@@ -16,16 +16,16 @@ pub fn IntroComponent(
     let timestamp = use_timestamp();
     
     create_effect(move |started_with| {
-        let config = config.get_untracked();
-        let timestamp= timestamp.get_untracked();
+        let config = config.get();
+        let timestamp= timestamp.get();
         if started_with
             .as_ref()
             .map(|c| c != &config)
             .unwrap_or(false)
         {
-            ev.set(intro::Event::SetInstrumentTarget(config.clone()))
+            ev.set(intro::Event::SetInstrumentTarget(config.clone()));
         } else if started_with.is_some() {
-            ev.set(intro::Event::TsNext(timestamp))
+            ev.set(intro::Event::TsNext(timestamp));
         } else {
             ev.set(intro::Event::StartAnimation {
                 config: config.clone(),
@@ -49,9 +49,14 @@ pub fn IntroComponent(
       "#, vm.intro_opacity)
     };
 
+    create_effect(move|_| {
+      log::debug!("opacity_var {:#?}", opacity_var());
+      log::debug!("view_box {:#?}", view_box());
+    });
+
     view! {
-        <div class="h-full w-full bg-red dark:bg-black splash" style={opacity_var()}>
-          <svg id="sun" viewBox={view_box()} class="fill-black dark:fill-red" xmlns="http://www.w3.org/2000/svg">
+        <div class="h-full w-full bg-red dark:bg-black splash" style={move || opacity_var()}>
+          <svg id="sun" viewBox={move || view_box()} class="fill-black dark:fill-red" xmlns="http://www.w3.org/2000/svg">
             <circle cx="107" cy="164" r="39" />
           </svg>
           <svg id="waves" viewBox="0 0 1048 932" fill="none" class="stroke-gray dark:stroke-red blur-[.5px]" xmlns="http://www.w3.org/2000/svg">
@@ -69,7 +74,7 @@ pub fn IntroComponent(
           <svg id="flute-shadow" viewBox="0 0 430 932" fill="none" class="stroke-red dark:stroke-black" xmlns="http://www.w3.org/2000/svg">
             <rect x="73.7113" y="576.054" width="53.653" height="8.25253" transform="rotate(-17.1246 73.7113 576.054)" stroke-width="2" />
           </svg>
-          <svg id="flute" viewBox={view_box()} class="fill-red dark:fill-black stroke-black dark:stroke-red" xmlns="http://www.w3.org/2000/svg">
+          <svg id="flute" viewBox={move || view_box()} class="fill-red dark:fill-black stroke-black dark:stroke-red" xmlns="http://www.w3.org/2000/svg">
             <rect x="48.3365" y="585.964" width="282.096" height="4.25253" transform="rotate(-17.1246 48.3365 585.964)" stroke-width="2" />
           </svg>
           <svg id="siren-arm" viewBox="0 0 430 932" class="fill-black dark:fill-red stroke-red dark:stroke-black" xmlns="http://www.w3.org/2000/svg">

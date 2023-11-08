@@ -130,25 +130,30 @@ impl App for Intro {
     fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) {
         match event {
             Event::SetInstrumentTarget(config) => {
+                log::debug!("Event::SetInstrumentTarget, {:?}", config);
                 model.config = config;
 
                 self.update_sequence(model);
             }
             Event::StartAnimation { ts_start, config } => {
+                log::debug!("Event::StartAnimation, {} {:?}", ts_start, config);
                 model.config = config;
                 model.ts_start = ts_start;
                 model.ts_end = ts_start + INTRO_DURATION;
                 model.ts_current = ts_start;
 
                 self.update_sequence(model);
+                caps.render.render();
             }
             Event::TsNext(ts) => {
+                log::debug!("Event::TsNext, {}", ts);
                 model.ts_current = ts;
                 let seq = self.sequence.clone();
                 let mut seq = seq.lock().unwrap();
                 let seq = seq.as_mut().unwrap();
                 let advance_duration = (ts - model.ts_start) / INTRO_DURATION;
                 seq.advance_to(advance_duration);
+                caps.render.render();
             }
         }
     }

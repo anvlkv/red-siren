@@ -13,7 +13,7 @@ RUN cp cargo-binstall /usr/local/cargo/bin
 RUN cargo binstall --no-confirm wasm-bindgen-cli@0.2.88
 
 # Install cargo-leptos
-RUN cargo binstall --git https://github.com/leptos-rs/cargo-leptos --locked cargo-leptos 
+RUN cargo binstall --no-confirm --git https://github.com/leptos-rs/cargo-leptos --locked cargo-leptos 
 
 
 

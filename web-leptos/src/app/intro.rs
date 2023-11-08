@@ -147,13 +147,18 @@ pub fn IntroComponent(
                 let previous_groups_size =
                     groups_before * (whole_buttons as f64) * (button_size() + button_gap())
                         + (groups_before) * button_group_gap();
+                let (group_offset, mult) = if i % 2 == 0 {
+                  (-1.0 * track_size.x + button_gap() * 1.5, -1.0)
+                } else {
+                  (-0.25 * button_gap(), 1.0)
+                };
 
                 for j in 1..=whole_buttons {
                     let transform = move || {
                         format!(
                             "translate({} {})",
-                            -0.25 * button_gap() + tracks_offset,
-                            previous_groups_size + (j - 1) as f64 * (button_size() + button_gap()) - 0.25 * button_gap()
+                            tracks_offset * mult + group_offset,
+                            previous_groups_size + (j - 1) as f64 * (button_size() + button_gap()) - 0.25 * button_gap(),
                         )
                     };
                     tracks.push(view! {

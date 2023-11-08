@@ -11,7 +11,7 @@ RUN tar -xvf cargo-binstall-x86_64-unknown-linux-musl.tgz
 RUN cp cargo-binstall /usr/local/cargo/bin
 
 # Install cargo-leptos
-RUN cargo binstall --no-confirm cargo-leptos@0.2.0 wasm-bindgen-cli@0.2.88
+RUN cargo binstall --no-confirm  --git https://github.com/leptos-rs/cargo-leptos --locked cargo-leptos wasm-bindgen-cli@0.2.88
 
 
 # Add the WASM target

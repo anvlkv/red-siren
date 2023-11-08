@@ -17,6 +17,7 @@ pub fn RootComponent() -> impl IntoView {
     view! {
         <Stylesheet id="leptos" href="/pkg/red-siren.css"/>
         <Title text="Red Siren"/>
+        <Link rel="icon" type_="image/x-icon" href="/favicon/favicon.ico" />
         <Link rel="apple-touch-icon-precomposed" sizes="57x57" href="/favicon/apple-touch-icon-57x57.png" />
         <Link rel="apple-touch-icon-precomposed" sizes="114x114" href="/favicon/apple-touch-icon-114x114.png" />
         <Link rel="apple-touch-icon-precomposed" sizes="72x72" href="/favicon/apple-touch-icon-72x72.png" />
@@ -110,8 +111,7 @@ fn RedSirenRoutes() -> impl IntoView {
         set_config.set(instrument::Config::new(
             width.try_into().unwrap(),
             height.try_into().unwrap(),
-            78,
-            navigator.max_touch_points() < 1,
+            navigator.max_touch_points() <= 1,
             max_buttons,
         ));
     });

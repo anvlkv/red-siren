@@ -23,13 +23,14 @@ pub struct Config {
     pub button_size: u8,
     pub gap: (u8, u8),
     pub steps: u16,
+    pub breadth: u16,
+    pub length: u16,
 }
 
 impl Config {
     pub fn new(
         width: usize,
         height: usize,
-        button_size: usize,
         rigid_step: bool,
         max_buttons: usize,
     ) -> Self {
@@ -40,14 +41,19 @@ impl Config {
             (width, height)
         };
 
-        let mut button_gap = button_size / 2;
-        let mut button_group_gap = button_gap + button_size;
+        let bs_ratio = breadth as f64 / 430.0;
+        let button_size = bs_ratio * 78.0;
+        let button_size = button_size.round() as usize;
+
+        let mut button_gap = button_size / 3;
+        let mut button_group_gap = button_gap * 2;
 
         let steps = if rigid_step {
             breadth / 2 / button_size
         } else {
             breadth / 2
         };
+
 
         let active_length = length - button_group_gap * 2;
 
@@ -116,6 +122,8 @@ impl Config {
             ),
             groups: optimal_groups.try_into().unwrap_or(1),
             buttons_group: optimal_buttons.try_into().unwrap_or(1),
+            length: length.try_into().unwrap_or(200),
+            breadth: (breadth / 3).try_into().unwrap_or(66)
         }
     }
 }

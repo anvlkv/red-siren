@@ -23,7 +23,7 @@ main {
       left: auto;
       top: auto;
     }
-    &:not(#flute):not(#sun) {
+    &:not(#flute):not(#sun):not(#tracks) {
       opacity: var(--intro-opacity)
     }
   }

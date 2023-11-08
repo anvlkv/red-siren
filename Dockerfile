@@ -1,4 +1,4 @@
-FROM anvlkv42/rust-nightly-wasm-leptos:latest
+FROM anvlkv42/rust-nightly-wasm-leptos:latest as builder
 
 # Make an /app dir, which everything will eventually live in
 RUN mkdir -p /app
@@ -25,6 +25,7 @@ ENV RUST_LOG="info"
 ENV APP_ENVIRONMENT="production"
 ENV LEPTOS_SITE_ADDR="0.0.0.0:3000"
 ENV LEPTOS_SITE_ROOT="site"
+ENV LEPTOS_WASM_OPT_VERSION="version_116"
 EXPOSE 3000
 # Run the server
 CMD ["/app/web-leptos"]

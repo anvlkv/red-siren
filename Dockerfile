@@ -1,17 +1,4 @@
-# Get started with a build env with Rust nightly
-FROM rustlang/rust:nightly-bullseye as builder
-
-
-RUN cargo install wasm-bindgen-cli --version 0.2.88
-
-# Install cargo-leptos
-RUN cargo install cargo-leptos --version 0.2.0
-
-
-
-# Add the WASM target
-RUN rustup target add wasm32-unknown-unknown
-
+FROM anvlkv42/rust-nightly-wasm-leptos:latest
 
 # Make an /app dir, which everything will eventually live in
 RUN mkdir -p /app
@@ -36,9 +23,9 @@ WORKDIR /app
 # Set any required env variables and
 ENV RUST_LOG="info"
 ENV APP_ENVIRONMENT="production"
-ENV LEPTOS_SITE_ADDR="0.0.0.0:8080"
+ENV LEPTOS_SITE_ADDR="0.0.0.0:3000"
 ENV LEPTOS_SITE_ROOT="site"
-EXPOSE 8080
+EXPOSE 3000
 # Run the server
 CMD ["/app/web-leptos"]
 

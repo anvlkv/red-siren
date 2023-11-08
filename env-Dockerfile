@@ -1,0 +1,11 @@
+FROM rustlang/rust:nightly-bullseye as builder
+
+RUN cargo install wasm-bindgen-cli --version 0.2.88
+
+# Install cargo-leptos
+RUN cargo install cargo-leptos --version 0.2.0
+
+
+
+# Add the WASM target
+RUN rustup target add wasm32-unknown-unknown

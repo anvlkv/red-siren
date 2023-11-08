@@ -31,7 +31,7 @@ thiserror = "1.0.50"
 uniffi = "0.25.0"
 url = "2.4.1"
 uuid = { version = "1.5.0", features = ["v4", "wasm-bindgen", "js"] }
-wasm-bindgen = "0.2.88"
+wasm-bindgen = {workspace = true}
 log = { workspace = true }
 
 [dev-dependencies]

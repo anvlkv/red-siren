@@ -10,6 +10,8 @@ RUN wget https://github.com/cargo-bins/cargo-binstall/releases/latest/download/c
 RUN tar -xvf cargo-binstall-x86_64-unknown-linux-musl.tgz
 RUN cp cargo-binstall /usr/local/cargo/bin
 
+RUN cargo install -f wasm-bindgen-cli --version 0.2.88
+
 # Install cargo-leptos
 RUN cargo binstall cargo-leptos -y
 

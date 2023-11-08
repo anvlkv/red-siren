@@ -13,8 +13,12 @@ RUN cp cargo-binstall /usr/local/cargo/bin
 # Install cargo-leptos
 RUN cargo binstall cargo-leptos -y
 
+# bindgen version
+RUN cargo binstall -f wasm-bindgen-cli --version 0.2.88
+
 # Add the WASM target
 RUN rustup target add wasm32-unknown-unknown
+
 
 # Make an /app dir, which everything will eventually live in
 RUN mkdir -p /app
@@ -22,7 +26,6 @@ WORKDIR /app
 COPY . .
 
 # Build the app
-
 WORKDIR /app/web-leptos
 RUN cargo leptos build --release -vv
 

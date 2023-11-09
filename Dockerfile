@@ -9,7 +9,7 @@ COPY . .
 WORKDIR /app/web-leptos
 RUN cargo leptos build --release -vv
 
-WORKDIR /app
+
 FROM rustlang/rust:nightly-bullseye as runner
 # Copy the server binary to the /app directory
 COPY --from=builder /app/target/release/web-leptos /app/
@@ -20,13 +20,16 @@ COPY --from=builder /app/Cargo.toml /app/
 
 WORKDIR /app
 
+ENV PORT=3000
+
 # Set any required env variables and
 ENV RUST_LOG="info"
 ENV APP_ENVIRONMENT="production"
-ENV LEPTOS_SITE_ADDR="0.0.0.0:3000"
 ENV LEPTOS_SITE_ROOT="site"
-ENV LEPTOS_WASM_OPT_VERSION="version_116"
-EXPOSE 3000
+
+# default port
+EXPOSE $PORT
+
 # Run the server
-CMD ["/app/web-leptos"]
+CMD LEPTOS_SITE_ADDR=0.0.0.0:$PORT /app/web-leptos
 

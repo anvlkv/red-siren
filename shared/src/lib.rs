@@ -1,5 +1,7 @@
 pub mod app;
 
+pub mod geometry;
+
 use lazy_static::lazy_static;
 use wasm_bindgen::prelude::wasm_bindgen;
 

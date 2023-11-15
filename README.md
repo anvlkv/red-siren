@@ -3,7 +3,7 @@
 
 ## Development
 
-Red Siren is built using [`crux`](https://github.com/redbadger/crux)
+
 
 ### Shared
 

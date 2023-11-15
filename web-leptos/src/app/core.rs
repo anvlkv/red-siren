@@ -1,7 +1,10 @@
 use std::rc::Rc;
 
 use leptos::{SignalUpdate, WriteSignal};
-use shared::{RedSirenCapabilities, RedSiren, Effect, Event, ViewModel};
+use leptos_router::NavigateOptions;
+use shared::{
+    navigate::NavigateOperation, Effect, Event, RedSiren, RedSirenCapabilities, ViewModel,
+};
 
 pub type Core = Rc<shared::Core<Effect, RedSiren>>;
 
@@ -16,6 +19,7 @@ pub fn update(core: &Core, event: Event, render: WriteSignal<ViewModel>) {
 }
 
 pub fn process_effect(core: &Core, effect: Effect, render: WriteSignal<ViewModel>) {
+    let navigate = leptos_router::use_navigate();
     match effect {
         Effect::Render(_) => {
             render.update(|view| *view = core.view());
@@ -23,5 +27,15 @@ pub fn process_effect(core: &Core, effect: Effect, render: WriteSignal<ViewModel
         Effect::KeyValue(_) => {
             render.update(|view| *view = core.view());
         }
+        Effect::Navigate(nav) => match nav.operation {
+            NavigateOperation::To(activity) => {
+                match activity {
+                    shared::Activity::Intro => navigate("/", NavigateOptions::default()),
+                    shared::Activity::Tune => navigate("/tune", NavigateOptions::default()),
+                    shared::Activity::Play => navigate("/play", NavigateOptions::default()),
+                    shared::Activity::Listen => navigate("/listen", NavigateOptions::default()),
+                }
+            }
+        },
     };
 }

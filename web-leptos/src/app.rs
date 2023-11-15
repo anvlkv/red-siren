@@ -1,4 +1,5 @@
 mod core;
+mod instrument;
 mod intro;
 
 use std::rc::Rc;
@@ -8,7 +9,7 @@ use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
 use leptos_use::{use_event_listener, use_window};
-use shared::{instrument, Activity, Event};
+use shared::{Activity, Event};
 
 #[component]
 pub fn RootComponent() -> impl IntoView {
@@ -38,6 +39,7 @@ pub fn RootComponent() -> impl IntoView {
         <Meta name="msapplication-square150x150logo" content="/favicon/mstile-150x150.png" />
         <Meta name="msapplication-wide310x150logo" content="/favicon/mstile-310x150.png" />
         <Meta name="msapplication-square310x310logo" content="/favicon/mstile-310x310.png" />
+        <Meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
 
 
         <Router fallback=|| {
@@ -63,12 +65,22 @@ fn RedSirenRoutes() -> impl IntoView {
     let render = view_rw_signal.write_only();
 
     let (event, set_event) = create_signal(Event::None);
+
     create_effect(move |_| {
         core::update(&core, event.get(), render);
     });
 
-    let navigate = leptos_router::use_navigate();
+    let location = leptos_router::use_location();
 
+    create_effect(move |_| match (location.pathname)().as_str() {
+        "/" | "" => set_event(Event::Activate(Activity::Intro)),
+        "/tune" => set_event(Event::Activate(Activity::Tune)),
+        "/play" => set_event(Event::Activate(Activity::Play)),
+        "/listen" => set_event(Event::Activate(Activity::Listen)),
+        _=> panic!("route not using activity")
+    });
+
+    let navigate = leptos_router::use_navigate();
     create_effect(move |_| {
         let path = match view.get().activity {
             Activity::Intro => "/",
@@ -80,7 +92,7 @@ fn RedSirenRoutes() -> impl IntoView {
         navigate(path, Default::default())
     });
 
-    let (config, set_config) = create_signal(instrument::Config::default());
+    let (config, set_config) = create_signal(shared::instrument::Config::default());
     let (size, set_size) = create_signal((0, 0));
     let window = use_window();
     use_event_listener(window.clone(), leptos::ev::resize, move |_| {
@@ -94,31 +106,18 @@ fn RedSirenRoutes() -> impl IntoView {
         set_size.set((body.client_width(), body.client_height()));
     });
 
-    let window = use_window();
     create_effect(move |_| {
-        let navigator = window.navigator().unwrap();
         let (width, height) = size.get();
 
-        let mut max_buttons = 5;
-
-        let short_side = width.min(height);
-        let long_side = width.max(height);
-
-        if short_side < 769 {
-            max_buttons = 3;
-        }
-
-        set_config.set(instrument::Config::new(
-            width.try_into().unwrap(),
-            height.try_into().unwrap(),
-            navigator.max_touch_points() <= 1,
-            max_buttons,
-        ));
+        set_config.set(shared::instrument::Config::new(width as f32, height as f32));
     });
 
-    
-    let intro_vm = create_read_slice(view_rw_signal, move |v| v.intro);
+    create_effect(move |_| set_event(Event::ConfigureApp(config.get())));
+
+    let intro_vm = create_read_slice(view_rw_signal, move |v| v.intro.clone());
     let intro_ev = SignalSetter::map(move |ev| set_event.set(Event::IntroEvent(ev)));
+    let instrument_vm = create_read_slice(view_rw_signal, move |v| v.instrument.clone());
+    let instrument_ev = SignalSetter::map(move |ev| set_event.set(Event::InstrumentEvent(ev)));
 
     view! {
         <Routes>
@@ -126,7 +125,12 @@ fn RedSirenRoutes() -> impl IntoView {
                 <intro::IntroComponent
                     vm=intro_vm
                     ev=intro_ev
-                    config=config
+                />
+            } />
+            <Route path="play" view=move || view! {
+                <instrument::InstrumentComponent
+                    vm=instrument_vm
+                    ev=instrument_ev
                 />
             } />
         </Routes>

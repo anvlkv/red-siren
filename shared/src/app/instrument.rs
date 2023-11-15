@@ -1,141 +1,45 @@
-use serde::{Deserialize, Serialize};
-
 use crux_core::render::Render;
 use crux_core::App;
 use crux_kv::KeyValue;
 use crux_macros::Effect;
+use hecs::{Entity, World};
+use serde::{Deserialize, Serialize};
+
+pub mod config;
+pub mod keyboard;
+pub mod layout;
+pub mod string;
+
+pub use config::Config;
+pub use layout::{Layout, LayoutRoot};
+
+use crate::geometry::Rect;
 
 #[derive(Default)]
 pub struct Instrument;
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct Model {
     pub config: Config,
+    pub world: World,
+    pub inbound: Option<Entity>,
+    pub outbound: Option<Entity>,
+    pub keyboard: Option<Entity>,
+    pub root: Option<Entity>,
+    pub layout: Option<Layout>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
-pub struct Config {
-    pub portrait: bool,
-    pub width: u16,
-    pub height: u16,
-    pub groups: u8,
-    pub buttons_group: u8,
-    pub button_size: u8,
-    pub gap: (u8, u8),
-    pub steps: u16,
-    pub breadth: u16,
-    pub length: u16,
-}
-
-impl Config {
-    pub fn new(
-        width: usize,
-        height: usize,
-        rigid_step: bool,
-        max_buttons: usize,
-    ) -> Self {
-        let portrait = height > width;
-        let (length, breadth) = if portrait {
-            (height, width)
-        } else {
-            (width, height)
-        };
-
-        let bs_ratio = breadth as f64 / 430.0;
-        let button_size = bs_ratio * 78.0;
-        let button_size = button_size.round() as usize;
-
-        let mut button_gap = button_size / 3;
-        let mut button_group_gap = button_gap * 2;
-
-        let steps = if rigid_step {
-            breadth / 2 / button_size
-        } else {
-            breadth / 2
-        };
-
-
-        let active_length = length - button_group_gap * 2;
-
-        let groups: Vec<(Vec<(usize, usize)>, usize)> = (1..=active_length)
-            .into_iter()
-            .fold(Vec::<(Vec<(usize, usize)>, usize)>::new(), |mut acc, _| {
-                if acc.last().is_some() {
-                    let pos = acc.len() - 1;
-                    let group = &mut acc[pos];
-                    let group_len = group.0.len();
-
-                    let mut last = group.0.last_mut();
-                    let btn = last.as_mut().unwrap();
-                    if btn.0 < button_size {
-                        btn.0 += 1;
-                    } else if btn.1 < button_gap && group_len < max_buttons {
-                        btn.1 += 1;
-                    } else if group_len < max_buttons {
-                        group.0.push((1, 0));
-                    } else if group.1 < button_group_gap {
-                        group.1 += 1;
-                    } else {
-                        acc.push((vec![(1, 0)], 0));
-                    }
-                } else {
-                    acc.push((vec![(1, 0)], 0));
-                }
-                acc
-            })
-            .into_iter()
-            .map(|group| {
-                (
-                    group
-                        .0
-                        .into_iter()
-                        .filter(|btn| btn.0 == button_size)
-                        .collect(),
-                    group.1,
-                )
-            })
-            .collect();
-
-        let optimal_buttons = groups.iter().map(|g| g.0.len()).max().unwrap_or(1);
-        let optimal_groups = groups
-            .iter()
-            .filter(|g| g.0.len() == optimal_buttons)
-            .count();
-
-        if optimal_groups < groups.len() {
-            let empty = groups.iter().skip(optimal_groups).fold(0, |acc, group| acc + group.1 + group.0.iter().fold(0, |a, b| a+b.0+b.1));
-            let extra = empty / (optimal_groups * optimal_buttons);
-
-            button_gap = button_gap + extra / optimal_groups;
-            button_group_gap = button_gap + button_size;
-        }
-
-        Config {
-            button_size: button_size.try_into().unwrap_or(42),
-            portrait,
-            width: width.try_into().unwrap_or(200),
-            height: height.try_into().unwrap_or(200),
-            steps: steps.try_into().unwrap_or(2),
-            gap: (
-                button_gap.try_into().unwrap_or(24),
-                button_group_gap.try_into().unwrap_or(66),
-            ),
-            groups: optimal_groups.try_into().unwrap_or(1),
-            buttons_group: optimal_buttons.try_into().unwrap_or(1),
-            length: length.try_into().unwrap_or(200),
-            breadth: (breadth / 3).try_into().unwrap_or(66)
-        }
-    }
-}
-
-#[derive(Default, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+#[derive(Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct ViewModel {
     pub config: Config,
+    pub layout: Layout,
+    pub view_box: Rect,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum Event {
     None,
+    CreateWithConfig(Config),
 }
 
 #[cfg_attr(feature = "typegen", derive(crux_macros::Export))]
@@ -156,10 +60,36 @@ impl App for Instrument {
     type Capabilities = InstrumentCapabilities;
 
     fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) {
-        todo!()
+        match event {
+            Event::CreateWithConfig(config) => {
+                model.config = config.clone();
+                model.world = World::new();
+
+                let inbound = string::InboundString::spawn(&mut model.world, &config);
+                let outbound = string::OutboundString::spawn(&mut model.world, &config);
+                let keyboard = keyboard::Keyboard::spawn(&mut model.world, &config);
+
+                let root = layout::LayoutRoot::spawn(&mut model.world, inbound, outbound, keyboard);
+
+                let layout = Layout::new(&model.world, &root).expect("Layout failed");
+
+                let _ = model.root.insert(root);
+                let _ = model.inbound.insert(inbound);
+                let _ = model.outbound.insert(outbound);
+                let _ = model.keyboard.insert(keyboard);
+                let _ = model.layout.insert(layout);
+
+                caps.render.render();
+            }
+            Event::None => {}
+        }
     }
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
-        ViewModel::default()
+        ViewModel {
+            config: model.config.clone(),
+            layout: model.layout.clone().unwrap_or_default(),
+            view_box: Rect::size(model.config.width, model.config.height)
+        }
     }
 }

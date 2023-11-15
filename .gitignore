@@ -20,3 +20,5 @@ public/tailwind.css
 
 dioxusin
 iOS/RedSiren.xcodeproj/project.xcworkspace/xcuserdata/*
+
+*.snap.new

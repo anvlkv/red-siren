@@ -1,0 +1,158 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'shared'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=shared"
+        ],
+        "filter": {
+          "name": "shared",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'uniffi-bindgen'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=uniffi-bindgen",
+          "--package=shared"
+        ],
+        "filter": {
+          "name": "uniffi-bindgen",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'uniffi-bindgen'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=uniffi-bindgen",
+          "--package=shared"
+        ],
+        "filter": {
+          "name": "uniffi-bindgen",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug integration test 'layout'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--test=layout",
+          "--package=shared"
+        ],
+        "filter": {
+          "name": "layout",
+          "kind": "test"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'shared_types'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=shared_types"
+        ],
+        "filter": {
+          "name": "shared_types",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'web-leptos'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=web-leptos"
+        ],
+        "filter": {
+          "name": "web-leptos",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'web-leptos'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=web-leptos",
+          "--package=web-leptos"
+        ],
+        "filter": {
+          "name": "web-leptos",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'web-leptos'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=web-leptos",
+          "--package=web-leptos"
+        ],
+        "filter": {
+          "name": "web-leptos",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

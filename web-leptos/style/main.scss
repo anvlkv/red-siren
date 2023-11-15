@@ -1,30 +1,38 @@
-main {
-  width: 100vw;
+body {
   height: 100vh;
+  width: 100vw;
+}
+
+main {
+  width: 100%;
+  height: 100%;
   overflow: hidden;
 }
 
 .splash {
   position: relative;
+  .splash-dummy {
+    opacity: calc(1 - var(--intro-opacity));
+  }
+  .splash-picture {
+    opacity: var(--intro-opacity);
+  }
   svg {
     position: absolute;
     height: 100%;
     width: auto;
     top: 0;
     left: 0;
-    &#siren,
-    &#siren-front,
-    &#flute,
-    &#stone,
-    &#flute-shadow,
-    &#siren-arm {
+    &.siren,
+    &.siren-front,
+    &.flute,
+    &.stone,
+    &.flute-shadow,
+    &.siren-arm {
       right: 0;
       bottom: 0;
       left: auto;
       top: auto;
-    }
-    &:not(#flute):not(#sun):not(#tracks) {
-      opacity: var(--intro-opacity)
     }
   }
 }

@@ -1,18 +1,22 @@
-use crux_core::{render::Render, Capability};
 pub use crux_core::App;
+use crux_core::{render::Render, Capability};
 use crux_kv::KeyValue;
 use crux_macros::Effect;
 use serde::{Deserialize, Serialize};
 
+pub mod navigate;
 pub mod instrument;
 pub mod intro;
 pub mod tuner;
 
+pub use navigate::Navigate;
 pub use instrument::Instrument;
 pub use intro::Intro;
 pub use tuner::Tuner;
 
-use self::{intro::IntroCapabilities, tuner::TunerCapabilities, instrument::InstrumentCapabilities};
+use self::{
+    instrument::InstrumentCapabilities, intro::IntroCapabilities, tuner::TunerCapabilities,
+};
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Activity {
@@ -28,7 +32,7 @@ impl Default for Activity {
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Default)]
 pub struct Model {
     instrument: instrument::Model,
     tuning: tuner::Model,
@@ -50,6 +54,8 @@ pub enum Event {
     TunerEvent(tuner::Event),
     InstrumentEvent(instrument::Event),
     IntroEvent(intro::Event),
+    ConfigureApp(instrument::Config),
+    Activate(Activity)
 }
 
 #[derive(Default)]
@@ -65,13 +71,15 @@ pub struct RedSiren {
 pub struct RedSirenCapabilities {
     pub render: Render<Event>,
     pub key_value: KeyValue<Event>,
+    pub navigate: Navigate<Event>
 }
+
 
 impl From<&RedSirenCapabilities> for IntroCapabilities {
     fn from(incoming: &RedSirenCapabilities) -> Self {
         IntroCapabilities {
-            key_value: incoming.key_value.map_event(super::Event::IntroEvent),
             render: incoming.render.map_event(super::Event::IntroEvent),
+            navigate: incoming.navigate.map_event(super::Event::IntroEvent)
         }
     }
 }
@@ -105,6 +113,25 @@ impl App for RedSiren {
             Event::None => {
                 caps.render.render();
             }
+            Event::Activate(act) => {
+                model.activity = act;
+                caps.render.render();
+            }
+            Event::ConfigureApp(config) => {
+                self.instrument.update(
+                    instrument::Event::CreateWithConfig(config),
+                    &mut model.instrument,
+                    &caps.into(),
+                );
+                self.intro.update(
+                    intro::Event::SetInstrumentTarget(
+                        model.instrument.layout.as_ref().unwrap().clone(),
+                        model.instrument.config.clone(),
+                    ),
+                    &mut model.intro,
+                    &caps.into(),
+                );
+            }
             Event::InstrumentEvent(event) => {
                 self.instrument
                     .update(event, &mut model.instrument, &caps.into())
@@ -119,7 +146,7 @@ impl App for RedSiren {
             activity: model.activity,
             tuning: self.tuner.view(&model.tuning),
             intro: self.intro.view(&model.intro),
-            instrument: self.instrument.view(&model.instrument)
+            instrument: self.instrument.view(&model.instrument),
         }
     }
 }

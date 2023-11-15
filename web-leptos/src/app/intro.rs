@@ -1,3 +1,4 @@
+use crate::app::instrument::{ButtonComponent, StringComponent, TrackComponent};
 use leptos::*;
 use leptos_use::{use_media_query, use_timestamp};
 use shared::{
@@ -10,29 +11,24 @@ use std::rc::Rc;
 pub fn IntroComponent(
     vm: Signal<intro::ViewModel>,
     ev: SignalSetter<intro::Event>,
-    config: ReadSignal<instrument::Config>,
 ) -> impl IntoView {
     let timestamp = use_timestamp();
 
     let reduced_motion = use_media_query("(prefers-reduced-motion)");
 
     create_effect(move |started_with| {
-        let config = config.get();
         let timestamp = timestamp.get();
         let reduced_motion = reduced_motion.get();
-        if started_with.as_ref().map(|c| c != &config).unwrap_or(false) {
-            ev.set(intro::Event::SetInstrumentTarget(config.clone()));
-        } else if started_with.is_some() {
+        if started_with.is_some() {
             ev.set(intro::Event::TsNext(timestamp));
         } else {
             ev.set(intro::Event::StartAnimation {
-                config: config.clone(),
                 ts_start: timestamp,
                 reduced_motion,
             });
         }
 
-        config
+        timestamp
     });
 
     let view_box = move || {
@@ -40,210 +36,96 @@ pub fn IntroComponent(
         format!("{} {} {} {}", vb.x.x, vb.x.y, vb.y.x, vb.y.y)
     };
 
-    let opacity_var = move || {
-        let vm = vm();
-
+    let flute_transform = move || {
         format!(
-            r#"
-      --intro-opacity:{};
-      "#,
-            vm.intro_opacity
-        )
-    };
-
-    let suns = move || {
-        let whole_groups = vm().groups.floor() as u64;
-        let whole_buttons = vm().buttons_group.floor() as u64;
-
-        let upcoming_group = vm().groups - whole_groups as f64;
-        let upcoming_button = vm().buttons_group - whole_buttons as f64;
-
-        let button_gap = move || vm().button_gap;
-        let button_group_gap = move || vm().button_group_gap;
-        let button_size = move || vm().button_size;
-
-        let mut buttons = Vec::new();
-
-        for i in 1..=whole_groups {
-            let groups_before = (i - 1) as f64;
-            let previous_groups_size =
-                groups_before * (whole_buttons as f64) * (button_size() + button_gap())
-                    + (groups_before) * button_group_gap();
-
-            for j in 1..=whole_buttons {
-                buttons.push(view!{
-                  <circle r={move || button_size()/2.0}
-                    cx={move || button_size() * 0.5}
-                    cy={move || previous_groups_size + ((j-1) as f64 * (button_size() + button_gap()) + button_size() * 0.5)}
-                  />
-                })
-            }
-
-            if i == whole_groups && (upcoming_group > 0.0 || upcoming_button > 0.0) {
-                let previous_groups_size = (i as f64 + upcoming_group)
-                    * (whole_buttons as f64)
-                    * (button_size() + button_gap())
-                    + (whole_groups - 1) as f64 * button_group_gap();
-
-                buttons.push(view! {
-                  <circle r={move||button_size()/2.0}
-                    cx={move || button_size() * 0.5}
-                    cy={move||previous_groups_size + button_size() * 0.5 * upcoming_button }
-                  />
-                })
-            }
-        }
-
-        let g_transform = move || {
-            format!(
-                "rotate({} {} {}) translate({} {})",
-                vm().buttons_rotation.z,
-                vm().buttons_rotation.x,
-                vm().buttons_rotation.y,
-                vm().buttons_position.x,
-                vm().buttons_position.y,
-            )
-        };
-
-        view! {
-          <g transform={g_transform}>
-            {buttons}
-          </g>
-        }
-    };
-
-    let flute_rotation = move || {
-        format!(
-            "rotate({} {} {})",
+            "rotate({} {} {}) translate({} {})",
             vm().flute_rotation.z,
             vm().flute_rotation.x,
             vm().flute_rotation.y,
-        )
-    };
-
-    let flute_transform = move || {
-        format!(
-            "translate({} {}) {}",
             vm().flute_position.x,
             vm().flute_position.y,
-            flute_rotation(),
         )
     };
 
-    let tracks = move || {
-        let whole_groups = vm().groups.floor() as u64;
-        let whole_buttons = vm().buttons_group.floor() as u64;
-        let track_size = vm().track_size;
-        let track_radius = vm().track_radius;
-        let mut tracks_offset = vm().tracks_offset;
-        let button_gap = move || vm().button_gap;
-        let button_group_gap = move || vm().button_group_gap;
-        let button_size = move || vm().button_size;
-
-        let mut tracks = Vec::new();
-        if track_size.x != 0.0 && track_size.y != 0.0 {
-            for i in 1..=whole_groups {
-                let groups_before = (i - 1) as f64;
-                let previous_groups_size =
-                    groups_before * (whole_buttons as f64) * (button_size() + button_gap())
-                        + (groups_before) * button_group_gap();
-                let (group_offset, mult) = if i % 2 == 0 {
-                  (-1.0 * track_size.x + button_gap() * 1.5, -1.0)
-                } else {
-                  (-0.25 * button_gap(), 1.0)
-                };
-
-                for j in 1..=whole_buttons {
-                    let transform = move || {
-                        format!(
-                            "translate({} {})",
-                            tracks_offset * mult + group_offset,
-                            previous_groups_size + (j - 1) as f64 * (button_size() + button_gap()) - 0.25 * button_gap(),
-                        )
-                    };
-                    tracks.push(view! {
-                      <rect
-                         width={track_size.x + track_radius}
-                         height={track_size.y}
-                         transform={transform}
-                         rx={track_radius} 
-                         ry={track_radius}
-                      />
-                    });
-                    tracks_offset = (tracks_offset - track_size.x).max(0.0);
-                }
-            }
-        }
-
-        let g_transform = move || {
-            format!(
-                "rotate({} {} {}) translate({} {})",
-                vm().buttons_rotation.z,
-                vm().buttons_rotation.x,
-                vm().buttons_rotation.y,
-                vm().buttons_position.x,
-                vm().buttons_position.y,
-            )
-        };
-
-        view! {
-          <svg id="tracks"
-            viewBox={move || view_box()}
-            class="fill-red dark:fill-black stroke-black dark:stroke-red"
-            xmlns="http://www.w3.org/2000/svg">
-            <defs>
-                <clipPath id="track-round-corner">
-                    <rect x={track_radius * -1.0} y="0" width={track_size.x + track_radius} height={track_size.y} />
-                </clipPath>
-            </defs>
-            <g transform={g_transform}>
-              {tracks}
-            </g>
-          </svg>
-        }
+    let sun_transform = move || {
+        format!(
+            "translate({} {})",
+            vm().buttons_position.x,
+            vm().buttons_position.y,
+        )
     };
 
-    let flute = move || {
-        view! {
-          <svg id="flute"
-            viewBox={move || view_box()}
-            class="fill-red dark:fill-black stroke-black dark:stroke-red"
-            xmlns="http://www.w3.org/2000/svg">
-            <rect width={move || vm().flute_size.x }
-              height={move || vm().flute_size.y }
-              transform={move || flute_transform()}
-              stroke-width={move || vm().flute_stroke}
-             />
-          </svg>
-        }
-    };
+    // let portrait = Signal::derive(move || config().portrait);
+    let inbound_layout_line = Signal::derive(move || vm().layout.inbound);
+    let outbound_layout_line = Signal::derive(move || vm().layout.outbound);
 
     view! {
-        <div class="h-full w-full bg-red dark:bg-black splash" style={move || opacity_var()}>
-          <svg id="waves" viewBox="0 0 1048 932" fill="none" class="stroke-gray dark:stroke-red blur-[.5px]" xmlns="http://www.w3.org/2000/svg">
+      <div class="h-full w-full bg-red dark:bg-black splash"
+        style={move || format!("--intro-opacity: {};", vm().intro_opacity)}
+      >
+        <div class="absolute h-full w-full splash-dummy" class:hidden={move|| vm().animation_progress == 0.0 }>
+          <svg fill="none" class="flute stroke-black dark:stroke-red" viewBox={view_box} xmlns="http://www.w3.org/2000/svg">
+            <g transform={flute_transform}>
+              <StringComponent layout_line={inbound_layout_line} />
+              <StringComponent layout_line={outbound_layout_line} />
+            </g>
+          </svg>
+          <svg class="tracks fill-red dark:fill-black stroke-black dark:stroke-red" viewBox={view_box} xmlns="http://www.w3.org/2000/svg">
+            {move || vm().layout.tracks.into_iter().map(|rect|
+                view!{
+                  <TrackComponent layout_rect={Signal::derive(move || rect)}/>
+                }
+              ).collect_view()}
+          </svg>
+          <svg class="sun fill-black dark:fill-red" viewBox={view_box} xmlns="http://www.w3.org/2000/svg">
+            <g transform={sun_transform}>
+              {move || vm().layout.buttons.into_iter().map(|rect|
+                view!{
+                  <ButtonComponent layout_rect={Signal::derive(move || rect)}/>
+                }
+              ).collect_view()}
+            </g>
+          </svg>
+        </div>
+
+        // svg split into several to handle dark mode with tailwind classes...
+        <div class="absolute h-full w-full splash-picture">
+          <svg viewBox="0 0 1048 932" fill="none" class="waves stroke-gray dark:stroke-red blur-[.5px]" xmlns="http://www.w3.org/2000/svg">
             <path d={WAVES_PATH} stroke-width="0.5"/>
           </svg>
-
-          <svg id="stone" viewBox="0 0 430 932" class="fill-red dark:fill-black stroke-black dark:stroke-red" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 430 932" class="stone fill-red dark:fill-black stroke-black dark:stroke-red" xmlns="http://www.w3.org/2000/svg">
             <path d="M350.5 815.501C388.533 848.848 429 933.001 429 933.001H85C85 933.001 265.246 740.749 350.5 815.501Z" stroke-width="3" />
           </svg>
-          <svg id="siren" viewBox="0 0 430 932" class="fill-black dark:fill-red" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 430 932" class="siren fill-black dark:fill-red" xmlns="http://www.w3.org/2000/svg">
             <path d="M240 585.001C250 574.001 257.201 559.354 245.5 549.501C236 541.501 171 618.501 171 618.501L110.126 585.001C110.126 585.001 125.204 566.227 117 571.501C110 576.001 112.5 568.501 110.126 565.001C109.536 564.131 109.5 561.07 107.5 559.5C105.5 557.93 107.5 568.5 104.231 571.001C100.962 573.503 95.0002 557.5 93.0001 559C91 560.501 96.9999 574.5 95.0001 574.001C93.0002 573.502 87.5 561 87.5 565C87.5 569 88.3494 571.894 88.0001 572.501C87.4631 573.433 86.7409 571.227 82.5 568.5C75.4999 564 102.231 594.74 102.231 594.74C102.231 594.74 158.5 642.001 171 641.001C183.5 640.001 216.673 610.661 240 585.001Z" />
             <path d="M299 412.501L289 429.5L272.5 485.5C272.5 485.5 304.536 532.826 285.5 546.5C275.132 553.947 257.649 550.718 245 549C231.128 547.116 220.068 546.44 212 535C199.128 516.746 226.224 503.117 233.5 482C242.142 456.919 236.638 438.473 251.5 416.5C258.16 406.654 260.726 403.637 272.5 402.001C284.411 400.345 299 412.501 299 412.501Z" />
             <path d="M234 609C229.5 593 245 549.5 245 549.5L278.5 545.5C278.5 545.5 282.487 522.685 278.5 509C275.593 499.02 266 485.5 266 485.5L289 429.5C289 429.5 314.485 467.233 319.5 495C323.005 514.408 319.5 545.5 319.5 545.5L358.5 549.5C358.5 549.5 355 631 358.5 687C362 743 370.934 745.097 378 782.5C388.874 840.066 294 932.5 294 932.5H165C165 932.5 175.661 837.276 198.5 782.5C214.988 742.955 249.079 729.708 252.5 687C254.999 655.794 238.5 625 234 609Z" />
           </svg>
-          <svg id="flute-shadow" viewBox="0 0 430 932" fill="none" class="stroke-red dark:stroke-black" xmlns="http://www.w3.org/2000/svg">
-            <rect x="73.7113" y="576.054" width="53.653" height="8.25253" transform="rotate(-17.1246 48.3365 585.964)" stroke-width={move || vm().flute_stroke} />
+          <svg viewBox="0 0 430 932" fill="none" class="flute-shadow stroke-red dark:stroke-black" xmlns="http://www.w3.org/2000/svg">
+            <rect x="73.7113" y="576.054" width="53.653" height="8.25253" transform="rotate(-17.1246 48.3365 585.964)" stroke-width="2" />
           </svg>
-          {flute}
-          {tracks}
-          <svg id="sun" viewBox={move || view_box()} class="fill-black dark:fill-red" xmlns="http://www.w3.org/2000/svg">
-            {move||suns()}
+          <svg
+            viewBox="0 0 430 932"
+            class="flute fill-red dark:fill-black stroke-black dark:stroke-red"
+            xmlns="http://www.w3.org/2000/svg">
+            <rect width="282.096"
+              height="4.25253"
+              x="48.3365"
+              y="585.964"
+              transform="rotate(-17.1246 48.3365, 585.964)"
+              stroke-width="2"
+            />
           </svg>
-          <svg id="siren-arm" viewBox="0 0 430 932" class="fill-black dark:fill-red stroke-red dark:stroke-black" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 430 932" class="sun fill-black dark:fill-red" xmlns="http://www.w3.org/2000/svg">
+            <circle r="39"
+              cx="107"
+              cy="164"
+            />
+          </svg>
+          <svg viewBox="0 0 430 932" class="siren-arm fill-black dark:fill-red stroke-red dark:stroke-black" xmlns="http://www.w3.org/2000/svg">
             <path d="M203.1 547.176C202.815 546.205 202.573 544.98 202.502 543.508L202.517 543.279L202.517 543.279L202.521 543.217C202.763 539.584 202.986 536.249 202.905 534.005C202.885 533.435 202.844 532.914 202.775 532.463C202.708 532.025 202.604 531.591 202.427 531.23C202.255 530.88 201.915 530.412 201.296 530.295C200.704 530.182 200.207 530.461 199.886 530.711C199.384 531.101 198.969 531.634 198.623 532.166C198.272 532.704 197.956 533.301 197.672 533.859C197.58 534.038 197.493 534.211 197.41 534.378C197.223 534.749 197.052 535.09 196.881 535.403C196.626 535.869 196.433 536.153 196.293 536.293C196.018 536.568 195.86 536.635 195.813 536.65C195.804 536.646 195.792 536.638 195.777 536.627C195.678 536.554 195.533 536.397 195.337 536.099C195.149 535.814 194.962 535.474 194.743 535.076L194.733 535.057L194.709 535.014C194.298 534.268 193.759 533.29 193.014 532.629C192.614 532.274 192.12 531.976 191.518 531.855C190.911 531.734 190.277 531.81 189.628 532.07C189.146 532.263 188.76 532.565 188.489 532.971C188.225 533.365 188.111 533.797 188.068 534.197C187.99 534.925 188.138 535.741 188.254 536.379C188.258 536.402 188.262 536.424 188.266 536.447C188.399 537.183 188.487 537.715 188.443 538.117C188.424 538.295 188.383 538.382 188.354 538.425C188.333 538.456 188.287 538.511 188.145 538.565C187.476 538.818 187.191 538.692 187.022 538.575C186.757 538.391 186.514 538.029 186.207 537.435C186.161 537.347 186.112 537.248 186.059 537.145C185.961 536.949 185.854 536.737 185.754 536.554C185.594 536.261 185.397 535.934 185.147 535.653C184.891 535.367 184.541 535.084 184.068 534.955C183.586 534.823 183.096 534.884 182.629 535.071C181.662 535.458 180.808 535.98 180.6 536.885C180.496 537.334 180.591 537.734 180.703 538.027C180.807 538.298 180.957 538.558 181.067 538.748C181.071 538.755 181.075 538.762 181.079 538.769C181.343 539.225 181.461 539.465 181.469 539.7C181.474 539.852 181.435 540.192 180.818 540.768C179.997 541.534 179.697 541.422 179.649 541.404C179.648 541.404 179.647 541.403 179.646 541.403C179.562 541.373 179.432 541.294 179.24 541.1C179.046 540.904 178.851 540.656 178.605 540.339C178.586 540.316 178.568 540.292 178.549 540.267C178.108 539.699 177.491 538.903 176.63 538.45C175.62 537.918 174.434 537.914 173.053 538.605C172.687 538.788 172.197 539.161 172.146 539.835C172.105 540.391 172.407 540.836 172.595 541.081C172.814 541.365 173.111 541.661 173.418 541.952C173.58 542.106 173.772 542.284 173.974 542.47C174.145 542.628 174.322 542.792 174.493 542.953C176.065 544.428 178.162 546.582 179.581 549.894L179.604 549.947L179.633 549.998C181.77 553.714 183.7 558.524 185.453 562.909L185.501 563.029C186.354 565.163 187.166 567.194 187.93 568.911C188.7 570.64 189.459 572.136 190.207 573.108C190.607 573.628 191.23 574.168 191.977 574.714C192.738 575.271 193.686 575.875 194.786 576.518C196.986 577.803 199.844 579.267 203.142 580.832C209.74 583.962 218.153 587.518 226.698 590.867C235.243 594.216 243.934 597.364 251.091 599.677C254.668 600.833 257.872 601.783 260.488 602.446C263.071 603.1 265.174 603.499 266.5 603.499C267.78 603.499 269.921 603.235 272.647 602.78C275.396 602.322 278.804 601.658 282.65 600.836C290.345 599.191 299.823 596.906 309.354 594.339C318.883 591.773 328.479 588.922 336.405 586.146C340.367 584.758 343.924 583.384 346.852 582.069C349.763 580.763 352.116 579.487 353.625 578.28C357.518 575.165 361.117 570.227 362.601 564.932C364.096 559.597 363.455 553.807 358.689 549.274C353.194 544.047 344.57 543.503 335.1 545.321C325.575 547.15 314.874 551.428 304.875 556.287C294.865 561.151 285.506 566.623 278.652 570.876C275.225 573.003 272.421 574.827 270.473 576.12C269.499 576.766 268.739 577.28 268.222 577.633C268.067 577.739 267.933 577.83 267.823 577.906L207.101 560.277L208.242 551.376C208.354 550.504 208.6 549.538 208.893 548.53C209.005 548.145 209.127 547.742 209.25 547.338C209.436 546.727 209.622 546.115 209.773 545.559C210.026 544.63 210.235 543.676 210.217 542.859C210.198 542.026 209.923 541.06 208.923 540.593C208.256 540.281 207.571 540.23 206.921 540.449C206.301 540.657 205.805 541.079 205.415 541.545C204.647 542.462 204.089 543.793 203.682 545.053C203.451 545.769 203.258 546.498 203.1 547.176Z" stroke-width="2" />
           </svg>
-          <svg id="siren-front" viewBox="0 0 430 932" class="fill-black dark:fill-red" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 430 932" class="siren-front fill-black dark:fill-red" xmlns="http://www.w3.org/2000/svg">
             <path d="M299.5 411.5L289 430C289 430 313.862 470.508 319 499.5C323.331 523.937 294.949 552.806 318 562C336.745 569.478 359.087 557.193 363.5 537.501C366.814 522.711 353.312 516.031 349 501.5C342.323 478.998 352.064 462.426 340.5 442C333.957 430.443 329.828 417.54 318 411.5C308.5 406.648 299.5 411.5 299.5 411.5Z" />
             <path d="M83.5312 578.5C82.0312 579 80.0313 568 81.5312 568C83.1881 568 83.2888 569.019 84.0312 570.5C84.4 571.236 84.5918 578.146 83.5312 578.5Z" />
             <path d="M89.2847 574.983C87.9308 575.506 86.1256 564 87.4795 564C88.975 564 89.0659 565.066 89.7361 566.615C90.0689 567.384 90.2421 574.613 89.2847 574.983Z" />
@@ -251,6 +133,7 @@ pub fn IntroComponent(
             <path d="M100.8 570.575C99.3555 570.215 106.417 558.455 107.476 559.299C108.645 560.231 107.932 561.272 107.315 563.122C107.009 564.041 101.821 570.83 100.8 570.575Z" />
           </svg>
         </div>
+      </div>
     }
 }
 

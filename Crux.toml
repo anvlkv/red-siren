@@ -18,3 +18,7 @@ template = "web-leptos"
 source = "web-leptos"
 cores = ["shared"]
 
+[shells.iOS]
+template = "iOS"
+source = "iOS"
+cores = ["shared"]

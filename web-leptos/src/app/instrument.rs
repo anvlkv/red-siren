@@ -47,8 +47,8 @@ pub fn TrackComponent(#[prop(into)] layout_rect: Signal<Rect>) -> impl IntoView 
 
 #[component]
 pub fn InstrumentComponent(
-    vm: Signal<instrument::ViewModel>,
-    ev: SignalSetter<instrument::Event>,
+    vm: Signal<instrument::InstrumentVM>,
+    ev: SignalSetter<instrument::InstrumentEV>,
 ) -> impl IntoView {
     let view_box = move || {
         let vb = vm().view_box;

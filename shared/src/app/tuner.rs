@@ -14,8 +14,13 @@ pub struct Model {
 
 }
 
+#[derive(Default, Serialize, Deserialize, Clone)]
+pub struct TunerVM {
+
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub enum Event {
+pub enum TunerEV {
   GetTuning,
   SetTuning,
 
@@ -25,16 +30,16 @@ pub enum Event {
 #[derive(Effect)]
 #[effect(app = "Tuner")]
 pub struct TunerCapabilities {
-    pub render: Render<Event>,
-    pub key_value: KeyValue<Event>,
+    pub render: Render<TunerEV>,
+    pub key_value: KeyValue<TunerEV>,
 }
 
 impl App for Tuner {
-    type Event = Event;
+    type Event = TunerEV;
 
     type Model = Model;
 
-    type ViewModel = Model;
+    type ViewModel = TunerVM;
 
     type Capabilities = TunerCapabilities;
 
@@ -43,6 +48,6 @@ impl App for Tuner {
     }
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
-        Model::default()
+        TunerVM::default()
     }
 }

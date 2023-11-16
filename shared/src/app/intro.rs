@@ -1,3 +1,4 @@
+use crate::{instrument, Navigate};
 use crux_core::render::Render;
 use crux_core::App;
 use crux_macros::Effect;
@@ -8,49 +9,38 @@ use keyframe::{
 use keyframe_derive::CanTween;
 use mint::{Point2, Point3, Vector2};
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
-
-use crate::{instrument, Navigate};
 
 const INTRO_DURATION: f64 = 2750.0;
 
-pub struct Intro {
-    sequence: Arc<Mutex<Option<AnimationSequence<ViewModel>>>>,
-}
-
-impl Default for Intro {
-    fn default() -> Self {
-        Self {
-            sequence: Arc::new(Mutex::new(None)),
-        }
-    }
-}
+#[derive(Default)]
+pub struct Intro;
 
 #[derive(Default)]
 pub struct Model {
     layout: instrument::Layout,
     config: instrument::Config,
+    sequence: Option<AnimationSequence<IntroVM>>,
     ts_start: f64,
     ts_end: f64,
     ts_current: f64,
     reduced_motion: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, CanTween, PartialEq)]
-pub struct ViewModel {
+#[derive(Serialize, Deserialize, Clone, PartialEq, CanTween)]
+pub struct IntroVM {
+    pub layout: instrument::Layout,
     pub animation_progress: f64,
     pub view_box: Vector2<Point2<f32>>,
     pub intro_opacity: f32,
-    pub layout: instrument::Layout,
     pub flute_rotation: Point3<f32>,
     pub flute_position: Point2<f32>,
     pub buttons_position: Point2<f32>,
     pub button_size: f32,
 }
 
-impl Eq for ViewModel {}
+impl Eq for IntroVM {}
 
-impl Default for ViewModel {
+impl Default for IntroVM {
     fn default() -> Self {
         Self {
             layout: instrument::Layout::dummy(4.25253, 282.096, 78.0),
@@ -79,41 +69,41 @@ impl Default for ViewModel {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
-pub enum Event {
+pub enum IntroEV {
     SetInstrumentTarget(instrument::Layout, instrument::Config),
     StartAnimation { ts_start: f64, reduced_motion: bool },
     TsNext(f64),
 }
 
-impl Eq for Event {}
+impl Eq for IntroEV {}
 
 #[cfg_attr(feature = "typegen", derive(crux_macros::Export))]
 #[derive(Effect)]
 #[effect(app = "Intro")]
 pub struct IntroCapabilities {
-    pub render: Render<Event>,
-    pub navigate: Navigate<Event>,
+    pub render: Render<IntroEV>,
+    pub navigate: Navigate<IntroEV>,
 }
 
 impl App for Intro {
-    type Event = Event;
+    type Event = IntroEV;
 
     type Model = Model;
 
-    type ViewModel = ViewModel;
+    type ViewModel = IntroVM;
 
     type Capabilities = IntroCapabilities;
 
     fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) {
         match event {
-            Event::SetInstrumentTarget(layout, config) => {
+            IntroEV::SetInstrumentTarget(layout, config) => {
                 model.layout = layout;
                 model.config = config;
                 self.update_sequence(model);
-                self.update(Event::TsNext(model.ts_current), model, caps);
+                self.update(IntroEV::TsNext(model.ts_current), model, caps);
                 caps.render.render();
             }
-            Event::StartAnimation {
+            IntroEV::StartAnimation {
                 ts_start,
                 reduced_motion,
             } => {
@@ -125,10 +115,9 @@ impl App for Intro {
                 self.update_sequence(model);
                 caps.render.render();
             }
-            Event::TsNext(ts) => {
+            IntroEV::TsNext(ts) => {
                 model.ts_current = ts;
-                let seq = self.sequence.clone();
-                let mut seq = seq.lock().unwrap();
+                let mut seq = model.sequence.clone();
                 let seq = seq.as_mut().unwrap();
                 let advance_duration = (ts - model.ts_start) / INTRO_DURATION;
                 if model.reduced_motion {
@@ -154,27 +143,24 @@ impl App for Intro {
         }
     }
 
-    fn view(&self, _model: &Self::Model) -> Self::ViewModel {
-        let seq = self.sequence.clone();
-        let seq = seq.lock().unwrap();
+    fn view(&self, model: &Self::Model) -> Self::ViewModel {
+        let seq = &model.sequence;
 
         if let Some(seq) = seq.as_ref() {
             let now = seq.now();
 
-            ViewModel {
+            IntroVM {
                 animation_progress: seq.progress(),
                 ..now
             }
         } else {
-            ViewModel::default()
+            IntroVM::default()
         }
     }
 }
 
 impl Intro {
-    fn update_sequence(&self, model: &Model) {
-        let seq = self.sequence.clone();
-        let mut seq = seq.lock().unwrap();
+    fn update_sequence(&self, model: &mut Model) {
         let vb_target = Vector2 {
             x: Point2 { x: 0.0, y: 0.0 },
             y: Point2 {
@@ -191,25 +177,25 @@ impl Intro {
         let buttons_position_target = Point2 { x: 0.0, y: 0.0 };
         let target_button_size = model.config.button_size;
 
-        let animation: AnimationSequence<ViewModel> = keyframes![
+        let animation: AnimationSequence<IntroVM> = keyframes![
             (
-                ViewModel {
-                    ..ViewModel::default()
+                IntroVM {
+                    ..IntroVM::default()
                 },
                 0.0,
                 EaseIn
             ),
             (
-                ViewModel {
+                IntroVM {
                     intro_opacity: 0.0,
                     button_size: target_button_size,
-                    ..ViewModel::default()
+                    ..IntroVM::default()
                 },
                 0.5,
                 EaseOut
             ),
             (
-                ViewModel {
+                IntroVM {
                     intro_opacity: 0.0,
                     layout: instrument::Layout {
                         tracks: vec![],
@@ -220,13 +206,13 @@ impl Intro {
                     flute_rotation: flute_rotation_target,
                     flute_position: flute_position_target,
                     buttons_position: buttons_position_target,
-                    ..ViewModel::default()
+                    ..IntroVM::default()
                 },
                 0.75,
                 EaseOut
             ),
             (
-                ViewModel {
+                IntroVM {
                     intro_opacity: 0.0,
                     layout: model.layout.clone(),
                     view_box: vb_target,
@@ -234,12 +220,12 @@ impl Intro {
                     flute_rotation: flute_rotation_target,
                     flute_position: flute_position_target,
                     buttons_position: buttons_position_target,
-                    ..ViewModel::default()
+                    ..IntroVM::default()
                 },
                 1.0,
                 EaseIn
             )
         ];
-        let _ = seq.insert(animation);
+        let _ = model.sequence.insert(animation);
     }
 }

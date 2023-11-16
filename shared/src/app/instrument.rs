@@ -30,14 +30,14 @@ pub struct Model {
 }
 
 #[derive(Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub struct ViewModel {
+pub struct InstrumentVM {
     pub config: Config,
     pub layout: Layout,
     pub view_box: Rect,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub enum Event {
+pub enum InstrumentEV {
     None,
     CreateWithConfig(Config),
 }
@@ -46,22 +46,22 @@ pub enum Event {
 #[derive(Effect)]
 #[effect(app = "Instrument")]
 pub struct InstrumentCapabilities {
-    pub render: Render<Event>,
-    pub key_value: KeyValue<Event>,
+    pub render: Render<InstrumentEV>,
+    pub key_value: KeyValue<InstrumentEV>,
 }
 
 impl App for Instrument {
-    type Event = Event;
+    type Event = InstrumentEV;
 
     type Model = Model;
 
-    type ViewModel = ViewModel;
+    type ViewModel = InstrumentVM;
 
     type Capabilities = InstrumentCapabilities;
 
     fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) {
         match event {
-            Event::CreateWithConfig(config) => {
+            InstrumentEV::CreateWithConfig(config) => {
                 model.config = config.clone();
                 model.world = World::new();
 
@@ -81,12 +81,12 @@ impl App for Instrument {
 
                 caps.render.render();
             }
-            Event::None => {}
+            InstrumentEV::None => {}
         }
     }
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
-        ViewModel {
+        InstrumentVM {
             config: model.config.clone(),
             layout: model.layout.clone().unwrap_or_default(),
             view_box: Rect::size(model.config.width, model.config.height)

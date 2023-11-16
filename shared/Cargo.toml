@@ -14,17 +14,17 @@ typegen = ["crux_core/typegen"]
 [dependencies]
 anyhow.workspace = true
 bincode = "1.3.3"
-crux_core = "0.6"
-crux_http = "0.4"
-crux_kv = "0.1"
-crux_macros = "0.3"
-crux_platform = "0.1"
-crux_time = "0.1"
+crux_core.workspace = true
+crux_http.workspace = true
+crux_kv.workspace = true
+crux_macros.workspace = true
+crux_platform.workspace = true
+crux_time.workspace = true
 derive_more = "0.99.17"
 keyframe = { version = "1.1.1" }
 keyframe_derive = "1.0.0"
 lazy_static = "1.4.0"
-mint = { version = "0.5.9", features = ["serde"] }
+mint = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1.0.107"
 thiserror = "1.0.50"
@@ -32,7 +32,7 @@ uniffi = "0.25.0"
 url = "2.4.1"
 wasm-bindgen = { workspace = true }
 log = { workspace = true }
-hecs = {version="0.10.4", features = ["serde", "macros"]}
+hecs = { version = "0.10.4", features = ["serde", "macros"] }
 
 [dev-dependencies]
 assert_let_bind = "0.1.1"

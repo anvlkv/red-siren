@@ -9,8 +9,8 @@ use std::rc::Rc;
 
 #[component]
 pub fn IntroComponent(
-    vm: Signal<intro::ViewModel>,
-    ev: SignalSetter<intro::Event>,
+    vm: Signal<intro::IntroVM>,
+    ev: SignalSetter<intro::IntroEV>,
 ) -> impl IntoView {
     let timestamp = use_timestamp();
 
@@ -20,9 +20,9 @@ pub fn IntroComponent(
         let timestamp = timestamp.get();
         let reduced_motion = reduced_motion.get();
         if started_with.is_some() {
-            ev.set(intro::Event::TsNext(timestamp));
+            ev.set(intro::IntroEV::TsNext(timestamp));
         } else {
-            ev.set(intro::Event::StartAnimation {
+            ev.set(intro::IntroEV::StartAnimation {
                 ts_start: timestamp,
                 reduced_motion,
             });

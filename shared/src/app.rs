@@ -43,17 +43,17 @@ pub struct Model {
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub struct ViewModel {
     pub activity: Activity,
-    pub intro: intro::ViewModel,
-    pub tuning: tuner::Model,
-    pub instrument: instrument::ViewModel,
+    pub intro: intro::IntroVM,
+    pub tuning: tuner::TunerVM,
+    pub instrument: instrument::InstrumentVM,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum Event {
     None,
-    TunerEvent(tuner::Event),
-    InstrumentEvent(instrument::Event),
-    IntroEvent(intro::Event),
+    TunerEvent(tuner::TunerEV),
+    InstrumentEvent(instrument::InstrumentEV),
+    IntroEvent(intro::IntroEV),
     ConfigureApp(instrument::Config),
     Activate(Activity)
 }
@@ -119,12 +119,12 @@ impl App for RedSiren {
             }
             Event::ConfigureApp(config) => {
                 self.instrument.update(
-                    instrument::Event::CreateWithConfig(config),
+                    instrument::InstrumentEV::CreateWithConfig(config),
                     &mut model.instrument,
                     &caps.into(),
                 );
                 self.intro.update(
-                    intro::Event::SetInstrumentTarget(
+                    intro::IntroEV::SetInstrumentTarget(
                         model.instrument.layout.as_ref().unwrap().clone(),
                         model.instrument.config.clone(),
                     ),

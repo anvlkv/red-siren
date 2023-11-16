@@ -29,16 +29,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-class MyCore : Core() {
-    init {
-        viewModelScope.launch {
-
-        }
-    }
-}
 
 @Composable
-fun RedSiren(core: MyCore = viewModel()) {
+fun RedSiren(core: Core = viewModel()) {
     val coroutineScope = rememberCoroutineScope()
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,

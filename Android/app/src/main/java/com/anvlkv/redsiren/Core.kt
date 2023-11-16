@@ -40,6 +40,10 @@ open class Core : androidx.lifecycle.ViewModel() {
 
 
             is Effect.KeyValue -> {}
+
+            is Effect.Navigate -> {
+
+            }
         }
     }
 }

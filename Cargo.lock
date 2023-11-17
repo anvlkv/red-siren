@@ -1802,8 +1802,8 @@ dependencies = [
 
 [[package]]
 name = "leptos-use"
-version = "0.8.1"
-source = "git+https://github.com/anvlkv/leptos-use.git#2cf5a0edc8c7af3c65fe36fb2f9a6ed02d3dfbd9"
+version = "0.8.2"
+source = "git+https://github.com/Synphonyte/leptos-use.git#ded266356451e71b39dfd70b9f432f21c56b3aaa"
 dependencies = [
  "cfg-if",
  "default-struct-builder",
@@ -1813,6 +1813,7 @@ dependencies = [
  "lazy_static",
  "leptos",
  "paste",
+ "thiserror",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",

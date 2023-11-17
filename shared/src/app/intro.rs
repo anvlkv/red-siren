@@ -1,4 +1,4 @@
-use crate::{instrument, Navigate};
+use crate::{instrument, Navigate, geometry::Rect};
 use crux_core::render::Render;
 use crux_core::App;
 use crux_macros::Effect;
@@ -7,7 +7,7 @@ use keyframe::{
     keyframes, AnimationSequence,
 };
 use keyframe_derive::CanTween;
-use mint::{Point2, Point3, Vector2};
+use mint::{Point2, Point3};
 use serde::{Deserialize, Serialize};
 
 const INTRO_DURATION: f64 = 2750.0;
@@ -30,7 +30,7 @@ pub struct Model {
 pub struct IntroVM {
     pub layout: instrument::Layout,
     pub animation_progress: f64,
-    pub view_box: Vector2<Point2<f32>>,
+    pub view_box: Rect,
     pub intro_opacity: f32,
     pub flute_rotation: Point3<f32>,
     pub flute_position: Point2<f32>,
@@ -45,10 +45,7 @@ impl Default for IntroVM {
         Self {
             layout: instrument::Layout::dummy(4.25253, 282.096, 78.0),
             animation_progress: 0.0,
-            view_box: Vector2 {
-                x: Point2 { x: 0.0, y: 0.0 },
-                y: Point2 { x: 430.0, y: 932.0 },
-            },
+            view_box: Rect::size(430.0, 932.0),
             intro_opacity: 1.0,
             flute_rotation: Point3 {
                 z: -17.1246,
@@ -161,13 +158,10 @@ impl App for Intro {
 
 impl Intro {
     fn update_sequence(&self, model: &mut Model) {
-        let vb_target = Vector2 {
-            x: Point2 { x: 0.0, y: 0.0 },
-            y: Point2 {
-                x: model.config.width,
-                y: model.config.height,
-            },
-        };
+        let vb_target = Rect::size(model.config.width,
+                model.config.height,
+            );
+
         let flute_position_target = Point2 { x: 0.0, y: 0.0 };
         let flute_rotation_target = Point3 {
             z: 0.0,

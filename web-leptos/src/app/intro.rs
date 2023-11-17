@@ -33,7 +33,7 @@ pub fn IntroComponent(
 
     let view_box = move || {
         let vb = vm().view_box;
-        format!("{} {} {} {}", vb.x.x, vb.x.y, vb.y.x, vb.y.y)
+        format!("{} {} {} {}", vb.top_left().x, vb.top_left().y, vb.bottom_right().x, vb.bottom_right().y)
     };
 
     let flute_transform = move || {

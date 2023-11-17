@@ -48,15 +48,18 @@ pub struct ViewModel {
     pub instrument: instrument::InstrumentVM,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum Event {
     None,
     TunerEvent(tuner::TunerEV),
     InstrumentEvent(instrument::InstrumentEV),
     IntroEvent(intro::IntroEV),
     ConfigureApp(instrument::Config),
+    CreateConfigAndConfigureApp(f32, f32),
     Activate(Activity)
 }
+
+impl Eq for Event{}
 
 #[derive(Default)]
 pub struct RedSiren {
@@ -116,6 +119,10 @@ impl App for RedSiren {
             Event::Activate(act) => {
                 model.activity = act;
                 caps.render.render();
+            }
+            Event::CreateConfigAndConfigureApp(width, height) => {
+                let config = instrument::Config::new(width, height);
+                self.update(Event::ConfigureApp(config), model, caps);
             }
             Event::ConfigureApp(config) => {
                 self.instrument.update(

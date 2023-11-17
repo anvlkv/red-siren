@@ -4,5 +4,10 @@
     android:height="108dp"
     android:viewportWidth="1080"
     android:viewportHeight="1080">
-    <path android:fillColor="@color/red" android:pathData="M0,0h1080v1080h-1080z"/>
+  <group android:scaleX="1.94"
+      android:scaleY="1.94"
+      android:translateX="-507.6"
+      android:translateY="-507.6">
+      <path android:fillColor="@color/red" android:pathData="M0,0h1080v1080h-1080z"/>
+  </group>
 </vector>

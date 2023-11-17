@@ -3,7 +3,7 @@
 
     <!-- Allows us to override night specific attributes in the
          values-night folder. -->
-    <style name="NightAdjusted.Theme.RedSiren" parent="android:Theme.Material.NoActionBar" >
+    <style name="NightAdjusted.Theme.RedSiren" parent="android:Theme.NoTitleBar.Fullscreen" >
         <item name="android:windowBackground">@color/red</item>
         <item name="android:statusBarColor" >@color/red</item>
         <item name="android:windowLightStatusBar" >true</item>

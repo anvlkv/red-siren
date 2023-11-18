@@ -1,4 +1,4 @@
-use crate::{instrument, Navigate, geometry::Rect};
+use crate::{geometry::Rect, instrument, Navigate};
 use crux_core::render::Render;
 use crux_core::App;
 use crux_macros::Effect;
@@ -20,6 +20,7 @@ pub struct Model {
     layout: instrument::Layout,
     config: instrument::Config,
     sequence: Option<AnimationSequence<IntroVM>>,
+    init_view_model: Option<IntroVM>,
     ts_start: f64,
     ts_end: f64,
     ts_current: f64,
@@ -65,10 +66,38 @@ impl Default for IntroVM {
     }
 }
 
+impl IntroVM {
+    fn init_size(width: f32, height: f32) -> Self {
+        let scale = (430.0 / width).min(932.0 / height);
+
+        Self {
+            layout: instrument::Layout::dummy(4.25253 * scale, 282.096 * scale, 78.0 * scale),
+            animation_progress: 0.0,
+            view_box: Rect::size(width, height),
+            intro_opacity: 1.0,
+            flute_rotation: Point3 {
+                z: -17.1246,
+                x: 48.3365 * scale,
+                y: 585.964 * scale,
+            },
+            flute_position: Point2 {
+                x: 48.3365 * scale,
+                y: 585.964 * scale,
+            },
+            buttons_position: Point2 {
+                x: (107.0 - 39.0) * scale,
+                y: (164.0 - 39.0) * scale,
+            },
+            button_size: 78.0 * scale,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum IntroEV {
     SetInstrumentTarget(instrument::Layout, instrument::Config),
     StartAnimation { ts_start: f64, reduced_motion: bool },
+    SetViewBoxInit { width: f32, height: f32 },
     TsNext(f64),
 }
 
@@ -93,6 +122,9 @@ impl App for Intro {
 
     fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) {
         match event {
+            IntroEV::SetViewBoxInit { width, height } => {
+                model.init_view_model = Some(IntroVM::init_size(width, height));
+            }
             IntroEV::SetInstrumentTarget(layout, config) => {
                 model.layout = layout;
                 model.config = config;
@@ -114,16 +146,16 @@ impl App for Intro {
             }
             IntroEV::TsNext(ts) => {
                 model.ts_current = ts;
-                let mut seq = model.sequence.clone();
-                let seq = seq.as_mut().unwrap();
+                let seq = model.sequence.as_mut();
+                let seq = seq.unwrap();
                 let advance_duration = (ts - model.ts_start) / INTRO_DURATION;
                 if model.reduced_motion {
                     if seq.has_keyframe_at(advance_duration)
                         || seq
                             .pair()
                             .1
-                            .map(|f| f.time() < advance_duration)
-                            .unwrap_or(false)
+                            .map(|f| f.time() <= advance_duration)
+                            .unwrap_or(true)
                     {
                         seq.advance_to(advance_duration);
                     }
@@ -158,9 +190,8 @@ impl App for Intro {
 
 impl Intro {
     fn update_sequence(&self, model: &mut Model) {
-        let vb_target = Rect::size(model.config.width,
-                model.config.height,
-            );
+        let init_vm = model.init_view_model.clone().unwrap_or_default();
+        let vb_target = Rect::size(model.config.width, model.config.height);
 
         let flute_position_target = Point2 { x: 0.0, y: 0.0 };
         let flute_rotation_target = Point3 {
@@ -171,19 +202,29 @@ impl Intro {
         let buttons_position_target = Point2 { x: 0.0, y: 0.0 };
         let target_button_size = model.config.button_size;
 
+        let tracks_intermediate = model.layout.buttons.clone();
+        let tracks_intermediate = tracks_intermediate
+            .into_iter()
+            .map(|b| {
+                let (left, right, top, bottom) = b.components();
+                let button_track_margin =
+                    model.config.button_size * model.config.button_track_margin;
+                Rect::new(
+                    left - button_track_margin,
+                    right + button_track_margin,
+                    top - button_track_margin,
+                    bottom + button_track_margin,
+                )
+            })
+            .collect::<Vec<_>>();
+
         let animation: AnimationSequence<IntroVM> = keyframes![
-            (
-                IntroVM {
-                    ..IntroVM::default()
-                },
-                0.0,
-                EaseIn
-            ),
+            (IntroVM { ..init_vm.clone() }, 0.0, EaseIn),
             (
                 IntroVM {
                     intro_opacity: 0.0,
                     button_size: target_button_size,
-                    ..IntroVM::default()
+                    ..init_vm.clone()
                 },
                 0.5,
                 EaseOut
@@ -200,9 +241,26 @@ impl Intro {
                     flute_rotation: flute_rotation_target,
                     flute_position: flute_position_target,
                     buttons_position: buttons_position_target,
-                    ..IntroVM::default()
+                    ..init_vm.clone()
                 },
                 0.75,
+                EaseOut
+            ),
+            (
+                IntroVM {
+                    intro_opacity: 0.0,
+                    layout: instrument::Layout {
+                        tracks: tracks_intermediate,
+                        ..model.layout.clone()
+                    },
+                    view_box: vb_target,
+                    button_size: target_button_size,
+                    flute_rotation: flute_rotation_target,
+                    flute_position: flute_position_target,
+                    buttons_position: buttons_position_target,
+                    ..init_vm.clone()
+                },
+                0.85,
                 EaseOut
             ),
             (
@@ -214,7 +272,7 @@ impl Intro {
                     flute_rotation: flute_rotation_target,
                     flute_position: flute_position_target,
                     buttons_position: buttons_position_target,
-                    ..IntroVM::default()
+                    ..init_vm.clone()
                 },
                 1.0,
                 EaseIn

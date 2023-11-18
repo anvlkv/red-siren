@@ -109,7 +109,7 @@ fn RedSirenRoutes() -> impl IntoView {
     create_effect(move |_| {
         let (width, height) = size.get();
 
-        set_config.set(shared::instrument::Config::new(width as f32, height as f32));
+        set_config.set(shared::instrument::Config::new(width as f32, height as f32, 1.0));
     });
 
     create_effect(move |_| set_event(Event::ConfigureApp(config.get())));

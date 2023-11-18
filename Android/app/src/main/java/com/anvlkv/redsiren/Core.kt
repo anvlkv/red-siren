@@ -2,9 +2,11 @@
 
 package com.anvlkv.redsiren
 
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewModelScope
 import com.anvlkv.redsiren.shared.processEvent
 import com.anvlkv.redsiren.shared.view
 import com.anvlkv.redsiren.shared_types.Activity
@@ -16,12 +18,23 @@ import com.anvlkv.redsiren.shared_types.Requests
 import com.anvlkv.redsiren.shared_types.ViewModel
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
+import kotlinx.coroutines.launch
+import java.util.Optional
 
-open class Core(var navigate_to: (act: Activity) -> Unit) : androidx.lifecycle.ViewModel() {
+open class Core : androidx.lifecycle.ViewModel() {
     var view: ViewModel by mutableStateOf(ViewModel.bincodeDeserialize(view()))
         private set
 
+    var navigateTo: Optional<Activity> = Optional.empty()
+
     private val httpClient = HttpClient(CIO)
+
+    init {
+        viewModelScope.launch {
+            update(Event.None())
+        }
+    }
+
 
     suspend fun update(event: Event) {
         val effects = processEvent(event.bincodeSerialize())
@@ -38,17 +51,18 @@ open class Core(var navigate_to: (act: Activity) -> Unit) : androidx.lifecycle.V
                 this.view = ViewModel.bincodeDeserialize(view())
             }
 
+            is Effect.Navigate -> {
+                when (val op = effect.value) {
+                    is NavigateOperation.To -> {
+                        this.navigateTo = Optional.of(op.value)
+                        this.view = ViewModel.bincodeDeserialize(view())
+                    }
+                }
+            }
 
 
             is Effect.KeyValue -> {}
 
-            is Effect.Navigate -> {
-                when (val op = effect.value) {
-                    is NavigateOperation.To -> {
-                        this.navigate_to(op.value)
-                    }
-                }
-            }
         }
     }
 }

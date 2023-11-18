@@ -55,7 +55,7 @@ pub enum Event {
     InstrumentEvent(instrument::InstrumentEV),
     IntroEvent(intro::IntroEV),
     ConfigureApp(instrument::Config),
-    CreateConfigAndConfigureApp(f32, f32),
+    CreateConfigAndConfigureApp(f32, f32, f32),
     Activate(Activity)
 }
 
@@ -120,8 +120,8 @@ impl App for RedSiren {
                 model.activity = act;
                 caps.render.render();
             }
-            Event::CreateConfigAndConfigureApp(width, height) => {
-                let config = instrument::Config::new(width, height);
+            Event::CreateConfigAndConfigureApp(width, height, density) => {
+                let config = instrument::Config::new(width, height, density);
                 self.update(Event::ConfigureApp(config), model, caps);
             }
             Event::ConfigureApp(config) => {

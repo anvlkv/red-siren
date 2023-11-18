@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="red">#E30022</color>
-    <color name="black">#353839</color>
-    <color name="gray">#36454F</color>
+    <color name="main">#E30022</color>
+    <color name="primary">#353839</color>
+    <color name="muted">#36454F</color>
 </resources>

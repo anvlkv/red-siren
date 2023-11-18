@@ -2,13 +2,14 @@
 <resources>
 
     <style name="NightAdjusted.Theme.RedSiren" parent="android:Theme.Material.NoActionBar" >
-        <item name="android:windowBackground">@color/black</item>
-        <item name="android:statusBarColor" >@color/black</item>
+        <item name="android:windowBackground">@color/main</item>
+        <item name="android:statusBarColor" >@color/main</item>
         <item name="android:windowLightStatusBar" >false</item>
         <item name="android:windowLightNavigationBar" >false</item>
-        <item name="android:navigationBarColor">@color/black</item>
-        <item name="android:color">@color/red</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_night</item>
-        <item name="android:windowSplashScreenBrandingImage">@drawable/ic_brand_night</item>
+        <item name="android:navigationBarColor">@color/main</item>
+        <item name="android:color">@color/muted</item>
+        <item name="android:colorPrimary">@color/primary</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="android:windowSplashScreenBrandingImage">@drawable/ic_brand</item>
     </style>
 </resources>

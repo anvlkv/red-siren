@@ -16,7 +16,7 @@ impl Track {
         button_rect: &Rect,
     ) -> Entity {
         let sign = if left_hand { -1.0 } else { 1.0 };
-        let button_track_margin = config.button_size * 0.2 * sign;
+        let button_track_margin = config.button_size * config.button_track_margin * sign;
         let track_length = (config.breadth * 2.0 + button_track_margin * sign + config.button_size) * sign;
         let track_breadth = (config.button_size + button_track_margin * 2.0 * sign) * sign;
 

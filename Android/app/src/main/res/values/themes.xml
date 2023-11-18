@@ -3,13 +3,14 @@
 
     <!-- Allows us to override night specific attributes in the
          values-night folder. -->
-    <style name="NightAdjusted.Theme.RedSiren" parent="android:Theme.NoTitleBar.Fullscreen" >
-        <item name="android:windowBackground">@color/red</item>
-        <item name="android:statusBarColor" >@color/red</item>
+    <style name="NightAdjusted.Theme.RedSiren" parent="android:Theme.Material.NoActionBar" >
+        <item name="android:windowBackground">@color/main</item>
+        <item name="android:statusBarColor" >@color/main</item>
         <item name="android:windowLightStatusBar" >true</item>
         <item name="android:windowLightNavigationBar" >true</item>
-        <item name="android:navigationBarColor">@color/red</item>
-        <item name="android:color">@color/gray</item>
+        <item name="android:navigationBarColor">@color/main</item>
+        <item name="android:color">@color/muted</item>
+        <item name="android:colorPrimary">@color/primary</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
         <item name="android:windowSplashScreenBrandingImage">@drawable/ic_brand</item>
     </style>

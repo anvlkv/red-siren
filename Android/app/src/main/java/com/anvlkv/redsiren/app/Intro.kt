@@ -4,15 +4,11 @@ import android.animation.TimeAnimator
 import android.content.ContentResolver
 import android.content.res.Resources
 import android.provider.Settings
-import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.absoluteOffset
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -21,7 +17,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -34,6 +29,7 @@ import com.anvlkv.redsiren.R
 import com.anvlkv.redsiren.shared_types.IntroEV
 import com.anvlkv.redsiren.shared_types.IntroVM
 import kotlinx.coroutines.launch
+import java.lang.Float.min
 
 fun isReducedMotionEnabled(resolver: ContentResolver): Boolean {
     val animationDuration = try {
@@ -74,40 +70,38 @@ fun AppIntro(vm: IntroVM, ev: (ev: IntroEV) -> Unit) {
 
 
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val scaleX = this.maxWidth.value.toDouble() / vm.view_box.rect[1][0]
-        val scaleY = this.maxHeight.value.toDouble() / vm.view_box.rect[1][1]
-
-        Log.d("scaleX", scaleX.toString())
-        Log.d("scaleY", scaleY.toString())
+    Box(modifier = Modifier.fillMaxSize()) {
+        val scale = min(
+            vm.view_box.rect[1][0].dp / sirenPainter.intrinsicSize.width.dp,
+            vm.view_box.rect[1][1].dp / sirenPainter.intrinsicSize.height.dp
+        )
 
         Box(
             modifier = Modifier
                 .alpha(1 - vm.intro_opacity.toFloat())
                 .size(vm.view_box.rect[1][0].dp, vm.view_box.rect[1][1].dp)
-                .align(Alignment.BottomEnd),
-            contentAlignment = Alignment.BottomEnd
+                .align(Alignment.BottomEnd), contentAlignment = Alignment.BottomEnd
         ) {
             Box(
                 modifier = Modifier
                     .graphicsLayer(
                         rotationZ = vm.flute_rotation[2].toFloat(),
-                        // TODO: Here I lost patience...
-                        // FIXME: landscape tablet shows flute with offset...
                         transformOrigin = TransformOrigin(
-                            (vm.flute_rotation[0] / vm.view_box.rect[1][0] * scaleX).toFloat(),
-                            (vm.flute_rotation[1] / vm.view_box.rect[1][1] * scaleY).toFloat()
+                            (vm.flute_rotation[0] / vm.view_box.rect[1][0] * scale).toFloat(),
+                            (vm.flute_rotation[1] / vm.view_box.rect[1][1] * scale).toFloat(),
                         ),
                     )
-                    .graphicsLayer(
-                        translationX = vm.flute_position[0].toFloat() * density * scaleX.toFloat(),
-                        translationY = vm.flute_position[1].toFloat() * density * scaleY.toFloat()
-                    )
-
 
             ) {
-                InstrumentInboundString(layoutLine = vm.layout.inbound)
-                InstrumentOutboundString(layoutLine = vm.layout.outbound)
+                Box(
+                    modifier = Modifier.graphicsLayer(
+                        translationX = (vm.flute_position[0] * density.toDouble()).toFloat(),
+                        translationY = (vm.flute_position[1] * density.toDouble()).toFloat(),
+                    )
+                ) {
+                    InstrumentInboundString(layoutLine = vm.layout.inbound)
+                    InstrumentOutboundString(layoutLine = vm.layout.outbound)
+                }
             }
         }
 
@@ -134,7 +128,7 @@ fun AppIntro(vm: IntroVM, ev: (ev: IntroEV) -> Unit) {
 
         Box(
             modifier = Modifier
-                .alpha(vm.intro_opacity.toFloat() + 0.1F)
+                .alpha(vm.intro_opacity.toFloat())
                 .fillMaxSize()
         ) {
 
@@ -153,7 +147,6 @@ fun AppIntro(vm: IntroVM, ev: (ev: IntroEV) -> Unit) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .defaultMinSize(minWidth = 712.dp)
                     .align(Alignment.BottomStart)
                     .blur(1F.dp)
             ) {

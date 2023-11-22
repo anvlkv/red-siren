@@ -228,7 +228,7 @@ impl Intro {
                 },
                 0.5,
                 EaseOut
-            )/*,
+            ),
             (
                 IntroVM {
                     intro_opacity: 0.0,
@@ -276,7 +276,7 @@ impl Intro {
                 },
                 1.0,
                 EaseIn
-            ) */
+            )
         ];
         let _ = model.sequence.insert(animation);
     }

@@ -54,8 +54,8 @@ open class Core : androidx.lifecycle.ViewModel() {
             is Effect.Navigate -> {
                 when (val op = effect.value) {
                     is NavigateOperation.To -> {
-//                        this.navigateTo = Optional.of(op.value)
-//                        this.view = ViewModel.bincodeDeserialize(view())
+                        this.navigateTo = Optional.of(op.value)
+                        this.view = ViewModel.bincodeDeserialize(view())
                     }
                 }
             }

@@ -3,7 +3,7 @@ use shared::instrument::{keyboard, string, Config, Layout, LayoutRoot};
 
 #[test]
 fn creates_layout_from_config() {
-    let config = Config::new(430.0, 932.0, 476, Default::default());
+    let config = Config::new(430.0, 932.0, 476.0, Default::default());
     let mut world = World::new();
 
     let inbound = string::InboundString::spawn(&mut world, &config);

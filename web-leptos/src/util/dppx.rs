@@ -14,7 +14,7 @@ pub fn use_dppx() -> Signal<f64> {
     let (dppx, set_dppx) = create_signal(1.0 as f64);
     let window = use_window();
 
-    cfg_if! { if #[cfg(not(feature = "ssr"))] {
+    cfg_if! { if #[cfg(feature = "hydrate")] {
       let media_query: Rc<RefCell<Option<web_sys::MediaQueryList>>> = Rc::new(RefCell::new(None));
       let remove_listener: RemoveListener = Rc::new(RefCell::new(None));
 

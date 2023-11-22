@@ -12,14 +12,14 @@ leptos = { version = "0.5.1", features = ["nightly"] }
 leptos_meta = { version = "0.5", features = ["nightly"] }
 leptos_router = { version = "0.5", features = ["nightly"] }
 leptos_axum = { version = "0.5", optional = true }
-leptos-use = {git="https://github.com/Synphonyte/leptos-use.git", default-features = false}
+leptos-use = { git = "https://github.com/Synphonyte/leptos-use.git", default-features = false }
 axum = { version = "0.6.4", optional = true }
 http = "0.2"
 tokio = { version = "1.25.0", optional = true }
 tower = { version = "0.4.13", optional = true }
 tower-http = { version = "0.4", features = ["fs"], optional = true }
-wasm-bindgen = {workspace = true}
-log={workspace=true}
+wasm-bindgen = { workspace = true }
+log = { workspace = true }
 simple_logger = "4"
 console_error_panic_hook = "0.1"
 console_log = "1"
@@ -27,12 +27,25 @@ cfg-if = "1"
 thiserror = "1.0.38"
 mint = { version = "0.5.9", features = ["serde"] }
 tracing = { version = "0.1.37", optional = true }
-web-sys = {version = "0.3", features = ["UiEvent", "Event", "EventTarget", "Element", "HtmlElement", "Navigator", "Window", "MediaQueryList"], optional=true}
-
+web-sys = { version = "0.3", features = [
+    "UiEvent",
+    "Event",
+    "EventTarget",
+    "Element",
+    "HtmlElement",
+    "Navigator",
+    "Window",
+    "MediaQueryList",
+], optional = true }
 
 
 [features]
-hydrate = ["leptos/hydrate", "leptos_meta/hydrate",  "leptos_router/hydrate", "web-sys"]
+hydrate = [
+    "leptos/hydrate",
+    "leptos_meta/hydrate",
+    "leptos_router/hydrate",
+    "web-sys",
+]
 ssr = [
     "dep:axum",
     "dep:tokio",

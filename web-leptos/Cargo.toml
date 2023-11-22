@@ -27,7 +27,7 @@ cfg-if = "1"
 thiserror = "1.0.38"
 mint = { version = "0.5.9", features = ["serde"] }
 tracing = { version = "0.1.37", optional = true }
-web-sys = {version = "0.3", features = ["UiEvent", "Event", "EventTarget", "Element", "HtmlElement", "Navigator"], optional=true}
+web-sys = {version = "0.3", features = ["UiEvent", "Event", "EventTarget", "Element", "HtmlElement", "Navigator", "Window", "MediaQueryList"], optional=true}
 
 
 

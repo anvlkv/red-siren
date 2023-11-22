@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		334B08822AC4D801207951A0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6F004D450518226D7B50A267 /* Assets.xcassets */; };
+		45B5157CB6DC4BD490F119FC /* Pods_RedSiren.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EE2619BE51FCAF0FB9A9D2B9 /* Pods_RedSiren.framework */; };
 		54C2E71CAF2F96B967BC0DF5 /* shared.udl in Sources */ = {isa = PBXBuildFile; fileRef = 5793BC3BA0A0576A14F5F050 /* shared.udl */; };
 		5CB93AF904772A9440AC765F /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E4056BAC32CC8AC7A9740CA /* ContentView.swift */; };
 		7D03E7045F57CA28148D2CA4 /* core.swift in Sources */ = {isa = PBXBuildFile; fileRef = 194A00C08EEF11C3CC1340EE /* core.swift */; };
@@ -16,7 +17,10 @@
 		91A375A39D8A4F827B873AF3 /* RedSirenApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17F008C3C1A819A3D7658E59 /* RedSirenApp.swift */; };
 		C6A871270F87D449FB7FE5C4 /* uniffi-bindgen in Resources */ = {isa = PBXBuildFile; fileRef = 4D27A7B150B96621935C1300 /* uniffi-bindgen */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F68573BF507ACC074620C5D8 /* libshared_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 6A500489520C085A22DE7285 /* libshared_static.a */; };
-		FAB686542AF94B7D00225C44 /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FAB686532AF94B7D00225C44 /* Launch Screen.storyboard */; };
+		FAAA65362B09DFB500B1F5D1 /* IntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAA65352B09DFB500B1F5D1 /* IntroView.swift */; };
+		FAAA65382B09E0E100B1F5D1 /* InstrumentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAA65372B09E0E100B1F5D1 /* InstrumentView.swift */; };
+		FAAA653A2B09EC8300B1F5D1 /* Intro.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FAAA65392B09EC8300B1F5D1 /* Intro.storyboard */; };
+		FAAA653C2B0A23E500B1F5D1 /* AnimationClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAA653B2B0A23E500B1F5D1 /* AnimationClock.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXBuildRule section */
@@ -82,14 +86,20 @@
 		17F008C3C1A819A3D7658E59 /* RedSirenApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedSirenApp.swift; sourceTree = "<group>"; };
 		194A00C08EEF11C3CC1340EE /* core.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = core.swift; sourceTree = "<group>"; };
 		1E4056BAC32CC8AC7A9740CA /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		457F08D9BCEE7D38DA310B0D /* Pods-RedSiren.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RedSiren.release.xcconfig"; path = "Target Support Files/Pods-RedSiren/Pods-RedSiren.release.xcconfig"; sourceTree = "<group>"; };
 		5793BC3BA0A0576A14F5F050 /* shared.udl */ = {isa = PBXFileReference; lastKnownFileType = text; path = shared.udl; sourceTree = "<group>"; };
 		6F004D450518226D7B50A267 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		85AA482E612CD48B918497C9 /* RedSiren.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RedSiren.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B159CE6ED67571255C05D2C3 /* SharedTypes */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SharedTypes; path = ../shared_types/generated/swift/SharedTypes; sourceTree = SOURCE_ROOT; };
 		BA04D6CC7F18E9A653D26BDD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		BEED0A11FB2044F35FBCD25B /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		CB737D623C3D7CA99A86C4B0 /* Pods-RedSiren.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RedSiren.debug.xcconfig"; path = "Target Support Files/Pods-RedSiren/Pods-RedSiren.debug.xcconfig"; sourceTree = "<group>"; };
+		EE2619BE51FCAF0FB9A9D2B9 /* Pods_RedSiren.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RedSiren.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F7A91C46D50C923426AE058D /* Shared */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Shared; path = ../shared/shared.xcodeproj; sourceTree = "<group>"; };
-		FAB686532AF94B7D00225C44 /* Launch Screen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = "Launch Screen.storyboard"; sourceTree = "<group>"; };
+		FAAA65352B09DFB500B1F5D1 /* IntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroView.swift; sourceTree = "<group>"; };
+		FAAA65372B09E0E100B1F5D1 /* InstrumentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstrumentView.swift; sourceTree = "<group>"; };
+		FAAA65392B09EC8300B1F5D1 /* Intro.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Intro.storyboard; sourceTree = "<group>"; };
+		FAAA653B2B0A23E500B1F5D1 /* AnimationClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationClock.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -99,6 +109,7 @@
 			files = (
 				F68573BF507ACC074620C5D8 /* libshared_static.a in Frameworks */,
 				8CEEE500CE6BE0647260B67F /* SharedTypes in Frameworks */,
+				45B5157CB6DC4BD490F119FC /* Pods_RedSiren.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -111,12 +122,24 @@
 				6F004D450518226D7B50A267 /* Assets.xcassets */,
 				17F008C3C1A819A3D7658E59 /* RedSirenApp.swift */,
 				1E4056BAC32CC8AC7A9740CA /* ContentView.swift */,
+				FAAA65352B09DFB500B1F5D1 /* IntroView.swift */,
+				FAAA653B2B0A23E500B1F5D1 /* AnimationClock.swift */,
+				FAAA65372B09E0E100B1F5D1 /* InstrumentView.swift */,
 				194A00C08EEF11C3CC1340EE /* core.swift */,
+				FAAA65392B09EC8300B1F5D1 /* Intro.storyboard */,
 				BA04D6CC7F18E9A653D26BDD /* Info.plist */,
-				FAB686532AF94B7D00225C44 /* Launch Screen.storyboard */,
 				B5007F506D99687AEC368328 /* Preview Content */,
 			);
 			path = RedSiren;
+			sourceTree = "<group>";
+		};
+		18763685152B49105C9B51B4 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				CB737D623C3D7CA99A86C4B0 /* Pods-RedSiren.debug.xcconfig */,
+				457F08D9BCEE7D38DA310B0D /* Pods-RedSiren.release.xcconfig */,
+			);
+			path = Pods;
 			sourceTree = "<group>";
 		};
 		2C7829583F1579E7AC74C08C /* src */ = {
@@ -136,6 +159,14 @@
 			name = Projects;
 			sourceTree = "<group>";
 		};
+		8603ECCCFC0ECC027AB147F8 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				EE2619BE51FCAF0FB9A9D2B9 /* Pods_RedSiren.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		B5007F506D99687AEC368328 /* Preview Content */ = {
 			isa = PBXGroup;
 			children = (
@@ -152,6 +183,8 @@
 				2C7829583F1579E7AC74C08C /* src */,
 				D3FCB02205D19ED1EDA7794F /* Products */,
 				632E821FBB8ECA7154D2ED0E /* Projects */,
+				18763685152B49105C9B51B4 /* Pods */,
+				8603ECCCFC0ECC027AB147F8 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -188,9 +221,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = E4B2439A59895E897FF0E533 /* Build configuration list for PBXNativeTarget "RedSiren" */;
 			buildPhases = (
+				F4F0ADD5BCBE2798676166B4 /* [CP] Check Pods Manifest.lock */,
 				E1A5EC4560D091F83DC11375 /* Sources */,
 				17C3C3744E3DC17C1662F83C /* Resources */,
 				32E37407E09C303EE44B4C29 /* Frameworks */,
+				D591286300FFCD79D78BC9BB /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 				325AF1D41F320967DD15643C /* PBXBuildRule */,
@@ -225,6 +260,7 @@
 				en,
 			);
 			mainGroup = C4A5B9BF461AAFDF4CBFCCBD;
+			productRefGroup = D3FCB02205D19ED1EDA7794F /* Products */;
 			projectDirPath = "";
 			projectReferences = (
 				{
@@ -270,12 +306,54 @@
 			files = (
 				334B08822AC4D801207951A0 /* Assets.xcassets in Resources */,
 				831E091105B555E7D0085CF4 /* Preview Assets.xcassets in Resources */,
-				FAB686542AF94B7D00225C44 /* Launch Screen.storyboard in Resources */,
 				C6A871270F87D449FB7FE5C4 /* uniffi-bindgen in Resources */,
+				FAAA653A2B09EC8300B1F5D1 /* Intro.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		D591286300FFCD79D78BC9BB /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-RedSiren/Pods-RedSiren-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-RedSiren/Pods-RedSiren-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-RedSiren/Pods-RedSiren-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		F4F0ADD5BCBE2798676166B4 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-RedSiren-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		E1A5EC4560D091F83DC11375 /* Sources */ = {
@@ -284,8 +362,11 @@
 			files = (
 				91A375A39D8A4F827B873AF3 /* RedSirenApp.swift in Sources */,
 				5CB93AF904772A9440AC765F /* ContentView.swift in Sources */,
+				FAAA65362B09DFB500B1F5D1 /* IntroView.swift in Sources */,
 				7D03E7045F57CA28148D2CA4 /* core.swift in Sources */,
 				54C2E71CAF2F96B967BC0DF5 /* shared.udl in Sources */,
+				FAAA65382B09E0E100B1F5D1 /* InstrumentView.swift in Sources */,
+				FAAA653C2B0A23E500B1F5D1 /* AnimationClock.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -426,7 +507,9 @@
 		};
 		9C50312AAA0AD55228C5C641 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 457F08D9BCEE7D38DA310B0D /* Pods-RedSiren.release.xcconfig */;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = "$(inherited)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -439,9 +522,11 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				LINK_WITH_STANDARD_LIBRARIES = "$(inherited)";
 				OTHER_LDFLAGS = (
 					"-w",
 					"-ObjC",
+					"$(inherited)",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.anvlkv.redsiren.RedSiren;
 				SDKROOT = iphoneos;
@@ -452,7 +537,9 @@
 		};
 		D70F62F9308AA2CA3466EB5C /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = CB737D623C3D7CA99A86C4B0 /* Pods-RedSiren.debug.xcconfig */;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = "$(inherited)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -465,9 +552,11 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				LINK_WITH_STANDARD_LIBRARIES = "$(inherited)";
 				OTHER_LDFLAGS = (
 					"-w",
 					"-ObjC",
+					"$(inherited)",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.anvlkv.redsiren.RedSiren;
 				SDKROOT = iphoneos;

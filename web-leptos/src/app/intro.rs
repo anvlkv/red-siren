@@ -5,7 +5,6 @@ use shared::{
     app::{instrument, intro},
     Intro,
 };
-use std::rc::Rc;
 
 #[component]
 pub fn IntroComponent(
@@ -90,7 +89,7 @@ pub fn IntroComponent(
 
         // svg split into several to handle dark mode with tailwind classes...
         <div class="absolute h-full w-full splash-picture">
-          <svg viewBox="0 0 1048 932" fill="none" class="waves stroke-gray dark:stroke-red blur-[.5px]" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 1048 932" fill="none" class="waves stroke-gray dark:stroke-cinnabar blur-[.5px]" xmlns="http://www.w3.org/2000/svg">
             <path d={WAVES_PATH} stroke-width="0.5"/>
           </svg>
           <svg viewBox="0 0 430 932" class="stone fill-red dark:fill-black stroke-black dark:stroke-red" xmlns="http://www.w3.org/2000/svg">

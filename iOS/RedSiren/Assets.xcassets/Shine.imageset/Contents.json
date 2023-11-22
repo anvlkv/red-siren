@@ -1,19 +1,18 @@
 {
   "images" : [
     {
-      "filename" : "Shine.png",
-      "idiom" : "universal",
-      "scale" : "1x"
+      "filename" : "shine.svg",
+      "idiom" : "universal"
     },
     {
-      "filename" : "Shine@2x.png",
-      "idiom" : "universal",
-      "scale" : "2x"
-    },
-    {
-      "filename" : "Shine@3x.png",
-      "idiom" : "universal",
-      "scale" : "3x"
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "dark"
+        }
+      ],
+      "filename" : "Shine-dark.svg",
+      "idiom" : "universal"
     }
   ],
   "info" : {

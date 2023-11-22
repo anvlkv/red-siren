@@ -88,7 +88,7 @@ impl Layout {
         })
     }
 
-    pub fn dummy(breadth: f32, length: f32, button_size: f32) -> Self {
+    pub fn dummy(breadth: f64, length: f64, button_size: f64) -> Self {
         let inbound = Line::new(0.0, length, 0.0, 1.0);
         let outbound = Line::new(0.0, length, breadth, breadth + 1.0);
 
@@ -104,7 +104,7 @@ impl Layout {
 }
 
 fn ease_vec(from: Vec<Rect>, to: Vec<Rect>, time: impl keyframe::num_traits::Float) -> Vec<Rect> {
-    let len = CanTween::ease(from.len() as f32, to.len() as f32, time).round() as usize;
+    let len = CanTween::ease(from.len() as f64, to.len() as f64, time).round() as usize;
     (0..len)
         .into_iter()
         .map(|i| {

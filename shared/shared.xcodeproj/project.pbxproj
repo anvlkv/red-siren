@@ -7,9 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		CA60D3693CF72A54933F48BD /* Cargo.toml in Sources */ = {isa = PBXBuildFile; fileRef = CA60A8EAC2313EF4668187A5 /* Cargo.toml */; settings = {COMPILER_FLAGS = "--lib"; }; };
-		CA60D3693CF75AAF98D5E0DD /* Cargo.toml in Sources */ = {isa = PBXBuildFile; fileRef = CA60A8EAC2313EF4668187A5 /* Cargo.toml */; settings = {COMPILER_FLAGS = "--lib"; }; };
-		CA60D3693CF79A6F07B14E08 /* Cargo.toml in Sources */ = {isa = PBXBuildFile; fileRef = CA60A8EAC2313EF4668187A5 /* Cargo.toml */; settings = {COMPILER_FLAGS = "--bin 'uniffi-bindgen'"; }; };
+		CA60D3693CF72A54933F48BD /* Cargo.toml in Sources */ = {isa = PBXBuildFile; fileRef = CA60A8EAC2313EF4668187A5 /* Cargo.toml */; settings = {COMPILER_FLAGS = "--lib --features ios"; }; };
+		CA60D3693CF75AAF98D5E0DD /* Cargo.toml in Sources */ = {isa = PBXBuildFile; fileRef = CA60A8EAC2313EF4668187A5 /* Cargo.toml */; settings = {COMPILER_FLAGS = "--lib --features ios"; }; };
+		CA60D3693CF79A6F07B14E08 /* Cargo.toml in Sources */ = {isa = PBXBuildFile; fileRef = CA60A8EAC2313EF4668187A5 /* Cargo.toml */; settings = {COMPILER_FLAGS = "--bin 'uniffi-bindgen' --features ios"; }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXBuildRule section */

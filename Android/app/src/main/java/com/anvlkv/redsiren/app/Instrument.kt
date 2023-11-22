@@ -1,6 +1,5 @@
 package com.anvlkv.redsiren.app
 
-import android.content.res.Resources
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.absoluteOffset
@@ -14,7 +13,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.anvlkv.redsiren.shared_types.InstrumentEV
 import com.anvlkv.redsiren.shared_types.InstrumentVM
 import com.anvlkv.redsiren.shared_types.Line
@@ -26,11 +25,11 @@ fun InstrumentButton(layoutRect: Rect) {
     val color = MaterialTheme.colorScheme.primary
     Canvas(
         modifier = Modifier
-            .width(Dp(layoutRect.rect[1][0] - layoutRect.rect[0][0]))
-            .height(Dp(layoutRect.rect[1][1] - layoutRect.rect[0][1]))
+            .width((layoutRect.rect[1][0] - layoutRect.rect[0][0]).dp)
+            .height((layoutRect.rect[1][1] - layoutRect.rect[0][1]).dp)
             .absoluteOffset(
-                Dp(layoutRect.rect[0][0]),
-                Dp(layoutRect.rect[0][1]),
+                (layoutRect.rect[0][0]).dp,
+                (layoutRect.rect[0][1]).dp,
             )
     ) {
         drawCircle(color = color, style = Fill)
@@ -57,8 +56,8 @@ fun InstrumentString(
 
         ) {
         val path = Path()
-        path.moveTo(layoutLine.line[0][0] * this.density, layoutLine.line[0][1] * this.density)
-        path.lineTo(layoutLine.line[1][0] * this.density, layoutLine.line[1][1] * this.density)
+        path.moveTo(layoutLine.line[0][0].dp.toPx(), layoutLine.line[0][1].dp.toPx())
+        path.lineTo(layoutLine.line[1][0].dp.toPx(), layoutLine.line[1][1].dp.toPx())
         drawPath(
             color = color,
             style = Stroke(1F * this.density),
@@ -72,24 +71,24 @@ fun InstrumentString(
 fun InstrumentTrack(layoutRect: Rect) {
     val color = MaterialTheme.colorScheme.primary
     val backgroundColor = MaterialTheme.colorScheme.background
-    val density = Resources.getSystem().displayMetrics.density
 
-    val r = min(
-        layoutRect.rect[1][0] - layoutRect.rect[0][0],
-        layoutRect.rect[1][1] - layoutRect.rect[0][1]
-    ) * density
+
 
     Canvas(
         modifier = Modifier
-            .width(Dp(layoutRect.rect[1][0] - layoutRect.rect[0][0]))
-            .height(Dp(layoutRect.rect[1][1] - layoutRect.rect[0][1]))
+            .width((layoutRect.rect[1][0] - layoutRect.rect[0][0]).dp)
+            .height((layoutRect.rect[1][1] - layoutRect.rect[0][1]).dp)
             .absoluteOffset(
-                Dp(layoutRect.rect[0][0]),
-                Dp(layoutRect.rect[0][1]),
+                layoutRect.rect[0][0].dp,
+                layoutRect.rect[0][1].dp,
             )
     ) {
+        val r = min(
+            layoutRect.rect[1][0] - layoutRect.rect[0][0],
+            layoutRect.rect[1][1] - layoutRect.rect[0][1]
+        ).toFloat() * this.density
         drawRoundRect(color = backgroundColor, style = Fill, cornerRadius = CornerRadius(r, r))
-        drawRoundRect(color = color, style = Stroke(1F * density), cornerRadius = CornerRadius(r, r))
+        drawRoundRect(color = color, style = Stroke(1F.dp.toPx()), cornerRadius = CornerRadius(r, r))
     }
 }
 

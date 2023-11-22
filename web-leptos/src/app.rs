@@ -2,9 +2,10 @@ mod core;
 mod instrument;
 mod intro;
 
-use std::rc::Rc;
-
-use crate::error_template::{AppError, ErrorTemplate};
+use crate::{
+    util::use_dpi,
+    error_template::{AppError, ErrorTemplate},
+};
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
@@ -64,7 +65,7 @@ fn RedSirenRoutes() -> impl IntoView {
     let view = view_rw_signal.read_only();
     let render = view_rw_signal.write_only();
 
-    let (event, set_event) = create_signal(Event::None);
+    let (event, set_event) = create_signal(Event::Start);
 
     create_effect(move |_| {
         core::update(&core, event.get(), render);
@@ -77,7 +78,7 @@ fn RedSirenRoutes() -> impl IntoView {
         "/tune" => set_event(Event::Activate(Activity::Tune)),
         "/play" => set_event(Event::Activate(Activity::Play)),
         "/listen" => set_event(Event::Activate(Activity::Listen)),
-        _=> panic!("route not using activity")
+        _ => panic!("route not using activity"),
     });
 
     let navigate = leptos_router::use_navigate();
@@ -92,10 +93,9 @@ fn RedSirenRoutes() -> impl IntoView {
         navigate(path, Default::default())
     });
 
-    let (config, set_config) = create_signal(shared::instrument::Config::default());
     let (size, set_size) = create_signal((0, 0));
     let window = use_window();
-    use_event_listener(window.clone(), leptos::ev::resize, move |_| {
+    let _ = use_event_listener(window.clone(), leptos::ev::resize, move |_| {
         let body = window.document().body().unwrap();
         set_size.set((body.client_width(), body.client_height()));
     });
@@ -106,13 +106,18 @@ fn RedSirenRoutes() -> impl IntoView {
         set_size.set((body.client_width(), body.client_height()));
     });
 
+    let dpi = use_dpi(vec![120, 160, 240, 320, 480, 640]);
     create_effect(move |_| {
         let (width, height) = size.get();
+        let dpi = dpi.get() as f64;
 
-        set_config.set(shared::instrument::Config::new(width as f32, height as f32, 1.0));
+        set_event(Event::CreateConfigAndConfigureApp {
+            width: width as f64,
+            height: height as f64,
+            dpi,
+            safe_areas: Default::default(),
+        })
     });
-
-    create_effect(move |_| set_event(Event::ConfigureApp(config.get())));
 
     let intro_vm = create_read_slice(view_rw_signal, move |v| v.intro.clone());
     let intro_ev = SignalSetter::map(move |ev| set_event.set(Event::IntroEvent(ev)));

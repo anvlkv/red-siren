@@ -4,14 +4,14 @@ use crux_kv::KeyValue;
 use crux_macros::Effect;
 use serde::{Deserialize, Serialize};
 
-pub mod navigate;
 pub mod instrument;
 pub mod intro;
+pub mod navigate;
 pub mod tuner;
 
-pub use navigate::Navigate;
 pub use instrument::Instrument;
 pub use intro::Intro;
+pub use navigate::Navigate;
 pub use tuner::Tuner;
 
 use self::{
@@ -50,16 +50,21 @@ pub struct ViewModel {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum Event {
-    None,
+    Start,
     TunerEvent(tuner::TunerEV),
     InstrumentEvent(instrument::InstrumentEV),
     IntroEvent(intro::IntroEV),
     ConfigureApp(instrument::Config),
-    CreateConfigAndConfigureApp(f32, f32, f32),
-    Activate(Activity)
+    CreateConfigAndConfigureApp {
+        width: f64,
+        height: f64,
+        dpi: f64,
+        safe_areas: [f64; 4],
+    },
+    Activate(Activity),
 }
 
-impl Eq for Event{}
+impl Eq for Event {}
 
 #[derive(Default)]
 pub struct RedSiren {
@@ -74,15 +79,14 @@ pub struct RedSiren {
 pub struct RedSirenCapabilities {
     pub render: Render<Event>,
     pub key_value: KeyValue<Event>,
-    pub navigate: Navigate<Event>
+    pub navigate: Navigate<Event>,
 }
-
 
 impl From<&RedSirenCapabilities> for IntroCapabilities {
     fn from(incoming: &RedSirenCapabilities) -> Self {
         IntroCapabilities {
             render: incoming.render.map_event(super::Event::IntroEvent),
-            navigate: incoming.navigate.map_event(super::Event::IntroEvent)
+            navigate: incoming.navigate.map_event(super::Event::IntroEvent),
         }
     }
 }
@@ -112,16 +116,46 @@ impl App for RedSiren {
     type Capabilities = RedSirenCapabilities;
 
     fn update(&self, msg: Event, model: &mut Model, caps: &RedSirenCapabilities) {
+        log::debug!("msg: {:?}", msg);
+        
         match msg {
-            Event::None => {
+            Event::Start => {
+                #[cfg(feature = "android")]
+                {
+                    use android_logger::{init_once, Config};
+                    use log::LevelFilter;
+
+                    init_once(
+                        Config::default()
+                            .with_max_level(LevelFilter::Trace)
+                            .with_tag("red_siren::shared"),
+                    );
+                }
+                #[cfg(feature = "ios")]
+                {
+                    use log::LevelFilter;
+                    use oslog::OsLogger;
+
+                    OsLogger::new("com.anvlkv.RedSiren.Core")
+                        .level_filter(LevelFilter::Debug)
+                        .category_level_filter("Settings", LevelFilter::Info)
+                        .init()
+                        .unwrap();
+                }
+
                 caps.render.render();
             }
             Event::Activate(act) => {
                 model.activity = act;
                 caps.render.render();
             }
-            Event::CreateConfigAndConfigureApp(width, height, density) => {
-                let config = instrument::Config::new(width, height, density);
+            Event::CreateConfigAndConfigureApp {
+                width,
+                height,
+                dpi,
+                safe_areas,
+            } => {
+                let config = instrument::Config::new(width, height, dpi, safe_areas);
                 self.update(Event::ConfigureApp(config), model, caps);
             }
             Event::ConfigureApp(config) => {

@@ -8,7 +8,9 @@ import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.absoluteOffset
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
@@ -27,7 +29,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.vectorResource
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.anvlkv.redsiren.R
 import com.anvlkv.redsiren.shared_types.IntroEV
 import com.anvlkv.redsiren.shared_types.IntroVM
@@ -49,6 +51,7 @@ fun AppIntro(vm: IntroVM, ev: (ev: IntroEV) -> Unit) {
     val sun = ImageVector.vectorResource(id = R.drawable.intro_sun)
     val waves = ImageVector.vectorResource(id = R.drawable.intro_shine)
     val sirenComp = ImageVector.vectorResource(id = R.drawable.intro_siren)
+    val density = Resources.getSystem().displayMetrics.density
 
     val sunPainter = rememberVectorPainter(image = sun)
     val wavesPainter = rememberVectorPainter(image = waves)
@@ -69,26 +72,39 @@ fun AppIntro(vm: IntroVM, ev: (ev: IntroEV) -> Unit) {
         animator.start()
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+
+
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val scaleX = this.maxWidth.value.toDouble() / vm.view_box.rect[1][0]
+        val scaleY = this.maxHeight.value.toDouble() / vm.view_box.rect[1][1]
+
+        Log.d("scaleX", scaleX.toString())
+        Log.d("scaleY", scaleY.toString())
+
         Box(
             modifier = Modifier
-                .alpha(1 - vm.intro_opacity)
-                .size(Dp(vm.view_box.rect[1][0]), Dp(vm.view_box.rect[1][1]))
-                .align(Alignment.BottomEnd)
-
+                .alpha(1 - vm.intro_opacity.toFloat())
+                .size(vm.view_box.rect[1][0].dp, vm.view_box.rect[1][1].dp)
+                .align(Alignment.BottomEnd),
+            contentAlignment = Alignment.BottomEnd
         ) {
             Box(
                 modifier = Modifier
                     .graphicsLayer(
-                        rotationZ = vm.flute_rotation[2],
+                        rotationZ = vm.flute_rotation[2].toFloat(),
                         // TODO: Here I lost patience...
                         // FIXME: landscape tablet shows flute with offset...
                         transformOrigin = TransformOrigin(
-                            vm.flute_rotation[0] / vm.view_box.rect[1][0],
-                            vm.flute_rotation[1] / vm.view_box.rect[1][1]
+                            (vm.flute_rotation[0] / vm.view_box.rect[1][0] * scaleX).toFloat(),
+                            (vm.flute_rotation[1] / vm.view_box.rect[1][1] * scaleY).toFloat()
                         ),
                     )
-                    .absoluteOffset(Dp(vm.flute_position[0]), Dp(vm.flute_position[1]))
+                    .graphicsLayer(
+                        translationX = vm.flute_position[0].toFloat() * density * scaleX.toFloat(),
+                        translationY = vm.flute_position[1].toFloat() * density * scaleY.toFloat()
+                    )
+
+
             ) {
                 InstrumentInboundString(layoutLine = vm.layout.inbound)
                 InstrumentOutboundString(layoutLine = vm.layout.outbound)
@@ -97,8 +113,8 @@ fun AppIntro(vm: IntroVM, ev: (ev: IntroEV) -> Unit) {
 
         Box(
             modifier = Modifier
-                .alpha(1 - vm.intro_opacity)
-                .size(Dp(vm.view_box.rect[1][0]), Dp(vm.view_box.rect[1][1]))
+                .alpha(1 - vm.intro_opacity.toFloat())
+                .size(vm.view_box.rect[1][0].dp, vm.view_box.rect[1][1].dp)
         ) {
             vm.layout.tracks.forEach { rect ->
                 InstrumentTrack(layoutRect = rect)
@@ -107,9 +123,9 @@ fun AppIntro(vm: IntroVM, ev: (ev: IntroEV) -> Unit) {
 
         Box(
             modifier = Modifier
-                .alpha(1 - vm.intro_opacity)
-                .absoluteOffset(Dp(vm.buttons_position[0]), Dp(vm.buttons_position[1]))
-                .size(Dp(vm.view_box.rect[1][0]), Dp(vm.view_box.rect[1][1]))
+                .alpha(1 - vm.intro_opacity.toFloat())
+                .absoluteOffset(vm.buttons_position[0].dp, vm.buttons_position[1].dp)
+                .size(vm.view_box.rect[1][0].dp, vm.view_box.rect[1][1].dp)
         ) {
             vm.layout.buttons.forEach { rect ->
                 InstrumentButton(layoutRect = rect)
@@ -118,7 +134,7 @@ fun AppIntro(vm: IntroVM, ev: (ev: IntroEV) -> Unit) {
 
         Box(
             modifier = Modifier
-                .alpha(vm.intro_opacity)
+                .alpha(vm.intro_opacity.toFloat() + 0.1F)
                 .fillMaxSize()
         ) {
 
@@ -137,8 +153,9 @@ fun AppIntro(vm: IntroVM, ev: (ev: IntroEV) -> Unit) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .defaultMinSize(minWidth = 712.dp)
                     .align(Alignment.BottomStart)
-                    .blur(Dp(1F))
+                    .blur(1F.dp)
             ) {
                 Image(
                     painter = wavesPainter,

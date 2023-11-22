@@ -56,6 +56,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0942ffc6dcaadf03badf6e6a2d0228460359d5e34b57ccdc720b7382dfbd5ec5"
 
 [[package]]
+name = "android_log-sys"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ecc8056bf6ab9892dcd53216c83d1597487d7dacac16c8df6b877d127df9937"
+
+[[package]]
+name = "android_logger"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c494134f746c14dc653a35a4ea5aca24ac368529da5370ecf41fe0341c35772f"
+dependencies = [
+ "android_log-sys",
+ "env_logger",
+ "log",
+ "once_cell",
+]
+
+[[package]]
 name = "anstream"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -828,8 +846,6 @@ dependencies = [
 [[package]]
 name = "crux_core"
 version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51f7c4e7212fa3535071e43a3737d5aa79fba0dd0c2e697d3a3c7fa5fc9f6d41"
 dependencies = [
  "anyhow",
  "bincode",
@@ -848,8 +864,6 @@ dependencies = [
 [[package]]
 name = "crux_http"
 version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da2edbe73700dfa067f1eb52bdb1a7cb9aab433766bc198fe1e01287be435eac"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -867,8 +881,6 @@ dependencies = [
 [[package]]
 name = "crux_kv"
 version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb8a04d308e7a6cc71eacb16bd175634a7783d29531c4cf6c5ead31cbdc0d3c3"
 dependencies = [
  "anyhow",
  "crux_core",
@@ -879,8 +891,6 @@ dependencies = [
 [[package]]
 name = "crux_macros"
 version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcf94d071fb3a38ca72b4411a122bad758352d6cb859501fcc2de9c6ae08e94a"
 dependencies = [
  "darling 0.20.3",
  "proc-macro-error",
@@ -892,8 +902,6 @@ dependencies = [
 [[package]]
 name = "crux_platform"
 version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71462b345a7bddbfadfe71bcf90af544abb53e4b8b98c42c62a16c0037442da2"
 dependencies = [
  "anyhow",
  "crux_core",
@@ -904,8 +912,6 @@ dependencies = [
 [[package]]
 name = "crux_time"
 version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29eb9dc723046dbdaf6f281378476922efa4b688dd17cdf56fd3a97b35a0828e"
 dependencies = [
  "anyhow",
  "crux_core",
@@ -981,6 +987,19 @@ dependencies = [
  "darling_core 0.20.3",
  "quote",
  "syn 2.0.39",
+]
+
+[[package]]
+name = "dashmap"
+version = "5.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856"
+dependencies = [
+ "cfg-if",
+ "hashbrown 0.14.2",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core",
 ]
 
 [[package]]
@@ -1084,6 +1103,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7268b386296a025e474d5140678f75d6de9493ae55a5d709eeb9dd08149945e1"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95b3f3e67048839cb0d0781f445682a35113da7121f7c949db0e2be96a4fbece"
+dependencies = [
+ "log",
+ "regex",
 ]
 
 [[package]]
@@ -2281,6 +2310,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "oslog"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80d2043d1f61d77cb2f4b1f7b7b2295f40507f5f8e9d1c8bf10a1ca5f97a3969"
+dependencies = [
+ "cc",
+ "dashmap",
+ "log",
+]
+
+[[package]]
 name = "overload"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3106,6 +3146,7 @@ dependencies = [
 name = "shared"
 version = "0.1.0"
 dependencies = [
+ "android_logger",
  "anyhow",
  "assert_let_bind",
  "bincode",
@@ -3123,6 +3164,7 @@ dependencies = [
  "lazy_static",
  "log",
  "mint",
+ "oslog",
  "serde",
  "serde_json",
  "thiserror",

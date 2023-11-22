@@ -6,7 +6,7 @@ use super::rect::Rect;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Copy, CanTween, Debug)]
 pub struct Line {
-    line: Vector2<Point2<f32>>,
+    line: Vector2<Point2<f64>>,
 }
 
 impl Eq for Line {}
@@ -18,7 +18,7 @@ impl Default for Line {
 }
 
 impl Line {
-    pub fn new(x: f32, x1: f32, y: f32, y1: f32) -> Self {
+    pub fn new(x: f64, x1: f64, y: f64, y1: f64) -> Self {
         Self {
             line: Vector2 {
                 x: Point2 { x, y },
@@ -27,11 +27,11 @@ impl Line {
         }
     }
 
-    pub fn vertical(len: f32) -> Self {
+    pub fn vertical(len: f64) -> Self {
         Self::new(0.0, 0.0, 0.0, len,)
     }
 
-    pub fn horizontal(len: f32) -> Self {
+    pub fn horizontal(len: f64) -> Self {
         Self::new(0.0, len, 0.0, 0.0)
     }
 
@@ -39,19 +39,19 @@ impl Line {
         Rect::new(self.line.x.x, self.line.y.x, self.line.x.y, self.line.y.y)
     }
 
-    pub fn p0(&self) -> Point2<f32> {
+    pub fn p0(&self) -> Point2<f64> {
         self.line.x
     }
 
-    pub fn p1(&self) -> Point2<f32> {
+    pub fn p1(&self) -> Point2<f64> {
         self.line.y
     }
 
-    pub fn width(&self) -> f32 {
+    pub fn width(&self) -> f64 {
         self.line.y.x - self.line.x.x
     }
 
-    pub fn height(&self) -> f32 {
+    pub fn height(&self) -> f64 {
         self.line.y.y - self.line.x.y
     }
 }

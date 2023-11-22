@@ -1,0 +1,6 @@
+platform :ios, '15.0'
+use_frameworks!
+
+target 'RedSiren' do
+  pod 'UIScreenExtension', :git => 'https://github.com/marchv/UIScreenExtension'
+end

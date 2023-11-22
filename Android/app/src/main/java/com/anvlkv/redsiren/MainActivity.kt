@@ -6,6 +6,10 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -14,7 +18,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Density
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -41,6 +48,8 @@ class MainActivity : ComponentActivity() {
         windowInsetsController.systemBarsBehavior =
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+
+        WindowCompat.setDecorFitsSystemWindows(window, false)
 
 
         setContent {
@@ -69,11 +78,11 @@ fun RedSirenNavHost(
     val coroutineScope = rememberCoroutineScope()
 
 
-    fun updateConfig(width: Float, height: Float) {
-        val density = Resources.getSystem().displayMetrics.density
+    fun updateConfig(width: Double, height: Double, cutouts: Array<Double>) {
+        val dpi = Resources.getSystem().displayMetrics.densityDpi.toDouble()
 
         coroutineScope.launch {
-            core.update(Event.CreateConfigAndConfigureApp(width, height, density))
+            core.update(Event.CreateConfigAndConfigureApp(width, height, dpi, cutouts.asList()))
         }
     }
 
@@ -101,7 +110,7 @@ fun RedSirenNavHost(
         }
     }
 
-    fun navigateTo (act: CoreActivity) {
+    fun navigateTo(act: CoreActivity) {
         when (act) {
             is CoreActivity.Intro -> {
                 navController.navigate("intro")
@@ -131,14 +140,34 @@ fun RedSirenNavHost(
         }
     }
 
+    val context = LocalContext.current
+    val cutouts = context.display?.cutout
+
+    val safeAreas = remember {
+        cutouts?.let {
+            arrayOf(
+                it.safeInsetLeft.toDouble(),
+                it.safeInsetTop.toDouble(),
+                it.safeInsetRight.toDouble(),
+                it.safeInsetBottom.toDouble()
+            )
+        } ?: run {
+            arrayOf(0.0, 0.0, 0.0, 0.0)
+        }
+    }
 
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+    ) {
         val width = this.maxWidth
         val height = this.maxHeight
 
         LaunchedEffect(width, height) {
-            updateConfig(width.value, height.value)
+
+            updateConfig(width.value.toDouble(), height.value.toDouble(), safeAreas)
         }
         NavHost(navController = navController, startDestination = "intro") {
             composable("intro") {

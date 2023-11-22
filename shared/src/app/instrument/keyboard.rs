@@ -56,13 +56,13 @@ pub struct Button {
 impl Button {
     pub fn spawn(world: &mut World, config: &Config, group: usize, button: usize) -> Entity {
         let button_space_b = (config.breadth - config.button_size) / 2.0;
-        let button_space_l = (config.length / (config.groups * config.buttons_group) as f32
+        let button_space_l = (config.length / (config.groups * config.buttons_group) as f64
             - config.button_size)
             / 2.0;
         let side = config.breadth + button_space_b;
         let side_breadth = side + config.button_size;
         let idx = (group - 1) * config.buttons_group + (button - 1);
-        let main = (config.button_size + button_space_l * 2.0) * idx as f32 + button_space_l;
+        let main = (config.button_size + button_space_l * 2.0) * idx as f64 + button_space_l;
         let main_length = main + config.button_size;
         let rect = if config.portrait {
             Rect::new(side, side_breadth, main, main_length)
@@ -91,18 +91,18 @@ impl ButtonGroup {
         for j in 1..=config.buttons_group {
             buttons.push(Button::spawn(world, config, group, j));
         }
-        let group_length = config.length / config.groups as f32;
+        let group_length = config.length / config.groups as f64;
         let rect = if config.portrait {
             Rect::new(
                 config.breadth,
                 config.breadth * 2.0,
-                group_length * (group - 1) as f32,
-                group_length * group as f32,
+                group_length * (group - 1) as f64,
+                group_length * group as f64,
             )
         } else {
             Rect::new(
-                group_length * (group - 1) as f32,
-                group_length * group as f32,
+                group_length * (group - 1) as f64,
+                group_length * group as f64,
                 config.breadth,
                 config.breadth * 2.0,
             )

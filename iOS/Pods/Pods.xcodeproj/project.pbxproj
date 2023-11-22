@@ -1,0 +1,616 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		253399DAFB20631A22A5BB2CA7288FBF /* UIScreenExtension-dummy.m in Sources */ = {isa = PBXBuildFile; fileRef = AA01D170D222B8745860B5389FBDA134 /* UIScreenExtension-dummy.m */; };
+		2C1D1114ED57D02168A2F899E3B3B147 /* SimulatorDeviceInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B7D05C808F930776F54FAC559F01B1B /* SimulatorDeviceInfoView.swift */; };
+		87F8774782D78E43FA20EC3571CD442F /* Pods-RedSiren-umbrella.h in Headers */ = {isa = PBXBuildFile; fileRef = 080B4890BB952B9E65A166D4B4BF403A /* Pods-RedSiren-umbrella.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		A0AE9AC7722A73DFC4A25AAA6EBB440C /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73010CC983E3809BECEE5348DA1BB8C6 /* Foundation.framework */; };
+		B2B626CE103DF457E026EC373E15D30A /* UIScreenExtension-umbrella.h in Headers */ = {isa = PBXBuildFile; fileRef = F2359AB3FEBA61F5028C61D7072B2728 /* UIScreenExtension-umbrella.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		B82A74E0F9F4CA85AD969ABF4B2B7543 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73010CC983E3809BECEE5348DA1BB8C6 /* Foundation.framework */; };
+		B9A38B5B3CD7CDC7BCD845720ACE89DF /* UIScreenExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB7C51A881884FF6340486A845AC3EC0 /* UIScreenExtension.swift */; };
+		CA35F5C0E806FECFD0D2D13DB6526F1B /* UIScreenExtension.h in Headers */ = {isa = PBXBuildFile; fileRef = 49AE961E4FBDE9AD2DE0D3BBCA4301B3 /* UIScreenExtension.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		D5F1F50CEECF6D09B708BB18F1988506 /* Pods-RedSiren-dummy.m in Sources */ = {isa = PBXBuildFile; fileRef = 87351F381E9087B9BB4A95E078AFDA9D /* Pods-RedSiren-dummy.m */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		4E96CF677969D1612D652368DC5714BF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 154F8F4DB13C6240CE654CC93BD4E89F;
+			remoteInfo = UIScreenExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		07F07CA2EFE6EBC0431D3250F12C79CE /* UIScreenExtension.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = UIScreenExtension.release.xcconfig; sourceTree = "<group>"; };
+		080B4890BB952B9E65A166D4B4BF403A /* Pods-RedSiren-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "Pods-RedSiren-umbrella.h"; sourceTree = "<group>"; };
+		0B7D05C808F930776F54FAC559F01B1B /* SimulatorDeviceInfoView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SimulatorDeviceInfoView.swift; path = UIScreenExtension/SimulatorDeviceInfoView.swift; sourceTree = "<group>"; };
+		253FD8C37D594A0263C2B570E498D648 /* UIScreenExtension-prefix.pch */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "UIScreenExtension-prefix.pch"; sourceTree = "<group>"; };
+		3B9219AAF99F62E852857BA3E776AC42 /* Pods-RedSiren.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "Pods-RedSiren.release.xcconfig"; sourceTree = "<group>"; };
+		40F8C94D8C7C9E83EF3F104233FCDC1B /* Pods-RedSiren-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Pods-RedSiren-Info.plist"; sourceTree = "<group>"; };
+		49AE961E4FBDE9AD2DE0D3BBCA4301B3 /* UIScreenExtension.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = UIScreenExtension.h; path = UIScreenExtension/UIScreenExtension.h; sourceTree = "<group>"; };
+		4C15D3ED7EFF7DC892A913C531D01139 /* UIScreenExtension.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; path = UIScreenExtension.modulemap; sourceTree = "<group>"; };
+		4CE2F98AD81DA8CBDF392DFA1CB1387A /* Pods-RedSiren.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "Pods-RedSiren.debug.xcconfig"; sourceTree = "<group>"; };
+		59C1E2AC377A71D757FC00557C56863B /* Pods-RedSiren.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; path = "Pods-RedSiren.modulemap"; sourceTree = "<group>"; };
+		59FE7D027D0C61F2BF5D650B9E5AADEF /* UIScreenExtension-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "UIScreenExtension-Info.plist"; sourceTree = "<group>"; };
+		68657298832E3C656B63E7814873D641 /* Pods-RedSiren-frameworks.sh */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.script.sh; path = "Pods-RedSiren-frameworks.sh"; sourceTree = "<group>"; };
+		70F3F0855146BB80ED7F50DD08F145FF /* Pods-RedSiren-acknowledgements.markdown */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "Pods-RedSiren-acknowledgements.markdown"; sourceTree = "<group>"; };
+		73010CC983E3809BECEE5348DA1BB8C6 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS14.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		7590033E7BB65FC3A922EB57EB688D8B /* UIScreenExtension */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = UIScreenExtension; path = UIScreenExtension.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		87351F381E9087B9BB4A95E078AFDA9D /* Pods-RedSiren-dummy.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = "Pods-RedSiren-dummy.m"; sourceTree = "<group>"; };
+		8EAD92462200ADD4BC69E519A0956FB3 /* Pods-RedSiren */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Pods-RedSiren"; path = Pods_RedSiren.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		9D08CBCF2CF13440A56CA15C13A2AF3D /* UIScreenExtension.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = UIScreenExtension.debug.xcconfig; sourceTree = "<group>"; };
+		9D940727FF8FB9C785EB98E56350EF41 /* Podfile */ = {isa = PBXFileReference; explicitFileType = text.script.ruby; includeInIndex = 1; indentWidth = 2; lastKnownFileType = text; name = Podfile; path = ../Podfile; sourceTree = SOURCE_ROOT; tabWidth = 2; xcLanguageSpecificationIdentifier = xcode.lang.ruby; };
+		A7B6C8E604E06FEBD8D825DA1B521FA8 /* Pods-RedSiren-acknowledgements.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Pods-RedSiren-acknowledgements.plist"; sourceTree = "<group>"; };
+		AA01D170D222B8745860B5389FBDA134 /* UIScreenExtension-dummy.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = "UIScreenExtension-dummy.m"; sourceTree = "<group>"; };
+		EB7C51A881884FF6340486A845AC3EC0 /* UIScreenExtension.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = UIScreenExtension.swift; path = Sources/UIScreenExtension/UIScreenExtension.swift; sourceTree = "<group>"; };
+		F2359AB3FEBA61F5028C61D7072B2728 /* UIScreenExtension-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "UIScreenExtension-umbrella.h"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		C25C7406C78F9C07C9CB8F5C900C8EEB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A0AE9AC7722A73DFC4A25AAA6EBB440C /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F707BFB7F85B852A56D742DB98C5E123 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B82A74E0F9F4CA85AD969ABF4B2B7543 /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0912C3599A149A090ED334825C75C37D /* Targets Support Files */ = {
+			isa = PBXGroup;
+			children = (
+				2239B87F3CE6B8D60C64380E6A5B193A /* Pods-RedSiren */,
+			);
+			name = "Targets Support Files";
+			sourceTree = "<group>";
+		};
+		1701BD16F2C1DF32B7B7AD2C824E3D8F /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				8EAD92462200ADD4BC69E519A0956FB3 /* Pods-RedSiren */,
+				7590033E7BB65FC3A922EB57EB688D8B /* UIScreenExtension */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		2239B87F3CE6B8D60C64380E6A5B193A /* Pods-RedSiren */ = {
+			isa = PBXGroup;
+			children = (
+				59C1E2AC377A71D757FC00557C56863B /* Pods-RedSiren.modulemap */,
+				70F3F0855146BB80ED7F50DD08F145FF /* Pods-RedSiren-acknowledgements.markdown */,
+				A7B6C8E604E06FEBD8D825DA1B521FA8 /* Pods-RedSiren-acknowledgements.plist */,
+				87351F381E9087B9BB4A95E078AFDA9D /* Pods-RedSiren-dummy.m */,
+				68657298832E3C656B63E7814873D641 /* Pods-RedSiren-frameworks.sh */,
+				40F8C94D8C7C9E83EF3F104233FCDC1B /* Pods-RedSiren-Info.plist */,
+				080B4890BB952B9E65A166D4B4BF403A /* Pods-RedSiren-umbrella.h */,
+				4CE2F98AD81DA8CBDF392DFA1CB1387A /* Pods-RedSiren.debug.xcconfig */,
+				3B9219AAF99F62E852857BA3E776AC42 /* Pods-RedSiren.release.xcconfig */,
+			);
+			name = "Pods-RedSiren";
+			path = "Target Support Files/Pods-RedSiren";
+			sourceTree = "<group>";
+		};
+		4FF225D3C4CB9745FE73DC13C79AFC01 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				E6158B34F6F4B7CD2EB091F972FB79EB /* UIScreenExtension */,
+			);
+			name = Pods;
+			sourceTree = "<group>";
+		};
+		578452D2E740E91742655AC8F1636D1F /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				73010CC983E3809BECEE5348DA1BB8C6 /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
+		A64DC8CB56EA751B2B35D743F5B60A44 /* Support Files */ = {
+			isa = PBXGroup;
+			children = (
+				4C15D3ED7EFF7DC892A913C531D01139 /* UIScreenExtension.modulemap */,
+				AA01D170D222B8745860B5389FBDA134 /* UIScreenExtension-dummy.m */,
+				59FE7D027D0C61F2BF5D650B9E5AADEF /* UIScreenExtension-Info.plist */,
+				253FD8C37D594A0263C2B570E498D648 /* UIScreenExtension-prefix.pch */,
+				F2359AB3FEBA61F5028C61D7072B2728 /* UIScreenExtension-umbrella.h */,
+				9D08CBCF2CF13440A56CA15C13A2AF3D /* UIScreenExtension.debug.xcconfig */,
+				07F07CA2EFE6EBC0431D3250F12C79CE /* UIScreenExtension.release.xcconfig */,
+			);
+			name = "Support Files";
+			path = "../Target Support Files/UIScreenExtension";
+			sourceTree = "<group>";
+		};
+		CF1408CF629C7361332E53B88F7BD30C = {
+			isa = PBXGroup;
+			children = (
+				9D940727FF8FB9C785EB98E56350EF41 /* Podfile */,
+				D210D550F4EA176C3123ED886F8F87F5 /* Frameworks */,
+				4FF225D3C4CB9745FE73DC13C79AFC01 /* Pods */,
+				1701BD16F2C1DF32B7B7AD2C824E3D8F /* Products */,
+				0912C3599A149A090ED334825C75C37D /* Targets Support Files */,
+			);
+			sourceTree = "<group>";
+		};
+		D210D550F4EA176C3123ED886F8F87F5 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				578452D2E740E91742655AC8F1636D1F /* iOS */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		E6158B34F6F4B7CD2EB091F972FB79EB /* UIScreenExtension */ = {
+			isa = PBXGroup;
+			children = (
+				0B7D05C808F930776F54FAC559F01B1B /* SimulatorDeviceInfoView.swift */,
+				49AE961E4FBDE9AD2DE0D3BBCA4301B3 /* UIScreenExtension.h */,
+				EB7C51A881884FF6340486A845AC3EC0 /* UIScreenExtension.swift */,
+				A64DC8CB56EA751B2B35D743F5B60A44 /* Support Files */,
+			);
+			name = UIScreenExtension;
+			path = UIScreenExtension;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		2625A65DA69E1E62EC8C59D6329BC924 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CA35F5C0E806FECFD0D2D13DB6526F1B /* UIScreenExtension.h in Headers */,
+				B2B626CE103DF457E026EC373E15D30A /* UIScreenExtension-umbrella.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8F34DA739A575837475ED77D0A41650E /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				87F8774782D78E43FA20EC3571CD442F /* Pods-RedSiren-umbrella.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		154F8F4DB13C6240CE654CC93BD4E89F /* UIScreenExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 228489763C2C2491D4A37565D38A7FCF /* Build configuration list for PBXNativeTarget "UIScreenExtension" */;
+			buildPhases = (
+				2625A65DA69E1E62EC8C59D6329BC924 /* Headers */,
+				BD2B6AF569EF1C70748958BDC30475B7 /* Sources */,
+				C25C7406C78F9C07C9CB8F5C900C8EEB /* Frameworks */,
+				D8277AA92C5252602471DEBFFAD5ADBD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = UIScreenExtension;
+			productName = UIScreenExtension;
+			productReference = 7590033E7BB65FC3A922EB57EB688D8B /* UIScreenExtension */;
+			productType = "com.apple.product-type.framework";
+		};
+		5489FE6B36F9F561DD0533CF09CF90EC /* Pods-RedSiren */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 21D9FF5EAA12F5BF1A16327CFA428C1C /* Build configuration list for PBXNativeTarget "Pods-RedSiren" */;
+			buildPhases = (
+				8F34DA739A575837475ED77D0A41650E /* Headers */,
+				313A9420FFCCEE39BCF4B89B37EF4DA7 /* Sources */,
+				F707BFB7F85B852A56D742DB98C5E123 /* Frameworks */,
+				D1E82BF54766B793474E4EB00E369489 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				DA1333784601131D007F058F7F4EA9C4 /* PBXTargetDependency */,
+			);
+			name = "Pods-RedSiren";
+			productName = Pods_RedSiren;
+			productReference = 8EAD92462200ADD4BC69E519A0956FB3 /* Pods-RedSiren */;
+			productType = "com.apple.product-type.framework";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		BFDFE7DC352907FC980B868725387E98 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+			};
+			buildConfigurationList = 4821239608C13582E20E6DA73FD5F1F9 /* Build configuration list for PBXProject "Pods" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = CF1408CF629C7361332E53B88F7BD30C;
+			productRefGroup = 1701BD16F2C1DF32B7B7AD2C824E3D8F /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				5489FE6B36F9F561DD0533CF09CF90EC /* Pods-RedSiren */,
+				154F8F4DB13C6240CE654CC93BD4E89F /* UIScreenExtension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D1E82BF54766B793474E4EB00E369489 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D8277AA92C5252602471DEBFFAD5ADBD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		313A9420FFCCEE39BCF4B89B37EF4DA7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D5F1F50CEECF6D09B708BB18F1988506 /* Pods-RedSiren-dummy.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BD2B6AF569EF1C70748958BDC30475B7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2C1D1114ED57D02168A2F899E3B3B147 /* SimulatorDeviceInfoView.swift in Sources */,
+				B9A38B5B3CD7CDC7BCD845720ACE89DF /* UIScreenExtension.swift in Sources */,
+				253399DAFB20631A22A5BB2CA7288FBF /* UIScreenExtension-dummy.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		DA1333784601131D007F058F7F4EA9C4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = UIScreenExtension;
+			target = 154F8F4DB13C6240CE654CC93BD4E89F /* UIScreenExtension */;
+			targetProxy = 4E96CF677969D1612D652368DC5714BF /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		62439F465C136EB9B5B32D94C5D18422 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 4CE2F98AD81DA8CBDF392DFA1CB1387A /* Pods-RedSiren.debug.xcconfig */;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
+				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INFOPLIST_FILE = "Target Support Files/Pods-RedSiren/Pods-RedSiren-Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				MODULEMAP_FILE = "Target Support Files/Pods-RedSiren/Pods-RedSiren.modulemap";
+				OTHER_LDFLAGS = "";
+				OTHER_LIBTOOLFLAGS = "";
+				PODS_ROOT = "$(SRCROOT)";
+				PRODUCT_BUNDLE_IDENTIFIER = "org.cocoapods.${PRODUCT_NAME:rfc1034identifier}";
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Debug;
+		};
+		90B668A5675EBCB8E114259BF054ECEA /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 3B9219AAF99F62E852857BA3E776AC42 /* Pods-RedSiren.release.xcconfig */;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
+				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INFOPLIST_FILE = "Target Support Files/Pods-RedSiren/Pods-RedSiren-Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				MODULEMAP_FILE = "Target Support Files/Pods-RedSiren/Pods-RedSiren.modulemap";
+				OTHER_LDFLAGS = "";
+				OTHER_LIBTOOLFLAGS = "";
+				PODS_ROOT = "$(SRCROOT)";
+				PRODUCT_BUNDLE_IDENTIFIER = "org.cocoapods.${PRODUCT_NAME:rfc1034identifier}";
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Release;
+		};
+		90D4D09BCB6A4660E43ACBE9ECB6FE9A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"POD_CONFIGURATION_DEBUG=1",
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRIP_INSTALLED_PRODUCT = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				SYMROOT = "${SRCROOT}/../build";
+			};
+			name = Debug;
+		};
+		939CCCBC4B0A715DB32758C637EA729F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9D08CBCF2CF13440A56CA15C13A2AF3D /* UIScreenExtension.debug.xcconfig */;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
+				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GCC_PREFIX_HEADER = "Target Support Files/UIScreenExtension/UIScreenExtension-prefix.pch";
+				INFOPLIST_FILE = "Target Support Files/UIScreenExtension/UIScreenExtension-Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MODULEMAP_FILE = "Target Support Files/UIScreenExtension/UIScreenExtension.modulemap";
+				PRODUCT_MODULE_NAME = UIScreenExtension;
+				PRODUCT_NAME = UIScreenExtension;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) ";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Debug;
+		};
+		9553C89E183877A5CB2F3C6801BEC129 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"POD_CONFIGURATION_RELEASE=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRIP_INSTALLED_PRODUCT = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				SYMROOT = "${SRCROOT}/../build";
+			};
+			name = Release;
+		};
+		A562B2E90121FE1198F2F35EBB02FC3C /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 07F07CA2EFE6EBC0431D3250F12C79CE /* UIScreenExtension.release.xcconfig */;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
+				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GCC_PREFIX_HEADER = "Target Support Files/UIScreenExtension/UIScreenExtension-prefix.pch";
+				INFOPLIST_FILE = "Target Support Files/UIScreenExtension/UIScreenExtension-Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MODULEMAP_FILE = "Target Support Files/UIScreenExtension/UIScreenExtension.modulemap";
+				PRODUCT_MODULE_NAME = UIScreenExtension;
+				PRODUCT_NAME = UIScreenExtension;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) ";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		21D9FF5EAA12F5BF1A16327CFA428C1C /* Build configuration list for PBXNativeTarget "Pods-RedSiren" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				62439F465C136EB9B5B32D94C5D18422 /* Debug */,
+				90B668A5675EBCB8E114259BF054ECEA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		228489763C2C2491D4A37565D38A7FCF /* Build configuration list for PBXNativeTarget "UIScreenExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				939CCCBC4B0A715DB32758C637EA729F /* Debug */,
+				A562B2E90121FE1198F2F35EBB02FC3C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4821239608C13582E20E6DA73FD5F1F9 /* Build configuration list for PBXProject "Pods" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				90D4D09BCB6A4660E43ACBE9ECB6FE9A /* Debug */,
+				9553C89E183877A5CB2F3C6801BEC129 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = BFDFE7DC352907FC980B868725387E98 /* Project object */;
+}

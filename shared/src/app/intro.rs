@@ -32,11 +32,11 @@ pub struct IntroVM {
     pub layout: instrument::Layout,
     pub animation_progress: f64,
     pub view_box: Rect,
-    pub intro_opacity: f32,
-    pub flute_rotation: Point3<f32>,
-    pub flute_position: Point2<f32>,
-    pub buttons_position: Point2<f32>,
-    pub button_size: f32,
+    pub intro_opacity: f64,
+    pub flute_rotation: Point3<f64>,
+    pub flute_position: Point2<f64>,
+    pub buttons_position: Point2<f64>,
+    pub button_size: f64,
 }
 
 impl Eq for IntroVM {}
@@ -67,7 +67,7 @@ impl Default for IntroVM {
 }
 
 impl IntroVM {
-    fn init_size(width: f32, height: f32) -> Self {
+    fn init_size(width: f64, height: f64) -> Self {
         let scale = (430.0 / width).min(932.0 / height);
 
         Self {
@@ -97,7 +97,7 @@ impl IntroVM {
 pub enum IntroEV {
     SetInstrumentTarget(instrument::Layout, instrument::Config),
     StartAnimation { ts_start: f64, reduced_motion: bool },
-    SetViewBoxInit { width: f32, height: f32 },
+    SetViewBoxInit { width: f64, height: f64 },
     TsNext(f64),
 }
 
@@ -228,7 +228,7 @@ impl Intro {
                 },
                 0.5,
                 EaseOut
-            ),
+            )/*,
             (
                 IntroVM {
                     intro_opacity: 0.0,
@@ -276,7 +276,7 @@ impl Intro {
                 },
                 1.0,
                 EaseIn
-            )
+            ) */
         ];
         let _ = model.sequence.insert(animation);
     }

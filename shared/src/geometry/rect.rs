@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Copy, CanTween, Debug)]
 pub struct Rect {
-    rect: Vector2<Point2<f32>>,
+    rect: Vector2<Point2<f64>>,
 }
 
 impl Eq for Rect {}
@@ -16,7 +16,7 @@ impl Default for Rect {
 }
 
 impl Rect {
-    pub fn new(left: f32, right: f32, top: f32, bottom: f32) -> Self {
+    pub fn new(left: f64, right: f64, top: f64, bottom: f64) -> Self {
         Self {
             rect: Vector2 {
                 x: Point2 {
@@ -31,15 +31,15 @@ impl Rect {
         }
     }
 
-    pub fn size(width: f32, height: f32) -> Self {
+    pub fn size(width: f64, height: f64) -> Self {
         Self::new(0.0, width, 0.0, height)
     }
 
-    pub fn components(&self) -> (f32, f32, f32, f32) {
+    pub fn components(&self) -> (f64, f64, f64, f64) {
         (self.rect.x.x, self.rect.y.x, self.rect.x.y, self.rect.y.y)
     }
 
-    pub fn center(&self) -> Point2<f32> {
+    pub fn center(&self) -> Point2<f64> {
         let d_x = self.width() / 2.0;
         let d_y = self.height() / 2.0;
 
@@ -49,39 +49,39 @@ impl Rect {
         }
     }
 
-    pub fn top_left(&self) -> Point2<f32> {
+    pub fn top_left(&self) -> Point2<f64> {
         Point2 {
             x: self.rect.x.x,
             y: self.rect.x.y,
         }
     }
 
-    pub fn bottom_right(&self) -> Point2<f32> {
+    pub fn bottom_right(&self) -> Point2<f64> {
         Point2 {
             x: self.rect.y.x,
             y: self.rect.y.y,
         }
     }
 
-    pub fn top_right(&self) -> Point2<f32> {
+    pub fn top_right(&self) -> Point2<f64> {
         Point2 {
             x: self.rect.y.x,
             y: self.rect.x.y,
         }
     }
 
-    pub fn bottom_left(&self) -> Point2<f32> {
+    pub fn bottom_left(&self) -> Point2<f64> {
         Point2 {
             x: self.rect.x.x,
             y: self.rect.y.y,
         }
     }
 
-    pub fn width(&self) -> f32 {
+    pub fn width(&self) -> f64 {
         self.rect.y.x - self.rect.x.x
     }
 
-    pub fn height(&self) -> f32 {
+    pub fn height(&self) -> f64 {
         self.rect.y.y - self.rect.x.y
     }
 }

@@ -56,7 +56,7 @@ cargo {
     // make sure you have included the rust toolchain for each of these targets: \
     // `rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android`
     targets = ["arm", "arm64", "x86", "x86_64"]
-    extraCargoBuildArguments = ['--package', 'shared']
+    extraCargoBuildArguments = ['--package', 'shared', '--features', 'android']
     pythonCommand="python3"
 }
 

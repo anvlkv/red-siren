@@ -6,14 +6,15 @@ portrait: false
 width: 2960
 height: 1440
 breadth: 480
-length: 2596
-groups: 2
-buttons_group: 2
-button_size: 76
+length: 2740
+groups: 6
+buttons_group: 3
+button_size: 40
 button_track_margin: 0.2
 safe_area:
-  - 202
+  - 130
   - 20
-  - 162
+  - 90
   - 25
+f0: 134.9402270076083
 

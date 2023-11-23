@@ -6,6 +6,9 @@ const MIN_BUTTON_SIZE_IN: f64 = 0.75;
 const MAX_BUTTON_SIZE_B_RATIO: f64 = 0.6;
 const BUTTON_TRACK_MARGIN_RATION: f64 = 0.2;
 const BUTTON_SPACE_RATIO: f64 = 2.0;
+const DPI_RANGE: &[usize] = &[120, 160, 240, 320, 480, 640];
+const F_BASE: f64 = 110.0;
+const F_MAX: f64 = 5500.0;
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Config {
@@ -19,6 +22,7 @@ pub struct Config {
     pub button_size: f64,
     pub button_track_margin: f64,
     pub safe_area: [f64; 4],
+    pub f0: f64,
 }
 
 impl Eq for Config {}
@@ -68,6 +72,18 @@ impl Config {
 
         let min_count = min_groups * min_buttons;
 
+        let f_c = F_BASE / f64::sqrt((length * safe_breadth) / dpi);
+
+        let f0 = {
+            let mut f0 = f_c;
+
+            while f0 < F_BASE {
+                f0 = f0 * 2.0;
+            }
+
+            f0
+        };
+
         let mut candidates = HashSet::<(usize, usize, usize, usize)>::new();
 
         for size in min_button_size..=max_button_size {
@@ -81,7 +97,8 @@ impl Config {
             ] {
                 let count = groups * buttons_group;
                 let used_space = space * count as f64;
-                if count >= min_count && used_space < safe_length {
+                let f_max = f0 * 2.0 * (groups * buttons_group) as f64;
+                if count >= min_count && used_space < safe_length && f_max <= F_MAX {
                     let _ = candidates.insert((size, groups, buttons_group, active_length));
                 }
             }
@@ -125,7 +142,14 @@ impl Config {
                 },
             ));
 
-        let mid = candidates.len().saturating_sub(1) / 2;
+        let dpi_pos = DPI_RANGE
+            .iter()
+            .position(|d| *d as f64 >= dpi)
+            .map_or(1.0, |pos| {
+                ((pos + 1) as f64 / DPI_RANGE.len() as f64) * candidates.len() as f64
+            })
+            .round() as usize;
+        let mid = candidates.len().saturating_sub(dpi_pos);
 
         let (button_size, groups, buttons_group, active_length) =
             candidates.into_iter().nth(mid).map_or(
@@ -168,6 +192,7 @@ impl Config {
             buttons_group,
             button_track_margin: BUTTON_TRACK_MARGIN_RATION,
             safe_area,
+            f0,
         }
     }
 }
@@ -213,7 +238,9 @@ mod tests {
     fn config_snapshot_by_rand_screen() {
         for (i, config) in RAND_SCREENS
             .iter()
-            .map(|(width, height, dpi)| Config::new(*width, *height, *dpi, [50.0, 20.0, 10.0, 25.0]))
+            .map(|(width, height, dpi)| {
+                Config::new(*width, *height, *dpi, [50.0, 20.0, 10.0, 25.0])
+            })
             .enumerate()
         {
             insta::assert_yaml_snapshot!(format!("size: {i}"), config)

@@ -15,31 +15,37 @@ impl Track {
         left_hand: bool,
         button_rect: &Rect,
     ) -> Entity {
-        let sign = if left_hand { -1.0 } else { 1.0 };
-        let button_track_margin = config.button_size * config.button_track_margin * sign;
-        let track_length = (config.breadth * 2.0 + button_track_margin * sign + config.button_size) * sign;
-        let track_breadth = (config.button_size + button_track_margin * 2.0 * sign) * sign;
+        let button_track_margin = config.button_size * config.button_track_margin;
+        log::info!("button_track_margin {button_track_margin}, {}, {}", config.button_size, config.button_track_margin);
 
-        let side = if left_hand {
-            button_rect.bottom_right()
-        } else {
-            button_rect.top_left()
+        log::info!("rect: {button_rect:?}");
+
+        let track_length = config.breadth * 2.0 + button_track_margin + config.button_size;
+        // let track_breadth = config.button_size + button_track_margin * 2.0;
+
+        let rect = if config.portrait  {
+            button_rect.offset_top(button_track_margin).offset_bottom(button_track_margin)
+        }
+        else {
+            button_rect.offset_left(button_track_margin).offset_right(button_track_margin)
         };
 
-        let rect = if config.portrait {
-            Rect::new(
-                side.x - button_track_margin,
-                side.x - button_track_margin + track_length,
-                side.y - button_track_margin,
-                side.y - button_track_margin + track_breadth,
-            )
-        } else {
-            Rect::new(
-                side.x - button_track_margin,
-                side.x - button_track_margin + track_breadth,
-                side.y - button_track_margin,
-                side.y - button_track_margin + track_length,
-            )
+
+        let rect = if left_hand {
+            if config.portrait {
+                rect.offset_left_and_right(track_length, button_track_margin)
+            }
+            else {
+                rect.offset_top_and_bottom(button_track_margin, track_length)
+            }
+        }
+        else {
+            if config.portrait {
+                rect.offset_left_and_right(button_track_margin, track_length)
+            }
+            else {
+                rect.offset_top_and_bottom(track_length, button_track_margin)
+            }
         };
 
         world.spawn((Self { rect, left_hand },))
@@ -55,15 +61,25 @@ pub struct Button {
 
 impl Button {
     pub fn spawn(world: &mut World, config: &Config, group: usize, button: usize) -> Entity {
-        let button_space_b = (config.breadth - config.button_size) / 2.0;
-        let button_space_l = (config.length / (config.groups * config.buttons_group) as f64
+        let button_space_side = (config.breadth - config.button_size) / 2.0;
+        let button_space_main = (config.length / (config.groups * config.buttons_group) as f64
             - config.button_size)
             / 2.0;
-        let side = config.breadth + button_space_b;
-        let side_breadth = side + config.button_size;
         let idx = (group - 1) * config.buttons_group + (button - 1);
-        let main = (config.button_size + button_space_l * 2.0) * idx as f64 + button_space_l;
+
+        let side = config.breadth + button_space_side;
+        let side_breadth = side + config.button_size;
+
+        let offset = if config.portrait {
+            config.safe_area[1]
+        }
+        else {
+            config.safe_area[0]
+        };
+
+        let main = offset + (config.button_size + button_space_main * 2.0) * idx as f64 + button_space_main;
         let main_length = main + config.button_size;
+
         let rect = if config.portrait {
             Rect::new(side, side_breadth, main, main_length)
         } else {
@@ -96,12 +112,12 @@ impl ButtonGroup {
             Rect::new(
                 config.breadth,
                 config.breadth * 2.0,
-                group_length * (group - 1) as f64,
+                group_length * (group - 1) as f64 + config.safe_area[1],
                 group_length * group as f64,
             )
         } else {
             Rect::new(
-                group_length * (group - 1) as f64,
+                group_length * (group - 1) as f64 + config.safe_area[0],
                 group_length * group as f64,
                 config.breadth,
                 config.breadth * 2.0,

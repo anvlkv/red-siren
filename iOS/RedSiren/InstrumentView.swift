@@ -161,7 +161,7 @@ struct InstrumentView: View {
                 ForEach(self.vm.layout.buttons, id: \.hashValue) { btn in
                     InstrumentButtonView(rect: btn)
                 }
-            }
+            }.ignoresSafeArea(.all)
                 .frame(width: proxy.frame(in: .global).width, height: proxy.frame(in: .global).height)
         }.ignoresSafeArea(.all)
 

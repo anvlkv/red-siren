@@ -115,7 +115,7 @@ fn RedSirenRoutes() -> impl IntoView {
             width: width as f64,
             height: height as f64,
             dpi,
-            safe_areas: Default::default(),
+            safe_areas: [50.0, 50.0, 50.0, 50.0],
         })
     });
 

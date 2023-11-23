@@ -84,4 +84,58 @@ impl Rect {
     pub fn height(&self) -> f64 {
         self.rect.y.y - self.rect.x.y
     }
+
+    pub fn offset_left(&self, by: f64) -> Self {
+        Self::new(
+            self.rect.x.x - by,
+            self.rect.y.x,
+            self.rect.x.y,
+            self.rect.y.y,
+        )
+    }
+
+    pub fn offset_top(&self, by: f64) -> Self {
+        Self::new(
+            self.rect.x.x,
+            self.rect.y.x,
+            self.rect.x.y - by,
+            self.rect.y.y,
+        )
+    }
+
+    pub fn offset_right(&self, by: f64) -> Self {
+        Self::new(
+            self.rect.x.x,
+            self.rect.y.x + by,
+            self.rect.x.y,
+            self.rect.y.y,
+        )
+    }
+
+    pub fn offset_bottom(&self, by: f64) -> Self {
+        Self::new(
+            self.rect.x.x,
+            self.rect.y.x,
+            self.rect.x.y,
+            self.rect.y.y + by,
+        )
+    }
+
+    pub fn offset_top_and_bottom(&self, top: f64, bottom: f64) -> Self  {
+        Self::new(
+            self.rect.x.x,
+            self.rect.y.x,
+            self.rect.x.y - top,
+            self.rect.y.y + bottom,
+        )
+    }
+   
+    pub fn offset_left_and_right(&self, left: f64, right: f64) -> Self  {
+        Self::new(
+            self.rect.x.x - left,
+            self.rect.y.x + right,
+            self.rect.x.y,
+            self.rect.y.y,
+        )
+    }
 }

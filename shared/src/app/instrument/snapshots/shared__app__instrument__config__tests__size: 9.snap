@@ -1,0 +1,19 @@
+---
+source: shared/src/app/instrument/config.rs
+expression: config
+---
+portrait: false
+width: 2560
+height: 1600
+breadth: 533.3333333333334
+length: 2388
+groups: 2
+buttons_group: 2
+button_size: 28
+button_track_margin: 0.2
+safe_area:
+  - 106
+  - 20
+  - 66
+  - 25
+

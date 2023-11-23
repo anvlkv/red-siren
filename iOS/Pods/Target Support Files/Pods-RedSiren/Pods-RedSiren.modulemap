@@ -1,6 +1,0 @@
-framework module Pods_RedSiren {
-  umbrella header "Pods-RedSiren-umbrella.h"
-
-  export *
-  module * { export * }
-}

@@ -23,3 +23,5 @@ xcuserdata/
 **/UserInterfaceState.xcuserstate
 
 *.snap.new
+
+iOS/Pods/

@@ -19,7 +19,7 @@ public/tailwind.css
 .DS_Store
 
 dioxusin
-xcuserdata/
+**/xcuserdata/
 **/UserInterfaceState.xcuserstate
 
 *.snap.new

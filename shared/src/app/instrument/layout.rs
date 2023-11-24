@@ -1,6 +1,7 @@
 use super::{
     keyboard::{Button, ButtonGroup, Keyboard, Track},
     string::{InboundString, OutboundString},
+    Config,
 };
 use crate::geometry::{line::Line, rect::Rect};
 use anyhow::Result;
@@ -14,6 +15,42 @@ pub struct Layout {
     pub outbound: Line,
     pub buttons: Vec<Rect>,
     pub tracks: Vec<Rect>,
+    pub menu_position: MenuPosition,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Eq)]
+pub enum MenuPosition {
+    TopLeft(Rect),
+    TopRight(Rect),
+    BottomLeft(Rect),
+}
+
+impl Default for MenuPosition {
+    fn default() -> Self {
+        Self::TopLeft(Rect::default())
+    }
+}
+
+impl MenuPosition {
+    pub fn rect(&self) -> &Rect {
+        match self {
+            MenuPosition::TopLeft(r) | MenuPosition::TopRight(r) | MenuPosition::BottomLeft(r) => r,
+        }
+    }
+}
+
+impl CanTween for MenuPosition {
+    fn ease(from: Self, to: Self, time: impl keyframe::num_traits::Float) -> Self {
+        let r1 = match from {
+            MenuPosition::TopLeft(r) | MenuPosition::TopRight(r) | MenuPosition::BottomLeft(r) => r,
+        };
+
+        match to {
+            MenuPosition::TopLeft(r) => MenuPosition::TopLeft(CanTween::ease(r1, r, time)),
+            MenuPosition::TopRight(r) => MenuPosition::TopRight(CanTween::ease(r1, r, time)),
+            MenuPosition::BottomLeft(r) => MenuPosition::BottomLeft(CanTween::ease(r1, r, time)),
+        }
+    }
 }
 
 #[derive(Bundle)]
@@ -29,13 +66,13 @@ impl LayoutRoot {
     }
 
     pub fn inbound(&self) -> Entity {
-      self.entities.0
+        self.entities.0
     }
     pub fn outbound(&self) -> Entity {
-      self.entities.2
+        self.entities.2
     }
     pub fn keyboard(&self) -> Entity {
-      self.entities.1
+        self.entities.1
     }
 }
 
@@ -46,18 +83,20 @@ impl CanTween for Layout {
 
         let buttons = ease_vec(from.buttons, to.buttons, time);
         let tracks = ease_vec(from.tracks, to.tracks, time);
+        let menu_position = CanTween::ease(from.menu_position, to.menu_position, time);
 
         Self {
             outbound,
             inbound,
             buttons,
             tracks,
+            menu_position,
         }
     }
 }
 
 impl Layout {
-    pub fn new(world: &World, root: &Entity) -> Result<Self> {
+    pub fn new(world: &World, root: &Entity, config: &Config) -> Result<Self> {
         let root = world.get::<&LayoutRoot>(*root)?;
         let (inbound, keyboard, outbound) = (
             world.get::<&InboundString>(root.inbound())?,
@@ -65,10 +104,11 @@ impl Layout {
             world.get::<&OutboundString>(root.outbound())?,
         );
 
-        let (buttons, tracks) = keyboard
+        let (buttons, tracks): (Vec<Rect>, Vec<Rect>) = keyboard
             .groups
             .iter()
-            .try_fold(Vec::<(Rect, Rect)>::new(), |mut acc, g| -> Result<_> {
+            .enumerate()
+            .try_fold(Vec::<(Rect, Rect)>::new(), |mut acc, (i, g)| -> Result<_> {
                 let group = world.get::<&ButtonGroup>(*g)?;
                 for b in &group.buttons {
                     let button = world.get::<&Button>(*b)?;
@@ -80,11 +120,53 @@ impl Layout {
             .into_iter()
             .unzip();
 
+        log::debug!("{tracks:#?}");
+
+        let menu_position = tracks
+            .first()
+            .map(|t| {
+                if config.portrait {
+                    if t.top_left().x >= config.breadth {
+                        MenuPosition::TopLeft(Rect::new(
+                            config.safe_area[0],
+                            config.breadth,
+                            config.safe_area[1],
+                            config.breadth,
+                        ))
+                    } else {
+                        MenuPosition::TopRight(Rect::new(
+                            config.width - config.breadth,
+                            config.width - config.safe_area[2],
+                            config.safe_area[1],
+                            config.breadth,
+                        ))
+                    }
+                } else {
+                    if t.top_left().y < config.breadth {
+                        MenuPosition::BottomLeft(Rect::new(
+                            config.safe_area[0],
+                            config.breadth,
+                            config.height - config.breadth,
+                            config.height - config.safe_area[3],
+                        ))
+                    } else {
+                        MenuPosition::TopLeft(Rect::new(
+                            config.safe_area[0],
+                            config.breadth,
+                            config.safe_area[1],
+                            config.breadth,
+                        ))
+                    }
+                }
+            })
+            .unwrap_or_default();
+
         Ok(Self {
             inbound: inbound.line,
             outbound: outbound.line,
             buttons,
             tracks,
+            menu_position,
         })
     }
 

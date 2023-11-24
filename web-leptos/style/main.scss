@@ -36,3 +36,12 @@ main {
     }
   }
 }
+
+.instrument {
+  position: relative;
+  svg {
+    position: absolute;
+    height: 100%;
+    width: 100%;
+  }
+}

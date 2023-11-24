@@ -17,6 +17,7 @@ pub struct Config {
     pub height: f64,
     pub breadth: f64,
     pub length: f64,
+    pub whitespace: f64,
     pub groups: usize,
     pub buttons_group: usize,
     pub button_size: f64,
@@ -165,21 +166,6 @@ impl Config {
             );
 
         let whitespace = (safe_length - active_length) / 2.0;
-        let safe_area = if portrait {
-            [
-                safe_area[0],
-                safe_area[1] + whitespace,
-                safe_area[2],
-                safe_area[3] + whitespace,
-            ]
-        } else {
-            [
-                safe_area[0] + whitespace,
-                safe_area[1],
-                safe_area[2] + whitespace,
-                safe_area[3],
-            ]
-        };
 
         Config {
             portrait,
@@ -192,6 +178,7 @@ impl Config {
             buttons_group,
             button_track_margin: BUTTON_TRACK_MARGIN_RATION,
             safe_area,
+            whitespace,
             f0,
         }
     }

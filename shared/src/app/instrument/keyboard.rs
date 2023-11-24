@@ -16,7 +16,7 @@ impl Track {
         left_hand: bool,
         button_rect: &Rect,
         base_freq: f64,
-        f_n: usize,
+        max_freq: f64,
     ) -> Entity {
         let button_track_margin = config.button_size * config.button_track_margin;
 
@@ -46,8 +46,6 @@ impl Track {
             }
         };
 
-        let max_freq = config.f0 * (f_n + 1) as f64 * 2.0;
-
         let freq = (base_freq, max_freq);
 
         world.spawn((Self {
@@ -73,6 +71,7 @@ impl Button {
         let button_space_main = (config.length / (config.groups * config.buttons_group) as f64
             - config.button_size)
             / 2.0;
+        let total_buttons = config.buttons_group * config.groups;
         let idx = (group - 1) * config.buttons_group + (button - 1);
 
         let side = config.breadth + button_space_side;
@@ -82,7 +81,7 @@ impl Button {
             config.safe_area[1]
         } else {
             config.safe_area[0]
-        };
+        } + config.whitespace;
 
         let main = offset
             + (config.button_size + button_space_main * 2.0) * idx as f64
@@ -95,10 +94,11 @@ impl Button {
             Rect::new(main, main_length, side, side_breadth)
         };
 
-        let f_n = idx + 1;
-        let freq = config.f0 * (f_n * 2) as f64;
+        let f_n = total_buttons - idx;
+        let freq = config.f0 * (f_n * 2) as f64 - config.f0;
+        let max_freq = freq + config.f0;
 
-        let track = Track::spawn(world, config, group % 2 == 0, &rect, freq, f_n);
+        let track = Track::spawn(world, config, group % 2 == 0, &rect, freq, max_freq);
 
         world.spawn((Button {
             rect,
@@ -127,12 +127,12 @@ impl ButtonGroup {
             Rect::new(
                 config.breadth,
                 config.breadth * 2.0,
-                group_length * (group - 1) as f64 + config.safe_area[1],
+                group_length * (group - 1) as f64 + config.safe_area[1] + config.whitespace,
                 group_length * group as f64,
             )
         } else {
             Rect::new(
-                group_length * (group - 1) as f64 + config.safe_area[0],
+                group_length * (group - 1) as f64 + config.safe_area[0] + config.whitespace,
                 group_length * group as f64,
                 config.breadth,
                 config.breadth * 2.0,

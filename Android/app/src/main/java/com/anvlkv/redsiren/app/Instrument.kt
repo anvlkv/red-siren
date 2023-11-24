@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Fill
@@ -94,7 +95,7 @@ fun InstrumentTrack(layoutRect: Rect) {
 
 @Composable
 fun AppInstrument(vm: InstrumentVM, ev: (ev: InstrumentEV) -> Unit) {
-    Box (Modifier.fillMaxSize()) {
+    Box (Modifier.fillMaxSize().clipToBounds()) {
         InstrumentInboundString(layoutLine = vm.layout.inbound)
         InstrumentOutboundString(layoutLine = vm.layout.outbound)
 

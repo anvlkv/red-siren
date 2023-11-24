@@ -36,6 +36,15 @@ web-sys = { version = "0.3", features = [
     "Navigator",
     "Window",
     "MediaQueryList",
+    "AudioContext",
+    "OscillatorNode",
+    "OscillatorType",
+    "AudioParam",
+    "BaseAudioContext",
+    "AudioDestinationNode",
+    "AudioNode",
+    "AudioContextState",
+    "GainNode"
 ], optional = true }
 
 
@@ -45,7 +54,9 @@ hydrate = [
     "leptos/hydrate",
     "leptos_meta/hydrate",
     "leptos_router/hydrate",
-    "web-sys",
+]
+browser = [
+    "web-sys"
 ]
 ssr = [
     "dep:axum",
@@ -110,7 +121,7 @@ bin-default-features = false
 # The features to use when compiling the lib target
 #
 # Optional. Can be over-ridden with the command line parameter --lib-features
-lib-features = ["hydrate"]
+lib-features = ["hydrate", "browser"]
 
 # If the --no-default-features flag should be used when compiling the lib target
 #

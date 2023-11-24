@@ -8,12 +8,15 @@ use serde::{Deserialize, Serialize};
 pub mod config;
 pub mod keyboard;
 pub mod layout;
+pub mod node;
 pub mod string;
 
+use crate::geometry::Rect;
 pub use config::Config;
 pub use layout::{Layout, LayoutRoot};
+pub use node::Node;
 
-use crate::geometry::Rect;
+use self::keyboard::{Button, Track};
 
 #[derive(Default)]
 pub struct Instrument;
@@ -27,6 +30,8 @@ pub struct Model {
     pub keyboard: Option<Entity>,
     pub root: Option<Entity>,
     pub layout: Option<Layout>,
+    pub nodes: Vec<Node>,
+    pub playing: bool,
 }
 
 #[derive(Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -34,12 +39,15 @@ pub struct InstrumentVM {
     pub config: Config,
     pub layout: Layout,
     pub view_box: Rect,
+    pub nodes: Vec<Node>,
+    pub playing: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum InstrumentEV {
     None,
     CreateWithConfig(Config),
+    Playback(bool),
 }
 
 #[cfg_attr(feature = "typegen", derive(crux_macros::Export))]
@@ -71,7 +79,7 @@ impl App for Instrument {
 
                 let root = layout::LayoutRoot::spawn(&mut model.world, inbound, outbound, keyboard);
 
-                let layout = Layout::new(&model.world, &root).expect("Layout failed");
+                let layout = Layout::new(&model.world, &root, &config).expect("Layout failed");
 
                 let _ = model.root.insert(root);
                 let _ = model.inbound.insert(inbound);
@@ -79,6 +87,26 @@ impl App for Instrument {
                 let _ = model.keyboard.insert(keyboard);
                 let _ = model.layout.insert(layout);
 
+                let mut nodes = model
+                    .world
+                    .query::<&Button>()
+                    .iter()
+                    .map(|(_, b)| {
+                        let mut query = model.world.query_one::<&Track>(b.track).unwrap();
+                        let track = query.get().unwrap();
+
+                        Node::new(track.freq, b.f_n)
+                    })
+                    .collect::<Vec<_>>();
+                nodes.sort();
+                nodes.reverse();
+
+                model.nodes = nodes;
+
+                caps.render.render();
+            }
+            InstrumentEV::Playback(playing) => {
+                model.playing = playing;
                 caps.render.render();
             }
             InstrumentEV::None => {}
@@ -89,7 +117,9 @@ impl App for Instrument {
         InstrumentVM {
             config: model.config.clone(),
             layout: model.layout.clone().unwrap_or_default(),
-            view_box: Rect::size(model.config.width, model.config.height)
+            nodes: model.nodes.clone(),
+            view_box: Rect::size(model.config.width, model.config.height),
+            playing: model.playing,
         }
     }
 }

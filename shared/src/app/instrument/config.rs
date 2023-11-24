@@ -9,6 +9,8 @@ const BUTTON_SPACE_RATIO: f64 = 2.0;
 const DPI_RANGE: &[usize] = &[120, 160, 240, 320, 480, 640];
 const F_BASE: f64 = 110.0;
 const F_MAX: f64 = 5500.0;
+const SAMPLE_RATE: f64 = 96000.0;
+const CHANNELS: usize = 2;
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Config {
@@ -23,7 +25,9 @@ pub struct Config {
     pub button_size: f64,
     pub button_track_margin: f64,
     pub safe_area: [f64; 4],
-    pub f0: f64,
+    pub f0: f32,
+    pub sample_rate_hz: f64,
+    pub channels: usize,
 }
 
 impl Eq for Config {}
@@ -73,12 +77,12 @@ impl Config {
 
         let min_count = min_groups * min_buttons;
 
-        let f_c = F_BASE / f64::sqrt((length * safe_breadth) / dpi);
+        let f_c = (F_BASE / f64::sqrt((length * safe_breadth) / dpi)) as f32;
 
         let f0 = {
             let mut f0 = f_c;
 
-            while f0 < F_BASE {
+            while f0 < F_BASE as f32 {
                 f0 = f0 * 2.0;
             }
 
@@ -98,7 +102,7 @@ impl Config {
             ] {
                 let count = groups * buttons_group;
                 let used_space = space * count as f64;
-                let f_max = f0 * 2.0 * (groups * buttons_group) as f64;
+                let f_max = f0 as f64 * 2.0 * (groups * buttons_group) as f64;
                 if count >= min_count && used_space < safe_length && f_max <= F_MAX {
                     let _ = candidates.insert((size, groups, buttons_group, active_length));
                 }
@@ -150,10 +154,9 @@ impl Config {
                 ((pos + 1) as f64 / DPI_RANGE.len() as f64) * candidates.len() as f64
             })
             .round() as usize;
-        let mid = candidates.len().saturating_sub(dpi_pos);
 
         let (button_size, groups, buttons_group, active_length) =
-            candidates.into_iter().nth(mid).map_or(
+            candidates.into_iter().nth(dpi_pos).map_or(
                 (max_button_size as f64, min_groups, min_buttons, safe_length),
                 |(_, (button_size, groups, buttons_group, active_length))| {
                     (
@@ -180,6 +183,8 @@ impl Config {
             safe_area,
             whitespace,
             f0,
+            sample_rate_hz: SAMPLE_RATE,
+            channels: groups.min(CHANNELS)
         }
     }
 }

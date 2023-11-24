@@ -6,7 +6,7 @@ use hecs::{Bundle, Entity, World};
 pub struct Track {
     pub left_hand: bool,
     pub rect: Rect,
-    pub freq: (f64, f64),
+    pub freq: (f32, f32),
 }
 
 impl Track {
@@ -15,8 +15,8 @@ impl Track {
         config: &Config,
         left_hand: bool,
         button_rect: &Rect,
-        base_freq: f64,
-        max_freq: f64,
+        base_freq: f32,
+        max_freq: f32,
     ) -> Entity {
         let button_track_margin = config.button_size * config.button_track_margin;
 
@@ -62,7 +62,7 @@ pub struct Button {
     pub rect: Rect,
     pub group_button: (usize, usize),
     pub f_n: usize,
-    pub freq: f64,
+    pub freq: f32,
 }
 
 impl Button {
@@ -95,7 +95,7 @@ impl Button {
         };
 
         let f_n = total_buttons - idx;
-        let freq = config.f0 * (f_n * 2) as f64 - config.f0;
+        let freq = config.f0 * (f_n * 2) as f32 - config.f0;
         let max_freq = freq + config.f0;
 
         let track = Track::spawn(world, config, group % 2 == 0, &rect, freq, max_freq);

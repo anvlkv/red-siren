@@ -6,15 +6,18 @@ portrait: false
 width: 3840
 height: 1080
 breadth: 360
-length: 3740
-groups: 3
-buttons_group: 3
-button_size: 10
+length: 3696
+whitespace: 42
+groups: 10
+buttons_group: 2
+button_size: 21
 button_track_margin: 0.2
 safe_area:
-  - 70
+  - 50
   - 20
-  - 30
+  - 10
   - 25
-f0: 125.59782965805904
+f0: 125.59783
+sample_rate_hz: 96000
+channels: 2
 

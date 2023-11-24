@@ -7,14 +7,17 @@ width: 3840
 height: 2160
 breadth: 720
 length: 3472
+whitespace: 154
 groups: 1
 buttons_group: 5
 button_size: 77
 button_track_margin: 0.2
 safe_area:
-  - 204
+  - 50
   - 20
-  - 164
+  - 10
   - 25
-f0: 120.94443168478472
+f0: 120.944435
+sample_rate_hz: 96000
+channels: 1
 

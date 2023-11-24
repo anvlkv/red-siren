@@ -1,22 +1,22 @@
-use crux_core::render::Render;
-use crux_core::App;
-use crux_kv::KeyValue;
-use crux_macros::Effect;
-use hecs::{Entity, World};
-use serde::{Deserialize, Serialize};
-
 pub mod config;
 pub mod keyboard;
 pub mod layout;
 pub mod node;
 pub mod string;
+mod system;
 
 use crate::geometry::Rect;
+use crux_core::render::Render;
+use crux_core::App;
+use crux_kv::KeyValue;
+use crux_macros::Effect;
+use hecs::{Entity, World};
+pub use node::Node;
+use serde::{Deserialize, Serialize};
+use system::System;
+
 pub use config::Config;
 pub use layout::{Layout, LayoutRoot};
-pub use node::Node;
-
-use self::keyboard::{Button, Track};
 
 #[derive(Default)]
 pub struct Instrument;
@@ -30,7 +30,7 @@ pub struct Model {
     pub keyboard: Option<Entity>,
     pub root: Option<Entity>,
     pub layout: Option<Layout>,
-    pub nodes: Vec<Node>,
+    pub system: Option<System>,
     pub playing: bool,
 }
 
@@ -86,40 +86,35 @@ impl App for Instrument {
                 let _ = model.outbound.insert(outbound);
                 let _ = model.keyboard.insert(keyboard);
                 let _ = model.layout.insert(layout);
-
-                let mut nodes = model
-                    .world
-                    .query::<&Button>()
-                    .iter()
-                    .map(|(_, b)| {
-                        let mut query = model.world.query_one::<&Track>(b.track).unwrap();
-                        let track = query.get().unwrap();
-
-                        Node::new(track.freq, b.f_n)
-                    })
-                    .collect::<Vec<_>>();
-                nodes.sort();
-                nodes.reverse();
-
-                model.nodes = nodes;
+                let _ = model
+                    .system
+                    .insert(System::spawn(&mut model.world, &config));
 
                 caps.render.render();
             }
             InstrumentEV::Playback(playing) => {
                 model.playing = playing;
                 caps.render.render();
+                if playing {
+                    caps.key_value.write(key, value, make_event)
+                }
             }
             InstrumentEV::None => {}
         }
     }
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
+        let nodes = model.system
+            .iter()
+            .flat_map(|s| s.get_nodes(&model.world))
+            .collect::<Vec<Node>>();
+
         InstrumentVM {
+            nodes,
+            playing: model.playing,
             config: model.config.clone(),
             layout: model.layout.clone().unwrap_or_default(),
-            nodes: model.nodes.clone(),
             view_box: Rect::size(model.config.width, model.config.height),
-            playing: model.playing,
         }
     }
 }

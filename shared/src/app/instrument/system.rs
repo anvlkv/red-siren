@@ -142,7 +142,9 @@ impl System {
 
         net.check();
 
-        let net_be = net.backend();
+        let mut net_be = net.backend();
+
+        net_be.allocate();
 
         Self {
             net,

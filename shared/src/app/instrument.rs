@@ -8,8 +8,9 @@ mod system;
 use crate::geometry::Rect;
 use crux_core::render::Render;
 use crux_core::App;
-use crux_kv::KeyValue;
+use crux_kv::{KeyValue, KeyValueOutput};
 use crux_macros::Effect;
+use fundsp::{audiounit::AudioUnit32, buffer::Buffer};
 use hecs::{Entity, World};
 pub use node::Node;
 use serde::{Deserialize, Serialize};
@@ -17,6 +18,9 @@ use system::System;
 
 pub use config::Config;
 pub use layout::{Layout, LayoutRoot};
+
+pub const INPUT_STREAM_KV: &str = "input stream KV";
+pub const OUTPUT_STREAM_KV: &str = "output stream KV";
 
 #[derive(Default)]
 pub struct Instrument;
@@ -48,6 +52,9 @@ pub enum InstrumentEV {
     None,
     CreateWithConfig(Config),
     Playback(bool),
+    Input(KeyValueOutput),
+    PlaybackLoop(KeyValueOutput),
+    PlaybackError,
 }
 
 #[cfg_attr(feature = "typegen", derive(crux_macros::Export))]
@@ -96,15 +103,48 @@ impl App for Instrument {
                 model.playing = playing;
                 caps.render.render();
                 if playing {
-                    caps.key_value.write(key, value, make_event)
+                    let sys = model.system.as_mut().unwrap();
+                    sys.net_be.reset();
+
+                    caps.key_value.read(INPUT_STREAM_KV, InstrumentEV::Input);
                 }
             }
+            InstrumentEV::Input(input) => {
+                if let KeyValueOutput::Read(Some(bytes)) = input {
+                    if let Ok(input) = serde_json::from_slice::<Vec<f32>>(&bytes) {
+                        let sys = model.system.as_mut().unwrap();
+                        let mut output = Buffer::<f32>::with_channels(model.config.channels);
+                        let input = input.iter().map(|v| vec![*v]).collect::<Vec<Vec<f32>>>();
+                        let input = input.iter().map(|v| v.as_slice()).collect::<Vec<&[f32]>>();
+                        sys.net_be
+                            .process(input.len(), input.as_slice(), output.self_mut());
+
+                        if let Ok(value) = serde_json::to_vec(output.self_ref()) {
+                            caps.key_value.write(
+                                OUTPUT_STREAM_KV,
+                                value,
+                                InstrumentEV::PlaybackLoop,
+                            );
+                        }
+                    }
+                }
+            }
+            InstrumentEV::PlaybackLoop(ev) => {
+                if KeyValueOutput::Write(true) == ev {
+                    caps.key_value.read(INPUT_STREAM_KV, InstrumentEV::Input);
+                } else {
+                    model.playing = false;
+                    caps.render.render();
+                }
+            }
+            InstrumentEV::PlaybackError => {}
             InstrumentEV::None => {}
         }
     }
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
-        let nodes = model.system
+        let nodes = model
+            .system
             .iter()
             .flat_map(|s| s.get_nodes(&model.world))
             .collect::<Vec<Node>>();

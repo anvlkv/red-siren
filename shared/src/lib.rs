@@ -14,6 +14,8 @@ pub use crux_time as time;
 
 pub use app::*;
 
+pub const MAX_AUDIO_BUFFER_SIZE: usize = fundsp::MAX_BUFFER_SIZE;
+
 // TODO see if crux already does it.
 
 uniffi::include_scaffolding!("shared");

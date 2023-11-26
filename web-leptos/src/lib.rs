@@ -1,5 +1,6 @@
 use cfg_if::cfg_if;
 mod util;
+mod kv;
 pub mod app;
 pub mod error_template;
 pub mod fileserv;

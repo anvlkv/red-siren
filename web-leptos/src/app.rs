@@ -4,7 +4,7 @@ mod intro;
 
 use crate::{
     util::use_dpi,
-    error_template::{AppError, ErrorTemplate},
+    error_template::{AppError, ErrorTemplate}, kv::KVContext,
 };
 use leptos::*;
 use leptos_meta::*;
@@ -12,9 +12,13 @@ use leptos_router::*;
 use leptos_use::{use_event_listener, use_window};
 use shared::{Activity, Event};
 
+
+
 #[component]
 pub fn RootComponent() -> impl IntoView {
+
     provide_meta_context();
+    KVContext::provide();
 
     view! {
         <Stylesheet id="leptos" href="/pkg/red-siren.css"/>
@@ -52,14 +56,14 @@ pub fn RootComponent() -> impl IntoView {
           .into_view()
       }>
           <main>
-              <RedSirenRoutes/>
+              <RedSirenCore/>
           </main>
       </Router>
     }
 }
 
 #[component]
-fn RedSirenRoutes() -> impl IntoView {
+fn RedSirenCore() -> impl IntoView {
     let core = core::new();
     let view_rw_signal = create_rw_signal(core.view());
     let view = view_rw_signal.read_only();

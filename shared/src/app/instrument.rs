@@ -48,13 +48,18 @@ pub struct InstrumentVM {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub enum PlaybackEV {
+    Play(bool),
+    Error,
+    DataIn(KeyValueOutput),
+    DataOut(KeyValueOutput),
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum InstrumentEV {
     None,
     CreateWithConfig(Config),
-    Playback(bool),
-    Input(KeyValueOutput),
-    PlaybackLoop(KeyValueOutput),
-    PlaybackError,
+    Playback(PlaybackEV),
 }
 
 #[cfg_attr(feature = "typegen", derive(crux_macros::Export))]
@@ -99,45 +104,60 @@ impl App for Instrument {
 
                 caps.render.render();
             }
-            InstrumentEV::Playback(playing) => {
-                model.playing = playing;
-                caps.render.render();
-                if playing {
-                    let sys = model.system.as_mut().unwrap();
-                    sys.net_be.reset();
-
-                    caps.key_value.read(INPUT_STREAM_KV, InstrumentEV::Input);
-                }
-            }
-            InstrumentEV::Input(input) => {
-                if let KeyValueOutput::Read(Some(bytes)) = input {
-                    if let Ok(input) = serde_json::from_slice::<Vec<f32>>(&bytes) {
+            InstrumentEV::Playback(playback_ev) => match playback_ev {
+                PlaybackEV::Play(playing) => {
+                    model.playing = playing;
+                    caps.render.render();
+                    if playing {
                         let sys = model.system.as_mut().unwrap();
-                        let mut output = Buffer::<f32>::with_channels(model.config.channels);
-                        let input = input.iter().map(|v| vec![*v]).collect::<Vec<Vec<f32>>>();
-                        let input = input.iter().map(|v| v.as_slice()).collect::<Vec<&[f32]>>();
-                        sys.net_be
-                            .process(input.len(), input.as_slice(), output.self_mut());
+                        sys.net_be.reset();
 
-                        if let Ok(value) = serde_json::to_vec(output.self_ref()) {
-                            caps.key_value.write(
-                                OUTPUT_STREAM_KV,
-                                value,
-                                InstrumentEV::PlaybackLoop,
-                            );
+                        caps.key_value.read(INPUT_STREAM_KV, |e| {
+                            InstrumentEV::Playback(PlaybackEV::DataIn(e))
+                        });
+                    }
+                }
+                PlaybackEV::Error => todo!(),
+                PlaybackEV::DataIn(input) => {
+                    if let KeyValueOutput::Read(read) = input {
+                        match read {
+                            Some(bytes) => {
+                                let input = serde_json::from_slice::<Vec<Vec<f32>>>(&bytes)
+                                    .expect("input buffer");
+                                let sys = model.system.as_mut().unwrap();
+                                let mut output =
+                                    Buffer::<f32>::with_channels(model.config.channels);
+                                let input =
+                                    input.iter().map(|v| v.as_slice()).collect::<Vec<&[f32]>>();
+                                sys.net_be.process(
+                                    input.len(),
+                                    input.as_slice(),
+                                    output.self_mut(),
+                                );
+
+                                let value = serde_json::to_vec(output.self_ref()).expect("output data");
+                                
+                                caps.key_value.write(OUTPUT_STREAM_KV, value, |e| {
+                                    InstrumentEV::Playback(PlaybackEV::DataOut(e))
+                                });
+                            }
+                            None => {
+                                log::debug!("no data");
+                            }
                         }
                     }
                 }
-            }
-            InstrumentEV::PlaybackLoop(ev) => {
-                if KeyValueOutput::Write(true) == ev {
-                    caps.key_value.read(INPUT_STREAM_KV, InstrumentEV::Input);
-                } else {
-                    model.playing = false;
-                    caps.render.render();
+                PlaybackEV::DataOut(ev) => {
+                    if KeyValueOutput::Write(true) == ev {
+                        caps.key_value.read(INPUT_STREAM_KV, |e| {
+                            InstrumentEV::Playback(PlaybackEV::DataIn(e))
+                        });
+                    } else {
+                        model.playing = false;
+                        caps.render.render();
+                    }
                 }
-            }
-            InstrumentEV::PlaybackError => {}
+            },
             InstrumentEV::None => {}
         }
     }

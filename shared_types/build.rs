@@ -1,7 +1,7 @@
 use crux_core::typegen::TypeGen;
 use shared::{
     geometry::{Line, Rect},
-    instrument::{Config, InstrumentEV, Layout, Node, layout::MenuPosition},
+    instrument::{Config, InstrumentEV, Layout, Node, layout::MenuPosition, PlaybackEV},
     intro::IntroEV,
     tuner::TunerEV,
     Activity, RedSiren,
@@ -25,6 +25,8 @@ fn main() {
     gen.register_type::<TunerEV>().expect("register tuner ev");
     gen.register_type::<InstrumentEV>()
         .expect("register instrument ev");
+    gen.register_type::<PlaybackEV>()
+        .expect("register playback ev");
 
     gen.register_app::<RedSiren>().expect("register RedSiren");
 

@@ -7,6 +7,7 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+anyhow = { workspace = true }
 shared = { path = "../shared" }
 leptos = { version = "0.5.1", features = ["nightly"] }
 leptos_meta = { version = "0.5", features = ["nightly"] }
@@ -37,27 +38,25 @@ web-sys = { version = "0.3", features = [
     "Window",
     "MediaQueryList",
     "AudioContext",
-    "OscillatorNode",
-    "OscillatorType",
-    "AudioParam",
-    "BaseAudioContext",
     "AudioDestinationNode",
     "AudioNode",
     "AudioContextState",
-    "GainNode"
+    "AudioBuffer",
+    "AudioBufferSourceNode",
+    "GetUserMediaRequest",
+    "MediaDevices",
+    "MediaStreamConstraints",
+    "MediaStream",
+    "MediaStreamAudioSourceNode",
+    "MediaStreamAudioDestinationNode",
+    "AnalyserNode",
 ], optional = true }
-
+js-sys = { version = "0.3.65", optional = true }
 
 
 [features]
-hydrate = [
-    "leptos/hydrate",
-    "leptos_meta/hydrate",
-    "leptos_router/hydrate",
-]
-browser = [
-    "web-sys"
-]
+hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
+browser = ["web-sys", "js-sys"]
 ssr = [
     "dep:axum",
     "dep:tokio",

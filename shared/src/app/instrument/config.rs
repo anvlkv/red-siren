@@ -89,7 +89,7 @@ impl Config {
             f0
         };
 
-        let mut candidates = HashSet::<(usize, usize, usize, usize)>::new();
+        let mut candidates = Vec::<(usize, usize, usize, usize)>::new();
 
         for size in min_button_size..=max_button_size {
             let space = size as f64 * BUTTON_SPACE_RATIO * 2.0;
@@ -104,7 +104,7 @@ impl Config {
                 let used_space = space * count as f64;
                 let f_max = f0 as f64 * 2.0 * (groups * buttons_group) as f64;
                 if count >= min_count && used_space < safe_length && f_max <= F_MAX {
-                    let _ = candidates.insert((size, groups, buttons_group, active_length));
+                    candidates.push((size, groups, buttons_group, active_length));
                 }
             }
         }
@@ -112,11 +112,11 @@ impl Config {
         let (d_size, d_groups, d_buttons_group, d_active_length, d_count) = candidates.iter().fold(
             ((0, 0), (0, 0), (0, 0), (0, 0), (0, 0)),
             |mut acc, (size, groups, buttons_group, active_length)| {
+                let count = groups * buttons_group;
                 acc.0 = (acc.0 .0.min(*size), acc.0 .1.max(*size));
                 acc.1 = (acc.1 .0.min(*groups), acc.1 .1.max(*groups));
                 acc.2 = (acc.2 .0.min(*buttons_group), acc.2 .1.max(*buttons_group));
                 acc.3 = (acc.3 .0.min(*active_length), acc.3 .1.max(*active_length));
-                let count = groups * buttons_group;
                 acc.4 = (acc.4 .0.min(count), acc.4 .1.max(count));
                 acc
             },
@@ -127,18 +127,18 @@ impl Config {
             (d_groups.1 - d_groups.0) as f64,
             (d_buttons_group.1 - d_buttons_group.0) as f64,
             (d_active_length.1 - d_active_length.0) as f64,
-            (d_count.1 - d_count.0) as f64,
+            (d_count.1 - d_count.0).max(1) as f64,
         );
 
         let candidates =
             BTreeMap::<usize, (usize, usize, usize, usize)>::from_iter(candidates.into_iter().map(
                 |(size, groups, buttons_group, active_length)| {
                     let count = (buttons_group * groups) as f64;
-                    let score = (d_size / size as f64
-                        + d_groups / groups as f64
-                        + d_buttons_group / buttons_group as f64
-                        + d_active_length / active_length as f64)
-                        * (d_count / count);
+                    let score = (size as f64 / d_size
+                        + groups as f64 / d_groups
+                        + buttons_group as f64 / d_buttons_group
+                        + active_length as f64 / d_active_length)
+                        * (1.0 + d_count / count);
 
                     (
                         score.round() as usize,
@@ -147,13 +147,19 @@ impl Config {
                 },
             ));
 
+        let scores = candidates.keys().collect::<Vec<_>>();
+
+        println!("scores: {scores:?}");
+
         let dpi_pos = DPI_RANGE
             .iter()
             .position(|d| *d as f64 >= dpi)
-            .map_or(1.0, |pos| {
+            .map_or(0.0, |pos| {
                 ((pos + 1) as f64 / DPI_RANGE.len() as f64) * candidates.len() as f64
             })
             .round() as usize;
+
+        println!("dpi_pos: {dpi_pos}");
 
         let (button_size, groups, buttons_group, active_length) =
             candidates.into_iter().nth(dpi_pos).map_or(
@@ -184,7 +190,7 @@ impl Config {
             whitespace,
             f0,
             sample_rate_hz: SAMPLE_RATE,
-            channels: groups.min(CHANNELS)
+            channels: groups.min(CHANNELS),
         }
     }
 }
@@ -228,14 +234,13 @@ mod tests {
 
     #[test]
     fn config_snapshot_by_rand_screen() {
-        for (i, config) in RAND_SCREENS
-            .iter()
-            .map(|(width, height, dpi)| {
-                Config::new(*width, *height, *dpi, [50.0, 20.0, 10.0, 25.0])
-            })
-            .enumerate()
-        {
-            insta::assert_yaml_snapshot!(format!("size: {i}"), config)
+        let mut configs = Vec::new();
+        for config in RAND_SCREENS.iter().map(|(width, height, dpi)| {
+            Config::new(*width, *height, *dpi, [50.0, 20.0, 10.0, 25.0])
+        }) {
+            configs.push(config);
         }
+
+        insta::assert_yaml_snapshot!(configs)
     }
 }

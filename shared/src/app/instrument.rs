@@ -3,7 +3,9 @@ pub mod keyboard;
 pub mod layout;
 pub mod node;
 pub mod string;
+
 mod system;
+use system::System;
 
 use crate::geometry::Rect;
 use crux_core::render::Render;
@@ -14,7 +16,6 @@ use fundsp::{audiounit::AudioUnit32, buffer::Buffer};
 use hecs::{Entity, World};
 pub use node::Node;
 use serde::{Deserialize, Serialize};
-use system::System;
 
 pub use config::Config;
 pub use layout::{Layout, LayoutRoot};
@@ -34,26 +35,31 @@ pub struct Model {
     pub keyboard: Option<Entity>,
     pub root: Option<Entity>,
     pub layout: Option<Layout>,
-    pub system: Option<System>,
     pub playing: bool,
+    pub system: Option<System>,
+    pub audio_data: Vec<Vec<f32>>,
 }
 
-#[derive(Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct InstrumentVM {
     pub config: Config,
     pub layout: Layout,
     pub view_box: Rect,
     pub nodes: Vec<Node>,
     pub playing: bool,
+    pub audio_data: Vec<Vec<f32>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+impl Eq for InstrumentVM {}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum PlaybackEV {
     Play(bool),
     Error,
-    DataIn(KeyValueOutput),
-    DataOut(KeyValueOutput),
+    DataIn(Vec<Vec<f32>>),
 }
+
+impl Eq for PlaybackEV {}
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum InstrumentEV {
@@ -67,7 +73,6 @@ pub enum InstrumentEV {
 #[effect(app = "Instrument")]
 pub struct InstrumentCapabilities {
     pub render: Render<InstrumentEV>,
-    pub key_value: KeyValue<InstrumentEV>,
 }
 
 impl App for Instrument {
@@ -111,51 +116,51 @@ impl App for Instrument {
                     if playing {
                         let sys = model.system.as_mut().unwrap();
                         sys.net_be.reset();
-
-                        caps.key_value.read(INPUT_STREAM_KV, |e| {
-                            InstrumentEV::Playback(PlaybackEV::DataIn(e))
-                        });
                     }
                 }
                 PlaybackEV::Error => todo!(),
                 PlaybackEV::DataIn(input) => {
-                    if let KeyValueOutput::Read(read) = input {
-                        match read {
-                            Some(bytes) => {
-                                let input = serde_json::from_slice::<Vec<Vec<f32>>>(&bytes)
-                                    .expect("input buffer");
-                                let sys = model.system.as_mut().unwrap();
-                                let mut output =
-                                    Buffer::<f32>::with_channels(model.config.channels);
-                                let input =
-                                    input.iter().map(|v| v.as_slice()).collect::<Vec<&[f32]>>();
-                                sys.net_be.process(
-                                    input.len(),
-                                    input.as_slice(),
-                                    output.self_mut(),
-                                );
+                    log::debug!("new data");
+                    model.audio_data = vec![];
+                    let sys = model.system.as_mut().unwrap();
+                    let sample_length = input.first().map(|ch| ch.len()).unwrap_or_default();
+                    let rng = (0..sample_length).collect::<Vec<usize>>();
 
-                                let value = serde_json::to_vec(output.self_ref()).expect("output data");
-                                
-                                caps.key_value.write(OUTPUT_STREAM_KV, value, |e| {
-                                    InstrumentEV::Playback(PlaybackEV::DataOut(e))
-                                });
-                            }
-                            None => {
-                                log::debug!("no data");
-                            }
-                        }
+                    let mut it = rng.chunks(fundsp::MAX_BUFFER_SIZE).map(|range: &[usize]| {
+                        let mut input_buffer = Buffer::<f32>::with_channels(input.len());
+                        input.iter().zip(input_buffer.self_mut()).for_each(
+                            |(input_ch, buffer_ch)| {
+                                input_ch
+                                    .iter()
+                                    .skip(range.first().cloned().unwrap_or(0))
+                                    .take(fundsp::MAX_BUFFER_SIZE)
+                                    .enumerate()
+                                    .for_each(|(i, val)| {
+                                        buffer_ch[i] = *val;
+                                    });
+                            },
+                        );
+
+                        let mut output = Buffer::<f32>::with_channels(model.config.channels);
+
+                        let size = sample_length.min(fundsp::MAX_BUFFER_SIZE);
+
+                        sys.net_be
+                            .process(size, input_buffer.self_ref(), output.self_mut());
+                        output
+                    });
+
+                    while let Some(mut output) = it.next() {
+                        log::debug!("processed chunk: {:?}", output.self_ref());
+                        model.audio_data.extend(
+                            output
+                                .self_ref()
+                                .iter()
+                                .map(|s| Vec::from_iter(s.into_iter().cloned())),
+                        )
                     }
-                }
-                PlaybackEV::DataOut(ev) => {
-                    if KeyValueOutput::Write(true) == ev {
-                        caps.key_value.read(INPUT_STREAM_KV, |e| {
-                            InstrumentEV::Playback(PlaybackEV::DataIn(e))
-                        });
-                    } else {
-                        model.playing = false;
-                        caps.render.render();
-                    }
+
+                    caps.render.render();
                 }
             },
             InstrumentEV::None => {}
@@ -175,6 +180,7 @@ impl App for Instrument {
             config: model.config.clone(),
             layout: model.layout.clone().unwrap_or_default(),
             view_box: Rect::size(model.config.width, model.config.height),
+            audio_data: model.audio_data.clone(),
         }
     }
 }

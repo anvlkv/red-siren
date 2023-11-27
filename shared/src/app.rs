@@ -2,12 +2,13 @@ pub use crux_core::App;
 use crux_core::{render::Render, Capability};
 use crux_kv::KeyValue;
 use crux_macros::Effect;
+use log::LevelFilter;
 use serde::{Deserialize, Serialize};
 
 pub mod instrument;
-pub mod intro;
 pub mod navigate;
 pub mod tuner;
+pub mod intro;
 
 pub use instrument::Instrument;
 pub use intro::Intro;
@@ -103,7 +104,6 @@ impl From<&RedSirenCapabilities> for TunerCapabilities {
 impl From<&RedSirenCapabilities> for InstrumentCapabilities {
     fn from(incoming: &RedSirenCapabilities) -> Self {
         InstrumentCapabilities {
-            key_value: incoming.key_value.map_event(super::Event::InstrumentEvent),
             render: incoming.render.map_event(super::Event::InstrumentEvent),
         }
     }
@@ -116,33 +116,32 @@ impl App for RedSiren {
     type Capabilities = RedSirenCapabilities;
 
     fn update(&self, msg: Event, model: &mut Model, caps: &RedSirenCapabilities) {
-        log::debug!("msg: {:?}", msg);
-        
+        log::trace!("msg: {:?}", msg);
+
         match msg {
             Event::Start => {
+                let lvl = LevelFilter::Debug;
+
                 #[cfg(feature = "android")]
                 {
-                    use android_logger::{init_once, Config};
-                    use log::LevelFilter;
-
-                    init_once(
-                        Config::default()
-                            .with_max_level(LevelFilter::Trace)
+                    android_logger::init_once(
+                        android_logger::Config::default()
+                            .with_max_level(lvl)
                             .with_tag("red_siren::shared"),
                     );
                 }
                 #[cfg(feature = "ios")]
                 {
-                    use log::LevelFilter;
-                    use oslog::OsLogger;
-
-                    OsLogger::new("com.anvlkv.RedSiren.Core")
-                        .level_filter(LevelFilter::Debug)
-                        .category_level_filter("Settings", LevelFilter::Info)
+                    oslog::OsLogger::new("com.anvlkv.RedSiren.Core")
+                        .level_filter(lvl)
                         .init()
                         .unwrap();
                 }
-
+                #[cfg(feature = "worklet")]
+                {
+                    _ = console_log::init_with_level(lvl.to_level().unwrap_or(log::Level::Warn));
+                    console_error_panic_hook::set_once();
+                }
                 caps.render.render();
             }
             Event::Activate(act) => {

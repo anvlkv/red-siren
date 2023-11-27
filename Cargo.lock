@@ -3270,6 +3270,8 @@ dependencies = [
  "anyhow",
  "assert_let_bind",
  "bincode",
+ "console_error_panic_hook",
+ "console_log",
  "crux_core",
  "crux_http",
  "crux_kv",

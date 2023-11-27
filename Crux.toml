@@ -22,3 +22,8 @@ cores = ["shared"]
 template = "iOS"
 source = "iOS"
 cores = ["shared"]
+
+
+[shells.worklet]
+source = "worklet"
+cores = ["shared"]

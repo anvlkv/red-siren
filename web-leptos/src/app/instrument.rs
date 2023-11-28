@@ -1,8 +1,10 @@
 mod button;
+mod menu;
+#[cfg(feature = "browser")]
+mod node_binding;
+mod playback;
 mod string;
 mod track;
-mod menu;
-mod playback;
 
 use leptos::*;
 use shared::{instrument, key_value::KeyValueOutput};
@@ -36,7 +38,8 @@ pub fn InstrumentComponent(
     let playing = Signal::derive(move || vm().playing);
     let config = Signal::derive(move || vm().config);
     let playback_ev = SignalSetter::map(move |e| ev.set(instrument::InstrumentEV::Playback(e)));
-    let playback_state = playback::create_playback(playing.clone(), config, playback_ev);
+    let (playback_state, ev_port) =
+        playback::create_playback(Selector::new(move || playing()), config, playback_ev);
 
     // create_effect(move |prev| {
     //     let state = playback_state.get();

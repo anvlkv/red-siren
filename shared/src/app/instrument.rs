@@ -120,47 +120,51 @@ impl App for Instrument {
                 }
                 PlaybackEV::Error => todo!(),
                 PlaybackEV::DataIn(input) => {
-                    log::debug!("new data");
-                    model.audio_data = vec![];
-                    let sys = model.system.as_mut().unwrap();
-                    let sample_length = input.first().map(|ch| ch.len()).unwrap_or_default();
-                    let rng = (0..sample_length).collect::<Vec<usize>>();
-
-                    let mut it = rng.chunks(fundsp::MAX_BUFFER_SIZE).map(|range: &[usize]| {
-                        let mut input_buffer = Buffer::<f32>::with_channels(input.len());
-                        input.iter().zip(input_buffer.self_mut()).for_each(
-                            |(input_ch, buffer_ch)| {
-                                input_ch
-                                    .iter()
-                                    .skip(range.first().cloned().unwrap_or(0))
-                                    .take(fundsp::MAX_BUFFER_SIZE)
-                                    .enumerate()
-                                    .for_each(|(i, val)| {
-                                        buffer_ch[i] = *val;
-                                    });
-                            },
-                        );
-
-                        let mut output = Buffer::<f32>::with_channels(model.config.channels);
-
-                        let size = sample_length.min(fundsp::MAX_BUFFER_SIZE);
-
-                        sys.net_be
-                            .process(size, input_buffer.self_ref(), output.self_mut());
-                        output
-                    });
-
-                    while let Some(mut output) = it.next() {
-                        log::debug!("processed chunk: {:?}", output.self_ref());
-                        model.audio_data.extend(
+                    if let Some(sys) = model.system.as_mut() {
+                        log::debug!("handling new data");
+                        model.audio_data = vec![];
+                        let sample_length = input.first().map(|ch| ch.len()).unwrap_or_default();
+                        let rng = (0..sample_length).collect::<Vec<usize>>();
+    
+                        let mut it = rng.chunks(fundsp::MAX_BUFFER_SIZE).map(|range: &[usize]| {
+                            let mut input_buffer = Buffer::<f32>::with_channels(input.len());
+                            input.iter().zip(input_buffer.self_mut()).for_each(
+                                |(input_ch, buffer_ch)| {
+                                    input_ch
+                                        .iter()
+                                        .skip(range.first().cloned().unwrap_or(0))
+                                        .take(fundsp::MAX_BUFFER_SIZE)
+                                        .enumerate()
+                                        .for_each(|(i, val)| {
+                                            buffer_ch[i] = *val;
+                                        });
+                                },
+                            );
+    
+                            let mut output = Buffer::<f32>::with_channels(model.config.channels);
+    
+                            let size = sample_length.min(fundsp::MAX_BUFFER_SIZE);
+    
+                            sys.net_be
+                                .process(size, input_buffer.self_ref(), output.self_mut());
                             output
-                                .self_ref()
-                                .iter()
-                                .map(|s| Vec::from_iter(s.into_iter().cloned())),
-                        )
+                        });
+    
+                        while let Some(mut output) = it.next() {
+                            log::debug!("processed chunk: {:?}", output.self_ref());
+                            model.audio_data.extend(
+                                output
+                                    .self_ref()
+                                    .iter()
+                                    .map(|s| Vec::from_iter(s.into_iter().cloned())),
+                            )
+                        }
+    
+                        caps.render.render();
                     }
-
-                    caps.render.render();
+                    else {
+                        log::warn!("skipping new data, no config yet");
+                    }
                 }
             },
             InstrumentEV::None => {}

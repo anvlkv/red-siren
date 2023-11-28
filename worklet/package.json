@@ -6,18 +6,19 @@
   "files": [
     "dist"
   ],
-  "main": "./dist/worklet.umd.js",
-  "module": "./dist/worklet.es.js",
+  "main": "./dist/lib.cjs.js",
+  "module": "./dist/lib.es.js",
   "exports": {
     ".": {
-      "import": "./dist/worklet.es.js",
-      "require": "./dist/worklet.umd.js"
+      "import": "./dist/lib.es.js",
+      "require": "./dist/lib.cjs.js"
     }
   },
   "scripts": {
     "dev": "pnpm wasm:build && vite",
     "build": "pnpm wasm:build && tsc && vite build",
     "preview": "pnpm wasm:build && vite preview",
+    "vite:build": "pnpm tsc && vite build",
     "wasm:build": "cd ../shared && wasm-pack build --target web --features worklet"
   },
   "devDependencies": {
@@ -26,9 +27,7 @@
     "@types/node": "^20.10.0",
     "dat.gui": "^0.7.9",
     "typescript": "^5.3.2",
-    "vite": "^4.5.0",
-    "vite-plugin-top-level-await": "^1.3.1",
-    "vite-plugin-wasm": "^3.2.2"
+    "vite": "5.0.2"
   },
   "dependencies": {
     "polyfill-crypto.getrandomvalues": "^1.0.0",

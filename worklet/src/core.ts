@@ -32,6 +32,15 @@ export function update(
   }
 }
 
+export function update_plain(data: Uint8Array, callback: CB) {
+  const effects = process_event(data);
+
+  const requests = deserializeRequests(effects);
+  for (const { uuid, effect } of requests) {
+    processEffect(uuid, effect, callback);
+  }
+}
+
 function processEffect(
   uuid: number[],
   effect: Effect,

@@ -1,10 +1,11 @@
 import "./TextEncoder.js";
 import "./Crypto.js";
-import { update } from "./core";
+import { update, update_plain } from "./core";
 import { initSync } from "shared/shared";
 import {
   ActivityVariantPlay,
   Config,
+  Event,
   EventVariantActivate,
   EventVariantConfigureApp,
   EventVariantInstrumentEvent,
@@ -16,13 +17,6 @@ import {
   PlaybackEVVariantPlay,
   ViewModel,
 } from "shared_types/types/shared_types";
-
-function toWindows<T>(inputArray: T[], size: number) {
-  return Array.from(
-    { length: inputArray.length - (size - 1) }, //get the appropriate length
-    (_, index) => inputArray.slice(index, index + size) //create the windows
-  );
-}
 
 export class RedSirenWorklet extends AudioWorkletProcessor {
   private vm: ViewModel | null = null;
@@ -38,23 +32,21 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
   };
 
   onMessage(msg: MessageEvent) {
-    switch (msg.data.type) {
-      case "send-wasm-module":
-        try {
+    try {
+      switch (msg.data.type) {
+        case "send-wasm-module":
           this.core = initSync(msg.data.wasmBytes);
           update(new EventVariantStart(), this.onRender);
           this.port.postMessage({
             type: "wasm-ready",
           });
-        } catch (error) {
-          this.port.postMessage({
-            type: "error",
-            error,
-          });
-        }
-        break;
-      case "red-siren-config":
-        try {
+          break;
+        case "red-siren-ev":
+          const ev = msg.data.ev as Uint8Array;
+          update_plain(ev, this.onRender);
+          break;
+        // TODO: remove. This is only used for testing
+        case "red-siren-config":
           const {
             portrait,
             width,
@@ -70,29 +62,26 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
             length,
             safe_area,
             sample_rate_hz,
-          } = msg.data.config as Config;
-
-          update(
-            new EventVariantConfigureApp(
-              new Config(
-                portrait,
-                width,
-                height,
-                breadth,
-                length,
-                whitespace,
-                groups,
-                buttons_group,
-                button_size,
-                button_track_margin,
-                safe_area,
-                f0,
-                sample_rate_hz,
-                channels
-              )
-            ),
-            this.onRender
+          } = msg.data.config;
+    
+          const config = new Config(
+            portrait,
+            width,
+            height,
+            breadth,
+            length,
+            whitespace,
+            BigInt(groups),
+            BigInt(buttons_group),
+            button_size,
+            button_track_margin,
+            safe_area,
+            f0,
+            sample_rate_hz,
+            BigInt(channels)
           );
+
+          update(new EventVariantConfigureApp(config), this.onRender);
           update(
             new EventVariantActivate(new ActivityVariantPlay()),
             this.onRender
@@ -103,15 +92,15 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
             ),
             this.onRender
           );
-        } catch (error) {
-          this.port.postMessage({
-            type: "error",
-            error,
-          });
-        }
-        break;
-      default:
-        super.port.onmessage && super.port.onmessage(msg);
+          break;
+        default:
+          super.port.onmessage && super.port.onmessage(msg);
+      }
+    } catch (error) {
+      this.port.postMessage({
+        type: "error",
+        error,
+      });
     }
   }
 
@@ -126,7 +115,9 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
 
     update(
       new EventVariantInstrumentEvent(
-        new InstrumentEVVariantPlayback(new PlaybackEVVariantDataIn(inputs as any))
+        new InstrumentEVVariantPlayback(
+          new PlaybackEVVariantDataIn(inputs as any)
+        )
       ),
       this.onRender
     );

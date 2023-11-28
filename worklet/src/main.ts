@@ -1,7 +1,7 @@
 import * as dat from "dat.gui";
 import { ListTuple } from "shared_types/serde/types";
 import { Config } from "shared_types/types/shared_types";
-import RedSirenNode from "./lib";
+import { RedSirenNode } from "./lib";
 
 interface IConfig
   extends Omit<
@@ -45,6 +45,7 @@ const buttons_group = configFolder.add(config, "buttons_group");
 const button_size = configFolder.add(config, "button_size");
 const button_track_margin = configFolder.add(config, "button_track_margin");
 const sample_rate_hz = configFolder.add(config, "sample_rate_hz");
+const channels = configFolder.add(config, "channels");
 
 const canvas = document.createElement("canvas");
 canvas.setAttribute("style", "width: 100vw; height: 100vh;");
@@ -66,53 +67,52 @@ let analyser2Array: Uint8Array | null = null;
 
 const media = navigator.mediaDevices;
 
-playing.onChange((playing) => {
+playing.onChange(async (playing) => {
   if (playing) {
-    (async () => {
-      ctx = new AudioContext();
+    ctx = new AudioContext();
 
-      const stream = await media.getUserMedia({ audio: true });
+    const stream = await media.getUserMedia({ audio: true });
 
-      const inputNode = new MediaStreamAudioSourceNode(ctx, {
-        mediaStream: stream,
-      });
+    const inputNode = new MediaStreamAudioSourceNode(ctx, {
+      mediaStream: stream,
+    });
 
-      try {
-        worklet = new RedSirenNode(ctx, "red-siren");
-      } catch {
-        await ctx.audioWorklet.addModule(RedSirenNode.workletUrl);
-        worklet = new RedSirenNode(ctx, "red-siren");
-      }
+    try {
+      worklet = new RedSirenNode(ctx);
+    } catch {
+      await RedSirenNode.addModule(ctx);
+      worklet = new RedSirenNode(ctx);
+    }
 
-      await worklet.init();
+    await worklet.init();
 
-      worklet.port.postMessage({
-        type: "red-siren-config",
-        config: {
-          ...config,
-        },
-      });
+    worklet.port.postMessage({
+      type: "red-siren-config",
+      config: structuredClone(config),
+    });
 
-      analyser1 = ctx.createAnalyser();
-      analyser1.fftSize = 2048;
-      analyser1Array = new Uint8Array(analyser1.frequencyBinCount);
-      analyser2 = ctx.createAnalyser();
-      analyser2.fftSize = 2048;
-      analyser2Array = new Uint8Array(analyser2.frequencyBinCount);
+    analyser1 = ctx.createAnalyser();
+    analyser1.fftSize = 2048;
+    analyser1Array = new Uint8Array(analyser1.frequencyBinCount);
+    analyser2 = ctx.createAnalyser();
+    analyser2.fftSize = 2048;
+    analyser2Array = new Uint8Array(analyser2.frequencyBinCount);
 
-      inputNode
-        .connect(analyser1)
-        .connect(worklet)
-        .connect(analyser2)
-        .connect(ctx.destination);
-    })();
+    inputNode
+      .connect(analyser1)
+      .connect(worklet)
+      .connect(analyser2)
+      .connect(ctx.destination);
   } else if (ctx) {
-    ctx
-      .close()
-      .then(() => console.info("closed"))
-      .catch((e) => {
-        console.error(e);
-      });
+    await ctx.close();
+    console.info("closed");
+
+    ctx = null;
+    worklet = null;
+    analyser1 = null;
+    analyser1Array = null;
+    analyser2 = null;
+    analyser2Array = null;
   }
 });
 [
@@ -127,13 +127,12 @@ playing.onChange((playing) => {
   button_size,
   button_track_margin,
   sample_rate_hz,
+  channels,
 ].forEach((e) =>
   e.onChange(() => {
     worklet?.port.postMessage({
       type: "red-siren-config",
-      config: {
-        ...config,
-      },
+      config: structuredClone(config),
     });
   })
 );
@@ -145,7 +144,7 @@ function draw(
   size: { width: number; height: number }
 ) {
   analyser.getByteTimeDomainData(arr);
-  
+
   canvasCtx.lineWidth = 2;
   canvasCtx.strokeStyle = "rgb(0, 200, 0)";
   canvasCtx.beginPath();
@@ -176,7 +175,7 @@ function watcher() {
   const size = { width: canvas.width / 2, height: canvas.height };
   canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
   canvasCtx.fillStyle = "rgb(10, 10, 10)";
-  canvasCtx.fillRect(0,0, canvas.width, canvas.height);
+  canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
 
   if (analyser1 && analyser1Array) {
     draw(analyser1, analyser1Array, { x: 0, y: 0 }, size);

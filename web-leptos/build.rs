@@ -13,15 +13,18 @@ pub fn main() {
       let wk_dir = root.join("worklet");
       let root = root.to_str().unwrap();
   
-      println!("cargo:rerun-if-changed={root}/shared/pkg/");
+      println!("cargo:rerun-if-changed={root}/shared/src/");
+      println!("cargo:rerun-if-changed={root}/worklet/src/");
+      println!("cargo:rerun-if-changed={root}/web-leptos/build.rs");
+
       Command::new("pnpm")
           .arg("build")
           .current_dir(wk_dir)
           .status()
           .unwrap();
   
+
       create_all("../target/site/pkg/worklet", false).expect("create pkg/worklet");
       copy_items(&["../worklet/dist"], "../target/site/pkg/worklet", &options).expect("copy worklet");
-      println!("cargo:rerun-if-changed={root}/worklet/dist/");
     }
 }

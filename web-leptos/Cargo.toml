@@ -42,6 +42,7 @@ web-sys = { version = "0.3", features = [
     "Window",
     "MediaQueryList",
     "AudioContext",
+    "AudioContextOptions",
     "AudioDestinationNode",
     "AudioNode",
     "AudioContextState",
@@ -62,8 +63,8 @@ bincode = { version = "1.3.3", optional = true }
 
 
 [features]
-hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
-browser = ["web-sys", "js-sys", "bincode"]
+hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate", "shared/browser"]
+browser = ["web-sys", "js-sys", "bincode", "shared/browser"]
 ssr = [
     "dep:axum",
     "dep:tokio",

@@ -14,7 +14,7 @@ pub use menu::MenuComponent;
 pub use string::StringComponent;
 pub use track::TrackComponent;
 
-use crate::{app::instrument::playback::PlayBackState, kv::KVContext};
+use crate::{app::instrument::playback::PlayBackState};
 
 #[component]
 pub fn InstrumentComponent(
@@ -40,19 +40,6 @@ pub fn InstrumentComponent(
     let playback_ev = SignalSetter::map(move |e| ev.set(instrument::InstrumentEV::Playback(e)));
     let (playback_state, ev_port) =
         playback::create_playback(Selector::new(move || playing()), config, playback_ev);
-
-    // create_effect(move |prev| {
-    //     let state = playback_state.get();
-
-    //     match (state, prev) {
-    //         (PlayBackState::Playing, Some(PlayBackState::Preparing)) => ev(instrument::InstrumentEV::Input(
-    //             KeyValueOutput::Read(kv_ref.borrow_mut().remove(instrument::INPUT_STREAM_KV)),
-    //         )),
-    //         _ => {}
-    //     }
-
-    //     state
-    // });
 
     let toggle_playing = Callback::<()>::new(move |_| {
         ev(instrument::InstrumentEV::Playback(

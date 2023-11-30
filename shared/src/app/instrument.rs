@@ -10,9 +10,8 @@ use system::System;
 use crate::geometry::Rect;
 use crux_core::render::Render;
 use crux_core::App;
-use crux_kv::{KeyValue, KeyValueOutput};
 use crux_macros::Effect;
-use fundsp::{audiounit::AudioUnit32, buffer::Buffer};
+use fundsp::audiounit::AudioUnit32;
 use hecs::{Entity, World};
 pub use node::Node;
 use serde::{Deserialize, Serialize};
@@ -37,17 +36,19 @@ pub struct Model {
     pub layout: Option<Layout>,
     pub playing: bool,
     pub system: Option<System>,
+    // pub prev_audio_data: Vec<Vec<f32>>,
     pub audio_data: Vec<Vec<f32>>,
+    pub frame_size: usize,
 }
 
 #[derive(Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct InstrumentVM {
     pub config: Config,
-    pub layout: Layout,
     pub view_box: Rect,
     pub nodes: Vec<Node>,
     pub playing: bool,
     pub audio_data: Vec<Vec<f32>>,
+    pub layout: Layout,
 }
 
 impl Eq for InstrumentVM {}
@@ -111,58 +112,60 @@ impl App for Instrument {
             }
             InstrumentEV::Playback(playback_ev) => match playback_ev {
                 PlaybackEV::Play(playing) => {
-                    model.playing = playing;
-                    caps.render.render();
                     if playing {
                         let sys = model.system.as_mut().unwrap();
+
+                        model.playing = true;
                         sys.net_be.reset();
+                        model.audio_data = vec![];
+                        // model.prev_audio_data = vec![];
+                    } else {
+                        model.playing = false;
                     }
+                    caps.render.render();
                 }
-                PlaybackEV::Error => todo!(),
+                PlaybackEV::Error => {
+                    model.playing = false;
+                    model.audio_data = vec![];
+                    // model.prev_audio_data = vec![];
+                    caps.render.render();
+                }
                 PlaybackEV::DataIn(input) => {
                     if let Some(sys) = model.system.as_mut() {
-                        log::debug!("handling new data");
-                        model.audio_data = vec![];
-                        let sample_length = input.first().map(|ch| ch.len()).unwrap_or_default();
-                        let rng = (0..sample_length).collect::<Vec<usize>>();
-    
-                        let mut it = rng.chunks(fundsp::MAX_BUFFER_SIZE).map(|range: &[usize]| {
-                            let mut input_buffer = Buffer::<f32>::with_channels(input.len());
-                            input.iter().zip(input_buffer.self_mut()).for_each(
-                                |(input_ch, buffer_ch)| {
-                                    input_ch
-                                        .iter()
-                                        .skip(range.first().cloned().unwrap_or(0))
-                                        .take(fundsp::MAX_BUFFER_SIZE)
-                                        .enumerate()
-                                        .for_each(|(i, val)| {
-                                            buffer_ch[i] = *val;
-                                        });
-                                },
-                            );
-    
-                            let mut output = Buffer::<f32>::with_channels(model.config.channels);
-    
-                            let size = sample_length.min(fundsp::MAX_BUFFER_SIZE);
-    
-                            sys.net_be
-                                .process(size, input_buffer.self_ref(), output.self_mut());
-                            output
-                        });
-    
-                        while let Some(mut output) = it.next() {
-                            log::debug!("processed chunk: {:?}", output.self_ref());
-                            model.audio_data.extend(
-                                output
-                                    .self_ref()
-                                    .iter()
-                                    .map(|s| Vec::from_iter(s.into_iter().cloned())),
-                            )
+                        let frame_size = input.first().map(|ch| ch.len()).unwrap_or_default();
+
+                        if model.frame_size != frame_size {
+                            model.audio_data = (0..model.config.channels)
+                                .map(|_| (0..frame_size).map(|_| 0.0 as f32).collect())
+                                .collect();
+                            // model.prev_audio_data = model.audio_data.clone();
                         }
-    
+
+                        let input = input.iter().take(1).map(|ch| ch.as_slice()).collect::<Vec<_>>();
+                        // let mut input_data = model.prev_audio_data.to_owned();
+                        // input_data.extend(input.into_iter().nth(0));
+
+                        // let input_data = input_data
+                        //     .iter()
+                        //     .map(|ch| ch.as_slice())
+                        //     .collect::<Vec<_>>();
+
+                        let mut output = model
+                            .audio_data
+                            .iter_mut()
+                            .map(|ch| ch.as_mut_slice())
+                            .collect::<Vec<_>>();
+
+                        sys.net_be.process(
+                            frame_size,
+                            input.as_slice(),
+                            output.as_mut_slice(),
+                        );
+
                         caps.render.render();
-                    }
-                    else {
+
+                        // model.prev_audio_data = model.audio_data.clone();
+                    } else {
                         log::warn!("skipping new data, no config yet");
                     }
                 }

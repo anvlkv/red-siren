@@ -4,7 +4,7 @@ mod intro;
 
 use crate::{
     util::use_dpi,
-    error_template::{AppError, ErrorTemplate}, kv::KVContext,
+    error_template::{AppError, ErrorTemplate}
 };
 use leptos::*;
 use leptos_meta::*;
@@ -18,7 +18,6 @@ use shared::{Activity, Event};
 pub fn RootComponent() -> impl IntoView {
 
     provide_meta_context();
-    KVContext::provide();
 
     view! {
         <Stylesheet id="leptos" href="/pkg/red-siren.css"/>

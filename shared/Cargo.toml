@@ -13,6 +13,7 @@ typegen = ["crux_core/typegen"]
 android = ["android_logger"]
 ios = ["oslog"]
 worklet = ["console_error_panic_hook", "console_log"]
+browser = ["console_error_panic_hook", "console_log"]
 
 [dependencies]
 anyhow.workspace = true
@@ -42,6 +43,7 @@ num-integer = "0.1.45"
 fundsp = { version = "0.15.0", default-features = false}
 console_error_panic_hook = { version = "0.1", optional = true }
 console_log = { version = "1", optional = true }
+cfg-if="1"
 
 [dev-dependencies]
 assert_let_bind = "0.1.1"

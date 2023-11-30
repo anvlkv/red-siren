@@ -1,6 +1,13 @@
 import * as dat from "dat.gui";
 import { ListTuple } from "shared_types/serde/types";
-import { Config } from "shared_types/types/shared_types";
+import {
+  Config,
+  EventVariantInstrumentEvent,
+  InstrumentEVVariantCreateWithConfig,
+  InstrumentEVVariantPlayback,
+  PlaybackEVVariantPlay,
+} from "shared_types/types/shared_types";
+import { to_bin } from "./core";
 import { RedSirenNode } from "./lib";
 
 interface IConfig
@@ -67,53 +74,95 @@ let analyser2Array: Uint8Array | null = null;
 
 const media = navigator.mediaDevices;
 
+async function create_ctx() {
+  ctx = new AudioContext();
+
+  const stream = await media.getUserMedia({ audio: true });
+
+  const inputNode = new MediaStreamAudioSourceNode(ctx, {
+    mediaStream: stream,
+  });
+
+  await RedSirenNode.addModule(ctx);
+  worklet = new RedSirenNode(ctx);
+
+  await worklet.init();
+
+  worklet.port.postMessage({
+    type: "red-siren-ev",
+    ev: to_bin(
+      new EventVariantInstrumentEvent(
+        new InstrumentEVVariantCreateWithConfig(
+          new Config(
+            config.portrait,
+            config.width,
+            config.height,
+            config.breadth,
+            config.length,
+            config.whitespace,
+            BigInt(config.groups),
+            BigInt(config.buttons_group),
+            config.button_size,
+            config.button_track_margin,
+            config.safe_area,
+            config.f0,
+            config.sample_rate_hz,
+            BigInt(config.channels)
+          )
+        )
+      )
+    ),
+  });
+
+  analyser1 = ctx.createAnalyser();
+  analyser1.fftSize = 2048;
+  analyser1Array = new Uint8Array(analyser1.frequencyBinCount);
+  analyser2 = ctx.createAnalyser();
+  analyser2.fftSize = 2048;
+  analyser2Array = new Uint8Array(analyser2.frequencyBinCount);
+
+  inputNode
+    .connect(analyser1)
+    .connect(worklet)
+    .connect(analyser2)
+    .connect(ctx.destination);
+
+  console.info("created context");
+}
+
 playing.onChange(async (playing) => {
-  if (playing) {
-    ctx = new AudioContext();
-
-    const stream = await media.getUserMedia({ audio: true });
-
-    const inputNode = new MediaStreamAudioSourceNode(ctx, {
-      mediaStream: stream,
-    });
-
-    try {
-      worklet = new RedSirenNode(ctx);
-    } catch {
-      await RedSirenNode.addModule(ctx);
-      worklet = new RedSirenNode(ctx);
-    }
-
-    await worklet.init();
-
+  if (playing && ctx) {
+    await ctx.resume();
     worklet.port.postMessage({
-      type: "red-siren-config",
-      config: structuredClone(config),
+      type: "red-siren-ev",
+      ev: to_bin(
+        new EventVariantInstrumentEvent(
+          new InstrumentEVVariantPlayback(new PlaybackEVVariantPlay(true))
+        )
+      ),
     });
-
-    analyser1 = ctx.createAnalyser();
-    analyser1.fftSize = 2048;
-    analyser1Array = new Uint8Array(analyser1.frequencyBinCount);
-    analyser2 = ctx.createAnalyser();
-    analyser2.fftSize = 2048;
-    analyser2Array = new Uint8Array(analyser2.frequencyBinCount);
-
-    inputNode
-      .connect(analyser1)
-      .connect(worklet)
-      .connect(analyser2)
-      .connect(ctx.destination);
+  } else if (playing) {
+    await create_ctx();
+    worklet.port.postMessage({
+      type: "red-siren-ev",
+      ev: to_bin(
+        new EventVariantInstrumentEvent(
+          new InstrumentEVVariantPlayback(new PlaybackEVVariantPlay(true))
+        )
+      ),
+    });
   } else if (ctx) {
-    await ctx.close();
-    console.info("closed");
-
-    ctx = null;
-    worklet = null;
-    analyser1 = null;
-    analyser1Array = null;
-    analyser2 = null;
-    analyser2Array = null;
+    worklet.port.postMessage({
+      type: "red-siren-ev",
+      ev: to_bin(
+        new EventVariantInstrumentEvent(
+          new InstrumentEVVariantPlayback(new PlaybackEVVariantPlay(false))
+        )
+      ),
+    });
+    await ctx.suspend();
   }
+  console.info("playing", playing);
 });
 [
   portrait,
@@ -130,10 +179,33 @@ playing.onChange(async (playing) => {
   channels,
 ].forEach((e) =>
   e.onChange(() => {
-    worklet?.port.postMessage({
-      type: "red-siren-config",
-      config: structuredClone(config),
+    worklet.port.postMessage({
+      type: "red-siren-ev",
+      ev: to_bin(
+        new EventVariantInstrumentEvent(
+          new InstrumentEVVariantCreateWithConfig(
+            new Config(
+              config.portrait,
+              config.width,
+              config.height,
+              config.breadth,
+              config.length,
+              config.whitespace,
+              BigInt(config.groups),
+              BigInt(config.buttons_group),
+              config.button_size,
+              config.button_track_margin,
+              config.safe_area,
+              config.f0,
+              config.sample_rate_hz,
+              BigInt(config.channels)
+            )
+          )
+        )
+      ),
     });
+
+    console.info("new config", config);
   })
 );
 
@@ -182,6 +254,7 @@ function watcher() {
   }
 
   if (analyser2 && analyser2Array) {
+    canvasCtx.moveTo(size.width + size.width / 2, 0);
     draw(analyser2, analyser2Array, { x: size.width, y: 0 }, size);
   }
 

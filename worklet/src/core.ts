@@ -1,21 +1,26 @@
-import { process_event, handle_response, view } from "shared/shared";
+import { process_event, view } from "shared/shared";
+import {
+  BincodeDeserializer,
+  BincodeSerializer,
+} from "shared_types/bincode/mod";
 import type {
   Effect,
-  Event,
-  KeyValueOutput,
+  Event
 } from "shared_types/types/shared_types";
 import {
   EffectVariantRender,
-  ViewModel,
   Request,
-  EffectVariantKeyValue,
+  ViewModel
 } from "shared_types/types/shared_types";
-import {
-  BincodeSerializer,
-  BincodeDeserializer,
-} from "shared_types/bincode/mod";
 
 type CB = (vm: ViewModel) => void;
+
+export function to_bin(event: Event,) {
+  const serializer = new BincodeSerializer();
+  event.serialize(serializer);
+  const data = serializer.getBytes();
+  return data;
+}
 
 export function update(
   event: Event,

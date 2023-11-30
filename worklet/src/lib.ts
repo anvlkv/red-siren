@@ -1,4 +1,3 @@
-import { Config } from "shared_types/types/shared_types";
 import workletUrl from "./worklet?worker&url";
 import wasmUrl from "shared/shared_bg.wasm?url";
 
@@ -39,8 +38,8 @@ export class RedSirenNode extends AudioWorkletNode {
   }
 
   onprocessorerror = (err: Event) => {
-    console.log(
-      `An error from AudioWorkletProcessor.process() occurred: ${err}`
+    console.error(
+      `An error from AudioWorkletProcessor: ${err}`
     );
 
     if (this.initPromiseReject) {
@@ -52,16 +51,12 @@ export class RedSirenNode extends AudioWorkletNode {
 
   onmessage = (msg: MessageEvent) => {
     if (msg.data.type === "wasm-ready") {
-      this.initPromiseResolve && this.initPromiseResolve()
+      this.initPromiseResolve && this.initPromiseResolve();
+    }
+    else if (msg.data.type === "error") {
+      this.onprocessorerror(msg.data.error);
     }
   };
-
-  public configure(config: Config) {
-    this.port.postMessage({
-      type: "red-siren-config",
-      config,
-    });
-  }
 
   public forward(ev: Uint8Array) {
     this.port.postMessage({

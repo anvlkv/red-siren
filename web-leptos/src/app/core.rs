@@ -6,7 +6,6 @@ use shared::{
     navigate::NavigateOperation, Effect, Event, RedSiren, RedSirenCapabilities, ViewModel,
 };
 
-use crate::kv::KVContext;
 
 pub type Core = Rc<shared::Core<Effect, RedSiren>>;
 
@@ -22,26 +21,25 @@ pub fn update(core: &Core, event: Event, render: WriteSignal<ViewModel>) {
 
 pub fn process_effect(core: &Core, effect: Effect, render: WriteSignal<ViewModel>) {
     let navigate = leptos_router::use_navigate();
-    let kv_ctx = use_context::<KVContext>().unwrap().get();
 
     match effect {
         Effect::Render(_) => {
             render.update(|view| *view = core.view());
         }
         Effect::KeyValue(mut req) => {
-            let response = match &req.operation {
-                shared::key_value::KeyValueOperation::Read(key) => {
-                    shared::key_value::KeyValueOutput::Read(kv_ctx.borrow_mut().remove(key))
-                }
-                shared::key_value::KeyValueOperation::Write(key, data) => {
-                    let _ = kv_ctx.borrow_mut().insert(key.clone(), data.clone());
-                    shared::key_value::KeyValueOutput::Write(true)
-                }
-            };
+            // let response = match &req.operation {
+            //     shared::key_value::KeyValueOperation::Read(key) => {
+            //         shared::key_value::KeyValueOutput::Read(kv_ctx.borrow_mut().remove(key))
+            //     }
+            //     shared::key_value::KeyValueOperation::Write(key, data) => {
+            //         let _ = kv_ctx.borrow_mut().insert(key.clone(), data.clone());
+            //         shared::key_value::KeyValueOutput::Write(true)
+            //     }
+            // };
 
-            for effect in core.resolve(&mut req, response) {
-                process_effect(&core, effect, render);
-            }
+            // for effect in core.resolve(&mut req, response) {
+            //     process_effect(&core, effect, render);
+            // }
         }
         Effect::Navigate(nav) => match nav.operation {
             NavigateOperation::To(activity) => match activity {

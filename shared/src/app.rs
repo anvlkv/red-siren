@@ -2,7 +2,6 @@ pub use crux_core::App;
 use crux_core::{render::Render, Capability};
 use crux_kv::KeyValue;
 use crux_macros::Effect;
-use log::LevelFilter;
 use serde::{Deserialize, Serialize};
 
 pub mod instrument;
@@ -120,28 +119,6 @@ impl App for RedSiren {
 
         match msg {
             Event::Start => {
-                let lvl = LevelFilter::Debug;
-
-                #[cfg(feature = "android")]
-                {
-                    android_logger::init_once(
-                        android_logger::Config::default()
-                            .with_max_level(lvl)
-                            .with_tag("red_siren::shared"),
-                    );
-                }
-                #[cfg(feature = "ios")]
-                {
-                    oslog::OsLogger::new("com.anvlkv.RedSiren.Core")
-                        .level_filter(lvl)
-                        .init()
-                        .unwrap();
-                }
-                #[cfg(feature = "worklet")]
-                {
-                    _ = console_log::init_with_level(lvl.to_level().unwrap_or(log::Level::Warn));
-                    console_error_panic_hook::set_once();
-                }
                 caps.render.render();
             }
             Event::Activate(act) => {

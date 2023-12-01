@@ -11,7 +11,7 @@
 		45B5157CB6DC4BD490F119FC /* Pods_RedSiren.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EE2619BE51FCAF0FB9A9D2B9 /* Pods_RedSiren.framework */; };
 		54C2E71CAF2F96B967BC0DF5 /* shared.udl in Sources */ = {isa = PBXBuildFile; fileRef = 5793BC3BA0A0576A14F5F050 /* shared.udl */; };
 		5CB93AF904772A9440AC765F /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E4056BAC32CC8AC7A9740CA /* ContentView.swift */; };
-		7D03E7045F57CA28148D2CA4 /* core.swift in Sources */ = {isa = PBXBuildFile; fileRef = 194A00C08EEF11C3CC1340EE /* core.swift */; };
+		7D03E7045F57CA28148D2CA4 /* Core.swift in Sources */ = {isa = PBXBuildFile; fileRef = 194A00C08EEF11C3CC1340EE /* Core.swift */; };
 		831E091105B555E7D0085CF4 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BEED0A11FB2044F35FBCD25B /* Preview Assets.xcassets */; };
 		8CEEE500CE6BE0647260B67F /* SharedTypes in Frameworks */ = {isa = PBXBuildFile; productRef = 585C187420F6F4F4142F646D /* SharedTypes */; };
 		91A375A39D8A4F827B873AF3 /* RedSirenApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17F008C3C1A819A3D7658E59 /* RedSirenApp.swift */; };
@@ -84,7 +84,7 @@
 
 /* Begin PBXFileReference section */
 		17F008C3C1A819A3D7658E59 /* RedSirenApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedSirenApp.swift; sourceTree = "<group>"; };
-		194A00C08EEF11C3CC1340EE /* core.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = core.swift; sourceTree = "<group>"; };
+		194A00C08EEF11C3CC1340EE /* Core.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core.swift; sourceTree = "<group>"; };
 		1E4056BAC32CC8AC7A9740CA /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		457F08D9BCEE7D38DA310B0D /* Pods-RedSiren.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RedSiren.release.xcconfig"; path = "Target Support Files/Pods-RedSiren/Pods-RedSiren.release.xcconfig"; sourceTree = "<group>"; };
 		5793BC3BA0A0576A14F5F050 /* shared.udl */ = {isa = PBXFileReference; lastKnownFileType = text; path = shared.udl; sourceTree = "<group>"; };
@@ -125,7 +125,7 @@
 				FAAA65352B09DFB500B1F5D1 /* IntroView.swift */,
 				FAAA653B2B0A23E500B1F5D1 /* AnimationClock.swift */,
 				FAAA65372B09E0E100B1F5D1 /* InstrumentView.swift */,
-				194A00C08EEF11C3CC1340EE /* core.swift */,
+				194A00C08EEF11C3CC1340EE /* Core.swift */,
 				FAAA65392B09EC8300B1F5D1 /* Intro.storyboard */,
 				BA04D6CC7F18E9A653D26BDD /* Info.plist */,
 				B5007F506D99687AEC368328 /* Preview Content */,
@@ -363,7 +363,7 @@
 				91A375A39D8A4F827B873AF3 /* RedSirenApp.swift in Sources */,
 				5CB93AF904772A9440AC765F /* ContentView.swift in Sources */,
 				FAAA65362B09DFB500B1F5D1 /* IntroView.swift in Sources */,
-				7D03E7045F57CA28148D2CA4 /* core.swift in Sources */,
+				7D03E7045F57CA28148D2CA4 /* Core.swift in Sources */,
 				54C2E71CAF2F96B967BC0DF5 /* shared.udl in Sources */,
 				FAAA65382B09E0E100B1F5D1 /* InstrumentView.swift in Sources */,
 				FAAA653C2B0A23E500B1F5D1 /* AnimationClock.swift in Sources */,

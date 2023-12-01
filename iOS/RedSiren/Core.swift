@@ -8,6 +8,7 @@ class Core: ObservableObject {
 
     init() {
         self.view = try! .bincodeDeserialize(input: [UInt8](RedSiren.view()))
+        logInit()
     }
 
     func update(_ event: Event) {

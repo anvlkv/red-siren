@@ -141,6 +141,7 @@ struct InstrumentView: View {
     var ev: (InstrumentEV) -> Void
     var vSize: CGFloat
     var hSize: CGFloat
+    @State var playback:Playback
 
 
     init(vm: InstrumentVM, ev: @escaping (InstrumentEV) -> Void) {
@@ -148,7 +149,11 @@ struct InstrumentView: View {
         self.ev = ev
         self.vSize = vm.config.height
         self.hSize = vm.config.width
+        self.playback = Playback(config: vm.config)
+        self.playback.setupAudioSession()
     }
+    
+    
 
     var body: some View {
         GeometryReader { proxy in

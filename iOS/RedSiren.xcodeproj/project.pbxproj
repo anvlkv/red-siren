@@ -17,6 +17,8 @@
 		91A375A39D8A4F827B873AF3 /* RedSirenApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17F008C3C1A819A3D7658E59 /* RedSirenApp.swift */; };
 		C6A871270F87D449FB7FE5C4 /* uniffi-bindgen in Resources */ = {isa = PBXBuildFile; fileRef = 4D27A7B150B96621935C1300 /* uniffi-bindgen */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F68573BF507ACC074620C5D8 /* libshared_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 6A500489520C085A22DE7285 /* libshared_static.a */; };
+		FA3CD9922B19D3010002E8FF /* Playback.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA3CD9912B19D3010002E8FF /* Playback.swift */; };
+		FA3CD9942B1A043D0002E8FF /* RedSirenNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA3CD9932B1A043D0002E8FF /* RedSirenNode.swift */; };
 		FAAA65362B09DFB500B1F5D1 /* IntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAA65352B09DFB500B1F5D1 /* IntroView.swift */; };
 		FAAA65382B09E0E100B1F5D1 /* InstrumentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAA65372B09E0E100B1F5D1 /* InstrumentView.swift */; };
 		FAAA653A2B09EC8300B1F5D1 /* Intro.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FAAA65392B09EC8300B1F5D1 /* Intro.storyboard */; };
@@ -96,6 +98,9 @@
 		CB737D623C3D7CA99A86C4B0 /* Pods-RedSiren.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RedSiren.debug.xcconfig"; path = "Target Support Files/Pods-RedSiren/Pods-RedSiren.debug.xcconfig"; sourceTree = "<group>"; };
 		EE2619BE51FCAF0FB9A9D2B9 /* Pods_RedSiren.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RedSiren.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F7A91C46D50C923426AE058D /* Shared */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Shared; path = ../shared/shared.xcodeproj; sourceTree = "<group>"; };
+		FA3CD9912B19D3010002E8FF /* Playback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Playback.swift; sourceTree = "<group>"; };
+		FA3CD9932B1A043D0002E8FF /* RedSirenNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedSirenNode.swift; sourceTree = "<group>"; };
+		FA3CD9B32B1A0A770002E8FF /* Worklet.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Worklet.xcodeproj; path = ../shared/Worklet.xcodeproj; sourceTree = "<group>"; };
 		FAAA65352B09DFB500B1F5D1 /* IntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroView.swift; sourceTree = "<group>"; };
 		FAAA65372B09E0E100B1F5D1 /* InstrumentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstrumentView.swift; sourceTree = "<group>"; };
 		FAAA65392B09EC8300B1F5D1 /* Intro.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Intro.storyboard; sourceTree = "<group>"; };
@@ -125,6 +130,8 @@
 				FAAA65352B09DFB500B1F5D1 /* IntroView.swift */,
 				FAAA653B2B0A23E500B1F5D1 /* AnimationClock.swift */,
 				FAAA65372B09E0E100B1F5D1 /* InstrumentView.swift */,
+				FA3CD9912B19D3010002E8FF /* Playback.swift */,
+				FA3CD9932B1A043D0002E8FF /* RedSirenNode.swift */,
 				194A00C08EEF11C3CC1340EE /* Core.swift */,
 				FAAA65392B09EC8300B1F5D1 /* Intro.storyboard */,
 				BA04D6CC7F18E9A653D26BDD /* Info.plist */,
@@ -154,6 +161,7 @@
 		632E821FBB8ECA7154D2ED0E /* Projects */ = {
 			isa = PBXGroup;
 			children = (
+				FA3CD9B32B1A0A770002E8FF /* Worklet.xcodeproj */,
 				F7A91C46D50C923426AE058D /* Shared */,
 			);
 			name = Projects;
@@ -360,10 +368,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FA3CD9922B19D3010002E8FF /* Playback.swift in Sources */,
 				91A375A39D8A4F827B873AF3 /* RedSirenApp.swift in Sources */,
 				5CB93AF904772A9440AC765F /* ContentView.swift in Sources */,
 				FAAA65362B09DFB500B1F5D1 /* IntroView.swift in Sources */,
 				7D03E7045F57CA28148D2CA4 /* Core.swift in Sources */,
+				FA3CD9942B1A043D0002E8FF /* RedSirenNode.swift in Sources */,
 				54C2E71CAF2F96B967BC0DF5 /* shared.udl in Sources */,
 				FAAA65382B09E0E100B1F5D1 /* InstrumentView.swift in Sources */,
 				FAAA653C2B0A23E500B1F5D1 /* AnimationClock.swift in Sources */,

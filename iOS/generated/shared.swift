@@ -360,6 +360,14 @@ public func handleResponse(_ uuid: Data, _ res: Data)  -> Data {
     )
 }
 
+public func logInit()  {
+    try! rustCall() {
+    uniffi_shared_fn_func_log_init($0)
+}
+}
+
+
+
 public func processEvent(_ msg: Data)  -> Data {
     return try!  FfiConverterData.lift(
         try! rustCall() {
@@ -393,6 +401,9 @@ private var initializationResult: InitializationResult {
         return InitializationResult.contractVersionMismatch
     }
     if (uniffi_shared_checksum_func_handle_response() != 56274) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_shared_checksum_func_log_init() != 32726) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_shared_checksum_func_process_event() != 35444) {

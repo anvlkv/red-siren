@@ -100,7 +100,8 @@ fn RedSirenCore() -> impl IntoView {
     let window = use_window();
     let _ = use_event_listener(window.clone(), leptos::ev::resize, move |_| {
         let body = window.document().body().unwrap();
-        set_size.set((body.client_width(), body.client_height()));
+        let new_size = (body.client_width(), body.client_height());
+        set_size.set(new_size);
     });
 
     let window = use_window();

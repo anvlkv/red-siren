@@ -202,7 +202,7 @@ pub fn create_playback(
                     let mut options = AudioContextOptions::new();
                     let options = options
                         .sample_rate(sample_rate.get() as f32)
-                        .latency_hint(&"balanced".into());
+                        .latency_hint(&"interactive".into());
                     let new_ctx = AudioContext::new_with_context_options(options.as_ref())
                         .expect("audio context");
 

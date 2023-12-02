@@ -97,7 +97,7 @@ impl System {
          >> declick_s(1.0) 
          >> split::<U3>() 
          >> (pinkpass() | lowpass_hz(lp, 1.0) | highpass_hz(hp, 1.0)) 
-         >> (pass() | highpass_hz(hp, 0.25) | lowpass_hz(lp, 0.25)) 
+         >> (chorus(size as i64, 0.015, 0.005, 0.5) | highpass_hz(hp, 0.25) | lowpass_hz(lp, 0.25)) 
          >> join::<U3>();
         let mut left_join_id = Some(subnet.push(Box::new(subs_join.clone())));
         let mut right_join_id = if config.channels > 1 {

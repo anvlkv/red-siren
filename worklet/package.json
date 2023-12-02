@@ -19,7 +19,7 @@
     "build": "pnpm wasm:build && tsc && vite build",
     "preview": "pnpm wasm:build && vite preview",
     "vite:build": "pnpm tsc && vite build",
-    "wasm:build": "cd ../shared && wasm-pack build --target web --features worklet"
+    "wasm:build": "cd ../shared && wasm-pack build --target web --features worklet browser"
   },
   "devDependencies": {
     "@types/audioworklet": "^0.0.52",

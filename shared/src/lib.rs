@@ -57,11 +57,6 @@ pub fn log_init() {
             .init()
             .unwrap();
     }
-    #[cfg(feature = "worklet")]
-    {
-        _ = console_log::init_with_level(lvl.to_level().unwrap_or(log::Level::Warn));
-        console_error_panic_hook::set_once();
-    }
     #[cfg(feature = "browser")]
     {
         _ = console_log::init_with_level(lvl.to_level().unwrap_or(log::Level::Warn));

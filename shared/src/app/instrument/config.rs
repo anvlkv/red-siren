@@ -149,17 +149,18 @@ impl Config {
 
         let scores = candidates.keys().collect::<Vec<_>>();
 
-        println!("scores: {scores:?}");
+        log::debug!("scores: {scores:?}");
 
         let dpi_pos = DPI_RANGE
             .iter()
             .position(|d| *d as f64 >= dpi)
             .map_or(0.0, |pos| {
-                ((pos + 1) as f64 / DPI_RANGE.len() as f64) * candidates.len() as f64
+                candidates.len() as f64 - ((pos + 1) as f64 / DPI_RANGE.len() as f64) * candidates.len() as f64
             })
+            .abs()
             .round() as usize;
 
-        println!("dpi_pos: {dpi_pos}");
+        log::debug!("dpi_pos: {dpi_pos}");
 
         let (button_size, groups, buttons_group, active_length) =
             candidates.into_iter().nth(dpi_pos).map_or(

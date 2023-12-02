@@ -9,7 +9,7 @@ rust-version.workspace = true
 keywords.workspace = true
 
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = ["lib", "cdylib", "staticlib"]
 
 [dependencies]
 shared={path="../shared", features = ["worklet"]}

@@ -1,0 +1,669 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 53;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		CA000E257D84813998C96D09 /* Cargo.toml in Sources */ = {isa = PBXBuildFile; fileRef = CAF9A53A41933EF4668187A5 /* Cargo.toml */; settings = {COMPILER_FLAGS = "--lib --features ios"; }; };
+		CA010E257D84A163E4FD27D3 /* Cargo.toml in Sources */ = {isa = PBXBuildFile; fileRef = CAF9A53A41933EF4668187A5 /* Cargo.toml */; settings = {COMPILER_FLAGS = "--lib --features ios"; }; };
+		FA5DE8C72B1B5D2500F4946C /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = FA5DE8C62B1B5D2500F4946C /* README.md */; };
+		FA5DE8CC2B1B5D2500F4946C /* ParameterSpecBase.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA5DE8CB2B1B5D2500F4946C /* ParameterSpecBase.swift */; };
+		FA5DE8CF2B1B5D2500F4946C /* CrossPlatform.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA5DE8CE2B1B5D2500F4946C /* CrossPlatform.swift */; };
+		FA5DE8D12B1B5D2500F4946C /* String+Utils.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA5DE8D02B1B5D2500F4946C /* String+Utils.swift */; };
+		FA5DE8D52B1B5D2500F4946C /* unitExtensionAudioUnit.mm in Sources */ = {isa = PBXBuildFile; fileRef = FA5DE8D42B1B5D2500F4946C /* unitExtensionAudioUnit.mm */; };
+		FA5DE8D82B1B5D2500F4946C /* unitExtensionAUProcessHelper.hpp in Resources */ = {isa = PBXBuildFile; fileRef = FA5DE8D72B1B5D2500F4946C /* unitExtensionAUProcessHelper.hpp */; };
+		FA5DE8DA2B1B5D2500F4946C /* unitExtensionBufferedAudioBus.hpp in Resources */ = {isa = PBXBuildFile; fileRef = FA5DE8D92B1B5D2500F4946C /* unitExtensionBufferedAudioBus.hpp */; };
+		FA5DE8DE2B1B5D2500F4946C /* Parameters.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA5DE8DD2B1B5D2500F4946C /* Parameters.swift */; };
+		FA5DE8E12B1B5D2500F4946C /* unitExtensionDSPKernel.hpp in Resources */ = {isa = PBXBuildFile; fileRef = FA5DE8E02B1B5D2500F4946C /* unitExtensionDSPKernel.hpp */; };
+		FA5DE8E42B1B5D2500F4946C /* AudioUnitFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA5DE8E32B1B5D2500F4946C /* AudioUnitFactory.swift */; };
+		FA5DE8ED2B1B5D7E00F4946C /* libau_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CA019DB1550731D9F518FD0F /* libau_static.a */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXBuildRule section */
+		CAF4A53A4193AC6C1400ACA8 /* PBXBuildRule */ = {
+			isa = PBXBuildRule;
+			compilerSpec = com.apple.compilers.proxy.script;
+			dependencyFile = "$(DERIVED_FILE_DIR)/$(CARGO_XCODE_TARGET_ARCH)-$(EXECUTABLE_NAME).d";
+			filePatterns = "*/Cargo.toml";
+			fileType = pattern.proxy;
+			inputFiles = (
+			);
+			isEditable = 0;
+			name = "Cargo project build";
+			outputFiles = (
+				"$(OBJECT_FILE_DIR)/$(CARGO_XCODE_TARGET_ARCH)-$(EXECUTABLE_NAME)",
+			);
+			script = "# generated with cargo-xcode 1.7.0\nset -xeu;\nexport PATH=\"$HOME/.cargo/bin:$PATH:/usr/local/bin:/opt/homebrew/bin\";\n\nif [ \"${IS_MACCATALYST-NO}\" = YES ]; then\n CARGO_XCODE_TARGET_OS=ios-macabi\nfi\nCARGO_XCODE_TARGET_TRIPLE=\"${CARGO_XCODE_TARGET_ARCH}-apple-${CARGO_XCODE_TARGET_OS}\"\nif [ \"$CARGO_XCODE_TARGET_OS\" != darwin ]; then\n export PATH=\"${PATH/\\/Contents\\/Developer\\/Toolchains\\/XcodeDefault.xctoolchain\\/usr\\/bin:/xcode-provided-ld-cant-link-lSystem-for-the-host-build-script:}\"\nfi\nif [ \"$CARGO_XCODE_BUILD_PROFILE\" == release ]; then\n OTHER_INPUT_FILE_FLAGS=\"${OTHER_INPUT_FILE_FLAGS} --release\"\nfi\n\nif [ \"$ACTION\" = clean ]; then\n cargo clean --verbose --manifest-path=\"$SCRIPT_INPUT_FILE\" ${OTHER_INPUT_FILE_FLAGS} --target=\"${CARGO_XCODE_TARGET_TRIPLE}\";\n rm -f \"$SCRIPT_OUTPUT_FILE_0\"\n exit 0\nfi\ncargo build --verbose --manifest-path=\"$SCRIPT_INPUT_FILE\" --features=\"${CARGO_XCODE_FEATURES:-}\" ${OTHER_INPUT_FILE_FLAGS} --target=\"${CARGO_XCODE_TARGET_TRIPLE}\" || {\n if command -v rustup &> /dev/null; then\n  if ! rustup target list --installed | grep -Eq \"${CARGO_XCODE_TARGET_TRIPLE}\"; then\n   echo >&2 \"warning: this build requires rustup toolchain for $CARGO_XCODE_TARGET_TRIPLE, but it isn't installed (will try rustup next)\"\n   rustup target add \"${CARGO_XCODE_TARGET_TRIPLE}\" || echo >&2 \"warning: can't install $CARGO_XCODE_TARGET_TRIPLE\"\n  fi\n fi\n echo >&2 \"error: cargo build failed\"; exit 1; }\n\n# it's too hard to explain Cargo's actual exe path to Xcode build graph, so hardlink to a known-good path instead\nBUILT_SRC=\"${CARGO_TARGET_DIR}/${CARGO_XCODE_TARGET_TRIPLE}/${CARGO_XCODE_BUILD_PROFILE}/${CARGO_XCODE_CARGO_FILE_NAME}\"\nln -f -- \"$BUILT_SRC\" \"$SCRIPT_OUTPUT_FILE_0\" || { echo >&2 \"can't hardlink $BUILT_SRC to $SCRIPT_OUTPUT_FILE_0\"; exit 1; }\n\n# cargo generates a dep file, but for its own path, so append our rename to it\nDEP_FILE_SRC=\"${CARGO_TARGET_DIR}/${CARGO_XCODE_TARGET_TRIPLE}/${CARGO_XCODE_BUILD_PROFILE}/${CARGO_XCODE_CARGO_DEP_FILE_NAME}\"\nif [ -f \"$DEP_FILE_SRC\" ]; then\n DEP_FILE_DST=\"${DERIVED_FILE_DIR}/${CARGO_XCODE_TARGET_ARCH}-${EXECUTABLE_NAME}.d\"\n cp -f \"$DEP_FILE_SRC\" \"$DEP_FILE_DST\" || { echo >&2 \"can't copy $DEP_FILE_SRC to $DEP_FILE_DST\"; exit 1; }\n\n echo >> \"$DEP_FILE_DST\" \"${SCRIPT_OUTPUT_FILE_0/ /\\\\ /}: ${BUILT_SRC/ /\\\\ /}\"\nfi\n\n# lipo script needs to know all the platform-specific files that have been built\n# archs is in the file name, so that paths don't stay around after archs change\n# must match input for LipoScript\nFILE_LIST=\"${DERIVED_FILE_DIR}/${ARCHS}-${EXECUTABLE_NAME}.xcfilelist\"\ntouch \"$FILE_LIST\"\nif ! grep -Eq \"$SCRIPT_OUTPUT_FILE_0\" \"$FILE_LIST\" ; then\n echo >> \"$FILE_LIST\" \"$SCRIPT_OUTPUT_FILE_0\"\nfi\n\necho \"success: $ACTION of $SCRIPT_OUTPUT_FILE_0 for $CARGO_XCODE_TARGET_TRIPLE\"\n";
+		};
+/* End PBXBuildRule section */
+
+/* Begin PBXContainerItemProxy section */
+		FA5DE8EE2B1B5DBB00F4946C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CAF3A53A4193E04653AD465F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CA019DB15507A163E4FD27D3;
+			remoteInfo = "au-staticlib";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		CA0060254DCF215ED15804BF /* au.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = au.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
+		CA019DB1550731D9F518FD0F /* libau_static.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libau_static.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		CAF9A53A41933EF4668187A5 /* Cargo.toml */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Cargo.toml; sourceTree = "<group>"; };
+		FA5DE8C12B1B5D2500F4946C /* unitExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = unitExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		FA5DE8C62B1B5D2500F4946C /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		FA5DE8C92B1B5D2500F4946C /* unitExtension-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "unitExtension-Bridging-Header.h"; sourceTree = "<group>"; };
+		FA5DE8CB2B1B5D2500F4946C /* ParameterSpecBase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParameterSpecBase.swift; sourceTree = "<group>"; };
+		FA5DE8CE2B1B5D2500F4946C /* CrossPlatform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossPlatform.swift; sourceTree = "<group>"; };
+		FA5DE8D02B1B5D2500F4946C /* String+Utils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Utils.swift"; sourceTree = "<group>"; };
+		FA5DE8D32B1B5D2500F4946C /* unitExtensionAudioUnit.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = unitExtensionAudioUnit.h; sourceTree = "<group>"; };
+		FA5DE8D42B1B5D2500F4946C /* unitExtensionAudioUnit.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = unitExtensionAudioUnit.mm; sourceTree = "<group>"; };
+		FA5DE8D72B1B5D2500F4946C /* unitExtensionAUProcessHelper.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = unitExtensionAUProcessHelper.hpp; sourceTree = "<group>"; };
+		FA5DE8D92B1B5D2500F4946C /* unitExtensionBufferedAudioBus.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = unitExtensionBufferedAudioBus.hpp; sourceTree = "<group>"; };
+		FA5DE8DC2B1B5D2500F4946C /* unitExtensionParameterAddresses.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = unitExtensionParameterAddresses.h; sourceTree = "<group>"; };
+		FA5DE8DD2B1B5D2500F4946C /* Parameters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Parameters.swift; sourceTree = "<group>"; };
+		FA5DE8E02B1B5D2500F4946C /* unitExtensionDSPKernel.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = unitExtensionDSPKernel.hpp; sourceTree = "<group>"; };
+		FA5DE8E32B1B5D2500F4946C /* AudioUnitFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioUnitFactory.swift; sourceTree = "<group>"; };
+		FA5DE8E52B1B5D2500F4946C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		FA5DE8BE2B1B5D2500F4946C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FA5DE8ED2B1B5D7E00F4946C /* libau_static.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		CAF0A53A4193D65BC3C892A8 = {
+			isa = PBXGroup;
+			children = (
+				CAF9A53A41933EF4668187A5 /* Cargo.toml */,
+				FA5DE8C52B1B5D2500F4946C /* unitExtension */,
+				CAF1A53A419322869D176AE5 /* Products */,
+				CAF2A53A419398AF0B5890DB /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		CAF1A53A419322869D176AE5 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				CA0060254DCF215ED15804BF /* au.dylib */,
+				CA019DB1550731D9F518FD0F /* libau_static.a */,
+				FA5DE8C12B1B5D2500F4946C /* unitExtension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		CAF2A53A419398AF0B5890DB /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		FA5DE8C52B1B5D2500F4946C /* unitExtension */ = {
+			isa = PBXGroup;
+			children = (
+				FA5DE8C62B1B5D2500F4946C /* README.md */,
+				FA5DE8E52B1B5D2500F4946C /* Info.plist */,
+				FA5DE8C82B1B5D2500F4946C /* Common */,
+				FA5DE8DB2B1B5D2500F4946C /* Parameters */,
+				FA5DE8DF2B1B5D2500F4946C /* DSP */,
+			);
+			path = unitExtension;
+			sourceTree = "<group>";
+		};
+		FA5DE8C82B1B5D2500F4946C /* Common */ = {
+			isa = PBXGroup;
+			children = (
+				FA5DE8C92B1B5D2500F4946C /* unitExtension-Bridging-Header.h */,
+				FA5DE8CA2B1B5D2500F4946C /* Parameters */,
+				FA5DE8CD2B1B5D2500F4946C /* Utility */,
+				FA5DE8D22B1B5D2500F4946C /* Audio Unit */,
+				FA5DE8D62B1B5D2500F4946C /* DSP */,
+				FA5DE8E22B1B5D2500F4946C /* AudioUnitFactory */,
+			);
+			path = Common;
+			sourceTree = "<group>";
+		};
+		FA5DE8CA2B1B5D2500F4946C /* Parameters */ = {
+			isa = PBXGroup;
+			children = (
+				FA5DE8CB2B1B5D2500F4946C /* ParameterSpecBase.swift */,
+			);
+			path = Parameters;
+			sourceTree = "<group>";
+		};
+		FA5DE8CD2B1B5D2500F4946C /* Utility */ = {
+			isa = PBXGroup;
+			children = (
+				FA5DE8CE2B1B5D2500F4946C /* CrossPlatform.swift */,
+				FA5DE8D02B1B5D2500F4946C /* String+Utils.swift */,
+			);
+			path = Utility;
+			sourceTree = "<group>";
+		};
+		FA5DE8D22B1B5D2500F4946C /* Audio Unit */ = {
+			isa = PBXGroup;
+			children = (
+				FA5DE8D32B1B5D2500F4946C /* unitExtensionAudioUnit.h */,
+				FA5DE8D42B1B5D2500F4946C /* unitExtensionAudioUnit.mm */,
+			);
+			path = "Audio Unit";
+			sourceTree = "<group>";
+		};
+		FA5DE8D62B1B5D2500F4946C /* DSP */ = {
+			isa = PBXGroup;
+			children = (
+				FA5DE8D72B1B5D2500F4946C /* unitExtensionAUProcessHelper.hpp */,
+				FA5DE8D92B1B5D2500F4946C /* unitExtensionBufferedAudioBus.hpp */,
+			);
+			path = DSP;
+			sourceTree = "<group>";
+		};
+		FA5DE8DB2B1B5D2500F4946C /* Parameters */ = {
+			isa = PBXGroup;
+			children = (
+				FA5DE8DC2B1B5D2500F4946C /* unitExtensionParameterAddresses.h */,
+				FA5DE8DD2B1B5D2500F4946C /* Parameters.swift */,
+			);
+			path = Parameters;
+			sourceTree = "<group>";
+		};
+		FA5DE8DF2B1B5D2500F4946C /* DSP */ = {
+			isa = PBXGroup;
+			children = (
+				FA5DE8E02B1B5D2500F4946C /* unitExtensionDSPKernel.hpp */,
+			);
+			path = DSP;
+			sourceTree = "<group>";
+		};
+		FA5DE8E22B1B5D2500F4946C /* AudioUnitFactory */ = {
+			isa = PBXGroup;
+			children = (
+				FA5DE8E32B1B5D2500F4946C /* AudioUnitFactory.swift */,
+			);
+			path = AudioUnitFactory;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		CA0060254DCF813998C96D09 /* au-cdylib */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CA00C63412C5813998C96D09 /* Build configuration list for PBXNativeTarget "au-cdylib" */;
+			buildPhases = (
+				CA0086205102813998C96D09 /* Sources */,
+				CAF5A53A4193AF6EBB7F357C /* Universal Binary lipo */,
+			);
+			buildRules = (
+				CAF4A53A4193AC6C1400ACA8 /* PBXBuildRule */,
+			);
+			dependencies = (
+			);
+			name = "au-cdylib";
+			productName = au.dylib;
+			productReference = CA0060254DCF215ED15804BF /* au.dylib */;
+			productType = "com.apple.product-type.library.dynamic";
+		};
+		CA019DB15507A163E4FD27D3 /* au-staticlib */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CA01C63412C5A163E4FD27D3 /* Build configuration list for PBXNativeTarget "au-staticlib" */;
+			buildPhases = (
+				CA0186205102A163E4FD27D3 /* Sources */,
+				CAF5A53A4193AF6EBB7F357C /* Universal Binary lipo */,
+			);
+			buildRules = (
+				CAF4A53A4193AC6C1400ACA8 /* PBXBuildRule */,
+			);
+			dependencies = (
+			);
+			name = "au-staticlib";
+			productName = libau_static.a;
+			productReference = CA019DB1550731D9F518FD0F /* libau_static.a */;
+			productType = "com.apple.product-type.library.static";
+		};
+		FA5DE8C02B1B5D2500F4946C /* unitExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FA5DE8E62B1B5D2500F4946C /* Build configuration list for PBXNativeTarget "unitExtension" */;
+			buildPhases = (
+				FA5DE8BD2B1B5D2500F4946C /* Sources */,
+				FA5DE8BE2B1B5D2500F4946C /* Frameworks */,
+				FA5DE8BF2B1B5D2500F4946C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				FA5DE8EF2B1B5DBB00F4946C /* PBXTargetDependency */,
+			);
+			name = unitExtension;
+			productName = unitExtension;
+			productReference = FA5DE8C12B1B5D2500F4946C /* unitExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		CAF3A53A4193E04653AD465F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastSwiftUpdateCheck = 1420;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					CA0060254DCF813998C96D09 = {
+						CreatedOnToolsVersion = 9.2;
+						ProvisioningStyle = Automatic;
+					};
+					CA019DB15507A163E4FD27D3 = {
+						CreatedOnToolsVersion = 9.2;
+						ProvisioningStyle = Automatic;
+					};
+					FA5DE8C02B1B5D2500F4946C = {
+						CreatedOnToolsVersion = 14.2;
+					};
+				};
+			};
+			buildConfigurationList = CAF6A53A419380E02D6C7F57 /* Build configuration list for PBXProject "AU" */;
+			compatibilityVersion = "Xcode 11.4";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = CAF0A53A4193D65BC3C892A8;
+			productRefGroup = CAF1A53A419322869D176AE5 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				CA0060254DCF813998C96D09 /* au-cdylib */,
+				CA019DB15507A163E4FD27D3 /* au-staticlib */,
+				FA5DE8C02B1B5D2500F4946C /* unitExtension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		FA5DE8BF2B1B5D2500F4946C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FA5DE8D82B1B5D2500F4946C /* unitExtensionAUProcessHelper.hpp in Resources */,
+				FA5DE8E12B1B5D2500F4946C /* unitExtensionDSPKernel.hpp in Resources */,
+				FA5DE8DA2B1B5D2500F4946C /* unitExtensionBufferedAudioBus.hpp in Resources */,
+				FA5DE8C72B1B5D2500F4946C /* README.md in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		CAF5A53A4193AF6EBB7F357C /* Universal Binary lipo */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(DERIVED_FILE_DIR)/$(ARCHS)-$(EXECUTABLE_NAME).xcfilelist",
+			);
+			name = "Universal Binary lipo";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# generated with cargo-xcode 1.7.0\nset -eux;\ntr '\\n' '\\0' < \"$DERIVED_FILE_DIR/$ARCHS-$EXECUTABLE_NAME.xcfilelist\" | xargs -0 lipo -create -output \"$TARGET_BUILD_DIR/$EXECUTABLE_PATH\"\nif [ ${LD_DYLIB_INSTALL_NAME:+1} ]; then\n  install_name_tool -id \"$LD_DYLIB_INSTALL_NAME\" \"$TARGET_BUILD_DIR/$EXECUTABLE_PATH\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		CA0086205102813998C96D09 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CA000E257D84813998C96D09 /* Cargo.toml in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CA0186205102A163E4FD27D3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CA010E257D84A163E4FD27D3 /* Cargo.toml in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA5DE8BD2B1B5D2500F4946C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FA5DE8DE2B1B5D2500F4946C /* Parameters.swift in Sources */,
+				FA5DE8D52B1B5D2500F4946C /* unitExtensionAudioUnit.mm in Sources */,
+				FA5DE8CC2B1B5D2500F4946C /* ParameterSpecBase.swift in Sources */,
+				FA5DE8E42B1B5D2500F4946C /* AudioUnitFactory.swift in Sources */,
+				FA5DE8CF2B1B5D2500F4946C /* CrossPlatform.swift in Sources */,
+				FA5DE8D12B1B5D2500F4946C /* String+Utils.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		FA5DE8EF2B1B5DBB00F4946C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CA019DB15507A163E4FD27D3 /* au-staticlib */;
+			targetProxy = FA5DE8EE2B1B5DBB00F4946C /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		CA007EB5FB28813998C96D09 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CARGO_XCODE_CARGO_DEP_FILE_NAME = libau.d;
+				CARGO_XCODE_CARGO_FILE_NAME = libau.dylib;
+				DYLIB_COMPATIBILITY_VERSION = 0;
+				PRODUCT_NAME = au;
+				SUPPORTED_PLATFORMS = macosx;
+			};
+			name = Release;
+		};
+		CA00C25E1D7C813998C96D09 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CARGO_XCODE_CARGO_DEP_FILE_NAME = libau.d;
+				CARGO_XCODE_CARGO_FILE_NAME = libau.dylib;
+				DYLIB_COMPATIBILITY_VERSION = 0;
+				PRODUCT_NAME = au;
+				SUPPORTED_PLATFORMS = macosx;
+			};
+			name = Debug;
+		};
+		CA017EB5FB28A163E4FD27D3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CARGO_XCODE_CARGO_DEP_FILE_NAME = libau.d;
+				CARGO_XCODE_CARGO_FILE_NAME = libau.a;
+				INSTALL_GROUP = "";
+				INSTALL_MODE_FLAG = "";
+				INSTALL_OWNER = "";
+				PRODUCT_NAME = au_static;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "macosx iphonesimulator iphoneos appletvsimulator appletvos";
+			};
+			name = Release;
+		};
+		CA01C25E1D7CA163E4FD27D3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CARGO_XCODE_CARGO_DEP_FILE_NAME = libau.d;
+				CARGO_XCODE_CARGO_FILE_NAME = libau.a;
+				INSTALL_GROUP = "";
+				INSTALL_MODE_FLAG = "";
+				INSTALL_OWNER = "";
+				PRODUCT_NAME = au_static;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "macosx iphonesimulator iphoneos appletvsimulator appletvos";
+			};
+			name = Debug;
+		};
+		CAF761B23E203CC16B37690B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CARGO_TARGET_DIR = "$(PROJECT_TEMP_DIR)/cargo_target";
+				CARGO_XCODE_BUILD_PROFILE = release;
+				CARGO_XCODE_FEATURES = "";
+				"CARGO_XCODE_TARGET_ARCH[arch=arm64*]" = aarch64;
+				"CARGO_XCODE_TARGET_ARCH[arch=i386]" = i686;
+				"CARGO_XCODE_TARGET_ARCH[arch=x86_64*]" = x86_64;
+				"CARGO_XCODE_TARGET_OS[sdk=appletvos*]" = tvos;
+				"CARGO_XCODE_TARGET_OS[sdk=appletvsimulator*]" = tvos;
+				"CARGO_XCODE_TARGET_OS[sdk=iphoneos*]" = ios;
+				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*]" = "ios-sim";
+				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*][arch=x86_64*]" = ios;
+				"CARGO_XCODE_TARGET_OS[sdk=macosx*]" = darwin;
+				CURRENT_PROJECT_VERSION = 0.1;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_NAME = au;
+				RUSTUP_TOOLCHAIN = "";
+				SDKROOT = macosx;
+				SUPPORTS_MACCATALYST = YES;
+			};
+			name = Release;
+		};
+		CAF861B23E20228BE02872F8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CARGO_TARGET_DIR = "$(PROJECT_TEMP_DIR)/cargo_target";
+				CARGO_XCODE_BUILD_PROFILE = debug;
+				CARGO_XCODE_FEATURES = "";
+				"CARGO_XCODE_TARGET_ARCH[arch=arm64*]" = aarch64;
+				"CARGO_XCODE_TARGET_ARCH[arch=i386]" = i686;
+				"CARGO_XCODE_TARGET_ARCH[arch=x86_64*]" = x86_64;
+				"CARGO_XCODE_TARGET_OS[sdk=appletvos*]" = tvos;
+				"CARGO_XCODE_TARGET_OS[sdk=appletvsimulator*]" = tvos;
+				"CARGO_XCODE_TARGET_OS[sdk=iphoneos*]" = ios;
+				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*]" = "ios-sim";
+				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*][arch=x86_64*]" = ios;
+				"CARGO_XCODE_TARGET_OS[sdk=macosx*]" = darwin;
+				CURRENT_PROJECT_VERSION = 0.1;
+				MARKETING_VERSION = 0.1.0;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = au;
+				RUSTUP_TOOLCHAIN = "";
+				SDKROOT = macosx;
+				SUPPORTS_MACCATALYST = YES;
+			};
+			name = Debug;
+		};
+		FA5DE8E72B1B5D2500F4946C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = M59X77GZ2V;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = unitExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = unitExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.anvlkv.redsiren.RedSiren.AU.AU.AUExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "unitExtension/Common/unitExtension-Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		FA5DE8E82B1B5D2500F4946C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = M59X77GZ2V;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = unitExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = unitExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.anvlkv.redsiren.RedSiren.AU.AU.AUExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "unitExtension/Common/unitExtension-Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		CA00C63412C5813998C96D09 /* Build configuration list for PBXNativeTarget "au-cdylib" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA007EB5FB28813998C96D09 /* Release */,
+				CA00C25E1D7C813998C96D09 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CA01C63412C5A163E4FD27D3 /* Build configuration list for PBXNativeTarget "au-staticlib" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA017EB5FB28A163E4FD27D3 /* Release */,
+				CA01C25E1D7CA163E4FD27D3 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CAF6A53A419380E02D6C7F57 /* Build configuration list for PBXProject "AU" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CAF761B23E203CC16B37690B /* Release */,
+				CAF861B23E20228BE02872F8 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FA5DE8E62B1B5D2500F4946C /* Build configuration list for PBXNativeTarget "unitExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA5DE8E72B1B5D2500F4946C /* Release */,
+				FA5DE8E82B1B5D2500F4946C /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = CAF3A53A4193E04653AD465F /* Project object */;
+}

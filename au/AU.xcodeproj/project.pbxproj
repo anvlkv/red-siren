@@ -13,13 +13,15 @@
 		FA5DE8CC2B1B5D2500F4946C /* ParameterSpecBase.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA5DE8CB2B1B5D2500F4946C /* ParameterSpecBase.swift */; };
 		FA5DE8CF2B1B5D2500F4946C /* CrossPlatform.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA5DE8CE2B1B5D2500F4946C /* CrossPlatform.swift */; };
 		FA5DE8D12B1B5D2500F4946C /* String+Utils.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA5DE8D02B1B5D2500F4946C /* String+Utils.swift */; };
-		FA5DE8D52B1B5D2500F4946C /* unitExtensionAudioUnit.mm in Sources */ = {isa = PBXBuildFile; fileRef = FA5DE8D42B1B5D2500F4946C /* unitExtensionAudioUnit.mm */; };
-		FA5DE8D82B1B5D2500F4946C /* unitExtensionAUProcessHelper.hpp in Resources */ = {isa = PBXBuildFile; fileRef = FA5DE8D72B1B5D2500F4946C /* unitExtensionAUProcessHelper.hpp */; };
-		FA5DE8DA2B1B5D2500F4946C /* unitExtensionBufferedAudioBus.hpp in Resources */ = {isa = PBXBuildFile; fileRef = FA5DE8D92B1B5D2500F4946C /* unitExtensionBufferedAudioBus.hpp */; };
+		FA5DE8D52B1B5D2500F4946C /* UnitExtensionAudioUnit.mm in Sources */ = {isa = PBXBuildFile; fileRef = FA5DE8D42B1B5D2500F4946C /* UnitExtensionAudioUnit.mm */; };
+		FA5DE8D82B1B5D2500F4946C /* UnitExtensionAUProcessHelper.hpp in Resources */ = {isa = PBXBuildFile; fileRef = FA5DE8D72B1B5D2500F4946C /* UnitExtensionAUProcessHelper.hpp */; };
+		FA5DE8DA2B1B5D2500F4946C /* UnitExtensionBufferedAudioBus.hpp in Resources */ = {isa = PBXBuildFile; fileRef = FA5DE8D92B1B5D2500F4946C /* UnitExtensionBufferedAudioBus.hpp */; };
 		FA5DE8DE2B1B5D2500F4946C /* Parameters.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA5DE8DD2B1B5D2500F4946C /* Parameters.swift */; };
-		FA5DE8E12B1B5D2500F4946C /* unitExtensionDSPKernel.hpp in Resources */ = {isa = PBXBuildFile; fileRef = FA5DE8E02B1B5D2500F4946C /* unitExtensionDSPKernel.hpp */; };
+		FA5DE8E12B1B5D2500F4946C /* UnitExtensionDSPKernel.hpp in Resources */ = {isa = PBXBuildFile; fileRef = FA5DE8E02B1B5D2500F4946C /* UnitExtensionDSPKernel.hpp */; };
 		FA5DE8E42B1B5D2500F4946C /* AudioUnitFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA5DE8E32B1B5D2500F4946C /* AudioUnitFactory.swift */; };
 		FA5DE8ED2B1B5D7E00F4946C /* libau_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CA019DB1550731D9F518FD0F /* libau_static.a */; };
+		FA5DE9022B1B85C400F4946C /* lib.rs.h in Resources */ = {isa = PBXBuildFile; fileRef = FA5DE9002B1B856700F4946C /* lib.rs.h */; };
+		FA5DE9032B1B85C400F4946C /* lib.rs.cc in Resources */ = {isa = PBXBuildFile; fileRef = FA5DE9012B1B856700F4946C /* lib.rs.cc */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXBuildRule section */
@@ -54,21 +56,23 @@
 		CA0060254DCF215ED15804BF /* au.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = au.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
 		CA019DB1550731D9F518FD0F /* libau_static.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libau_static.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		CAF9A53A41933EF4668187A5 /* Cargo.toml */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Cargo.toml; sourceTree = "<group>"; };
-		FA5DE8C12B1B5D2500F4946C /* unitExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = unitExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		FA5DE8C12B1B5D2500F4946C /* UnitExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = UnitExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		FA5DE8C62B1B5D2500F4946C /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
-		FA5DE8C92B1B5D2500F4946C /* unitExtension-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "unitExtension-Bridging-Header.h"; sourceTree = "<group>"; };
+		FA5DE8C92B1B5D2500F4946C /* UnitExtension-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "UnitExtension-Bridging-Header.h"; sourceTree = "<group>"; };
 		FA5DE8CB2B1B5D2500F4946C /* ParameterSpecBase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParameterSpecBase.swift; sourceTree = "<group>"; };
 		FA5DE8CE2B1B5D2500F4946C /* CrossPlatform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossPlatform.swift; sourceTree = "<group>"; };
 		FA5DE8D02B1B5D2500F4946C /* String+Utils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Utils.swift"; sourceTree = "<group>"; };
-		FA5DE8D32B1B5D2500F4946C /* unitExtensionAudioUnit.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = unitExtensionAudioUnit.h; sourceTree = "<group>"; };
-		FA5DE8D42B1B5D2500F4946C /* unitExtensionAudioUnit.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = unitExtensionAudioUnit.mm; sourceTree = "<group>"; };
-		FA5DE8D72B1B5D2500F4946C /* unitExtensionAUProcessHelper.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = unitExtensionAUProcessHelper.hpp; sourceTree = "<group>"; };
-		FA5DE8D92B1B5D2500F4946C /* unitExtensionBufferedAudioBus.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = unitExtensionBufferedAudioBus.hpp; sourceTree = "<group>"; };
-		FA5DE8DC2B1B5D2500F4946C /* unitExtensionParameterAddresses.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = unitExtensionParameterAddresses.h; sourceTree = "<group>"; };
+		FA5DE8D32B1B5D2500F4946C /* UnitExtensionAudioUnit.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = UnitExtensionAudioUnit.h; sourceTree = "<group>"; };
+		FA5DE8D42B1B5D2500F4946C /* UnitExtensionAudioUnit.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = UnitExtensionAudioUnit.mm; sourceTree = "<group>"; };
+		FA5DE8D72B1B5D2500F4946C /* UnitExtensionAUProcessHelper.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = UnitExtensionAUProcessHelper.hpp; sourceTree = "<group>"; };
+		FA5DE8D92B1B5D2500F4946C /* UnitExtensionBufferedAudioBus.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = UnitExtensionBufferedAudioBus.hpp; sourceTree = "<group>"; };
+		FA5DE8DC2B1B5D2500F4946C /* UnitExtensionParameterAddresses.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = UnitExtensionParameterAddresses.h; sourceTree = "<group>"; };
 		FA5DE8DD2B1B5D2500F4946C /* Parameters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Parameters.swift; sourceTree = "<group>"; };
-		FA5DE8E02B1B5D2500F4946C /* unitExtensionDSPKernel.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = unitExtensionDSPKernel.hpp; sourceTree = "<group>"; };
+		FA5DE8E02B1B5D2500F4946C /* UnitExtensionDSPKernel.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = UnitExtensionDSPKernel.hpp; sourceTree = "<group>"; };
 		FA5DE8E32B1B5D2500F4946C /* AudioUnitFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioUnitFactory.swift; sourceTree = "<group>"; };
 		FA5DE8E52B1B5D2500F4946C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		FA5DE9002B1B856700F4946C /* lib.rs.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lib.rs.h; sourceTree = "<group>"; };
+		FA5DE9012B1B856700F4946C /* lib.rs.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = lib.rs.cc; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -86,8 +90,9 @@
 		CAF0A53A4193D65BC3C892A8 = {
 			isa = PBXGroup;
 			children = (
+				FA5DE8FE2B1B856700F4946C /* au */,
 				CAF9A53A41933EF4668187A5 /* Cargo.toml */,
-				FA5DE8C52B1B5D2500F4946C /* unitExtension */,
+				FA5DE8C52B1B5D2500F4946C /* UnitExtension */,
 				CAF1A53A419322869D176AE5 /* Products */,
 				CAF2A53A419398AF0B5890DB /* Frameworks */,
 			);
@@ -98,7 +103,7 @@
 			children = (
 				CA0060254DCF215ED15804BF /* au.dylib */,
 				CA019DB1550731D9F518FD0F /* libau_static.a */,
-				FA5DE8C12B1B5D2500F4946C /* unitExtension.appex */,
+				FA5DE8C12B1B5D2500F4946C /* UnitExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -110,7 +115,7 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		FA5DE8C52B1B5D2500F4946C /* unitExtension */ = {
+		FA5DE8C52B1B5D2500F4946C /* UnitExtension */ = {
 			isa = PBXGroup;
 			children = (
 				FA5DE8C62B1B5D2500F4946C /* README.md */,
@@ -119,13 +124,13 @@
 				FA5DE8DB2B1B5D2500F4946C /* Parameters */,
 				FA5DE8DF2B1B5D2500F4946C /* DSP */,
 			);
-			path = unitExtension;
+			path = UnitExtension;
 			sourceTree = "<group>";
 		};
 		FA5DE8C82B1B5D2500F4946C /* Common */ = {
 			isa = PBXGroup;
 			children = (
-				FA5DE8C92B1B5D2500F4946C /* unitExtension-Bridging-Header.h */,
+				FA5DE8C92B1B5D2500F4946C /* UnitExtension-Bridging-Header.h */,
 				FA5DE8CA2B1B5D2500F4946C /* Parameters */,
 				FA5DE8CD2B1B5D2500F4946C /* Utility */,
 				FA5DE8D22B1B5D2500F4946C /* Audio Unit */,
@@ -155,8 +160,8 @@
 		FA5DE8D22B1B5D2500F4946C /* Audio Unit */ = {
 			isa = PBXGroup;
 			children = (
-				FA5DE8D32B1B5D2500F4946C /* unitExtensionAudioUnit.h */,
-				FA5DE8D42B1B5D2500F4946C /* unitExtensionAudioUnit.mm */,
+				FA5DE8D32B1B5D2500F4946C /* UnitExtensionAudioUnit.h */,
+				FA5DE8D42B1B5D2500F4946C /* UnitExtensionAudioUnit.mm */,
 			);
 			path = "Audio Unit";
 			sourceTree = "<group>";
@@ -164,8 +169,8 @@
 		FA5DE8D62B1B5D2500F4946C /* DSP */ = {
 			isa = PBXGroup;
 			children = (
-				FA5DE8D72B1B5D2500F4946C /* unitExtensionAUProcessHelper.hpp */,
-				FA5DE8D92B1B5D2500F4946C /* unitExtensionBufferedAudioBus.hpp */,
+				FA5DE8D72B1B5D2500F4946C /* UnitExtensionAUProcessHelper.hpp */,
+				FA5DE8D92B1B5D2500F4946C /* UnitExtensionBufferedAudioBus.hpp */,
 			);
 			path = DSP;
 			sourceTree = "<group>";
@@ -173,7 +178,7 @@
 		FA5DE8DB2B1B5D2500F4946C /* Parameters */ = {
 			isa = PBXGroup;
 			children = (
-				FA5DE8DC2B1B5D2500F4946C /* unitExtensionParameterAddresses.h */,
+				FA5DE8DC2B1B5D2500F4946C /* UnitExtensionParameterAddresses.h */,
 				FA5DE8DD2B1B5D2500F4946C /* Parameters.swift */,
 			);
 			path = Parameters;
@@ -182,7 +187,7 @@
 		FA5DE8DF2B1B5D2500F4946C /* DSP */ = {
 			isa = PBXGroup;
 			children = (
-				FA5DE8E02B1B5D2500F4946C /* unitExtensionDSPKernel.hpp */,
+				FA5DE8E02B1B5D2500F4946C /* UnitExtensionDSPKernel.hpp */,
 			);
 			path = DSP;
 			sourceTree = "<group>";
@@ -193,6 +198,24 @@
 				FA5DE8E32B1B5D2500F4946C /* AudioUnitFactory.swift */,
 			);
 			path = AudioUnitFactory;
+			sourceTree = "<group>";
+		};
+		FA5DE8FE2B1B856700F4946C /* au */ = {
+			isa = PBXGroup;
+			children = (
+				FA5DE8FF2B1B856700F4946C /* src */,
+			);
+			name = au;
+			path = ../target/cxxbridge/au;
+			sourceTree = "<group>";
+		};
+		FA5DE8FF2B1B856700F4946C /* src */ = {
+			isa = PBXGroup;
+			children = (
+				FA5DE9002B1B856700F4946C /* lib.rs.h */,
+				FA5DE9012B1B856700F4946C /* lib.rs.cc */,
+			);
+			path = src;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -232,9 +255,9 @@
 			productReference = CA019DB1550731D9F518FD0F /* libau_static.a */;
 			productType = "com.apple.product-type.library.static";
 		};
-		FA5DE8C02B1B5D2500F4946C /* unitExtension */ = {
+		FA5DE8C02B1B5D2500F4946C /* UnitExtension */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = FA5DE8E62B1B5D2500F4946C /* Build configuration list for PBXNativeTarget "unitExtension" */;
+			buildConfigurationList = FA5DE8E62B1B5D2500F4946C /* Build configuration list for PBXNativeTarget "UnitExtension" */;
 			buildPhases = (
 				FA5DE8BD2B1B5D2500F4946C /* Sources */,
 				FA5DE8BE2B1B5D2500F4946C /* Frameworks */,
@@ -245,9 +268,9 @@
 			dependencies = (
 				FA5DE8EF2B1B5DBB00F4946C /* PBXTargetDependency */,
 			);
-			name = unitExtension;
-			productName = unitExtension;
-			productReference = FA5DE8C12B1B5D2500F4946C /* unitExtension.appex */;
+			name = UnitExtension;
+			productName = UnitExtension;
+			productReference = FA5DE8C12B1B5D2500F4946C /* UnitExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -287,7 +310,7 @@
 			targets = (
 				CA0060254DCF813998C96D09 /* au-cdylib */,
 				CA019DB15507A163E4FD27D3 /* au-staticlib */,
-				FA5DE8C02B1B5D2500F4946C /* unitExtension */,
+				FA5DE8C02B1B5D2500F4946C /* UnitExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -297,9 +320,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FA5DE8D82B1B5D2500F4946C /* unitExtensionAUProcessHelper.hpp in Resources */,
-				FA5DE8E12B1B5D2500F4946C /* unitExtensionDSPKernel.hpp in Resources */,
-				FA5DE8DA2B1B5D2500F4946C /* unitExtensionBufferedAudioBus.hpp in Resources */,
+				FA5DE9022B1B85C400F4946C /* lib.rs.h in Resources */,
+				FA5DE9032B1B85C400F4946C /* lib.rs.cc in Resources */,
+				FA5DE8D82B1B5D2500F4946C /* UnitExtensionAUProcessHelper.hpp in Resources */,
+				FA5DE8E12B1B5D2500F4946C /* UnitExtensionDSPKernel.hpp in Resources */,
+				FA5DE8DA2B1B5D2500F4946C /* UnitExtensionBufferedAudioBus.hpp in Resources */,
 				FA5DE8C72B1B5D2500F4946C /* README.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -351,7 +376,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FA5DE8DE2B1B5D2500F4946C /* Parameters.swift in Sources */,
-				FA5DE8D52B1B5D2500F4946C /* unitExtensionAudioUnit.mm in Sources */,
+				FA5DE8D52B1B5D2500F4946C /* UnitExtensionAudioUnit.mm in Sources */,
 				FA5DE8CC2B1B5D2500F4946C /* ParameterSpecBase.swift in Sources */,
 				FA5DE8E42B1B5D2500F4946C /* AudioUnitFactory.swift in Sources */,
 				FA5DE8CF2B1B5D2500F4946C /* CrossPlatform.swift in Sources */,
@@ -519,8 +544,8 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = unitExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = unitExtension;
+				INFOPLIST_FILE = UnitExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = UnitExtension;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -531,13 +556,13 @@
 				MARKETING_VERSION = 1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.anvlkv.redsiren.RedSiren.AU.AU.AUExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.anvlkv.redsiren.RedSiren.AUExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "unitExtension/Common/unitExtension-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "UnitExtension/Common/UnitExtension-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -599,8 +624,8 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = unitExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = unitExtension;
+				INFOPLIST_FILE = UnitExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = UnitExtension;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -611,13 +636,13 @@
 				MARKETING_VERSION = 1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.anvlkv.redsiren.RedSiren.AU.AU.AUExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.anvlkv.redsiren.RedSiren.AUExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "unitExtension/Common/unitExtension-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "UnitExtension/Common/UnitExtension-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -654,7 +679,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		FA5DE8E62B1B5D2500F4946C /* Build configuration list for PBXNativeTarget "unitExtension" */ = {
+		FA5DE8E62B1B5D2500F4946C /* Build configuration list for PBXNativeTarget "UnitExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				FA5DE8E72B1B5D2500F4946C /* Release */,

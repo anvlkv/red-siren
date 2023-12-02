@@ -1,20 +1,13 @@
-//
-//  unitExtensionAudioUnit.mm
-//  unitExtension
-//
-//  Created by a.nvlkv on 02/12/2023.
-//
-
-#import "unitExtensionAudioUnit.h"
+#import "UnitExtensionAudioUnit.h"
 
 #import <AVFoundation/AVFoundation.h>
 #import <CoreAudioKit/AUViewController.h>
 
-#import "unitExtensionBufferedAudioBus.hpp"
-#import "unitExtensionAUProcessHelper.hpp"
-#import "unitExtensionDSPKernel.hpp"
+#import "UnitExtensionBufferedAudioBus.hpp"
+#import "UnitExtensionAUProcessHelper.hpp"
+#import "UnitExtensionDSPKernel.hpp"
 
-@interface unitExtensionAudioUnit ()
+@interface UnitExtensionAudioUnit ()
 
 @property (nonatomic, readwrite) AUParameterTree *parameterTree;
 @property AUAudioUnitBusArray *inputBusArray;
@@ -23,9 +16,9 @@
 @end
 
 
-@implementation unitExtensionAudioUnit {
+@implementation UnitExtensionAudioUnit {
     // C++ members need to be ivars; they would be copied on access if they were properties.
-    unitExtensionDSPKernel _kernel;
+    UnitExtensionDSPKernel _kernel;
     BufferedInputBus _inputBus;
     std::unique_ptr<AUProcessHelper> _processHelper;
 }
@@ -77,7 +70,7 @@
 - (void)setupParameterCallbacks {
     // Make a local pointer to the kernel to avoid capturing self.
     
-    __block unitExtensionDSPKernel *kernel = &_kernel;
+    __block UnitExtensionDSPKernel *kernel = &_kernel;
     
     // implementorValueObserver is called when a parameter changes value.
     _parameterTree.implementorValueObserver = ^(AUParameter *param, AUValue value) {
@@ -135,15 +128,7 @@
     const auto inputChannelCount = [self.inputBusses objectAtIndexedSubscript:0].format.channelCount;
     const auto outputChannelCount = [self.outputBusses objectAtIndexedSubscript:0].format.channelCount;
     
-    if (outputChannelCount != inputChannelCount) {
-        if (outError) {
-            *outError = [NSError errorWithDomain:NSOSStatusErrorDomain code:kAudioUnitErr_FailedInitialization userInfo:nil];
-        }
-        // Notify superclass that initialization was not successful
-        self.renderResourcesAllocated = NO;
-        
-        return NO;
-    }
+    
     _inputBus.allocateRenderResources(self.maximumFramesToRender);
     _kernel.setMusicalContextBlock(self.musicalContextBlock);
     _kernel.initialize(inputChannelCount, outputChannelCount, _outputBus.format.sampleRate);
@@ -170,7 +155,7 @@
      render, we're doing it wrong.
      */
     // Specify captured objects are mutable.
-    __block unitExtensionDSPKernel *kernel = &_kernel;
+    __block UnitExtensionDSPKernel *kernel = &_kernel;
     __block std::unique_ptr<AUProcessHelper> &processHelper = _processHelper;
     __block BufferedInputBus *input = &_inputBus;
     

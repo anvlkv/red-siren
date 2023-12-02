@@ -1,14 +1,7 @@
-//
-//  AudioUnitFactory.swift
-//  unitExtension
-//
-//  Created by a.nvlkv on 02/12/2023.
-//
-
 import CoreAudioKit
 import os
 
-private let log = Logger(subsystem: "com.bundle.id.unitExtension", category: "AudioUnitFactory")
+private let log = Logger(subsystem: "com.anvlkv.redsiren.RedSiren.AUExtension", category: "AudioUnitFactory")
 
 public class AudioUnitFactory: NSObject, AUAudioUnitFactory {
     var auAudioUnit: AUAudioUnit?
@@ -21,13 +14,13 @@ public class AudioUnitFactory: NSObject, AUAudioUnitFactory {
 
     @objc
     public func createAudioUnit(with componentDescription: AudioComponentDescription) throws -> AUAudioUnit {
-        auAudioUnit = try unitExtensionAudioUnit(componentDescription: componentDescription, options: [])
+        auAudioUnit = try UnitExtensionAudioUnit(componentDescription: componentDescription, options: [])
 
-        guard let audioUnit = auAudioUnit as? unitExtensionAudioUnit else {
-            fatalError("Failed to create unitExtension")
+        guard let audioUnit = auAudioUnit as? UnitExtensionAudioUnit else {
+            fatalError("Failed to create UnitExtension")
         }
 
-        audioUnit.setupParameterTree(unitExtensionParameterSpecs.createAUParameterTree())
+        audioUnit.setupParameterTree(UnitExtensionParameterSpecs.createAUParameterTree())
 
         self.observation = audioUnit.observe(\.allParameterValues, options: [.new]) { object, change in
             guard let tree = audioUnit.parameterTree else { return }

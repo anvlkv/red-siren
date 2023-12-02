@@ -10,11 +10,11 @@
 			<array>
 				<dict>
 					<key>description</key>
-					<string>unitExtension</string>
+					<string>UnitExtension</string>
 					<key>manufacturer</key>
 					<string>nvlk</string>
 					<key>name</key>
-					<string>anvlkv: unitExtension</string>
+					<string>anvlkv: UnitExtension</string>
 					<key>sandboxSafe</key>
 					<true/>
 					<key>subtype</key>

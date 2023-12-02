@@ -62,4 +62,6 @@ pub fn log_init() {
         _ = console_log::init_with_level(lvl.to_level().unwrap_or(log::Level::Warn));
         console_error_panic_hook::set_once();
     }
+
+    log::debug!("init logging")
 }

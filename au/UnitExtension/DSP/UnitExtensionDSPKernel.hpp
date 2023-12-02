@@ -1,10 +1,3 @@
-//
-//  unitExtensionDSPKernel.hpp
-//  unitExtension
-//
-//  Created by a.nvlkv on 02/12/2023.
-//
-
 #pragma once
 
 #import <AudioToolbox/AudioToolbox.h>
@@ -12,17 +5,19 @@
 #import <vector>
 #import <span>
 
-#import "unitExtension-Swift.h"
-#import "unitExtensionParameterAddresses.h"
+#import "UnitExtension-Swift.h"
+#import "UnitExtensionParameterAddresses.h"
+#import "lib.rs.h"
 
 /*
- unitExtensionDSPKernel
+ UnitExtensionDSPKernel
  As a non-ObjC class, this is safe to use from render thread.
  */
-class unitExtensionDSPKernel {
+class UnitExtensionDSPKernel {
 public:
     void initialize(int inputChannelCount, int outputChannelCount, double inSampleRate) {
         mSampleRate = inSampleRate;
+        log_init();
     }
     
     void deInitialize() {
@@ -40,10 +35,9 @@ public:
     // MARK: - Parameter Getter / Setter
     void setParameter(AUParameterAddress address, AUValue value) {
         switch (address) {
-            case unitExtensionParameterAddress::gain:
-                mGain = value;
+            default:
                 break;
-                // Add a case for each parameter in unitExtensionParameterAddresses.h
+                // Add a case for each parameter in UnitExtensionParameterAddresses.h
         }
     }
     
@@ -51,9 +45,6 @@ public:
         // Return the goal. It is not thread safe to return the ramping value.
         
         switch (address) {
-            case unitExtensionParameterAddress::gain:
-                return (AUValue)mGain;
-                
             default: return 0.f;
         }
     }
@@ -79,14 +70,9 @@ public:
      Do your custom DSP here.
      */
     void process(std::span<float const*> inputBuffers, std::span<float *> outputBuffers, AUEventSampleTime bufferStartTime, AUAudioFrameCount frameCount) {
-        /*
-         Note: For an Audio Unit with 'n' input channels to 'n' output channels, remove the assert below and
-         modify the check in [unitExtensionAudioUnit allocateRenderResourcesAndReturnError]
-         */
-        assert(inputBuffers.size() == outputBuffers.size());
-        
+
         if (mBypassed) {
-            // Pass the samples through
+            assert(inputBuffers.size() == outputBuffers.size());
             for (UInt32 channel = 0; channel < inputBuffers.size(); ++channel) {
                 std::copy_n(inputBuffers[channel], frameCount, outputBuffers[channel]);
             }
@@ -105,15 +91,17 @@ public:
          nullptr);	// currentMeasureDownbeatPosition
          }
          */
+  
         
-        // Perform per sample dsp on the incoming float in before assigning it to out
-        for (UInt32 channel = 0; channel < inputBuffers.size(); ++channel) {
-            for (UInt32 frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
-                
-                // Do your sample by sample dsp here...
-                outputBuffers[channel][frameIndex] = inputBuffers[channel][frameIndex] * mGain;
-            }
-        }
+        
+//        // Perform per sample dsp on the incoming float in before assigning it to out
+//        for (UInt32 channel = 0; channel < inputBuffers.size(); ++channel) {
+//            for (UInt32 frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
+//
+//                // Do your sample by sample dsp here...
+////                outputBuffers[channel][frameIndex] = inputBuffers[channel][frameIndex] * mGain;
+//            }
+//        }
     }
     
     void handleOneEvent(AUEventSampleTime now, AURenderEvent const *event) {
@@ -136,7 +124,6 @@ public:
     AUHostMusicalContextBlock mMusicalContextBlock;
     
     double mSampleRate = 44100.0;
-    double mGain = 1.0;
     bool mBypassed = false;
     AUAudioFrameCount mMaxFramesToRender = 1024;
 };

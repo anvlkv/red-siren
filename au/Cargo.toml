@@ -15,5 +15,8 @@ crate-type = ["lib", "cdylib", "staticlib"]
 shared={path="../shared", features = ["worklet"]}
 cxx = "1.0"
 
+[build-dependencies]
+cxx-build = "1.0"
+
 [features]
 ios=["shared/ios"]

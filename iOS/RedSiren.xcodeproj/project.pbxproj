@@ -19,7 +19,7 @@
 		F68573BF507ACC074620C5D8 /* libshared_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 6A500489520C085A22DE7285 /* libshared_static.a */; };
 		FA3CD9922B19D3010002E8FF /* Playback.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA3CD9912B19D3010002E8FF /* Playback.swift */; };
 		FA3CD9942B1A043D0002E8FF /* RedSirenNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA3CD9932B1A043D0002E8FF /* RedSirenNode.swift */; };
-		FA5DE8F42B1B5DFA00F4946C /* unitExtension.appex in CopyFiles */ = {isa = PBXBuildFile; fileRef = FA5DE8F32B1B5DE500F4946C /* unitExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		FA5DE8F42B1B5DFA00F4946C /* UnitExtension.appex in CopyFiles */ = {isa = PBXBuildFile; fileRef = FA5DE8F32B1B5DE500F4946C /* UnitExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		FAAA65362B09DFB500B1F5D1 /* IntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAA65352B09DFB500B1F5D1 /* IntroView.swift */; };
 		FAAA65382B09E0E100B1F5D1 /* InstrumentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAA65372B09E0E100B1F5D1 /* InstrumentView.swift */; };
 		FAAA653A2B09EC8300B1F5D1 /* Intro.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FAAA65392B09EC8300B1F5D1 /* Intro.storyboard */; };
@@ -102,14 +102,14 @@
 			containerPortal = FA5DE88D2B1B5C9200F4946C /* AU.xcodeproj */;
 			proxyType = 2;
 			remoteGlobalIDString = FA5DE8C12B1B5D2500F4946C;
-			remoteInfo = unitExtension;
+			remoteInfo = UnitExtension;
 		};
 		FA5DE8F52B1B5E0F00F4946C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = FA5DE88D2B1B5C9200F4946C /* AU.xcodeproj */;
 			proxyType = 1;
 			remoteGlobalIDString = FA5DE8C02B1B5D2500F4946C;
-			remoteInfo = unitExtension;
+			remoteInfo = UnitExtension;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -120,7 +120,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				FA5DE8F42B1B5DFA00F4946C /* unitExtension.appex in CopyFiles */,
+				FA5DE8F42B1B5DFA00F4946C /* UnitExtension.appex in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -269,7 +269,7 @@
 			children = (
 				FA5DE8932B1B5C9200F4946C /* au.dylib */,
 				FA5DE8952B1B5C9200F4946C /* libau_static.a */,
-				FA5DE8F32B1B5DE500F4946C /* unitExtension.appex */,
+				FA5DE8F32B1B5DE500F4946C /* UnitExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -377,10 +377,10 @@
 			remoteRef = FA5DE8942B1B5C9200F4946C /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
-		FA5DE8F32B1B5DE500F4946C /* unitExtension.appex */ = {
+		FA5DE8F32B1B5DE500F4946C /* UnitExtension.appex */ = {
 			isa = PBXReferenceProxy;
 			fileType = "wrapper.app-extension";
-			path = unitExtension.appex;
+			path = UnitExtension.appex;
 			remoteRef = FA5DE8F22B1B5DE500F4946C /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
@@ -474,7 +474,7 @@
 		};
 		FA5DE8F62B1B5E0F00F4946C /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			name = unitExtension;
+			name = UnitExtension;
 			targetProxy = FA5DE8F52B1B5E0F00F4946C /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */

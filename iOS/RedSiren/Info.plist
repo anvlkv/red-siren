@@ -20,8 +20,6 @@
 	<string>1</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Red Siren uses the microphone to analyze incoming sounds</string>
-	<key>UILaunchScreen</key>
-	<dict/>
 	<key>UILaunchStoryboardName</key>
 	<string>Intro.storyboard</string>
 	<key>UIRequiresFullScreen</key>

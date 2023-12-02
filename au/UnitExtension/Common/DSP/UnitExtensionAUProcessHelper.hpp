@@ -1,23 +1,16 @@
-//
-//  unitExtensionAUProcessHelper.hpp
-//  unitExtension
-//
-//  Created by a.nvlkv on 02/12/2023.
-//
-
 #pragma once
 
 #import <AudioToolbox/AudioToolbox.h>
 #import <AVFoundation/AVFoundation.h>
 
 #include <vector>
-#include "unitExtensionDSPKernel.hpp"
+#include "UnitExtensionDSPKernel.hpp"
 
 //MARK:- AUProcessHelper Utility Class
 class AUProcessHelper
 {
 public:
-    AUProcessHelper(unitExtensionDSPKernel& kernel, UInt32 inputChannelCount, UInt32 outputChannelCount)
+    AUProcessHelper(UnitExtensionDSPKernel& kernel, UInt32 inputChannelCount, UInt32 outputChannelCount)
     : mKernel{kernel},
     mInputBuffers(inputChannelCount),
     mOutputBuffers(outputChannelCount) {
@@ -87,7 +80,7 @@ public:
         return event;
     }
 private:
-    unitExtensionDSPKernel& mKernel;
+    UnitExtensionDSPKernel& mKernel;
     std::vector<const float*> mInputBuffers;
     std::vector<float*> mOutputBuffers;
 };

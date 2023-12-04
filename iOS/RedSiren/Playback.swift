@@ -17,9 +17,14 @@ import SwiftUI
 
 
 class Playback: NSObject, ObservableObject {
+    let type: String = "aufx"
+    let subType: String = "rsau"
+    let manufacturer: String = "nvlk"
     
     private var session: AVAudioSession?
     private var audioEngine: AVAudioEngine?
+    private var avAudioUnit: AVAudioUnit?
+    private var evChannel: AUMessageChannel?
     
     let config: Config
     let ev: (InstrumentEV) -> Void
@@ -27,6 +32,78 @@ class Playback: NSObject, ObservableObject {
     init(config: Config, ev: @escaping (InstrumentEV) -> Void) {
         self.config=config
         self.ev = ev
+    }
+    
+//    let redSirenNode = AudioUnit(){_, _, frameCount, outputBusNumber, outputData, pullInputBlock in
+//    }
+    
+    public func setup(completion: @escaping (Result<Bool, Error>) -> Void) {
+        Task.init{
+            setupAudioSession()
+            if await setupAudioEngine() {
+                guard let component = AVAudioUnit.findComponent(type: type, subType: subType, manufacturer: manufacturer) else {
+                    fatalError("Failed to find component with type: \(type), subtype: \(subType), manufacturer: \(manufacturer))" )
+                }
+                AVAudioUnit.instantiate(with: component.audioComponentDescription,
+                                        options: AudioComponentInstantiationOptions.loadOutOfProcess) { avAudioUnit, error in
+                    guard let audioUnit = avAudioUnit, error == nil else {
+                        completion(.failure(error!))
+                        return
+                    }
+                    
+                    self.avAudioUnit = audioUnit
+
+                    self.setupNodes{completion_setup in
+                        completion(completion_setup)
+                    }
+                }
+            }
+            else {
+                completion(.success(false))
+            }
+        }
+    }
+    
+    func setupNodes(completion_setup: @escaping (Result<Bool, Error>) -> Void) {
+        let engine = self.audioEngine!
+        let audioUnit = self.avAudioUnit!
+        let format = AVAudioFormat.init(commonFormat: .pcmFormatFloat32, sampleRate: config.sample_rate_hz, channels: .init(config.channels), interleaved: true)
+        let input = engine.inputNode
+        do {
+            try input.setVoiceProcessingEnabled(true)
+        }
+        catch {
+            completion_setup(.failure(error))
+        }
+        let mixer = engine.mainMixerNode
+        engine.attach(audioUnit)
+        
+        engine.connect(input, to: audioUnit, format: format)
+        engine.connect(audioUnit, to: mixer, format: format)
+        let hardwareFormat = engine.outputNode.outputFormat(forBus: 0)
+        engine.connect(engine.mainMixerNode, to: engine.outputNode, format: hardwareFormat)
+
+        
+        engine.prepare()
+        
+        
+//        audioUnit.auAudioUnit
+        self.evChannel = audioUnit.auAudioUnit.messageChannel(for: "rsev")
+        let channel = self.evChannel!
+        
+        let configEv = Event.instrumentEvent(InstrumentEV.createWithConfig(self.config))
+        let data = try! configEv.bincodeSerialize()
+
+        _ = channel.callAudioUnit!(["ev": data])
+        
+        
+        do {
+            try engine.start()
+            completion_setup(.success(true))
+        }
+        catch {
+            completion_setup(.failure(error))
+        }
     }
 
     
@@ -51,52 +128,38 @@ class Playback: NSObject, ObservableObject {
         guard await isAuthorized else { return false }
         // Set up the capture session.
         
-        let input = audioEngine!.inputNode
-        
-//        audioEngine?.attach(<#T##node: AVAudioNode##AVAudioNode#>)
-        
-        return true
+        do {
+            try session!.setActive(true)
+            return true
+        }
+        catch {
+            return false
+        }
     }
     
     public func evPort(event: Event) {
         
     }
     
-    public func setupAudioSession() {
-        let session = AVAudioSession.sharedInstance()
+    func setupAudioSession() {
+        self.session = AVAudioSession.sharedInstance()
 
         do {
-            try session.setCategory(.playAndRecord, mode: .measurement, options: .defaultToSpeaker)
+            try session!.setCategory(.playAndRecord, mode: .measurement, options: .defaultToSpeaker)
         } catch {
             print("Could not set the audio category: \(error.localizedDescription)")
         }
 
         do {
-            try session.setPreferredSampleRate(self.config.sample_rate_hz)
+            try session!.setPreferredSampleRate(self.config.sample_rate_hz)
         } catch {
             print("Could not set the preferred sample rate: \(error.localizedDescription)")
         }
-        
-        let task = Task.init{
-            let ready = await setUpCaptureSession()
-            
-            if ready {
-                print("audio session ready")
-            }
-            else {
-                print("audio session was not allowed to start")
-            }
-        }
     }
     
-    func setupAudioEngine() {
-        do {
-            audioEngine = AVAudioEngine()
-            setupAudioSession()
-            try audioEngine!.start()
-        } catch {
-            fatalError("Could not set up the audio engine: \(error)")
-        }
+    func setupAudioEngine() async -> Bool {
+        audioEngine = AVAudioEngine()
+        return await setUpCaptureSession()
     }
     
     @objc
@@ -107,8 +170,12 @@ class Playback: NSObject, ObservableObject {
         
         switch type {
         case .began:
+            audioEngine?.pause()
             break
         case .ended:
+            if let audioEngine {
+                try! audioEngine.start()
+            }
             break
         @unknown default:
             fatalError("Unknown type: \(type)")
@@ -150,8 +217,10 @@ class Playback: NSObject, ObservableObject {
     @objc
     func handleMediaServicesWereReset(_ notification: Notification) {
         resetUIStates()
-        resetAudioEngine()
-        setupAudioEngine()
+        Task.init {
+            resetAudioEngine()
+            _ = await setupAudioEngine()
+        }
     }
     
     func resetUIStates() {
@@ -171,3 +240,28 @@ class Playback: NSObject, ObservableObject {
 }
 
 
+extension AVAudioUnit {
+    static fileprivate func findComponent(type: String, subType: String, manufacturer: String) -> AVAudioUnitComponent? {
+        // Make a component description matching any Audio Unit of the selected component type.
+        let description = AudioComponentDescription(componentType: type.fourCharCode!,
+                                                    componentSubType: subType.fourCharCode!,
+                                                    componentManufacturer: manufacturer.fourCharCode!,
+                                                    componentFlags: 0,
+                                                    componentFlagsMask: 0)
+        return AVAudioUnitComponentManager.shared().components(matching: description).first
+    }
+}
+
+extension String {
+    var fourCharCode: FourCharCode? {
+        guard self.count == 4 && self.utf8.count == 4 else {
+            return nil
+        }
+
+        var code: FourCharCode = 0
+        for character in self.utf8 {
+            code = code << 8 + FourCharCode(character)
+        }
+        return code
+    }
+}

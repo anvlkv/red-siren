@@ -6,13 +6,9 @@
 #import <span>
 
 #import "UnitExtension-Swift.h"
-#import "UnitExtensionParameterAddresses.h"
 #import "lib.rs.h"
 
-/*
- UnitExtensionDSPKernel
- As a non-ObjC class, this is safe to use from render thread.
- */
+
 class UnitExtensionDSPKernel {
 public:
     void initialize(int inputChannelCount, int outputChannelCount, double inSampleRate) {
@@ -23,6 +19,12 @@ public:
     void deInitialize() {
     }
     
+    void handleCoreEv(const std::vector<UInt8> &ev) {
+        ::rust::Slice<std::uint8_t const> eventSlice(const_cast<std::uint8_t*>(ev.data()), ev.size());
+        
+        vm = process_event(eventSlice);
+    }
+    
     // MARK: - Bypass
     bool isBypassed() {
         return mBypassed;
@@ -30,23 +32,6 @@ public:
     
     void setBypass(bool shouldBypass) {
         mBypassed = shouldBypass;
-    }
-    
-    // MARK: - Parameter Getter / Setter
-    void setParameter(AUParameterAddress address, AUValue value) {
-        switch (address) {
-            default:
-                break;
-                // Add a case for each parameter in UnitExtensionParameterAddresses.h
-        }
-    }
-    
-    AUValue getParameter(AUParameterAddress address) {
-        // Return the goal. It is not thread safe to return the ramping value.
-        
-        switch (address) {
-            default: return 0.f;
-        }
     }
     
     // MARK: - Max Frames
@@ -91,39 +76,34 @@ public:
          nullptr);	// currentMeasureDownbeatPosition
          }
          */
+        
+        
   
         
         
 //        // Perform per sample dsp on the incoming float in before assigning it to out
-//        for (UInt32 channel = 0; channel < inputBuffers.size(); ++channel) {
-//            for (UInt32 frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
-//
-//                // Do your sample by sample dsp here...
-////                outputBuffers[channel][frameIndex] = inputBuffers[channel][frameIndex] * mGain;
-//            }
-//        }
+        for (UInt32 channel = 0; channel < inputBuffers.size(); ++channel) {
+            for (UInt32 frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
+
+                // Do your sample by sample dsp here...
+//                outputBuffers[channel][frameIndex] = inputBuffers[channel][frameIndex] * 1.75;
+            }
+        }
     }
     
     void handleOneEvent(AUEventSampleTime now, AURenderEvent const *event) {
         switch (event->head.eventType) {
-            case AURenderEventParameter: {
-                handleParameterEvent(now, event->parameter);
-                break;
-            }
-                
             default:
                 break;
         }
     }
-    
-    void handleParameterEvent(AUEventSampleTime now, AUParameterEvent const& parameterEvent) {
-        // Implement handling incoming Parameter events as needed
-    }
+
     
     // MARK: Member Variables
     AUHostMusicalContextBlock mMusicalContextBlock;
     
     double mSampleRate = 44100.0;
     bool mBypassed = false;
-    AUAudioFrameCount mMaxFramesToRender = 1024;
+    AUAudioFrameCount mMaxFramesToRender = 64;
+    ::rust::Vec<::std::uint8_t> vm;
 };

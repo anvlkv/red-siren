@@ -1,5 +1,6 @@
 pub mod geometry;
 
+use cfg_if::cfg_if;
 use lazy_static::lazy_static;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -12,7 +13,6 @@ pub use crux_time as time;
 
 pub mod app;
 pub use app::*;
-
 
 pub const MAX_AUDIO_BUFFER_SIZE: usize = fundsp::MAX_BUFFER_SIZE;
 // TODO see if crux already does it.
@@ -52,10 +52,13 @@ pub fn log_init() {
     }
     #[cfg(feature = "ios")]
     {
-        oslog::OsLogger::new("com.anvlkv.RedSiren.Core")
-            .level_filter(lvl)
-            .init()
-            .unwrap();
+        cfg_if! { if #[cfg(feature="wokrlet")] {
+            let lg = oslog::OsLogger::new("com.anvlkv.redsiren.RedSiren.AUExtension");
+        } else {
+            let lg = oslog::OsLogger::new("com.anvlkv.RedSiren.Core");
+        }}
+
+        lg.level_filter(lvl).init().unwrap();
     }
     #[cfg(feature = "browser")]
     {

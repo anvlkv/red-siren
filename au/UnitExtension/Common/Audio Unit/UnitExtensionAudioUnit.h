@@ -2,5 +2,7 @@
 #import <AVFoundation/AVFoundation.h>
 
 @interface UnitExtensionAudioUnit : AUAudioUnit
-- (void)setupParameterTree:(AUParameterTree *)parameterTree;
+@property (nonatomic, copy) NSDictionary<NSString *, id> *callAudioUnit;
+@property (nonatomic, copy) CallHostBlock callHostBlock;
+
 @end

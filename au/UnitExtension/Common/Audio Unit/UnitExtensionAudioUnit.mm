@@ -1,5 +1,5 @@
 #import "UnitExtensionAudioUnit.h"
-
+#import "ChannelRS.h"
 #import <AVFoundation/AVFoundation.h>
 #import <CoreAudioKit/AUViewController.h>
 
@@ -9,7 +9,6 @@
 
 @interface UnitExtensionAudioUnit ()
 
-@property (nonatomic, readwrite) AUParameterTree *parameterTree;
 @property AUAudioUnitBusArray *inputBusArray;
 @property AUAudioUnitBusArray *outputBusArray;
 @property (nonatomic, readonly) AUAudioUnitBus *outputBus;
@@ -22,8 +21,6 @@
     BufferedInputBus _inputBus;
     std::unique_ptr<AUProcessHelper> _processHelper;
 }
-
-@synthesize parameterTree = _parameterTree;
 
 - (instancetype)initWithComponentDescription:(AudioComponentDescription)componentDescription options:(AudioComponentInstantiationOptions)options error:(NSError **)outError {
     self = [super initWithComponentDescription:componentDescription options:options error:outError];
@@ -56,39 +53,6 @@
                                                               busses: @[_outputBus]];
 }
 
-- (void)setupParameterTree:(AUParameterTree *)parameterTree {
-    _parameterTree = parameterTree;
-    
-    // Send the Parameter default values to the Kernel before setting up the parameter callbacks, so that the defaults set in the Kernel.hpp don't propagate back to the AUParameters via GetParameter
-    for (AUParameter *param in _parameterTree.allParameters) {
-        _kernel.setParameter(param.address, param.value);
-    }
-    
-    [self setupParameterCallbacks];
-}
-
-- (void)setupParameterCallbacks {
-    // Make a local pointer to the kernel to avoid capturing self.
-    
-    __block UnitExtensionDSPKernel *kernel = &_kernel;
-    
-    // implementorValueObserver is called when a parameter changes value.
-    _parameterTree.implementorValueObserver = ^(AUParameter *param, AUValue value) {
-        kernel->setParameter(param.address, value);
-    };
-    
-    // implementorValueProvider is called when the value needs to be refreshed.
-    _parameterTree.implementorValueProvider = ^(AUParameter *param) {
-        return kernel->getParameter(param.address);
-    };
-    
-    // A function to provide string representations of parameter values.
-    _parameterTree.implementorStringFromValueCallback = ^(AUParameter *param, const AUValue *__nullable valuePtr) {
-        AUValue value = valuePtr == nil ? param.value : *valuePtr;
-        
-        return [NSString stringWithFormat:@"%.f", value];
-    };
-}
 
 #pragma mark - AUAudioUnit Overrides
 
@@ -205,7 +169,35 @@
         processHelper->processWithEvents(inAudioBufferList, outAudioBufferList, timestamp, frameCount, realtimeEventListHead);
         return noErr;
     };
+    
 }
+
+- (id<AUMessageChannel>)messageChannelForName:(NSString *)name {
+    
+    
+    NSDictionary<NSString *, id>* _Nonnull (^evHandler)(NSDictionary<NSString *, id> * _Nonnull message) = ^(NSDictionary<NSString *, id> * _Nonnull message) {
+        NSString *messageType = message[@"type"];
+        
+        if ([messageType isEqualToString:@"ev"]) {
+            NSArray<NSNumber *> *evArray = message[@"ev"];
+                
+            std::vector<UInt8> data;
+            for (NSNumber *number in evArray) {
+                data.push_back([number unsignedCharValue]);
+            }
+            
+            self -> _kernel.handleCoreEv(data);
+        }
+        
+        return @{@"message": @"ok"};
+    };
+
+    ChannelRS *channel = [[ChannelRS alloc] initWithEvHandler:evHandler name:name];
+
+    
+    return channel;
+}
+
 
 @end
 

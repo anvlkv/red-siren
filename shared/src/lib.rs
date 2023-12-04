@@ -39,7 +39,7 @@ pub fn view() -> Vec<u8> {
 
 #[wasm_bindgen]
 pub fn log_init() {
-    #[allow(dead_code)]
+    #[allow(unused_variables)]
     let lvl = log::LevelFilter::Debug;
 
     #[cfg(feature = "android")]
@@ -52,6 +52,7 @@ pub fn log_init() {
     }
     #[cfg(feature = "ios")]
     {
+
         cfg_if! { if #[cfg(feature="wokrlet")] {
             let lg = oslog::OsLogger::new("com.anvlkv.redsiren.RedSiren.AUExtension");
         } else {

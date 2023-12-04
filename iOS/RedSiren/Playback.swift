@@ -89,11 +89,11 @@ class Playback: NSObject, ObservableObject {
         do {
             try engine.start()
             
-           self.evChannel = audioUnit.auAudioUnit.messageChannel(for: "rsev")
-           let channel = self.evChannel!
-           let configEv = Event.instrumentEvent(InstrumentEV.createWithConfig(self.config))
-           let data = try configEv.bincodeSerialize()
-           _ = channel.callAudioUnit!(["ev": data])
+//           self.evChannel = audioUnit.auAudioUnit.messageChannel(for: "rsev")
+//           let channel = self.evChannel!
+//           let configEv = Event.instrumentEvent(InstrumentEV.createWithConfig(self.config))
+//           let data = try configEv.bincodeSerialize()
+//           _ = channel.callAudioUnit!(["ev": data])
             
             completion_setup(.success(true))
         }

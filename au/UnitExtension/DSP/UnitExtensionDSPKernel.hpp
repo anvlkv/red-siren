@@ -4,10 +4,9 @@
 #import <algorithm>
 #import <vector>
 #import <span>
-
 #import "UnitExtension-Swift.h"
 #import "lib.rs.h"
-
+#include <iostream>
 
 class UnitExtensionDSPKernel {
 public:
@@ -15,6 +14,7 @@ public:
         mSampleRate = inSampleRate;
     //    log_init();
         printf("init");
+        std::cout << "init\n";
     }
     
     void deInitialize() {
@@ -105,6 +105,6 @@ public:
     
     double mSampleRate = 44100.0;
     bool mBypassed = false;
-    AUAudioFrameCount mMaxFramesToRender = 64;
+    AUAudioFrameCount mMaxFramesToRender = 1024;
 //    ::rust::Vec<::std::uint8_t> vm;
 };

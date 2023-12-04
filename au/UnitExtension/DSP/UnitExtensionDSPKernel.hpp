@@ -13,7 +13,7 @@ class UnitExtensionDSPKernel {
 public:
     void initialize(int inputChannelCount, int outputChannelCount, double inSampleRate) {
         mSampleRate = inSampleRate;
-        log_init();
+    //    log_init();
         printf("init");
     }
     
@@ -21,9 +21,9 @@ public:
     }
     
     void handleCoreEv(const std::vector<UInt8> &ev) {
-        ::rust::Slice<std::uint8_t const> eventSlice(const_cast<std::uint8_t*>(ev.data()), ev.size());
+//        ::rust::Slice<std::uint8_t const> eventSlice(const_cast<std::uint8_t*>(ev.data()), ev.size());
         
-        vm = process_event(eventSlice);
+//        vm = process_event(eventSlice);
     }
     
     // MARK: - Bypass
@@ -106,5 +106,5 @@ public:
     double mSampleRate = 44100.0;
     bool mBypassed = false;
     AUAudioFrameCount mMaxFramesToRender = 64;
-    ::rust::Vec<::std::uint8_t> vm;
+//    ::rust::Vec<::std::uint8_t> vm;
 };

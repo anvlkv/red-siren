@@ -172,8 +172,9 @@
     
 }
 
-- (id<AUMessageChannel>)messageChannelForName:(NSString *)name {
+- (id<AUMessageChannel>)messageChannelFor:(NSString *)name {
     
+    NSLog(@"channel");
     
     NSDictionary<NSString *, id>* _Nonnull (^evHandler)(NSDictionary<NSString *, id> * _Nonnull message) = ^(NSDictionary<NSString *, id> * _Nonnull message) {
         NSString *messageType = message[@"type"];

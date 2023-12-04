@@ -14,6 +14,7 @@ public:
     void initialize(int inputChannelCount, int outputChannelCount, double inSampleRate) {
         mSampleRate = inSampleRate;
         log_init();
+        printf("init");
     }
     
     void deInitialize() {
@@ -56,13 +57,13 @@ public:
      */
     void process(std::span<float const*> inputBuffers, std::span<float *> outputBuffers, AUEventSampleTime bufferStartTime, AUAudioFrameCount frameCount) {
 
-        if (mBypassed) {
-            assert(inputBuffers.size() == outputBuffers.size());
+//        if (mBypassed) {
+//            assert(inputBuffers.size() == outputBuffers.size());
             for (UInt32 channel = 0; channel < inputBuffers.size(); ++channel) {
                 std::copy_n(inputBuffers[channel], frameCount, outputBuffers[channel]);
             }
             return;
-        }
+//        }
         
         // Use this to get Musical context info from the Plugin Host,
         // Replace nullptr with &memberVariable according to the AUHostMusicalContextBlock function signature

@@ -21,8 +21,7 @@
 		FA5DE9762B1C705200F4946C /* lib.rs.h in Resources */ = {isa = PBXBuildFile; fileRef = FA5DE9742B1C705100F4946C /* lib.rs.h */; };
 		FA5DE9772B1C705200F4946C /* lib.rs.cc in Sources */ = {isa = PBXBuildFile; fileRef = FA5DE9752B1C705100F4946C /* lib.rs.cc */; };
 		FA5DE97B2B1CCC0F00F4946C /* ChannelRS.m in Sources */ = {isa = PBXBuildFile; fileRef = FA5DE97A2B1CCC0F00F4946C /* ChannelRS.m */; };
-		FA5DE97E2B1CE24A00F4946C /* au.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = CA0060254DCF215ED15804BF /* au.dylib */; };
-		FA5DE97F2B1CE2E600F4946C /* au.dylib in Embed Libraries */ = {isa = PBXBuildFile; fileRef = CA0060254DCF215ED15804BF /* au.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		FAAA9AD22B1D9F62003CCCD8 /* libau_static.a in Embed Libraries */ = {isa = PBXBuildFile; fileRef = CA019DB1550731D9F518FD0F /* libau_static.a */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXBuildRule section */
@@ -51,13 +50,6 @@
 			remoteGlobalIDString = CA019DB15507A163E4FD27D3;
 			remoteInfo = "au-staticlib";
 		};
-		FA5DE97C2B1CE23D00F4946C /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = CAF3A53A4193E04653AD465F /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = CA0060254DCF813998C96D09;
-			remoteInfo = "au-cdylib";
-		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -67,7 +59,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				FA5DE97F2B1CE2E600F4946C /* au.dylib in Embed Libraries */,
+				FAAA9AD22B1D9F62003CCCD8 /* libau_static.a in Embed Libraries */,
 			);
 			name = "Embed Libraries";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -95,6 +87,7 @@
 		FA5DE9792B1CCB8C00F4946C /* ChannelRS.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ChannelRS.h; sourceTree = "<group>"; };
 		FA5DE97A2B1CCC0F00F4946C /* ChannelRS.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ChannelRS.m; sourceTree = "<group>"; };
 		FA5DE9812B1CE39300F4946C /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		FAAA9AD42B1DC816003CCCD8 /* UnitExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = UnitExtension.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -102,7 +95,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FA5DE97E2B1CE24A00F4946C /* au.dylib in Frameworks */,
 				FA5DE8ED2B1B5D7E00F4946C /* libau_static.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -143,6 +135,7 @@
 		FA5DE8C52B1B5D2500F4946C /* UnitExtension */ = {
 			isa = PBXGroup;
 			children = (
+				FAAA9AD42B1DC816003CCCD8 /* UnitExtension.entitlements */,
 				FA5DE8C62B1B5D2500F4946C /* README.md */,
 				FA5DE8E52B1B5D2500F4946C /* Info.plist */,
 				FA5DE8C82B1B5D2500F4946C /* Common */,
@@ -257,7 +250,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				FA5DE97D2B1CE23D00F4946C /* PBXTargetDependency */,
 				FA5DE8EF2B1B5DBB00F4946C /* PBXTargetDependency */,
 			);
 			name = UnitExtension;
@@ -382,11 +374,6 @@
 			isa = PBXTargetDependency;
 			target = CA019DB15507A163E4FD27D3 /* au-staticlib */;
 			targetProxy = FA5DE8EE2B1B5DBB00F4946C /* PBXContainerItemProxy */;
-		};
-		FA5DE97D2B1CE23D00F4946C /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = CA0060254DCF813998C96D09 /* au-cdylib */;
-			targetProxy = FA5DE97C2B1CE23D00F4946C /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -543,6 +530,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_ENTITLEMENTS = UnitExtension/UnitExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
@@ -563,7 +551,7 @@
 				INFOPLIST_FILE = UnitExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = UnitExtension;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -620,6 +608,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_ENTITLEMENTS = UnitExtension/UnitExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
@@ -646,7 +635,7 @@
 				INFOPLIST_FILE = UnitExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = UnitExtension;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

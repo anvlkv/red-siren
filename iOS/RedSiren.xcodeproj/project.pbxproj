@@ -152,6 +152,7 @@
 		FAAA65372B09E0E100B1F5D1 /* InstrumentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstrumentView.swift; sourceTree = "<group>"; };
 		FAAA65392B09EC8300B1F5D1 /* Intro.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Intro.storyboard; sourceTree = "<group>"; };
 		FAAA653B2B0A23E500B1F5D1 /* AnimationClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationClock.swift; sourceTree = "<group>"; };
+		FAAA9AD32B1DC801003CCCD8 /* RedSiren.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RedSiren.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -171,6 +172,7 @@
 		0ECDC98F0209A1C6F2CAA14D /* RedSiren */ = {
 			isa = PBXGroup;
 			children = (
+				FAAA9AD32B1DC801003CCCD8 /* RedSiren.entitlements */,
 				6F004D450518226D7B50A267 /* Assets.xcassets */,
 				17F008C3C1A819A3D7658E59 /* RedSirenApp.swift */,
 				1E4056BAC32CC8AC7A9740CA /* ContentView.swift */,
@@ -615,6 +617,7 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = "$(inherited)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = RedSiren/RedSiren.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				DEVELOPMENT_TEAM = M59X77GZ2V;
 				INFOPLIST_FILE = RedSiren/Info.plist;
@@ -626,6 +629,7 @@
 					"@executable_path/Frameworks",
 				);
 				LINK_WITH_STANDARD_LIBRARIES = "$(inherited)";
+				MARKETING_VERSION = 1;
 				OTHER_LDFLAGS = (
 					"-w",
 					"-ObjC",
@@ -645,6 +649,7 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = "$(inherited)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = RedSiren/RedSiren.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				DEVELOPMENT_TEAM = M59X77GZ2V;
 				INFOPLIST_FILE = RedSiren/Info.plist;
@@ -656,6 +661,7 @@
 					"@executable_path/Frameworks",
 				);
 				LINK_WITH_STANDARD_LIBRARIES = "$(inherited)";
+				MARKETING_VERSION = 1;
 				OTHER_LDFLAGS = (
 					"-w",
 					"-ObjC",

@@ -83,22 +83,23 @@ class Playback: NSObject, ObservableObject {
         let hardwareFormat = engine.outputNode.outputFormat(forBus: 0)
         engine.connect(engine.mainMixerNode, to: engine.outputNode, format: hardwareFormat)
 
+        self.evChannel = audioUnit.auAudioUnit.messageChannel(for: "rsev")
+        let channel = self.evChannel!
+
+        let configEv = Event.instrumentEvent(InstrumentEV.createWithConfig(self.config))
+        let data = try! configEv.bincodeSerialize()
         
         engine.prepare()
         
-        
-//        audioUnit.auAudioUnit
-        self.evChannel = audioUnit.auAudioUnit.messageChannel(for: "rsev")
-        let channel = self.evChannel!
-        
-        let configEv = Event.instrumentEvent(InstrumentEV.createWithConfig(self.config))
-        let data = try! configEv.bincodeSerialize()
-
-        _ = channel.callAudioUnit!(["ev": data])
-        
+   
         
         do {
             try engine.start()
+            
+
+
+            _ = channel.callAudioUnit!(["ev": data])
+            
             completion_setup(.success(true))
         }
         catch {

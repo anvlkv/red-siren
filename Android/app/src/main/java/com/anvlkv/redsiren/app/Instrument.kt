@@ -95,6 +95,8 @@ fun InstrumentTrack(layoutRect: Rect) {
 
 @Composable
 fun AppInstrument(vm: InstrumentVM, ev: (ev: InstrumentEV) -> Unit) {
+    val playback = Playback()
+
     Box (Modifier.fillMaxSize().clipToBounds()) {
         InstrumentInboundString(layoutLine = vm.layout.inbound)
         InstrumentOutboundString(layoutLine = vm.layout.outbound)

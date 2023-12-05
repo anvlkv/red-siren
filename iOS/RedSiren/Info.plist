@@ -18,8 +18,8 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>UILaunchScreen</key>
-	<dict/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Red Siren uses the microphone to analyze incoming sounds</string>
 	<key>UILaunchStoryboardName</key>
 	<string>Intro.storyboard</string>
 	<key>UIRequiresFullScreen</key>

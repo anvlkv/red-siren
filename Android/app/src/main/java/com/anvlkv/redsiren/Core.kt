@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewModelScope
 import com.anvlkv.redsiren.shared.processEvent
 import com.anvlkv.redsiren.shared.view
+import com.anvlkv.redsiren.shared.logInit
 import com.anvlkv.redsiren.shared_types.Activity
 import com.anvlkv.redsiren.shared_types.Effect
 import com.anvlkv.redsiren.shared_types.Event
@@ -32,6 +33,7 @@ open class Core : androidx.lifecycle.ViewModel() {
     init {
         viewModelScope.launch {
             update(Event.Start())
+            logInit()
         }
     }
 

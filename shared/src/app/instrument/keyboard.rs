@@ -6,6 +6,7 @@ use hecs::{Bundle, Entity, World};
 pub struct Track {
     pub left_hand: bool,
     pub rect: Rect,
+    pub freq: (f32, f32),
 }
 
 impl Track {
@@ -14,41 +15,44 @@ impl Track {
         config: &Config,
         left_hand: bool,
         button_rect: &Rect,
+        base_freq: f32,
+        max_freq: f32,
     ) -> Entity {
         let button_track_margin = config.button_size * config.button_track_margin;
-        log::info!("button_track_margin {button_track_margin}, {}, {}", config.button_size, config.button_track_margin);
-
-        log::info!("rect: {button_rect:?}");
 
         let track_length = config.breadth * 2.0 + button_track_margin + config.button_size;
-        // let track_breadth = config.button_size + button_track_margin * 2.0;
 
-        let rect = if config.portrait  {
-            button_rect.offset_top(button_track_margin).offset_bottom(button_track_margin)
-        }
-        else {
-            button_rect.offset_left(button_track_margin).offset_right(button_track_margin)
+        let rect = if config.portrait {
+            button_rect
+                .offset_top(button_track_margin)
+                .offset_bottom(button_track_margin)
+        } else {
+            button_rect
+                .offset_left(button_track_margin)
+                .offset_right(button_track_margin)
         };
-
 
         let rect = if left_hand {
             if config.portrait {
                 rect.offset_left_and_right(track_length, button_track_margin)
-            }
-            else {
+            } else {
                 rect.offset_top_and_bottom(button_track_margin, track_length)
             }
-        }
-        else {
+        } else {
             if config.portrait {
                 rect.offset_left_and_right(button_track_margin, track_length)
-            }
-            else {
+            } else {
                 rect.offset_top_and_bottom(track_length, button_track_margin)
             }
         };
 
-        world.spawn((Self { rect, left_hand },))
+        let freq = (base_freq, max_freq);
+
+        world.spawn((Self {
+            rect,
+            left_hand,
+            freq,
+        },))
     }
 }
 
@@ -57,6 +61,8 @@ pub struct Button {
     pub track: Entity,
     pub rect: Rect,
     pub group_button: (usize, usize),
+    pub f_n: usize,
+    pub freq: f32,
 }
 
 impl Button {
@@ -65,6 +71,7 @@ impl Button {
         let button_space_main = (config.length / (config.groups * config.buttons_group) as f64
             - config.button_size)
             / 2.0;
+        let total_buttons = config.buttons_group * config.groups;
         let idx = (group - 1) * config.buttons_group + (button - 1);
 
         let side = config.breadth + button_space_side;
@@ -72,12 +79,13 @@ impl Button {
 
         let offset = if config.portrait {
             config.safe_area[1]
-        }
-        else {
+        } else {
             config.safe_area[0]
-        };
+        } + config.whitespace;
 
-        let main = offset + (config.button_size + button_space_main * 2.0) * idx as f64 + button_space_main;
+        let main = offset
+            + (config.button_size + button_space_main * 2.0) * idx as f64
+            + button_space_main;
         let main_length = main + config.button_size;
 
         let rect = if config.portrait {
@@ -86,11 +94,18 @@ impl Button {
             Rect::new(main, main_length, side, side_breadth)
         };
 
-        let track = Track::spawn(world, config, group % 2 == 0, &rect);
+        let f_n = total_buttons - idx;
+        let freq = config.f0 * (f_n * 2) as f32 - config.f0;
+        let max_freq = freq + config.f0;
+
+        let track = Track::spawn(world, config, group % 2 == 0, &rect, freq, max_freq);
+
         world.spawn((Button {
             rect,
             track,
             group_button: (group, button),
+            f_n,
+            freq,
         },))
     }
 }
@@ -112,12 +127,12 @@ impl ButtonGroup {
             Rect::new(
                 config.breadth,
                 config.breadth * 2.0,
-                group_length * (group - 1) as f64 + config.safe_area[1],
+                group_length * (group - 1) as f64 + config.safe_area[1] + config.whitespace,
                 group_length * group as f64,
             )
         } else {
             Rect::new(
-                group_length * (group - 1) as f64 + config.safe_area[0],
+                group_length * (group - 1) as f64 + config.safe_area[0] + config.whitespace,
                 group_length * group as f64,
                 config.breadth,
                 config.breadth * 2.0,

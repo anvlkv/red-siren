@@ -32,9 +32,9 @@ impl OutboundString {
 fn string_line(config: &Config, at: f64) -> Line {
     if config.portrait {
         let main = (config.width - config.breadth) / at;
-        Line::new(main, main, 0.0, config.length + config.safe_area[3] + config.safe_area[1])
+        Line::new(main, main, 0.0, config.length + config.safe_area[3] + config.safe_area[1] + config.whitespace * 2.0)
     } else {
         let main = (config.height - config.breadth) / at;
-        Line::new(0.0, config.length + config.safe_area[2] + config.safe_area[0], main, main)
+        Line::new(0.0, config.length + config.safe_area[2] + config.safe_area[0] + config.whitespace * 2.0, main, main)
     }
 }

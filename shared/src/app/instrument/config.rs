@@ -6,6 +6,11 @@ const MIN_BUTTON_SIZE_IN: f64 = 0.75;
 const MAX_BUTTON_SIZE_B_RATIO: f64 = 0.6;
 const BUTTON_TRACK_MARGIN_RATION: f64 = 0.2;
 const BUTTON_SPACE_RATIO: f64 = 2.0;
+const DPI_RANGE: &[usize] = &[120, 160, 240, 320, 480, 640];
+const F_BASE: f64 = 110.0;
+const F_MAX: f64 = 5500.0;
+const SAMPLE_RATE: f64 = 44100.0;
+const CHANNELS: usize = 2;
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Config {
@@ -14,11 +19,15 @@ pub struct Config {
     pub height: f64,
     pub breadth: f64,
     pub length: f64,
+    pub whitespace: f64,
     pub groups: usize,
     pub buttons_group: usize,
     pub button_size: f64,
     pub button_track_margin: f64,
     pub safe_area: [f64; 4],
+    pub f0: f32,
+    pub sample_rate_hz: f64,
+    pub channels: usize,
 }
 
 impl Eq for Config {}
@@ -68,7 +77,19 @@ impl Config {
 
         let min_count = min_groups * min_buttons;
 
-        let mut candidates = HashSet::<(usize, usize, usize, usize)>::new();
+        let f_c = (F_BASE / f64::sqrt((length * safe_breadth) / dpi)) as f32;
+
+        let f0 = {
+            let mut f0 = f_c;
+
+            while f0 < F_BASE as f32 {
+                f0 = f0 * 2.0;
+            }
+
+            f0
+        };
+
+        let mut candidates = Vec::<(usize, usize, usize, usize)>::new();
 
         for size in min_button_size..=max_button_size {
             let space = size as f64 * BUTTON_SPACE_RATIO * 2.0;
@@ -81,8 +102,9 @@ impl Config {
             ] {
                 let count = groups * buttons_group;
                 let used_space = space * count as f64;
-                if count >= min_count && used_space < safe_length {
-                    let _ = candidates.insert((size, groups, buttons_group, active_length));
+                let f_max = f0 as f64 * 2.0 * (groups * buttons_group) as f64;
+                if count >= min_count && used_space < safe_length && f_max <= F_MAX {
+                    candidates.push((size, groups, buttons_group, active_length));
                 }
             }
         }
@@ -90,11 +112,11 @@ impl Config {
         let (d_size, d_groups, d_buttons_group, d_active_length, d_count) = candidates.iter().fold(
             ((0, 0), (0, 0), (0, 0), (0, 0), (0, 0)),
             |mut acc, (size, groups, buttons_group, active_length)| {
+                let count = groups * buttons_group;
                 acc.0 = (acc.0 .0.min(*size), acc.0 .1.max(*size));
                 acc.1 = (acc.1 .0.min(*groups), acc.1 .1.max(*groups));
                 acc.2 = (acc.2 .0.min(*buttons_group), acc.2 .1.max(*buttons_group));
                 acc.3 = (acc.3 .0.min(*active_length), acc.3 .1.max(*active_length));
-                let count = groups * buttons_group;
                 acc.4 = (acc.4 .0.min(count), acc.4 .1.max(count));
                 acc
             },
@@ -105,18 +127,18 @@ impl Config {
             (d_groups.1 - d_groups.0) as f64,
             (d_buttons_group.1 - d_buttons_group.0) as f64,
             (d_active_length.1 - d_active_length.0) as f64,
-            (d_count.1 - d_count.0) as f64,
+            (d_count.1 - d_count.0).max(1) as f64,
         );
 
         let candidates =
             BTreeMap::<usize, (usize, usize, usize, usize)>::from_iter(candidates.into_iter().map(
                 |(size, groups, buttons_group, active_length)| {
                     let count = (buttons_group * groups) as f64;
-                    let score = (d_size / size as f64
-                        + d_groups / groups as f64
-                        + d_buttons_group / buttons_group as f64
-                        + d_active_length / active_length as f64)
-                        * (d_count / count);
+                    let score = (size as f64 / d_size
+                        + groups as f64 / d_groups
+                        + buttons_group as f64 / d_buttons_group
+                        + active_length as f64 / d_active_length)
+                        * (1.0 + d_count / count);
 
                     (
                         score.round() as usize,
@@ -125,10 +147,23 @@ impl Config {
                 },
             ));
 
-        let mid = candidates.len().saturating_sub(1) / 2;
+        let scores = candidates.keys().collect::<Vec<_>>();
+
+        log::debug!("scores: {scores:?}");
+
+        let dpi_pos = DPI_RANGE
+            .iter()
+            .position(|d| *d as f64 >= dpi)
+            .map_or(0.0, |pos| {
+                candidates.len() as f64 - ((pos + 1) as f64 / DPI_RANGE.len() as f64) * candidates.len() as f64
+            })
+            .abs()
+            .round() as usize;
+
+        log::debug!("dpi_pos: {dpi_pos}");
 
         let (button_size, groups, buttons_group, active_length) =
-            candidates.into_iter().nth(mid).map_or(
+            candidates.into_iter().nth(dpi_pos).map_or(
                 (max_button_size as f64, min_groups, min_buttons, safe_length),
                 |(_, (button_size, groups, buttons_group, active_length))| {
                     (
@@ -141,21 +176,6 @@ impl Config {
             );
 
         let whitespace = (safe_length - active_length) / 2.0;
-        let safe_area = if portrait {
-            [
-                safe_area[0],
-                safe_area[1] + whitespace,
-                safe_area[2],
-                safe_area[3] + whitespace,
-            ]
-        } else {
-            [
-                safe_area[0] + whitespace,
-                safe_area[1],
-                safe_area[2] + whitespace,
-                safe_area[3],
-            ]
-        };
 
         Config {
             portrait,
@@ -168,6 +188,10 @@ impl Config {
             buttons_group,
             button_track_margin: BUTTON_TRACK_MARGIN_RATION,
             safe_area,
+            whitespace,
+            f0,
+            sample_rate_hz: SAMPLE_RATE,
+            channels: groups.min(CHANNELS),
         }
     }
 }
@@ -211,12 +235,13 @@ mod tests {
 
     #[test]
     fn config_snapshot_by_rand_screen() {
-        for (i, config) in RAND_SCREENS
-            .iter()
-            .map(|(width, height, dpi)| Config::new(*width, *height, *dpi, [50.0, 20.0, 10.0, 25.0]))
-            .enumerate()
-        {
-            insta::assert_yaml_snapshot!(format!("size: {i}"), config)
+        let mut configs = Vec::new();
+        for config in RAND_SCREENS.iter().map(|(width, height, dpi)| {
+            Config::new(*width, *height, *dpi, [50.0, 20.0, 10.0, 25.0])
+        }) {
+            configs.push(config);
         }
+
+        insta::assert_yaml_snapshot!(configs)
     }
 }

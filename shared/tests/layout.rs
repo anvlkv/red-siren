@@ -11,7 +11,7 @@ fn creates_layout_from_config() {
     let keyboard = keyboard::Keyboard::spawn(&mut world, &config);
 
     let root = LayoutRoot::spawn(&mut world, inbound, outbound, keyboard);
-    let layout = Layout::new(&world, &root).expect("failed to create layout");
+    let layout = Layout::new(&world, &root, &config).expect("failed to create layout");
 
     insta::assert_yaml_snapshot!(layout)
 }

@@ -4,7 +4,7 @@ mod intro;
 
 use crate::{
     util::use_dpi,
-    error_template::{AppError, ErrorTemplate},
+    error_template::{AppError, ErrorTemplate}
 };
 use leptos::*;
 use leptos_meta::*;
@@ -12,8 +12,11 @@ use leptos_router::*;
 use leptos_use::{use_event_listener, use_window};
 use shared::{Activity, Event};
 
+
+
 #[component]
 pub fn RootComponent() -> impl IntoView {
+
     provide_meta_context();
 
     view! {
@@ -52,14 +55,14 @@ pub fn RootComponent() -> impl IntoView {
           .into_view()
       }>
           <main>
-              <RedSirenRoutes/>
+              <RedSirenCore/>
           </main>
       </Router>
     }
 }
 
 #[component]
-fn RedSirenRoutes() -> impl IntoView {
+fn RedSirenCore() -> impl IntoView {
     let core = core::new();
     let view_rw_signal = create_rw_signal(core.view());
     let view = view_rw_signal.read_only();
@@ -97,7 +100,8 @@ fn RedSirenRoutes() -> impl IntoView {
     let window = use_window();
     let _ = use_event_listener(window.clone(), leptos::ev::resize, move |_| {
         let body = window.document().body().unwrap();
-        set_size.set((body.client_width(), body.client_height()));
+        let new_size = (body.client_width(), body.client_height());
+        set_size.set(new_size);
     });
 
     let window = use_window();

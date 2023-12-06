@@ -1,4 +1,5 @@
 pub mod geometry;
+pub mod util;
 
 use cfg_if::cfg_if;
 use lazy_static::lazy_static;
@@ -52,14 +53,10 @@ pub fn log_init() {
     }
     #[cfg(feature = "ios")]
     {
-
-        cfg_if! { if #[cfg(feature="wokrlet")] {
-            let lg = oslog::OsLogger::new("com.anvlkv.redsiren.RedSiren.AUExtension");
-        } else {
-            let lg = oslog::OsLogger::new("com.anvlkv.RedSiren.Core");
-        }}
-
-        lg.level_filter(lvl).init().unwrap();
+        oslog::OsLogger::new("com.anvlkv.RedSiren.Core")
+            .level_filter(lvl)
+            .init()
+            .unwrap();
     }
     #[cfg(feature = "browser")]
     {

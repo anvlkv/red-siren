@@ -9,7 +9,6 @@ const BUTTON_SPACE_RATIO: f64 = 2.0;
 const DPI_RANGE: &[usize] = &[120, 160, 240, 320, 480, 640];
 const F_BASE: f64 = 110.0;
 const F_MAX: f64 = 5500.0;
-const SAMPLE_RATE: f64 = 44100.0;
 const CHANNELS: usize = 2;
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
@@ -26,7 +25,6 @@ pub struct Config {
     pub button_track_margin: f64,
     pub safe_area: [f64; 4],
     pub f0: f32,
-    pub sample_rate_hz: f64,
     pub channels: usize,
 }
 
@@ -190,7 +188,6 @@ impl Config {
             safe_area,
             whitespace,
             f0,
-            sample_rate_hz: SAMPLE_RATE,
             channels: groups.min(CHANNELS),
         }
     }

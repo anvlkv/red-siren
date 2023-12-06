@@ -24,15 +24,12 @@ where
         Self { context }
     }
 
-    pub fn to(&self, activity: super::Activity)
-    {
-        self.context.spawn({
-            let context = self.context.clone();
-            async move {
-                let _ = context
-                    .request_from_shell(NavigateOperation::To(activity))
-                    .await;
-            }
+    pub fn to(&self, activity: super::Activity) {
+        let ctx = self.context.clone();
+        self.context.spawn(async move {
+            let _ = ctx
+                .request_from_shell(NavigateOperation::To(activity))
+                .await;
         });
     }
 }

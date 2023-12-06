@@ -65,6 +65,9 @@ typedef void (*UniFfiRustFutureContinuation)(void * _Nonnull, int8_t);
 // Scaffolding functions
 RustBuffer uniffi_shared_fn_func_handle_response(RustBuffer uuid, RustBuffer res, RustCallStatus *_Nonnull out_status
 );
+void uniffi_shared_fn_func_log_init(RustCallStatus *_Nonnull out_status
+    
+);
 RustBuffer uniffi_shared_fn_func_process_event(RustBuffer msg, RustCallStatus *_Nonnull out_status
 );
 RustBuffer uniffi_shared_fn_func_view(RustCallStatus *_Nonnull out_status
@@ -185,6 +188,9 @@ void ffi_shared_rust_future_free_void(void* _Nonnull handle
 void ffi_shared_rust_future_complete_void(void* _Nonnull handle, RustCallStatus *_Nonnull out_status
 );
 uint16_t uniffi_shared_checksum_func_handle_response(void
+    
+);
+uint16_t uniffi_shared_checksum_func_log_init(void
     
 );
 uint16_t uniffi_shared_checksum_func_process_event(void

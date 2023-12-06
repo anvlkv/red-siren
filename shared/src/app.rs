@@ -80,6 +80,7 @@ pub struct RedSirenCapabilities {
     pub render: Render<Event>,
     pub key_value: KeyValue<Event>,
     pub navigate: Navigate<Event>,
+    pub play: instrument::play::Play<Event>,
 }
 
 impl From<&RedSirenCapabilities> for IntroCapabilities {
@@ -104,6 +105,7 @@ impl From<&RedSirenCapabilities> for InstrumentCapabilities {
     fn from(incoming: &RedSirenCapabilities) -> Self {
         InstrumentCapabilities {
             render: incoming.render.map_event(super::Event::InstrumentEvent),
+            play: incoming.play.map_event(super::Event::InstrumentEvent)
         }
     }
 }

@@ -11,7 +11,6 @@ pub use menu::MenuComponent;
 pub use string::StringComponent;
 pub use track::TrackComponent;
 
-use crate::{app::instrument::playback::PlayBackState};
 
 #[component]
 pub fn InstrumentComponent(
@@ -37,7 +36,7 @@ pub fn InstrumentComponent(
     
 
     let toggle_playing = Callback::<()>::new(move |_| {
-        ev(instrument::InstrumentEV::Playback(
+        ev(instrument::InstrumentEV::PlayOp(
             instrument::PlaybackEV::Play(!playing()),
         ))
     });

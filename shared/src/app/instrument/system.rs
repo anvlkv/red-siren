@@ -5,6 +5,7 @@ use super::{
 use fundsp::hacker32::*;
 use hecs::{Entity, World};
 
+#[derive(Default)]
 pub struct System {
     pub net_be: BigBlockAdapter32,
     pub size: usize,

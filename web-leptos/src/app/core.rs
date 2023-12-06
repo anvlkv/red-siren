@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use leptos::WriteSignal;
+use leptos::{WriteSignal, SignalUpdate};
 use leptos_router::NavigateOptions;
 use shared::{
     navigate::NavigateOperation, Effect, Event, RedSiren, RedSirenCapabilities, ViewModel,

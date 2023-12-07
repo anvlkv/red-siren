@@ -21,6 +21,7 @@ import com.anvlkv.redsiren.shared_types.Line
 import com.anvlkv.redsiren.shared_types.Rect
 import kotlin.math.min
 
+
 @Composable
 fun InstrumentButton(layoutRect: Rect) {
     val color = MaterialTheme.colorScheme.primary
@@ -95,8 +96,6 @@ fun InstrumentTrack(layoutRect: Rect) {
 
 @Composable
 fun AppInstrument(vm: InstrumentVM, ev: (ev: InstrumentEV) -> Unit) {
-    val playback = Playback()
-
     Box (Modifier.fillMaxSize().clipToBounds()) {
         InstrumentInboundString(layoutLine = vm.layout.inbound)
         InstrumentOutboundString(layoutLine = vm.layout.outbound)

@@ -18,7 +18,7 @@
 		C6A871270F87D449FB7FE5C4 /* uniffi-bindgen in Resources */ = {isa = PBXBuildFile; fileRef = 4D27A7B150B96621935C1300 /* uniffi-bindgen */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F68573BF507ACC074620C5D8 /* libshared_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 6A500489520C085A22DE7285 /* libshared_static.a */; };
 		FA3CD9922B19D3010002E8FF /* Playback.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA3CD9912B19D3010002E8FF /* Playback.swift */; };
-		FA5DE8F42B1B5DFA00F4946C /* UnitExtension.appex in CopyFiles */ = {isa = PBXBuildFile; fileRef = FA5DE8F32B1B5DE500F4946C /* UnitExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		FA9252532B207DBE00FDE1F8 /* UnitExtension.appex in CopyFiles */ = {isa = PBXBuildFile; fileRef = FA9252502B207CA700FDE1F8 /* UnitExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		FAAA65362B09DFB500B1F5D1 /* IntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAA65352B09DFB500B1F5D1 /* IntroView.swift */; };
 		FAAA65382B09E0E100B1F5D1 /* InstrumentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAA65372B09E0E100B1F5D1 /* InstrumentView.swift */; };
 		FAAA653A2B09EC8300B1F5D1 /* Intro.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FAAA65392B09EC8300B1F5D1 /* Intro.storyboard */; };
@@ -82,40 +82,33 @@
 			remoteGlobalIDString = CA0049BF7D4FD346A0A05154;
 			remoteInfo = "shared-staticlib";
 		};
-		FA5DE8922B1B5C9200F4946C /* PBXContainerItemProxy */ = {
+		FA92524B2B207CA700FDE1F8 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = FA5DE88D2B1B5C9200F4946C /* AU.xcodeproj */;
+			containerPortal = FADD70922B2078D100F7740C /* AUCore.xcodeproj */;
 			proxyType = 2;
 			remoteGlobalIDString = CA0060254DCF215ED15804BF;
 			remoteInfo = "au-cdylib";
 		};
-		FA5DE8942B1B5C9200F4946C /* PBXContainerItemProxy */ = {
+		FA92524D2B207CA700FDE1F8 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = FA5DE88D2B1B5C9200F4946C /* AU.xcodeproj */;
+			containerPortal = FADD70922B2078D100F7740C /* AUCore.xcodeproj */;
 			proxyType = 2;
 			remoteGlobalIDString = CA019DB1550731D9F518FD0F;
 			remoteInfo = "au-staticlib";
 		};
-		FA5DE8F22B1B5DE500F4946C /* PBXContainerItemProxy */ = {
+		FA92524F2B207CA700FDE1F8 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = FA5DE88D2B1B5C9200F4946C /* AU.xcodeproj */;
+			containerPortal = FADD70922B2078D100F7740C /* AUCore.xcodeproj */;
 			proxyType = 2;
 			remoteGlobalIDString = FA5DE8C12B1B5D2500F4946C;
 			remoteInfo = UnitExtension;
 		};
-		FA5DE8F52B1B5E0F00F4946C /* PBXContainerItemProxy */ = {
+		FA9252512B207DB500FDE1F8 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = FA5DE88D2B1B5C9200F4946C /* AU.xcodeproj */;
+			containerPortal = FADD70922B2078D100F7740C /* AUCore.xcodeproj */;
 			proxyType = 1;
 			remoteGlobalIDString = FA5DE8C02B1B5D2500F4946C;
 			remoteInfo = UnitExtension;
-		};
-		FA5DE9052B1B958400F4946C /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = FA5DE88D2B1B5C9200F4946C /* AU.xcodeproj */;
-			proxyType = 1;
-			remoteGlobalIDString = CA019DB15507A163E4FD27D3;
-			remoteInfo = "au-staticlib";
 		};
 /* End PBXContainerItemProxy section */
 
@@ -126,7 +119,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				FA5DE8F42B1B5DFA00F4946C /* UnitExtension.appex in CopyFiles */,
+				FA9252532B207DBE00FDE1F8 /* UnitExtension.appex in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -147,12 +140,12 @@
 		EE2619BE51FCAF0FB9A9D2B9 /* Pods_RedSiren.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RedSiren.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F7A91C46D50C923426AE058D /* Shared */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Shared; path = ../shared/shared.xcodeproj; sourceTree = "<group>"; };
 		FA3CD9912B19D3010002E8FF /* Playback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Playback.swift; sourceTree = "<group>"; };
-		FA5DE88D2B1B5C9200F4946C /* AU.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = AU.xcodeproj; path = ../au/AU.xcodeproj; sourceTree = "<group>"; };
 		FAAA65352B09DFB500B1F5D1 /* IntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroView.swift; sourceTree = "<group>"; };
 		FAAA65372B09E0E100B1F5D1 /* InstrumentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstrumentView.swift; sourceTree = "<group>"; };
 		FAAA65392B09EC8300B1F5D1 /* Intro.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Intro.storyboard; sourceTree = "<group>"; };
 		FAAA653B2B0A23E500B1F5D1 /* AnimationClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationClock.swift; sourceTree = "<group>"; };
 		FAAA9AD32B1DC801003CCCD8 /* RedSiren.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RedSiren.entitlements; sourceTree = "<group>"; };
+		FADD70922B2078D100F7740C /* AUCore.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = AUCore.xcodeproj; path = ../aucore/AUCore.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -209,7 +202,7 @@
 		632E821FBB8ECA7154D2ED0E /* Projects */ = {
 			isa = PBXGroup;
 			children = (
-				FA5DE88D2B1B5C9200F4946C /* AU.xcodeproj */,
+				FADD70922B2078D100F7740C /* AUCore.xcodeproj */,
 				F7A91C46D50C923426AE058D /* Shared */,
 			);
 			name = Projects;
@@ -270,12 +263,12 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		FA5DE88E2B1B5C9200F4946C /* Products */ = {
+		FA9252462B207CA700FDE1F8 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				FA5DE8932B1B5C9200F4946C /* au.dylib */,
-				FA5DE8952B1B5C9200F4946C /* libau_static.a */,
-				FA5DE8F32B1B5DE500F4946C /* UnitExtension.appex */,
+				FA92524C2B207CA700FDE1F8 /* au.dylib */,
+				FA92524E2B207CA700FDE1F8 /* libau_static.a */,
+				FA9252502B207CA700FDE1F8 /* UnitExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -298,10 +291,9 @@
 				325AF1D41F320967DD15643C /* PBXBuildRule */,
 			);
 			dependencies = (
+				FA9252522B207DB500FDE1F8 /* PBXTargetDependency */,
 				33CF43CC5F4BFFB977CD0EC8 /* PBXTargetDependency */,
 				8606B16FCDBB49E044DC7922 /* PBXTargetDependency */,
-				FA5DE9062B1B958400F4946C /* PBXTargetDependency */,
-				FA5DE8F62B1B5E0F00F4946C /* PBXTargetDependency */,
 			);
 			name = RedSiren;
 			packageProductDependencies = (
@@ -333,8 +325,8 @@
 			projectDirPath = "";
 			projectReferences = (
 				{
-					ProductGroup = FA5DE88E2B1B5C9200F4946C /* Products */;
-					ProjectRef = FA5DE88D2B1B5C9200F4946C /* AU.xcodeproj */;
+					ProductGroup = FA9252462B207CA700FDE1F8 /* Products */;
+					ProjectRef = FADD70922B2078D100F7740C /* AUCore.xcodeproj */;
 				},
 				{
 					ProductGroup = E0B8F6C21E620EB7C7D817BC /* Products */;
@@ -370,25 +362,25 @@
 			remoteRef = CCE079142AA1F7F900CD4B57 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
-		FA5DE8932B1B5C9200F4946C /* au.dylib */ = {
+		FA92524C2B207CA700FDE1F8 /* au.dylib */ = {
 			isa = PBXReferenceProxy;
 			fileType = "compiled.mach-o.dylib";
 			path = au.dylib;
-			remoteRef = FA5DE8922B1B5C9200F4946C /* PBXContainerItemProxy */;
+			remoteRef = FA92524B2B207CA700FDE1F8 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
-		FA5DE8952B1B5C9200F4946C /* libau_static.a */ = {
+		FA92524E2B207CA700FDE1F8 /* libau_static.a */ = {
 			isa = PBXReferenceProxy;
 			fileType = archive.ar;
 			path = libau_static.a;
-			remoteRef = FA5DE8942B1B5C9200F4946C /* PBXContainerItemProxy */;
+			remoteRef = FA92524D2B207CA700FDE1F8 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
-		FA5DE8F32B1B5DE500F4946C /* UnitExtension.appex */ = {
+		FA9252502B207CA700FDE1F8 /* UnitExtension.appex */ = {
 			isa = PBXReferenceProxy;
 			fileType = "wrapper.app-extension";
 			path = UnitExtension.appex;
-			remoteRef = FA5DE8F22B1B5DE500F4946C /* PBXContainerItemProxy */;
+			remoteRef = FA92524F2B207CA700FDE1F8 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 /* End PBXReferenceProxy section */
@@ -478,15 +470,10 @@
 			name = "shared-staticlib";
 			targetProxy = EC5B879D9A861F1E8FC33D84 /* PBXContainerItemProxy */;
 		};
-		FA5DE8F62B1B5E0F00F4946C /* PBXTargetDependency */ = {
+		FA9252522B207DB500FDE1F8 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = UnitExtension;
-			targetProxy = FA5DE8F52B1B5E0F00F4946C /* PBXContainerItemProxy */;
-		};
-		FA5DE9062B1B958400F4946C /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = "au-staticlib";
-			targetProxy = FA5DE9052B1B958400F4946C /* PBXContainerItemProxy */;
+			targetProxy = FA9252512B207DB500FDE1F8 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 

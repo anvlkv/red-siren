@@ -6,11 +6,11 @@ expression: configs
   width: 1920
   height: 1080
   breadth: 360
-  length: 1644
-  whitespace: 108
-  groups: 3
-  buttons_group: 2
-  button_size: 54
+  length: 1248
+  whitespace: 306
+  groups: 1
+  buttons_group: 3
+  button_size: 153
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -18,17 +18,15 @@ expression: configs
     - 10
     - 25
   f0: 165.93439
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 2560
   height: 1440
   breadth: 480
-  length: 2380
-  whitespace: 60
-  groups: 2
-  buttons_group: 5
-  button_size: 30
+  length: 1796
+  whitespace: 352
+  groups: 1
+  buttons_group: 3
+  button_size: 176
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -36,16 +34,14 @@ expression: configs
     - 10
     - 25
   f0: 133.21661
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 1366
   height: 768
   breadth: 256
   length: 990
   whitespace: 158
-  groups: 2
-  buttons_group: 2
+  groups: 1
+  buttons_group: 3
   button_size: 79
   button_track_margin: 0.2
   safe_area:
@@ -54,17 +50,15 @@ expression: configs
     - 10
     - 25
   f0: 133.10132
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 2732
   height: 2048
   breadth: 682.6666666666666
-  length: 2216
-  whitespace: 228
-  groups: 1
+  length: 2016
+  whitespace: 328
+  groups: 2
   buttons_group: 2
-  button_size: 114
+  button_size: 164
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -72,17 +66,15 @@ expression: configs
     - 10
     - 25
   f0: 167.5174
-  sample_rate_hz: 96000
-  channels: 1
 - portrait: false
   width: 2436
   height: 1125
   breadth: 375
-  length: 1784
-  whitespace: 296
-  groups: 2
-  buttons_group: 2
-  button_size: 148
+  length: 2124
+  whitespace: 126
+  groups: 3
+  buttons_group: 3
+  button_size: 63
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -90,17 +82,15 @@ expression: configs
     - 10
     - 25
   f0: 157.63445
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 2960
   height: 1440
   breadth: 480
-  length: 2900
-  whitespace: 0
-  groups: 2
-  buttons_group: 2
-  button_size: 288
+  length: 2740
+  whitespace: 80
+  groups: 6
+  buttons_group: 3
+  button_size: 40
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -108,8 +98,6 @@ expression: configs
     - 10
     - 25
   f0: 140.76036
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 3840
   height: 2160
@@ -126,8 +114,6 @@ expression: configs
     - 10
     - 25
   f0: 216.21936
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 1280
   height: 800
@@ -144,17 +130,15 @@ expression: configs
     - 10
     - 25
   f0: 161.66632
-  sample_rate_hz: 96000
-  channels: 1
 - portrait: false
   width: 3440
   height: 1440
   breadth: 480
-  length: 3180
-  whitespace: 100
-  groups: 3
-  buttons_group: 3
-  button_size: 50
+  length: 2720
+  whitespace: 330
+  groups: 1
+  buttons_group: 5
+  button_size: 165
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -162,8 +146,6 @@ expression: configs
     - 10
     - 25
   f0: 114.92094
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 2560
   height: 1600
@@ -180,17 +162,15 @@ expression: configs
     - 10
     - 25
   f0: 181.54999
-  sample_rate_hz: 96000
-  channels: 1
 - portrait: true
   width: 1080
   height: 2340
   breadth: 360
-  length: 1735
-  whitespace: 280
-  groups: 2
+  length: 2151
+  whitespace: 72
+  groups: 4
   buttons_group: 2
-  button_size: 140
+  button_size: 36
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -198,8 +178,6 @@ expression: configs
     - 10
     - 25
   f0: 152.25151
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 6016
   height: 3384
@@ -216,17 +194,15 @@ expression: configs
     - 10
     - 25
   f0: 160.33766
-  sample_rate_hz: 96000
-  channels: 1
 - portrait: false
   width: 2048
   height: 1536
   breadth: 512
-  length: 1516
-  whitespace: 236
-  groups: 1
+  length: 1492
+  whitespace: 248
+  groups: 2
   buttons_group: 2
-  button_size: 118
+  button_size: 124
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -234,17 +210,15 @@ expression: configs
     - 10
     - 25
   f0: 111.70553
-  sample_rate_hz: 96000
-  channels: 1
 - portrait: false
   width: 2960
   height: 1440
   breadth: 480
-  length: 2900
-  whitespace: 0
-  groups: 2
-  buttons_group: 2
-  button_size: 288
+  length: 2740
+  whitespace: 80
+  groups: 6
+  buttons_group: 3
+  button_size: 40
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -252,17 +226,15 @@ expression: configs
     - 10
     - 25
   f0: 134.94023
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 1280
   height: 720
   breadth: 240
-  length: 836
-  whitespace: 192
-  groups: 1
-  buttons_group: 3
-  button_size: 96
+  length: 996
+  whitespace: 112
+  groups: 2
+  buttons_group: 2
+  button_size: 56
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -270,8 +242,6 @@ expression: configs
     - 10
     - 25
   f0: 207.54759
-  sample_rate_hz: 96000
-  channels: 1
 - portrait: false
   width: 2560
   height: 1440
@@ -288,17 +258,15 @@ expression: configs
     - 10
     - 25
   f0: 162.16452
-  sample_rate_hz: 96000
-  channels: 1
 - portrait: false
   width: 1280
   height: 1024
   breadth: 341.3333333333333
-  length: 916
-  whitespace: 152
-  groups: 2
+  length: 636
+  whitespace: 292
+  groups: 1
   buttons_group: 2
-  button_size: 76
+  button_size: 146
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -306,17 +274,15 @@ expression: configs
     - 10
     - 25
   f0: 208.71033
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 3840
   height: 1080
   breadth: 360
-  length: 3620
-  whitespace: 80
-  groups: 10
+  length: 3312
+  whitespace: 234
+  groups: 4
   buttons_group: 2
-  button_size: 40
+  button_size: 117
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -324,17 +290,15 @@ expression: configs
     - 10
     - 25
   f0: 125.59783
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 2224
   height: 1668
   breadth: 556
-  length: 1532
-  whitespace: 316
+  length: 1444
+  whitespace: 360
   groups: 1
-  buttons_group: 2
-  button_size: 158
+  buttons_group: 3
+  button_size: 180
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -342,17 +306,15 @@ expression: configs
     - 10
     - 25
   f0: 205.73105
-  sample_rate_hz: 96000
-  channels: 1
 - portrait: false
   width: 2960
   height: 1440
   breadth: 480
-  length: 2900
-  whitespace: 0
-  groups: 2
-  buttons_group: 2
-  button_size: 288
+  length: 2740
+  whitespace: 80
+  groups: 6
+  buttons_group: 3
+  button_size: 40
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -360,8 +322,6 @@ expression: configs
     - 10
     - 25
   f0: 141.00795
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 3840
   height: 1600
@@ -378,17 +338,15 @@ expression: configs
     - 10
     - 25
   f0: 125.6121
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 1280
   height: 720
   breadth: 240
-  length: 836
-  whitespace: 192
-  groups: 1
-  buttons_group: 3
-  button_size: 96
+  length: 996
+  whitespace: 112
+  groups: 2
+  buttons_group: 2
+  button_size: 56
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -396,8 +354,6 @@ expression: configs
     - 10
     - 25
   f0: 114.66763
-  sample_rate_hz: 96000
-  channels: 1
 - portrait: false
   width: 1920
   height: 1200
@@ -414,17 +370,15 @@ expression: configs
     - 10
     - 25
   f0: 120.23089
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 2560
   height: 1440
   breadth: 480
-  length: 2080
-  whitespace: 210
-  groups: 2
-  buttons_group: 2
-  button_size: 105
+  length: 2148
+  whitespace: 176
+  groups: 1
+  buttons_group: 3
+  button_size: 88
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -432,17 +386,15 @@ expression: configs
     - 10
     - 25
   f0: 150.8244
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 1366
   height: 768
   breadth: 256
-  length: 1150
-  whitespace: 78
-  groups: 2
-  buttons_group: 2
-  button_size: 39
+  length: 910
+  whitespace: 198
+  groups: 1
+  buttons_group: 3
+  button_size: 99
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -450,17 +402,15 @@ expression: configs
     - 10
     - 25
   f0: 119.04943
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 2560
   height: 1440
   breadth: 480
-  length: 1812
-  whitespace: 344
-  groups: 1
+  length: 2380
+  whitespace: 60
+  groups: 3
   buttons_group: 3
-  button_size: 172
+  button_size: 30
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -468,17 +418,15 @@ expression: configs
     - 10
     - 25
   f0: 133.21661
-  sample_rate_hz: 96000
-  channels: 1
 - portrait: false
   width: 1280
   height: 800
   breadth: 266.6666666666667
-  length: 996
-  whitespace: 112
-  groups: 2
-  buttons_group: 2
-  button_size: 56
+  length: 836
+  whitespace: 192
+  groups: 1
+  buttons_group: 3
+  button_size: 96
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -486,17 +434,15 @@ expression: configs
     - 10
     - 25
   f0: 147.08772
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 2960
   height: 1440
   breadth: 480
-  length: 2900
-  whitespace: 0
-  groups: 2
-  buttons_group: 2
-  button_size: 288
+  length: 2740
+  whitespace: 80
+  groups: 6
+  buttons_group: 3
+  button_size: 40
   button_track_margin: 0.2
   safe_area:
     - 50
@@ -504,8 +450,6 @@ expression: configs
     - 10
     - 25
   f0: 134.94023
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 3840
   height: 2160
@@ -522,8 +466,6 @@ expression: configs
     - 10
     - 25
   f0: 120.944435
-  sample_rate_hz: 96000
-  channels: 2
 - portrait: false
   width: 2560
   height: 1600
@@ -540,6 +482,4 @@ expression: configs
     - 10
     - 25
   f0: 169.12836
-  sample_rate_hz: 96000
-  channels: 1
 

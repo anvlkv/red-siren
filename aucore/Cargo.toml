@@ -47,7 +47,7 @@ typegen = ["shared/typegen"]
 
 [dev-dependencies]
 assert_let_bind = "0.1.1"
-insta = "1.29.0"
+insta = {workspace = true}
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { version = "0.25.2", features = ["cli"] }

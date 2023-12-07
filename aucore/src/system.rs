@@ -70,6 +70,7 @@ impl System {
         let hp = nodes_data.first().map(|n| n.freq.0).unwrap_or_default();
         let subs_join = join::<U2>()
             >> declick_s(1.0)
+            >> clip() // TODO: make it nicer...
             >> split::<U3>()
             >> (pinkpass() | lowpass_hz(lp, 1.0) | highpass_hz(hp, 1.0))
             >> (chorus(size as i64, 0.015, 0.005, 0.5)

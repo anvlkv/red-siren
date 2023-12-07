@@ -25,7 +25,7 @@ cargo leptos watch
 ### Web (audio worklet)
 
 ```
-cd worklet
+cd web-leptos/worklet
 pnpm run dev
 ```
 

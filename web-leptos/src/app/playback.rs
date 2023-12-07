@@ -42,7 +42,7 @@ impl Playback {
     }
 }
 
-#[wasm_bindgen(raw_module = "/pkg/worklet/dist/lib.es.js")]
+#[wasm_bindgen(raw_module = "/worklet/lib.es.js")]
 extern "C" {
 
     #[derive(Clone)]

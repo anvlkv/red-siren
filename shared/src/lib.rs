@@ -7,58 +7,7 @@ pub use crux_kv as key_value;
 pub mod app;
 pub use app::*;
 
-use lazy_static::lazy_static;
-use wasm_bindgen::prelude::wasm_bindgen;
-
-use crux_core::bridge::Bridge;
-
-#[cfg(not(feature = "cargo-clippy"))]
-uniffi::include_scaffolding!("shared");
-
-lazy_static! {
-    static ref CORE: Bridge<Effect, RedSiren> = Bridge::new(Core::new::<RedSirenCapabilities>());
-}
-
-#[wasm_bindgen]
-pub fn process_event(data: &[u8]) -> Vec<u8> {
-    CORE.process_event(data)
-}
-
-#[wasm_bindgen]
-pub fn handle_response(uuid: &[u8], data: &[u8]) -> Vec<u8> {
-    CORE.handle_response(uuid, data)
-}
-
-#[wasm_bindgen]
-pub fn view() -> Vec<u8> {
-    CORE.view()
-}
-
-#[wasm_bindgen]
-pub fn log_init() {
-    #[allow(unused_variables)]
-    let lvl = log::LevelFilter::Debug;
-
-    #[cfg(feature = "android")]
-    {
-        android_logger::init_once(
-            android_logger::Config::default()
-                .with_max_level(lvl)
-                .with_tag("red_siren::shared"),
-        );
-    }
-    #[cfg(feature = "ios")]
-    {
-        oslog::OsLogger::new("com.anvlkv.RedSiren.Core")
-            .level_filter(lvl)
-            .init()
-            .unwrap();
-    }
-    #[cfg(feature = "browser")]
-    {
-        _ = console_log::init_with_level(lvl.to_level().unwrap_or(log::Level::Warn));
-        console_error_panic_hook::set_once();
-    }
-
-    log::debug!("init logging")
-}
+cfg_if::cfg_if! {if #[cfg(not(feature="worklet"))]{
+    mod instance;
+    pub use instance::*;
+}}

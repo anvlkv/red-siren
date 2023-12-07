@@ -15,11 +15,12 @@
     }
   },
   "scripts": {
-    "dev": "pnpm wasm:build && vite",
-    "build": "pnpm wasm:build && tsc && vite build",
-    "preview": "pnpm wasm:build && vite preview",
-    "vite:build": "pnpm tsc && vite build",
-    "wasm:build": "cd ../aucore && wasm-pack build --target web --features browser"
+    "dev": "pnpm types:build && pnpm wasm:build && pnpm vite",
+    "build": "pnpm types:build && pnpm wasm:build && pnpm tsc && pnpm vite build",
+    "preview": "pnpm types:build && pnpm wasm:build && pnpm vite preview",
+    "vite:build": "pnpm tsc && pnpm vite build",
+    "types:build": "cd ../../shared_types && cargo build",
+    "wasm:build": "cd ../../aucore && wasm-pack build --target web --features browser"
   },
   "devDependencies": {
     "@types/audioworklet": "^0.0.52",
@@ -31,7 +32,7 @@
   },
   "dependencies": {
     "polyfill-crypto.getrandomvalues": "^1.0.0",
-    "aucore": "link:../aucore/pkg",
-    "shared_types": "link:../shared_types/generated/typescript"
+    "aucore": "link:../../aucore/pkg",
+    "shared_types": "link:../../shared_types/generated/typescript"
   }
 }

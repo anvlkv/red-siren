@@ -76,7 +76,7 @@ pub fn RootComponent() -> impl IntoView {
           }
           .into_view()
       }>
-          <main>
+          <main class="bg-red dark:bg-black text-black dark:text-red">
               <RedSirenCore/>
           </main>
       </Router>

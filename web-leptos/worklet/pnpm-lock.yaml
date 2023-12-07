@@ -6,14 +6,14 @@ settings:
 
 dependencies:
   aucore:
-    specifier: link:../aucore/pkg
-    version: link:../aucore/pkg
+    specifier: link:../../aucore/pkg
+    version: link:../../aucore/pkg
   polyfill-crypto.getrandomvalues:
     specifier: ^1.0.0
     version: 1.0.0
   shared_types:
-    specifier: link:../shared_types/generated/typescript
-    version: link:../shared_types/generated/typescript
+    specifier: link:../../shared_types/generated/typescript
+    version: link:../../shared_types/generated/typescript
 
 devDependencies:
   '@types/audioworklet':

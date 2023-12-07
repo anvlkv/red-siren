@@ -6,7 +6,7 @@ import {
   PlayOperationVariantInput,
   PlayOperationOutput,
 } from "shared_types/types/au_types";
-import { update, update_plain } from "./core";
+import { update, update_plain } from "./core.js";
 
 export class RedSirenWorklet extends AudioWorkletProcessor {
   private vm: ViewModel["value"] | null = null;

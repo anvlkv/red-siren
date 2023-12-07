@@ -4,7 +4,7 @@ mod string;
 mod track;
 
 use leptos::*;
-use shared::{instrument, key_value::KeyValueOutput};
+use shared::instrument;
 
 pub use button::ButtonComponent;
 pub use menu::MenuComponent;
@@ -31,7 +31,6 @@ pub fn InstrumentComponent(
     let outbound_layout_line = Signal::derive(move || vm().layout.outbound);
 
     let playing = Signal::derive(move || vm().playing);
-    let config = Signal::derive(move || vm().config);
 
     let toggle_playing = Callback::<()>::new(move |_| {
         ev(instrument::InstrumentEV::Playback(
@@ -47,7 +46,7 @@ pub fn InstrumentComponent(
           <StringComponent layout_line={outbound_layout_line} />
         </svg>
         <svg class="fill-red dark:fill-black stroke-black dark:stroke-red" viewBox={view_box} xmlns="http://www.w3.org/2000/svg">
-          {move || vm().layout.tracks.into_iter().zip(vm().nodes).map(|(rect, node)|
+          {move || vm().layout.tracks.into_iter().zip(vm().nodes).map(|(rect, _node)|
             view!{
               <TrackComponent layout_rect={Signal::derive(move || rect)}/>
             }

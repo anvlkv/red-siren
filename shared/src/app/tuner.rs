@@ -43,11 +43,11 @@ impl App for Tuner {
 
     type Capabilities = TunerCapabilities;
 
-    fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) {
+    fn update(&self, _event: Self::Event, _model: &mut Self::Model, _caps: &Self::Capabilities) {
         todo!()
     }
 
-    fn view(&self, model: &Self::Model) -> Self::ViewModel {
+    fn view(&self, _model: &Self::Model) -> Self::ViewModel {
         TunerVM::default()
     }
 }

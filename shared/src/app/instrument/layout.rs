@@ -108,7 +108,7 @@ impl Layout {
             .groups
             .iter()
             .enumerate()
-            .try_fold(Vec::<(Rect, Rect)>::new(), |mut acc, (i, g)| -> Result<_> {
+            .try_fold(Vec::<(Rect, Rect)>::new(), |mut acc, (_i, g)| -> Result<_> {
                 let group = world.get::<&ButtonGroup>(*g)?;
                 for b in &group.buttons {
                     let button = world.get::<&Button>(*b)?;

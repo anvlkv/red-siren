@@ -1,6 +1,5 @@
-use crux_core::capability::{CapabilityContext, Operation};
+use crux_core::capability::CapabilityContext;
 use crux_macros::Capability;
-use serde::{Deserialize, Serialize};
 use shared::play::PlayOperationOutput;
 
 #[derive(Capability)]

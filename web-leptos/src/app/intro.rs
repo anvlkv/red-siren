@@ -1,10 +1,7 @@
 use crate::app::instrument::{ButtonComponent, StringComponent, TrackComponent};
 use leptos::*;
 use leptos_use::{use_media_query, use_timestamp};
-use shared::{
-    app::{instrument, intro},
-    Intro,
-};
+use shared::app::intro;
 
 #[component]
 pub fn IntroComponent(
@@ -32,7 +29,13 @@ pub fn IntroComponent(
 
     let view_box = move || {
         let vb = vm().view_box;
-        format!("{} {} {} {}", vb.top_left().x, vb.top_left().y, vb.bottom_right().x, vb.bottom_right().y)
+        format!(
+            "{} {} {} {}",
+            vb.top_left().x,
+            vb.top_left().y,
+            vb.bottom_right().x,
+            vb.bottom_right().y
+        )
     };
 
     let flute_transform = move || {

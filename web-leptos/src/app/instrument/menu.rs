@@ -33,7 +33,7 @@ pub fn MenuComponent(
 
     view! {
       <div class={menu_class} style={menu_style}>
-        <button on:click={move|_| toggle_playing(())}>
+        <button on:click=move|_| toggle_playing(())>
             {play_pause}
         </button>
       </div>

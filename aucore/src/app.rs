@@ -5,7 +5,7 @@ use ::shared::{
     play::PlayOperation,
 };
 pub use crux_core::App;
-use crux_core::{render::Render, Capability};
+use crux_core::render::Render;
 use crux_macros::Effect;
 use fundsp::hacker32::*;
 use serde::{Deserialize, Serialize};

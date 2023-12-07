@@ -3,7 +3,7 @@ use std::rc::Rc;
 use leptos::*;
 use leptos_router::NavigateOptions;
 use shared::{
-    navigate::NavigateOperation, play, Effect, Event, RedSiren, RedSirenCapabilities, ViewModel,
+    navigate::NavigateOperation, Effect, Event, RedSiren, RedSirenCapabilities, ViewModel,
 };
 
 use super::playback;
@@ -20,12 +20,13 @@ pub fn update(core: &Core, event: Event, render: WriteSignal<ViewModel>, playbac
     }
 }
 
+#[allow(unused_variables)]
 pub fn process_effect(core: &Core, effect: Effect, render: WriteSignal<ViewModel>, playback: playback::Playback) {
     match effect {
         Effect::Render(_) => {
             render.update(|view| *view = core.view());
         }
-        Effect::KeyValue(mut req) => {
+        Effect::KeyValue(_req) => {
             // let response = match &req.operation {
             //     shared::key_value::KeyValueOperation::Read(key) => {
             //         shared::key_value::KeyValueOutput::Read(kv_ctx.borrow_mut().remove(key))
@@ -48,6 +49,7 @@ pub fn process_effect(core: &Core, effect: Effect, render: WriteSignal<ViewModel
                 },
             }
         }
+        #[allow(unused_mut, unused_variables)]
         Effect::Play(mut req) => {
             #[cfg(feature = "browser")]
             {

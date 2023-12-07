@@ -12,8 +12,9 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 use crux_core::bridge::Bridge;
 
-
+#[cfg(not(feature = "cargo-clippy"))]
 uniffi::include_scaffolding!("shared");
+
 lazy_static! {
     static ref CORE: Bridge<Effect, RedSiren> = Bridge::new(Core::new::<RedSirenCapabilities>());
 }

@@ -1,9 +1,7 @@
-use std::rc::Rc;
 pub mod system;
 mod resolve;
 use lazy_static::lazy_static;
 use wasm_bindgen::prelude::wasm_bindgen;
-use resolve::Resolve;
 use crux_core::bridge::Bridge;
 pub use crux_core::{Core, Request};
 
@@ -11,8 +9,9 @@ pub use crux_core::{Core, Request};
 pub mod app;
 pub use app::*;
 
-
+#[cfg(not(feature = "cargo-clippy"))]
 uniffi::include_scaffolding!("aucore");
+
 lazy_static! {
     static ref AU_CORE: Bridge<Effect, RedSirenAU> = Bridge::new(Core::new::<RedSirenAUCapabilities>());
 }

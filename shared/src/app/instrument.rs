@@ -6,7 +6,7 @@ pub mod string;
 
 use crate::{
     geometry::Rect,
-    play::{Play, PlayOperationOutput},
+    play::Play,
     Navigate,
 };
 use crux_core::render::Render;

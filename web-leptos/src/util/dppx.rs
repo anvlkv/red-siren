@@ -11,7 +11,7 @@ type RemoveListener = Rc<RefCell<Option<Box<dyn Fn()>>>>;
 
 /// as seen in [leptos_use::use_media_query] implementation
 pub fn use_dppx() -> Signal<f64> {
-    let (dppx, set_dppx) = create_signal(1.0 as f64);
+    let (dppx, set_dppx) = create_signal(1.0_f64);
     let window = use_window();
 
     cfg_if! { if #[cfg(feature = "browser")] {

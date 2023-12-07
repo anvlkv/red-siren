@@ -41,10 +41,10 @@ pub fn spawn_all_nodes(world: &mut World) -> Vec<Entity> {
     nodes.sort_by(|a, b| a.1.cmp(&b.1));
     nodes.reverse();
 
-    let nodes = nodes
-        .into_iter()
-        .map(|(freq, f_n, pan)| Node::spawn(world, freq, f_n, pan))
-        .collect::<Vec<_>>();
+    
 
     nodes
+        .into_iter()
+        .map(|(freq, f_n, pan)| Node::spawn(world, freq, f_n, pan))
+        .collect::<Vec<_>>()
 }

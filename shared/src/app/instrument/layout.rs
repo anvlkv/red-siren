@@ -141,22 +141,20 @@ impl Layout {
                             config.breadth,
                         ))
                     }
+                } else if t.top_left().y < config.breadth {
+                    MenuPosition::BottomLeft(Rect::new(
+                        config.safe_area[0],
+                        config.breadth,
+                        config.height - config.breadth,
+                        config.height - config.safe_area[3],
+                    ))
                 } else {
-                    if t.top_left().y < config.breadth {
-                        MenuPosition::BottomLeft(Rect::new(
-                            config.safe_area[0],
-                            config.breadth,
-                            config.height - config.breadth,
-                            config.height - config.safe_area[3],
-                        ))
-                    } else {
-                        MenuPosition::TopLeft(Rect::new(
-                            config.safe_area[0],
-                            config.breadth,
-                            config.safe_area[1],
-                            config.breadth,
-                        ))
-                    }
+                    MenuPosition::TopLeft(Rect::new(
+                        config.safe_area[0],
+                        config.breadth,
+                        config.safe_area[1],
+                        config.breadth,
+                    ))
                 }
             })
             .unwrap_or_default();
@@ -188,9 +186,8 @@ impl Layout {
 fn ease_vec(from: Vec<Rect>, to: Vec<Rect>, time: impl keyframe::num_traits::Float) -> Vec<Rect> {
     let len = CanTween::ease(from.len() as f64, to.len() as f64, time).round() as usize;
     (0..len)
-        .into_iter()
         .map(|i| {
-            let (from_b, to_b) = (from.iter().nth(i), to.iter().nth(i));
+            let (from_b, to_b) = (from.get(i), to.get(i));
             match (from_b, to_b) {
                 (Some(from), Some(to)) => CanTween::ease(*from, *to, time),
                 (Some(from), None) => {

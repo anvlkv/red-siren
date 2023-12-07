@@ -62,7 +62,7 @@ impl App for RedSirenAU {
 
                     if model.frame_size != frame_size {
                         model.audio_data = (0..sys.channels)
-                            .map(|_| (0..frame_size).map(|_| 0.0 as f32).collect())
+                            .map(|_| (0..frame_size).map(|_| 0.0_f32).collect())
                             .collect();
                         // model.prev_audio_data = model.audio_data.clone();
                     }

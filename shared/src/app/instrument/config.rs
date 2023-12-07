@@ -51,7 +51,7 @@ impl Config {
         let min_button_size = f64::sqrt(dpi * MIN_BUTTON_SIZE_IN).round() as usize;
 
         let (min_groups, min_buttons) = {
-            let max_buttons = ((length as f64 - max_button_size as f64 * BUTTON_SPACE_RATIO)
+            let max_buttons = ((length - max_button_size as f64 * BUTTON_SPACE_RATIO)
                 / max_button_size as f64)
                 .round() as usize;
             let slots = max_buttons.div_euclid(2);
@@ -80,7 +80,7 @@ impl Config {
             let mut f0 = f_c;
 
             while f0 < F_BASE as f32 {
-                f0 = f0 * 2.0;
+                f0 *= 2.0;
             }
 
             f0
@@ -92,11 +92,9 @@ impl Config {
             let space = size as f64 * BUTTON_SPACE_RATIO * 2.0;
             let active_length = (safe_length - space).round() as usize;
             let slots = num_integer::gcd(space.round() as usize + size, active_length);
-            for (groups, buttons_group) in vec![
-                (slots.div_euclid(5), 5),
+            for (groups, buttons_group) in [(slots.div_euclid(5), 5),
                 (slots.div_euclid(3), 3),
-                (slots.div_euclid(2), 2),
-            ] {
+                (slots.div_euclid(2), 2)] {
                 let count = groups * buttons_group;
                 let used_space = space * count as f64;
                 let f_max = f0 as f64 * 2.0 * (groups * buttons_group) as f64;

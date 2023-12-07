@@ -165,12 +165,10 @@ impl App for Instrument {
                     model.playing = playing;
                     if !model.setup_complete && playing {
                         caps.play.permissions(InstrumentEV::PlayOpPermission)
+                    } else if playing {
+                        caps.play.play(InstrumentEV::PlayOpPlay)
                     } else {
-                        if playing {
-                            caps.play.play(InstrumentEV::PlayOpPlay)
-                        } else {
-                            caps.play.pause(InstrumentEV::PlayOpPause)
-                        }
+                        caps.play.pause(InstrumentEV::PlayOpPause)
                     }
                     caps.render.render();
                 }

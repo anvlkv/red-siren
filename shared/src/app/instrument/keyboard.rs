@@ -38,12 +38,10 @@ impl Track {
             } else {
                 rect.offset_top_and_bottom(button_track_margin, track_length)
             }
+        } else if config.portrait {
+            rect.offset_left_and_right(button_track_margin, track_length)
         } else {
-            if config.portrait {
-                rect.offset_left_and_right(button_track_margin, track_length)
-            } else {
-                rect.offset_top_and_bottom(track_length, button_track_margin)
-            }
+            rect.offset_top_and_bottom(track_length, button_track_margin)
         };
 
         let freq = (base_freq, max_freq);

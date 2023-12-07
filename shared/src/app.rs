@@ -21,18 +21,16 @@ use self::{
 };
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Default)]
 pub enum Activity {
+    #[default]
     Intro,
     Tune,
     Play,
     Listen,
 }
 
-impl Default for Activity {
-    fn default() -> Self {
-        Activity::Intro
-    }
-}
+
 
 #[derive(Default)]
 pub struct Model {
@@ -147,8 +145,8 @@ impl App for RedSiren {
                 );
                 self.intro.update(
                     intro::IntroEV::SetInstrumentTarget(
-                        model.instrument.layout.as_ref().unwrap().clone(),
-                        model.instrument.config.clone(),
+                        Box::new(model.instrument.layout.as_ref().unwrap().clone()),
+                        Box::new(model.instrument.config.clone()),
                     ),
                     &mut model.intro,
                     &caps.into(),

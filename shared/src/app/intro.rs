@@ -95,7 +95,7 @@ impl IntroVM {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum IntroEV {
-    SetInstrumentTarget(instrument::Layout, instrument::Config),
+    SetInstrumentTarget(Box<instrument::Layout>, Box<instrument::Config>),
     StartAnimation { ts_start: f64, reduced_motion: bool },
     SetViewBoxInit { width: f64, height: f64 },
     TsNext(f64),
@@ -126,8 +126,8 @@ impl App for Intro {
                 model.init_view_model = Some(IntroVM::init_size(width, height));
             }
             IntroEV::SetInstrumentTarget(layout, config) => {
-                model.layout = layout;
-                model.config = config;
+                model.layout = *layout;
+                model.config = *config;
                 self.update_sequence(model);
                 self.update(IntroEV::TsNext(model.ts_current), model, caps);
                 caps.render.render();

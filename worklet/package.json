@@ -19,7 +19,7 @@
     "build": "pnpm wasm:build && tsc && vite build",
     "preview": "pnpm wasm:build && vite preview",
     "vite:build": "pnpm tsc && vite build",
-    "wasm:build": "cd ../shared && wasm-pack build --target web --features worklet browser"
+    "wasm:build": "cd ../aucore && wasm-pack build --target web --features browser"
   },
   "devDependencies": {
     "@types/audioworklet": "^0.0.52",
@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "polyfill-crypto.getrandomvalues": "^1.0.0",
-    "shared": "link:../shared/pkg",
+    "aucore": "link:../aucore/pkg",
     "shared_types": "link:../shared_types/generated/typescript"
   }
 }

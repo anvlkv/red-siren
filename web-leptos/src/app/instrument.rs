@@ -1,8 +1,5 @@
 mod button;
 mod menu;
-#[cfg(feature = "browser")]
-mod node_binding;
-mod playback;
 mod string;
 mod track;
 
@@ -13,8 +10,6 @@ pub use button::ButtonComponent;
 pub use menu::MenuComponent;
 pub use string::StringComponent;
 pub use track::TrackComponent;
-
-use crate::{app::instrument::playback::PlayBackState};
 
 #[component]
 pub fn InstrumentComponent(
@@ -37,9 +32,6 @@ pub fn InstrumentComponent(
 
     let playing = Signal::derive(move || vm().playing);
     let config = Signal::derive(move || vm().config);
-    let playback_ev = SignalSetter::map(move |e| ev.set(instrument::InstrumentEV::Playback(e)));
-    let (playback_state, ev_port) =
-        playback::create_playback(Selector::new(move || playing()), config, playback_ev);
 
     let toggle_playing = Callback::<()>::new(move |_| {
         ev(instrument::InstrumentEV::Playback(

@@ -1,0 +1,7 @@
+[bindings.kotlin]
+cdylib_name = "aucore"
+package_name = "com.anvlkv.redsiren.aucore"
+
+[bindings.swift]
+cdylib_name = "aucore_ffi"
+omit_argument_labels = true

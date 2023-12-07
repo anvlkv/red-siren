@@ -4,23 +4,21 @@ pub mod layout;
 pub mod node;
 pub mod string;
 
-mod system;
-use system::System;
-
-use crate::geometry::Rect;
+use crate::{
+    geometry::Rect,
+    play::{Play, PlayOperationOutput},
+    Navigate,
+};
 use crux_core::render::Render;
 use crux_core::App;
 use crux_macros::Effect;
-use fundsp::audiounit::AudioUnit32;
 use hecs::{Entity, World};
-pub use node::Node;
 use serde::{Deserialize, Serialize};
 
 pub use config::Config;
 pub use layout::{Layout, LayoutRoot};
-
-pub const INPUT_STREAM_KV: &str = "input stream KV";
-pub const OUTPUT_STREAM_KV: &str = "output stream KV";
+use node::spawn_all_nodes;
+pub use node::Node;
 
 #[derive(Default)]
 pub struct Instrument;
@@ -33,21 +31,18 @@ pub struct Model {
     pub outbound: Option<Entity>,
     pub keyboard: Option<Entity>,
     pub root: Option<Entity>,
-    pub layout: Option<Layout>,
+    pub nodes: Vec<Entity>,
     pub playing: bool,
-    pub system: Option<System>,
-    // pub prev_audio_data: Vec<Vec<f32>>,
-    pub audio_data: Vec<Vec<f32>>,
-    pub frame_size: usize,
+    pub layout: Option<Layout>,
+    pub setup_complete: bool,
 }
 
 #[derive(Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct InstrumentVM {
     pub config: Config,
-    pub view_box: Rect,
     pub nodes: Vec<Node>,
     pub playing: bool,
-    pub audio_data: Vec<Vec<f32>>,
+    pub view_box: Rect,
     pub layout: Layout,
 }
 
@@ -57,7 +52,6 @@ impl Eq for InstrumentVM {}
 pub enum PlaybackEV {
     Play(bool),
     Error,
-    DataIn(Vec<Vec<f32>>),
 }
 
 impl Eq for PlaybackEV {}
@@ -67,6 +61,11 @@ pub enum InstrumentEV {
     None,
     CreateWithConfig(Config),
     Playback(PlaybackEV),
+    PlayOpPermission(bool),
+    PlayOpInstall(bool),
+    PlayOpConfigure(bool),
+    PlayOpPlay(bool),
+    PlayOpPause(bool),
 }
 
 #[cfg_attr(feature = "typegen", derive(crux_macros::Export))]
@@ -74,6 +73,8 @@ pub enum InstrumentEV {
 #[effect(app = "Instrument")]
 pub struct InstrumentCapabilities {
     pub render: Render<InstrumentEV>,
+    pub play: Play<InstrumentEV>,
+    pub navigate: Navigate<InstrumentEV>,
 }
 
 impl App for Instrument {
@@ -98,76 +99,85 @@ impl App for Instrument {
                 let root = layout::LayoutRoot::spawn(&mut model.world, inbound, outbound, keyboard);
 
                 let layout = Layout::new(&model.world, &root, &config).expect("Layout failed");
+                _ = model.layout.insert(layout);
 
-                let _ = model.root.insert(root);
-                let _ = model.inbound.insert(inbound);
-                let _ = model.outbound.insert(outbound);
-                let _ = model.keyboard.insert(keyboard);
-                let _ = model.layout.insert(layout);
-                let _ = model
-                    .system
-                    .insert(System::spawn(&mut model.world, &config));
+                _ = model.root.insert(root);
+                _ = model.inbound.insert(inbound);
+                _ = model.outbound.insert(outbound);
+                _ = model.keyboard.insert(keyboard);
+
+                model.nodes = spawn_all_nodes(&mut model.world);
+
+                if model.setup_complete {
+                    let nodes = self.get_nodes(model);
+                    caps.play.configure(
+                        &model.config,
+                        nodes.as_slice(),
+                        InstrumentEV::PlayOpConfigure,
+                    );
+                }
 
                 caps.render.render();
             }
+            InstrumentEV::PlayOpPermission(grant) => {
+                if grant {
+                    caps.play.install_au(InstrumentEV::PlayOpInstall)
+                } else {
+                    caps.navigate.to(crate::Activity::Intro)
+                }
+            }
+            InstrumentEV::PlayOpInstall(success) => {
+                if !success {
+                    self.update(InstrumentEV::Playback(PlaybackEV::Error), model, caps)
+                } else {
+                    model.setup_complete = true;
+                    let nodes = self.get_nodes(model);
+                    caps.play.configure(
+                        &model.config,
+                        nodes.as_slice(),
+                        InstrumentEV::PlayOpConfigure,
+                    );
+                }
+            }
+            InstrumentEV::PlayOpConfigure(success) => {
+                if !success {
+                    self.update(InstrumentEV::Playback(PlaybackEV::Error), model, caps)
+                } else {
+                    self.update(
+                        InstrumentEV::Playback(PlaybackEV::Play(model.playing)),
+                        model,
+                        caps,
+                    )
+                }
+            }
+            InstrumentEV::PlayOpPause(success) => {
+                if !success {
+                    self.update(InstrumentEV::Playback(PlaybackEV::Error), model, caps)
+                }
+            }
+            InstrumentEV::PlayOpPlay(success) => {
+                if !success {
+                    self.update(InstrumentEV::Playback(PlaybackEV::Error), model, caps)
+                }
+            }
             InstrumentEV::Playback(playback_ev) => match playback_ev {
                 PlaybackEV::Play(playing) => {
-                    if playing {
-                        let sys = model.system.as_mut().unwrap();
-
-                        model.playing = true;
-                        sys.net_be.reset();
-                        model.audio_data = vec![];
-                        // model.prev_audio_data = vec![];
+                    model.playing = playing;
+                    if !model.setup_complete && playing {
+                        caps.play.permissions(InstrumentEV::PlayOpPermission)
                     } else {
-                        model.playing = false;
+                        if playing {
+                            caps.play.play(InstrumentEV::PlayOpPlay)
+                        } else {
+                            caps.play.pause(InstrumentEV::PlayOpPause)
+                        }
                     }
                     caps.render.render();
                 }
                 PlaybackEV::Error => {
                     model.playing = false;
-                    model.audio_data = vec![];
-                    // model.prev_audio_data = vec![];
+                    model.setup_complete = false;
                     caps.render.render();
-                }
-                PlaybackEV::DataIn(input) => {
-                    if let Some(sys) = model.system.as_mut() {
-                        let frame_size = input.first().map(|ch| ch.len()).unwrap_or_default();
-
-                        if model.frame_size != frame_size {
-                            model.audio_data = (0..model.config.channels)
-                                .map(|_| (0..frame_size).map(|_| 0.0 as f32).collect())
-                                .collect();
-                            // model.prev_audio_data = model.audio_data.clone();
-                        }
-
-                        let input = input.iter().take(1).map(|ch| ch.as_slice()).collect::<Vec<_>>();
-                        // let mut input_data = model.prev_audio_data.to_owned();
-                        // input_data.extend(input.into_iter().nth(0));
-
-                        // let input_data = input_data
-                        //     .iter()
-                        //     .map(|ch| ch.as_slice())
-                        //     .collect::<Vec<_>>();
-
-                        let mut output = model
-                            .audio_data
-                            .iter_mut()
-                            .map(|ch| ch.as_mut_slice())
-                            .collect::<Vec<_>>();
-
-                        sys.net_be.process(
-                            frame_size,
-                            input.as_slice(),
-                            output.as_mut_slice(),
-                        );
-
-                        caps.render.render();
-
-                        // model.prev_audio_data = model.audio_data.clone();
-                    } else {
-                        log::warn!("skipping new data, no config yet");
-                    }
                 }
             },
             InstrumentEV::None => {}
@@ -175,19 +185,22 @@ impl App for Instrument {
     }
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
-        let nodes = model
-            .system
-            .iter()
-            .flat_map(|s| s.get_nodes(&model.world))
-            .collect::<Vec<Node>>();
-
         InstrumentVM {
-            nodes,
+            nodes: self.get_nodes(model),
             playing: model.playing,
             config: model.config.clone(),
             layout: model.layout.clone().unwrap_or_default(),
             view_box: Rect::size(model.config.width, model.config.height),
-            audio_data: model.audio_data.clone(),
         }
+    }
+}
+
+impl Instrument {
+    fn get_nodes(&self, model: &Model) -> Vec<Node> {
+        model
+            .nodes
+            .iter()
+            .map(|e| *model.world.get::<&Node>(*e).expect("node for entity"))
+            .collect()
     }
 }

@@ -2,22 +2,21 @@ import * as dat from "dat.gui";
 import { ListTuple } from "shared_types/serde/types";
 import {
   Config,
-  EventVariantInstrumentEvent,
-  InstrumentEVVariantCreateWithConfig,
-  InstrumentEVVariantPlayback,
-  PlaybackEVVariantPlay,
-} from "shared_types/types/shared_types";
+  PlayOperationVariantConfig,
+  PlayOperationVariantSuspend,
+  PlayOperationVariantResume,
+  Node,
+} from "shared_types/types/au_types";
 import { to_bin } from "./core";
 import { RedSirenNode } from "./lib";
 
 interface IConfig
   extends Omit<
     Config,
-    "serialize" | "deserialize" | "groups" | "buttons_group" | "channels"
+    "serialize" | "deserialize" | "groups" | "buttons_group"
   > {
   groups: number;
   buttons_group: number;
-  channels: number;
 }
 
 const gui = new dat.GUI({ name: "worklet" });
@@ -35,8 +34,6 @@ const config: IConfig = {
   buttons_group: 3,
   button_size: 78,
   button_track_margin: 0.2,
-  sample_rate_hz: 44000,
-  channels: 2,
   f0: 110,
 };
 
@@ -51,8 +48,7 @@ const groups = configFolder.add(config, "groups");
 const buttons_group = configFolder.add(config, "buttons_group");
 const button_size = configFolder.add(config, "button_size");
 const button_track_margin = configFolder.add(config, "button_track_margin");
-const sample_rate_hz = configFolder.add(config, "sample_rate_hz");
-const channels = configFolder.add(config, "channels");
+const f0 = configFolder.add(config, "f0");
 
 const canvas = document.createElement("canvas");
 canvas.setAttribute("style", "width: 100vw; height: 100vh;");
@@ -91,24 +87,29 @@ async function create_ctx() {
   worklet.port.postMessage({
     type: "red-siren-ev",
     ev: to_bin(
-      new EventVariantInstrumentEvent(
-        new InstrumentEVVariantCreateWithConfig(
-          new Config(
-            config.portrait,
-            config.width,
-            config.height,
-            config.breadth,
-            config.length,
-            config.whitespace,
-            BigInt(config.groups),
-            BigInt(config.buttons_group),
-            config.button_size,
-            config.button_track_margin,
-            config.safe_area,
-            config.f0,
-            config.sample_rate_hz,
-            BigInt(config.channels)
-          )
+      new PlayOperationVariantConfig(
+        new Config(
+          config.portrait,
+          config.width,
+          config.height,
+          config.breadth,
+          config.length,
+          config.whitespace,
+          BigInt(config.groups),
+          BigInt(config.buttons_group),
+          config.button_size,
+          config.button_track_margin,
+          config.safe_area,
+          config.f0
+        ),
+        Array.from({ length: config.groups * config.buttons_group }).map(
+          (_, i) => {
+            return new Node(
+              [[i * config.f0 * 2], [(i + 1) * config.f0 * 2]],
+              BigInt(i + 1),
+              0
+            );
+          }
         )
       )
     ),
@@ -135,30 +136,18 @@ playing.onChange(async (playing) => {
     await ctx.resume();
     worklet.port.postMessage({
       type: "red-siren-ev",
-      ev: to_bin(
-        new EventVariantInstrumentEvent(
-          new InstrumentEVVariantPlayback(new PlaybackEVVariantPlay(true))
-        )
-      ),
+      ev: to_bin(new PlayOperationVariantResume()),
     });
   } else if (playing) {
     await create_ctx();
     worklet.port.postMessage({
       type: "red-siren-ev",
-      ev: to_bin(
-        new EventVariantInstrumentEvent(
-          new InstrumentEVVariantPlayback(new PlaybackEVVariantPlay(true))
-        )
-      ),
+      ev: to_bin(new PlayOperationVariantResume()),
     });
   } else if (ctx) {
     worklet.port.postMessage({
       type: "red-siren-ev",
-      ev: to_bin(
-        new EventVariantInstrumentEvent(
-          new InstrumentEVVariantPlayback(new PlaybackEVVariantPlay(false))
-        )
-      ),
+      ev: to_bin(new PlayOperationVariantSuspend()),
     });
     await ctx.suspend();
   }
@@ -175,31 +164,34 @@ playing.onChange(async (playing) => {
   buttons_group,
   button_size,
   button_track_margin,
-  sample_rate_hz,
-  channels,
 ].forEach((e) =>
   e.onChange(() => {
     worklet.port.postMessage({
       type: "red-siren-ev",
       ev: to_bin(
-        new EventVariantInstrumentEvent(
-          new InstrumentEVVariantCreateWithConfig(
-            new Config(
-              config.portrait,
-              config.width,
-              config.height,
-              config.breadth,
-              config.length,
-              config.whitespace,
-              BigInt(config.groups),
-              BigInt(config.buttons_group),
-              config.button_size,
-              config.button_track_margin,
-              config.safe_area,
-              config.f0,
-              config.sample_rate_hz,
-              BigInt(config.channels)
-            )
+        new PlayOperationVariantConfig(
+          new Config(
+            config.portrait,
+            config.width,
+            config.height,
+            config.breadth,
+            config.length,
+            config.whitespace,
+            BigInt(config.groups),
+            BigInt(config.buttons_group),
+            config.button_size,
+            config.button_track_margin,
+            config.safe_area,
+            config.f0
+          ),
+          Array.from({ length: config.groups * config.buttons_group }).map(
+            (_, i) => {
+              return new Node(
+                [[i * config.f0 * 2], [(i + 1) * config.f0 * 2]],
+                BigInt(i + 1),
+                0
+              );
+            }
           )
         )
       ),

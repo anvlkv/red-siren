@@ -40,26 +40,11 @@ web-sys = { version = "0.3", features = [
     "HtmlElement",
     "Navigator",
     "Window",
-    "MediaQueryList",
-    "AudioContext",
-    "AudioContextOptions",
-    "AudioDestinationNode",
-    "AudioNode",
-    "AudioContextState",
-    "AudioBuffer",
-    "AudioBufferSourceNode",
-    "GetUserMediaRequest",
-    "MediaDevices",
-    "MediaStreamConstraints",
-    "MediaStream",
-    "MediaStreamAudioSourceNode",
-    "MediaStreamAudioDestinationNode",
-    "AnalyserNode",
-    "AudioWorkletNode",
-    "MessagePort", 
+    "MediaQueryList"
 ], optional = true }
 js-sys = { version = "0.3.65", optional = true }
 bincode = { version = "1.3.3", optional = true }
+wasm-bindgen-futures = "0.4.39"
 
 
 [features]

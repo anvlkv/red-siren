@@ -3,21 +3,43 @@ mod instrument;
 mod intro;
 
 use crate::{
+    error_template::{AppError, ErrorTemplate},
     util::use_dpi,
-    error_template::{AppError, ErrorTemplate}
 };
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
 use leptos_use::{use_event_listener, use_window};
 use shared::{Activity, Event};
+use cfg_if::cfg_if;
+
+cfg_if! { if #[cfg(feature="browser")]{
+    mod playback;
+} else {
+    mod playback {
+
+        #[derive(Clone)]
+        pub struct Playback;
+
+        impl Playback {
+            pub fn new() -> Self {
+                Self
+            }
+        }
+    }
+}}
 
 
+pub fn provide_playback() {
+    let (r_op, _) = create_signal::<playback::Playback>(playback::Playback::new());
+    provide_context(r_op)
+}
 
 #[component]
 pub fn RootComponent() -> impl IntoView {
-
     provide_meta_context();
+
+    provide_playback();
 
     view! {
         <Stylesheet id="leptos" href="/pkg/red-siren.css"/>
@@ -67,11 +89,11 @@ fn RedSirenCore() -> impl IntoView {
     let view_rw_signal = create_rw_signal(core.view());
     let view = view_rw_signal.read_only();
     let render = view_rw_signal.write_only();
-
+    let playback = use_context::<ReadSignal<playback::Playback>>().unwrap();
     let (event, set_event) = create_signal(Event::Start);
 
     create_effect(move |_| {
-        core::update(&core, event.get(), render);
+        core::update(&core, event.get(), render, playback.get());
     });
 
     let location = leptos_router::use_location();
@@ -98,7 +120,7 @@ fn RedSirenCore() -> impl IntoView {
 
     let (size, set_size) = create_signal((0, 0));
     let window = use_window();
-    let _ = use_event_listener(window.clone(), leptos::ev::resize, move |_| {
+    _ = use_event_listener(window.clone(), leptos::ev::resize, move |_| {
         let body = window.document().body().unwrap();
         let new_size = (body.client_width(), body.client_height());
         set_size.set(new_size);

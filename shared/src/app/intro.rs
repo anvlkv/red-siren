@@ -278,6 +278,6 @@ impl Intro {
                 EaseIn
             )
         ];
-        let _ = model.sequence.insert(animation);
+        _ = model.sequence.insert(animation);
     }
 }

@@ -1,21 +1,20 @@
-import { process_event, view } from "shared/shared";
+import { au_process_event, au_view } from "aucore/aucore";
 import {
   BincodeDeserializer,
   BincodeSerializer,
 } from "shared_types/bincode/mod";
-import type {
-  Effect,
-  Event
-} from "shared_types/types/shared_types";
+import type { Effect, PlayOperation } from "shared_types/types/au_types";
 import {
   EffectVariantRender,
+  EffectVariantResolve,
   Request,
-  ViewModel
-} from "shared_types/types/shared_types";
+  ViewModel,
+} from "shared_types/types/au_types";
 
-type CB = (vm: ViewModel) => void;
+type RenderCB = (vm: ViewModel) => void;
+type ResolveCB = (output: Uint8Array) => void;
 
-export function to_bin(event: Event,) {
+export function to_bin(event: PlayOperation) {
   const serializer = new BincodeSerializer();
   event.serialize(serializer);
   const data = serializer.getBytes();
@@ -23,37 +22,51 @@ export function to_bin(event: Event,) {
 }
 
 export function update(
-  event: Event,
-  callback: CB
+  event: PlayOperation,
+  callback: RenderCB,
+  resolve: ResolveCB
 ) {
   const serializer = new BincodeSerializer();
   event.serialize(serializer);
   const data = serializer.getBytes();
-  const effects = process_event(data);
+  const effects = au_process_event(data);
 
   const requests = deserializeRequests(effects);
   for (const { uuid, effect } of requests) {
-    processEffect(uuid, effect, callback);
+    processEffect(uuid, effect, callback, resolve);
   }
 }
 
-export function update_plain(data: Uint8Array, callback: CB) {
-  const effects = process_event(data);
+export function update_plain(
+  data: Uint8Array,
+  callback: RenderCB,
+  resolve: ResolveCB
+) {
+  const effects = au_process_event(data);
 
   const requests = deserializeRequests(effects);
   for (const { uuid, effect } of requests) {
-    processEffect(uuid, effect, callback);
+    processEffect(uuid, effect, callback, resolve);
   }
 }
 
 function processEffect(
   uuid: number[],
   effect: Effect,
-  callback: CB
+  callback: RenderCB,
+  resolve: ResolveCB
 ) {
   switch (effect.constructor) {
     case EffectVariantRender: {
-      callback(deserializeView(view()));
+      callback(deserializeView(au_view()));
+      break;
+    }
+    case EffectVariantResolve: {
+      const value = (effect as EffectVariantResolve).value;
+      const serializer = new BincodeSerializer();
+      value.serialize(serializer);
+      const data = serializer.getBytes();
+      resolve(data);
       break;
     }
     default:

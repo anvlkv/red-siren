@@ -1,19 +1,16 @@
 [package]
-name = "shared"
+name = "aucore"
 version = "0.1.0"
-edition = "2021"
-rust-version = { workspace = true }
+authors.workspace = true
+repository.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
 
 [lib]
 crate-type = ["lib", "staticlib", "cdylib"]
-name = "shared"
-
-[features]
-typegen = ["crux_core/typegen"]
-android = ["android_logger"]
-ios = ["oslog"]
-worklet = []
-browser = ["console_error_panic_hook", "console_log"]
+name = "aucore"
 
 [dependencies]
 anyhow.workspace = true
@@ -32,19 +29,21 @@ thiserror = "1.0.50"
 uniffi = "0.25.0"
 url = "2.4.1"
 wasm-bindgen = { workspace = true }
-# project specific
-keyframe = { version = "1.1.1" }
-keyframe_derive = {version  = "1.0.0" }
-mint = { workspace = true, features = ["serde"] }
-num-integer = "0.1.45"
-hecs = { version = "0.10.4", features = ["serde", "macros"] }
+# project
+shared = { path = "../shared", features = ["worklet"] }
+fundsp = { version = "0.15.0", default-features = false }
 # platforms
-cfg-if="1"
 log = { workspace = true }
 android_logger = { version = "0.13.3", optional = true }
 oslog = { version = "0.2.0", optional = true }
 console_error_panic_hook = { version = "0.1", optional = true }
 console_log = { version = "1", optional = true }
+
+[features]
+browser = ["shared/browser", "console_error_panic_hook", "console_log"]
+ios = ["shared/ios"]
+android = ["shared/android"]
+typegen = ["shared/typegen"]
 
 [dev-dependencies]
 assert_let_bind = "0.1.1"

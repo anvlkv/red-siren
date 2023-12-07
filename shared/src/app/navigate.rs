@@ -29,9 +29,9 @@ where
         self.context.spawn({
             let context = self.context.clone();
             async move {
-                let _ = context
+                _ = context
                     .request_from_shell(NavigateOperation::To(activity))
-                    .await;
+                    .await; 
             }
         });
     }

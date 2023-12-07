@@ -1,5 +1,5 @@
 [toolchain]
-channel = "stable"
+channel = "nightly"
 components = ["rustfmt", "rustc-dev"]
 targets = [
   "aarch64-apple-darwin",

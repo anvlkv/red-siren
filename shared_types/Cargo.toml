@@ -18,3 +18,4 @@ crux_kv.workspace = true
 crux_platform.workspace = true
 crux_time.workspace = true
 shared = { path = "../shared", features = ["typegen"] }
+aucore = { path = "../aucore", features = ["typegen"] }

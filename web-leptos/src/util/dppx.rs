@@ -1,4 +1,4 @@
-#![cfg_attr(feature = "ssr", allow(unused_variables, unused_imports, dead_code))]
+#![allow(unused_variables, unused_imports, dead_code)]
 
 use cfg_if::cfg_if;
 use leptos::ev::change;

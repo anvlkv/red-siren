@@ -279,7 +279,7 @@
 					};
 				};
 			};
-			buildConfigurationList = CAF6A53A419380E02D6C7F57 /* Build configuration list for PBXProject "AU" */;
+			buildConfigurationList = CAF6A53A419380E02D6C7F57 /* Build configuration list for PBXProject "AUCore" */;
 			compatibilityVersion = "Xcode 11.4";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -680,7 +680,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		CAF6A53A419380E02D6C7F57 /* Build configuration list for PBXProject "AU" */ = {
+		CAF6A53A419380E02D6C7F57 /* Build configuration list for PBXProject "AUCore" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				CAF761B23E203CC16B37690B /* Release */,

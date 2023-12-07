@@ -5,12 +5,12 @@ settings:
   excludeLinksFromLockfile: false
 
 dependencies:
+  aucore:
+    specifier: link:../aucore/pkg
+    version: link:../aucore/pkg
   polyfill-crypto.getrandomvalues:
     specifier: ^1.0.0
     version: 1.0.0
-  shared:
-    specifier: link:../shared/pkg
-    version: link:../shared/pkg
   shared_types:
     specifier: link:../shared_types/generated/typescript
     version: link:../shared_types/generated/typescript

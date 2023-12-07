@@ -8,10 +8,12 @@ pub mod instrument;
 pub mod navigate;
 pub mod tuner;
 pub mod intro;
+pub mod play;
 
 pub use instrument::Instrument;
 pub use intro::Intro;
 pub use navigate::Navigate;
+pub use play::Play;
 pub use tuner::Tuner;
 
 use self::{
@@ -80,6 +82,7 @@ pub struct RedSirenCapabilities {
     pub render: Render<Event>,
     pub key_value: KeyValue<Event>,
     pub navigate: Navigate<Event>,
+    pub play: Play<Event>,
 }
 
 impl From<&RedSirenCapabilities> for IntroCapabilities {
@@ -104,6 +107,8 @@ impl From<&RedSirenCapabilities> for InstrumentCapabilities {
     fn from(incoming: &RedSirenCapabilities) -> Self {
         InstrumentCapabilities {
             render: incoming.render.map_event(super::Event::InstrumentEvent),
+            play: incoming.play.map_event(super::Event::InstrumentEvent),
+            navigate: incoming.navigate.map_event(super::Event::InstrumentEvent),
         }
     }
 }

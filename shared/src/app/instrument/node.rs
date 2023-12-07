@@ -2,7 +2,7 @@ use super::keyboard::{Button, Track};
 use hecs::{Entity, World};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Copy)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Copy, Debug)]
 
 pub struct Node {
     pub freq: (f32, f32),
@@ -25,4 +25,26 @@ impl Node {
             pan
         },))
     }
+}
+
+pub fn spawn_all_nodes(world: &mut World) -> Vec<Entity> {
+    let mut nodes = world
+        .query::<&Button>()
+        .iter()
+        .map(|(_, b)| {
+            let mut query = world.query_one::<&Track>(b.track).unwrap();
+            let track = query.get().unwrap();
+            (track.freq, b.f_n, if track.left_hand { -1 } else { 1 })
+        })
+        .collect::<Vec<_>>();
+
+    nodes.sort_by(|a, b| a.1.cmp(&b.1));
+    nodes.reverse();
+
+    let nodes = nodes
+        .into_iter()
+        .map(|(freq, f_n, pan)| Node::spawn(world, freq, f_n, pan))
+        .collect::<Vec<_>>();
+
+    nodes
 }

@@ -11,7 +11,7 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ['shared_types/types/shared_types', 'shared_types/bincode/mod',  'shared'],
+    include: ['shared_types/types/au_types', 'shared_types/bincode/mod',  'shared'],
   },
   server: {
     fs: {

@@ -3,6 +3,26 @@ use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=../shared");
+    println!("cargo:rerun-if-changed=../aucore");
+
+    {
+        use aucore::RedSirenAU;
+        use shared::instrument::{Config, Node};
+
+        let mut gen = TypeGen::new();
+        gen.register_type::<Config>()?;
+        gen.register_type::<Node>()?;
+        gen.register_app::<RedSirenAU>()?;
+
+
+        let output_root = PathBuf::from("./generated");
+
+        gen.swift("AUTypes", output_root.join("swift"))?;
+
+        gen.java("com.anvlkv.redsiren.shared.au_types", output_root.join("java"))?;
+
+        gen.typescript("au_types", output_root.join("typescript"))?;
+    }
 
     {
         use shared::{
@@ -33,29 +53,9 @@ fn main() -> anyhow::Result<()> {
 
         gen.swift("SharedTypes", output_root.join("swift"))?;
 
-        gen.java("com.anvlkv.redsiren.shared_types", output_root.join("java"))?;
+        gen.java("com.anvlkv.redsiren.shared.shared_types", output_root.join("java"))?;
 
         gen.typescript("shared_types", output_root.join("typescript"))?;
-    }
-
-    {
-        use aucore::RedSirenAU;
-        use shared::instrument::{Config, Node};
-        
-
-        let mut gen = TypeGen::new();
-        gen.register_type::<Config>()?;
-        gen.register_type::<Node>()?;
-        gen.register_app::<RedSirenAU>()?;
-
-
-        let output_root = PathBuf::from("./generated");
-
-        gen.swift("AUTypes", output_root.join("swift"))?;
-
-        gen.java("com.anvlkv.redsiren.au_types", output_root.join("java"))?;
-
-        gen.typescript("au_types", output_root.join("typescript"))?;
     }
 
     Ok(())

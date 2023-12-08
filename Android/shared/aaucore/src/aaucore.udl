@@ -1,0 +1,4 @@
+namespace aaucore {
+  void au_log_init();
+  void test_oboe();
+};

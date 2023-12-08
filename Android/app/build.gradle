@@ -80,7 +80,6 @@ dependencies {
 
 
     implementation project(path: ':shared')
-    implementation project(path: ':aucore')
 
     implementation "androidx.compose.material:material-icons-extended:1.5.4"
 

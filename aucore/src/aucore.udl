@@ -1,6 +1,0 @@
-namespace aucore {
-  bytes au_process_event([ByRef] bytes msg);
-  bytes au_handle_response([ByRef] bytes uuid, [ByRef] bytes res);
-  bytes au_view();
-  void au_log_init();
-};

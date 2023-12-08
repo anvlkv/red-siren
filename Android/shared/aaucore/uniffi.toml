@@ -1,0 +1,4 @@
+[bindings.kotlin]
+cdylib_name = "aaucore"
+package_name = "com.anvlkv.redsiren.shared.aaucore"
+

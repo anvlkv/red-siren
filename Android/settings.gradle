@@ -15,4 +15,3 @@ dependencyResolutionManagement {
 rootProject.name = "RedSiren"
 include ':app'
 include ':shared'
-include ':aucore'

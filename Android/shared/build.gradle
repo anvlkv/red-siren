@@ -2,6 +2,7 @@ plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
     id 'org.mozilla.rust-android-gradle.rust-android'
+    id 'com.github.willir.rust.cargo-ndk-android'
 }
 
 android {
@@ -50,12 +51,29 @@ dependencies {
 apply plugin: 'org.mozilla.rust-android-gradle.rust-android'
 
 cargo {
+//    targets = ["arm", "arm64", "x86", "x86_64"]
+    targets = ["x86_64"]
     module  = "../.."
     libname = "shared"
     rustupChannel = "stable"
-    targets = ["arm", "arm64", "x86", "x86_64"]
     extraCargoBuildArguments = ['--package', 'shared', '--features', 'android']
-    pythonCommand="python3"
+    pythonCommand = "python3"
+}
+
+apply plugin: 'com.github.willir.rust.cargo-ndk-android'
+
+cargoNdk {
+    buildTypes {
+        release {
+            targets = ["arm", "arm64", "x86", "x86_64"]
+        }
+        debug {
+            targets = ["x86_64"]
+        }
+    }
+    module = "../"
+    librariesNames = ["libaaucore.so"]
+    extraCargoBuildArguments = ['--package', 'aaucore', '--features', 'ndk']
 }
 
 afterEvaluate {
@@ -67,12 +85,16 @@ afterEvaluate {
         }
         def buildType = "${variant.buildType.name.capitalize()}"
 
-        tasks.named("compileDebugKotlin") {
-            it.dependsOn(tasks.named("typesGen"), tasks.named("bindGen"))
+        tasks.named("compile${buildType}Kotlin") {
+            it.dependsOn(tasks.named("typesGen"), tasks.named("bindGenAU"), tasks.named("bindGen"))
         }
 
         tasks.named("generate${productFlavor}${buildType}Assets") {
             it.dependsOn(tasks.named("cargoBuild"))
+        }
+
+        tasks.named("compile${buildType}JavaWithJavac") {
+            it.dependsOn(tasks.named("typesGen"), tasks.named("bindGenAU"), tasks.named("bindGen"))
         }
     }
 }
@@ -94,6 +116,30 @@ tasks.register('bindGen', Exec) {
                 """\
                 cargo build -p shared && \
                 target/debug/uniffi-bindgen generate shared/src/shared.udl \
+                --language kotlin \
+                --out-dir $outDir
+                """
+        )
+    }
+}
+
+tasks.register('bindGenAU', Exec) {
+    def outDir = "${projectDir}/../../shared_types/generated/java"
+    workingDir "../../"
+    if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+        commandLine(
+                "cmd", "/c",
+                "cargo build -p aaucore && " +
+                        "target\\debug\\uniffi-bindgen-aau generate Android\\shared\\aaucore\\src\\aaucore.udl " +
+                        "--language kotlin " +
+                        "--out-dir " + outDir.replace('/', '\\')
+        )
+    } else {
+        commandLine(
+                "sh", "-c",
+                """\
+                cargo build -p aaucore && \
+                target/debug/uniffi-bindgen-aau generate Android/shared/aaucore/src/aaucore.udl \
                 --language kotlin \
                 --out-dir $outDir
                 """

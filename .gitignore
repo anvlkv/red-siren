@@ -27,3 +27,5 @@ dioxusin
 *.snap.new
 
 iOS/Pods/
+
+.vscode/

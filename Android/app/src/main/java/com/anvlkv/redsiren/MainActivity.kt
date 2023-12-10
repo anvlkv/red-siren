@@ -2,45 +2,45 @@ package com.anvlkv.redsiren
 
 import android.content.res.Resources
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.displayCutout
-import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Density
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.anvlkv.redsiren.app.AppInstrument
 import com.anvlkv.redsiren.app.AppIntro
-import com.anvlkv.redsiren.shared_types.Event
-import com.anvlkv.redsiren.shared_types.InstrumentEV
-import com.anvlkv.redsiren.shared_types.IntroEV
-import com.anvlkv.redsiren.shared_types.TunerEV
+import com.anvlkv.redsiren.shared.shared_types.Event
+import com.anvlkv.redsiren.shared.shared_types.InstrumentEV
+import com.anvlkv.redsiren.shared.shared_types.IntroEV
+import com.anvlkv.redsiren.shared.shared_types.TunerEV
 import com.anvlkv.redsiren.ui.theme.ApplyTheme
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
-import com.anvlkv.redsiren.shared_types.Activity as CoreActivity
+import com.anvlkv.redsiren.shared.shared_types.Activity as CoreActivity
 
 class MainActivity : ComponentActivity() {
+    var core: Core? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -51,11 +51,12 @@ class MainActivity : ComponentActivity() {
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-
         setContent {
             ApplyTheme(content = {
+                core = viewModel()
+
                 Surface {
-                    RedSiren()
+                    RedSiren(core!!)
                 }
             })
         }
@@ -63,20 +64,38 @@ class MainActivity : ComponentActivity() {
 }
 
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun RedSiren() {
+fun RedSiren(core: Core) {
     val navController = rememberNavController()
-
-
-    RedSirenNavHost(navController)
-}
-
-@Composable
-fun RedSirenNavHost(
-    navController: NavHostController, core: Core = viewModel()
-) {
     val coroutineScope = rememberCoroutineScope()
 
+    val recordAudioPermissionState = rememberPermissionState(
+        android.Manifest.permission.RECORD_AUDIO
+    )
+
+    val reqDef = remember {
+        CompletableDeferred<Boolean>()
+    }
+
+    var permissionRequested by remember { mutableStateOf(false) }
+
+    core.onRequestPermissions = fun(): CompletableDeferred<Boolean> {
+        if (recordAudioPermissionState.status.isGranted) {
+            reqDef.complete(true)
+        }
+        else {
+            recordAudioPermissionState.launchPermissionRequest()
+        }
+        permissionRequested = true
+        return reqDef
+    }
+
+    LaunchedEffect(recordAudioPermissionState.status) {
+        if (permissionRequested) {
+            reqDef.complete(recordAudioPermissionState.status.isGranted)
+        }
+    }
 
     fun updateConfig(width: Double, height: Double, cutouts: Array<Double>) {
         val dpi = Resources.getSystem().displayMetrics.densityDpi.toDouble()
@@ -171,23 +190,24 @@ fun RedSirenNavHost(
         }
         NavHost(navController = navController, startDestination = "intro") {
             composable("intro") {
-                AppIntro(vm = introVm, ev = introEv)
+                AppIntro(introVm, introEv)
             }
             composable("play") {
-                AppInstrument(vm = instrumentVm, ev = instrumentEv)
+                AppInstrument(instrumentVm, instrumentEv)
             }
             composable("listen") {
-
+                AppInstrument(instrumentVm, instrumentEv)
             }
             composable("tune") {
-
+//                AppInstrument(tunerVm, tunerEv)
             }
         }
     }
 }
 
+
 @Preview(showBackground = true)
 @Composable
 fun DefaultPreview() {
-    RedSiren()
+    RedSiren(viewModel())
 }

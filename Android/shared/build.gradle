@@ -16,6 +16,12 @@ android {
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
+
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=c++_shared"
+            }
+        }
     }
 
     buildTypes {
@@ -34,6 +40,13 @@ android {
 
     sourceSets {
         main.java.srcDirs += "${projectDir}/../../shared_types/generated/java"
+        main.jniLibs.srcDirs += "src/main/jniLibs"
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "CMakeLists.txt"
+        }
     }
 }
 
@@ -86,10 +99,11 @@ afterEvaluate {
         }
 
         tasks.named("compile${buildType}JavaWithJavac") {
-            it.dependsOn(tasks.named("typesGen"), tasks.named("bindGenAU"), tasks.named("bindGen"))
+            it.dependsOn(tasks.named("typesGen"), tasks.named("bindGenAU"), tasks.named("bindGen"), tasks.named("buildCargoNdk${buildType}"))
         }
     }
 }
+
 
 tasks.register('bindGen', Exec) {
     def outDir = "${projectDir}/../../shared_types/generated/java"
@@ -122,7 +136,7 @@ tasks.register('bindGenAU', Exec) {
         commandLine(
                 "cmd", "/c",
                 "cargo build -p aaucore && " +
-                        "target\\debug\\uniffi-bindgen-aau generate Android\\shared\\aaucore\\src\\aaucore.udl " +
+                        "target\\debug\\uniffi-bindgen-aau generate --library target\\debug\\libaaucore.so" +
                         "--language kotlin " +
                         "--out-dir " + outDir.replace('/', '\\')
         )
@@ -131,7 +145,7 @@ tasks.register('bindGenAU', Exec) {
                 "sh", "-c",
                 """\
                 cargo build -p aaucore && \
-                target/debug/uniffi-bindgen-aau generate Android/shared/aaucore/src/aaucore.udl \
+                target/debug/uniffi-bindgen-aau generate --library target/debug/libaaucore.dylib \
                 --language kotlin \
                 --out-dir $outDir
                 """

@@ -7,10 +7,17 @@ name = "aaucore"
 version = "0.1.0"
 dependencies = [
  "android_logger",
+ "anyhow",
  "aucore",
+ "bincode",
+ "cfg-if",
+ "futures",
+ "lazy_static",
  "log",
  "oboe",
+ "shared",
  "uniffi",
+ "uuid",
 ]
 
 [[package]]
@@ -1323,6 +1330,7 @@ dependencies = [
  "futures-core",
  "futures-task",
  "futures-util",
+ "num_cpus",
 ]
 
 [[package]]

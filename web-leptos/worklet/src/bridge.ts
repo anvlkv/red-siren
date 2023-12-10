@@ -34,6 +34,7 @@ export class PlaybackBridge {
   onResolve = (out: Uint8Array, id?: string) => {
     if (id) {
       this.registry.get(id)![0](out);
+      this.registry.delete(id);
     } else if (this.callHost) {
       this.callHost(out);
     } else {

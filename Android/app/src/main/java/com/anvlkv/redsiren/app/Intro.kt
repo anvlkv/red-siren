@@ -26,8 +26,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
 import com.anvlkv.redsiren.R
-import com.anvlkv.redsiren.shared_types.IntroEV
-import com.anvlkv.redsiren.shared_types.IntroVM
+import com.anvlkv.redsiren.shared.shared_types.IntroEV
+import com.anvlkv.redsiren.shared.shared_types.IntroVM
 import kotlinx.coroutines.launch
 import java.lang.Float.min
 

@@ -1,3 +1,4 @@
+use crate::instrument::layout::MenuPosition;
 use crate::{geometry::Rect, instrument, Navigate};
 use crux_core::render::Render;
 use crux_core::App;
@@ -166,7 +167,8 @@ impl App for Intro {
                 if !seq.finished() {
                     caps.render.render();
                 } else {
-                    caps.navigate.to(crate::Activity::Play)
+                    caps.navigate.to(crate::Activity::Play);
+                    log::info!("intro played")
                 }
             }
         }
@@ -218,21 +220,48 @@ impl Intro {
             })
             .collect::<Vec<_>>();
 
+        let off_screen_menu_position = MenuPosition::Center(Rect::new(
+            0.0,
+            vb_target.width(),
+            vb_target.height(),
+            vb_target.height() * 2.0,
+        ));
+        let target_menu_position = if model.config.portrait {
+            MenuPosition::Center(Rect::new(
+                model.config.safe_area[0],
+                vb_target.width() - model.config.safe_area[2],
+                vb_target.height() / 5.0,
+                vb_target.height() - vb_target.height() / 5.0,
+            ))
+        } else {
+            MenuPosition::Center(Rect::new(
+                vb_target.width() / 5.0,
+                vb_target.width() - vb_target.width() / 5.0,
+                model.config.safe_area[1],
+                vb_target.height() - model.config.safe_area[3],
+            ))
+        };
+
         let animation: AnimationSequence<IntroVM> = keyframes![
             (IntroVM { ..init_vm.clone() }, 0.0, EaseIn),
             (
                 IntroVM {
                     intro_opacity: 0.0,
                     button_size: target_button_size,
+                    layout: instrument::Layout {
+                        menu_position: off_screen_menu_position.clone(),
+                        ..model.layout.clone()
+                    },
                     ..init_vm.clone()
                 },
-                0.5,
+                0.25,
                 EaseOut
             ),
             (
                 IntroVM {
                     intro_opacity: 0.0,
                     layout: instrument::Layout {
+                        menu_position: off_screen_menu_position.clone(),
                         tracks: vec![],
                         ..model.layout.clone()
                     },
@@ -243,7 +272,7 @@ impl Intro {
                     buttons_position: buttons_position_target,
                     ..init_vm.clone()
                 },
-                0.75,
+                0.5,
                 EaseOut
             ),
             (
@@ -251,6 +280,7 @@ impl Intro {
                     intro_opacity: 0.0,
                     layout: instrument::Layout {
                         tracks: tracks_intermediate,
+                        menu_position: off_screen_menu_position.clone(),
                         ..model.layout.clone()
                     },
                     view_box: vb_target,
@@ -260,13 +290,33 @@ impl Intro {
                     buttons_position: buttons_position_target,
                     ..init_vm.clone()
                 },
-                0.85,
+                0.65,
                 EaseOut
             ),
             (
                 IntroVM {
                     intro_opacity: 0.0,
-                    layout: model.layout.clone(),
+                    layout: instrument::Layout {
+                        menu_position: off_screen_menu_position.clone(),
+                        ..model.layout.clone()
+                    },
+                    view_box: vb_target,
+                    button_size: target_button_size,
+                    flute_rotation: flute_rotation_target,
+                    flute_position: flute_position_target,
+                    buttons_position: buttons_position_target,
+                    ..init_vm.clone()
+                },
+                0.75,
+                EaseIn
+            ),
+            (
+                IntroVM {
+                    intro_opacity: 0.0,
+                    layout: instrument::Layout {
+                        menu_position: target_menu_position.clone(),
+                        ..model.layout.clone()
+                    },
                     view_box: vb_target,
                     button_size: target_button_size,
                     flute_rotation: flute_rotation_target,
@@ -275,7 +325,7 @@ impl Intro {
                     ..init_vm.clone()
                 },
                 1.0,
-                EaseIn
+                EaseOut
             )
         ];
         _ = model.sequence.insert(animation);

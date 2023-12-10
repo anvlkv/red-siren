@@ -20,8 +20,7 @@ use self::{
     instrument::InstrumentCapabilities, intro::IntroCapabilities, tuner::TunerCapabilities,
 };
 
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
-#[derive(Default)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Activity {
     #[default]
     Intro,

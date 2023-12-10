@@ -23,30 +23,33 @@ pub enum MenuPosition {
     TopLeft(Rect),
     TopRight(Rect),
     BottomLeft(Rect),
+    Center(Rect),
 }
 
 impl Default for MenuPosition {
     fn default() -> Self {
-        Self::TopLeft(Rect::default())
+        Self::Center(Rect::default())
     }
 }
 
 impl MenuPosition {
     pub fn rect(&self) -> &Rect {
         match self {
-            MenuPosition::TopLeft(r) | MenuPosition::TopRight(r) | MenuPosition::BottomLeft(r) => r,
+            MenuPosition::Center(r)
+            | MenuPosition::TopLeft(r)
+            | MenuPosition::TopRight(r)
+            | MenuPosition::BottomLeft(r) => r,
         }
     }
 }
 
 impl CanTween for MenuPosition {
     fn ease(from: Self, to: Self, time: impl keyframe::num_traits::Float) -> Self {
-        let r1 = match from {
-            MenuPosition::TopLeft(r) | MenuPosition::TopRight(r) | MenuPosition::BottomLeft(r) => r,
-        };
+        let r1 = from.rect().clone();
 
         match to {
             MenuPosition::TopLeft(r) => MenuPosition::TopLeft(CanTween::ease(r1, r, time)),
+            MenuPosition::Center(r) => MenuPosition::Center(CanTween::ease(r1, r, time)),
             MenuPosition::TopRight(r) => MenuPosition::TopRight(CanTween::ease(r1, r, time)),
             MenuPosition::BottomLeft(r) => MenuPosition::BottomLeft(CanTween::ease(r1, r, time)),
         }
@@ -108,15 +111,18 @@ impl Layout {
             .groups
             .iter()
             .enumerate()
-            .try_fold(Vec::<(Rect, Rect)>::new(), |mut acc, (_i, g)| -> Result<_> {
-                let group = world.get::<&ButtonGroup>(*g)?;
-                for b in &group.buttons {
-                    let button = world.get::<&Button>(*b)?;
-                    let track = world.get::<&Track>(button.track)?;
-                    acc.push((button.rect, track.rect));
-                }
-                Ok(acc)
-            })?
+            .try_fold(
+                Vec::<(Rect, Rect)>::new(),
+                |mut acc, (_i, g)| -> Result<_> {
+                    let group = world.get::<&ButtonGroup>(*g)?;
+                    for b in &group.buttons {
+                        let button = world.get::<&Button>(*b)?;
+                        let track = world.get::<&Track>(button.track)?;
+                        acc.push((button.rect, track.rect));
+                    }
+                    Ok(acc)
+                },
+            )?
             .into_iter()
             .unzip();
 

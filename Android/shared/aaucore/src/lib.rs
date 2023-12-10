@@ -1,6 +1,13 @@
+use futures::channel::mpsc::unbounded;
+use futures::executor::ThreadPool;
+use futures::task::SpawnExt;
+use futures::StreamExt;
+use std::sync::{Arc, Mutex};
 
-uniffi::include_scaffolding!("aaucore");
+#[cfg(feature = "ndk")]
+mod aau;
 
+#[uniffi::export]
 pub fn au_log_init() {
     let lvl = log::LevelFilter::Debug;
 
@@ -13,88 +20,63 @@ pub fn au_log_init() {
     log::debug!("init logging")
 }
 
-pub fn test_oboe() {
-    #[cfg(feature="ndk")]
-    {
-        use oboe::{
-            AudioOutputCallback, AudioStreamBuilder, DataCallbackResult, Mono,
-            PerformanceMode, SharingMode, AudioStream, AudioOutputStreamSafe
-        };
-        use core::f32::consts::PI;
-        
-        // Structure for sound generator
-        pub struct SineWave {
-            frequency: f32,
-            gain: f32,
-            phase: f32,
-            delta: Option<f32>,
-        }
-        
-        // Default constructor for sound generator
-        impl Default for SineWave {
-            fn default() -> Self {
-                Self {
-                    frequency: 440.0,
-                    gain: 0.5,
-                    phase: 0.0,
-                    delta: None,
-                }
+// TODO: if there's a way to build uniffi with oboe-rs...
+cfg_if::cfg_if! {
+  if #[cfg(not(feature = "ndk"))] {
+        #[derive(Default)]
+        struct CoreStreamer;
+
+        impl CoreStreamer {
+            pub fn update(&self, _: shared::play::PlayOperation, _: futures::channel::mpsc::UnboundedSender<shared::play::PlayOperationOutput>) {
+                unreachable!("ndk feature not enabled")
             }
         }
-        impl AudioOutputCallback for SineWave {
-            // Define type for frames which we would like to process
-            type FrameType = (f32, Mono);
-        
-            // Implement sound data output callback
-            fn on_audio_ready(
-                &mut self,
-                stream: &mut dyn AudioOutputStreamSafe,
-                frames: &mut [f32],
-            ) -> DataCallbackResult {
-                // Configure out wave generator
-                if self.delta.is_none() {
-                    let sample_rate = stream.get_sample_rate() as f32;
-                    self.delta = (self.frequency * 2.0 * PI / sample_rate).into();
-                    println!(
-                        "Prepare sine wave generator: samplerate={}, time delta={}",
-                        sample_rate,
-                        self.delta.unwrap()
-                    );
-                }
-        
-                let delta = self.delta.unwrap();
-        
-                // Generate audio frames to fill the output buffer
-                for frame in frames {
-                    *frame = self.gain * self.phase.sin();
-                    self.phase += delta;
-                    while self.phase > 2.0 * PI {
-                        self.phase -= 2.0 * PI;
-                    }
-                }
-        
-                // Notify the oboe that stream is continued
-                DataCallbackResult::Continue
-            }
-        }
-    
-    
-        let mut sine = AudioStreamBuilder::default()
-            // select desired performance mode
-            .set_performance_mode(PerformanceMode::LowLatency)
-            // select desired sharing mode
-            .set_sharing_mode(SharingMode::Shared)
-            // select sound sample format
-            .set_format::<f32>()
-            // select channels configuration
-            .set_channel_count::<Mono>()
-            // set our generator as callback
-            .set_callback(SineWave::default())
-            // open the output stream
-            .open_stream()
-            .unwrap();
-    
-        // Start playback
-        sine.start().unwrap();
+
+    }  else {
+        use aau::CoreStreamer;
     }
 }
+
+#[derive(uniffi::Object)]
+pub struct AUCoreBridge {
+    core: Arc<Mutex<CoreStreamer>>,
+    // r_out: Arc<Mutex<Receiver<PlayOperationOutput>>>,
+    pool: ThreadPool,
+}
+
+#[uniffi::export]
+pub fn new() -> Arc<AUCoreBridge> {
+    // let (s_out, r_out) = channel::<shared::play::PlayOperationOutput>();
+    let pool = ThreadPool::new().expect("create a thread pool for updates");
+    Arc::new(AUCoreBridge {
+        core: Arc::new(Mutex::new(CoreStreamer::default())),
+        // r_out: Arc::new(Mutex::new(r_out)),
+        pool,
+    })
+}
+
+#[uniffi::export]
+pub async fn request(arc_self: Arc<AUCoreBridge>, bytes: Vec<u8>) -> Vec<u8> {
+    let (s_id, r_id) = unbounded::<shared::play::PlayOperationOutput>();
+
+    let op = bincode::deserialize::<shared::play::PlayOperation>(bytes.as_slice())
+        .expect("deserialize op");
+    let core = arc_self.core.clone();
+    let tx_result = async move {
+        let core = core.lock().expect("streamer locked");
+        core.update(op, s_id);
+    };
+
+    arc_self.pool.spawn(tx_result).expect("cant spawn task");
+
+    let mut outs = r_id
+        .map(|out| bincode::serialize(&out).expect("serialize output"))
+        .collect::<Vec<_>>()
+        .await;
+
+    assert_eq!(outs.len(), 1);
+
+    outs.pop().unwrap()
+}
+
+uniffi::include_scaffolding!("aaucore");

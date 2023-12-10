@@ -24,6 +24,7 @@ pub fn MenuComponent(
             MenuPosition::TopLeft(_) => "top-left",
             MenuPosition::TopRight(_) => "top-right",
             MenuPosition::BottomLeft(_) => "bottom-left",
+            MenuPosition::Center(_) => "center",
         };
 
         format!("absolute bg-red menu menu-{corner}")

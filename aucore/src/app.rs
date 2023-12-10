@@ -1,14 +1,16 @@
-use super::resolve::Resolve;
-use super::system::System;
+use crux_core::render::Render;
+pub use crux_core::App;
+use crux_macros::Effect;
+use fundsp::hacker32::*;
+use serde::{Deserialize, Serialize};
+
 use ::shared::{
     instrument::{Config, Node},
     play::PlayOperation,
 };
-pub use crux_core::App;
-use crux_core::render::Render;
-use crux_macros::Effect;
-use fundsp::hacker32::*;
-use serde::{Deserialize, Serialize};
+
+use super::resolve::Resolve;
+use super::system::System;
 
 #[derive(Default)]
 pub struct Model {
@@ -34,8 +36,8 @@ pub struct RedSirenAUCapabilities {
 }
 
 impl App for RedSirenAU {
-    type Model = Model;
     type Event = PlayOperation;
+    type Model = Model;
     type ViewModel = ViewModel;
     type Capabilities = RedSirenAUCapabilities;
 
@@ -49,36 +51,23 @@ impl App for RedSirenAU {
                 _ = model
                     .system
                     .insert(System::new(model.nodes.as_slice(), &model.config));
+
+                model.audio_data = (0..model.system.as_ref().unwrap().channels)
+                    .map(|_| (0..128).map(|_| 0.0_f32).collect())
+                    .collect();
+
                 caps.render.render();
                 caps.resolve.resolve_success(true);
             }
-            PlayOperation::Resume => {}
-            PlayOperation::Suspend => {}
-            PlayOperation::InstallAU => {}
-            PlayOperation::Permissions => {}
             PlayOperation::Input(input) => {
                 if let Some(sys) = model.system.as_mut() {
-                    let frame_size = input.first().map(|ch| ch.len()).unwrap_or_default();
-
-                    if model.frame_size != frame_size {
-                        model.audio_data = (0..sys.channels)
-                            .map(|_| (0..frame_size).map(|_| 0.0_f32).collect())
-                            .collect();
-                        // model.prev_audio_data = model.audio_data.clone();
-                    }
+                    let frame_size = 128; //input.first().map(|ch| ch.len()).unwrap_or_default();
 
                     let input = input
                         .iter()
                         .take(1)
                         .map(|ch| ch.as_slice())
                         .collect::<Vec<_>>();
-                    // let mut input_data = model.prev_audio_data.to_owned();
-                    // input_data.extend(input.into_iter().nth(0));
-
-                    // let input_data = input_data
-                    //     .iter()
-                    //     .map(|ch| ch.as_slice())
-                    //     .collect::<Vec<_>>();
 
                     let mut output = model
                         .audio_data
@@ -90,14 +79,18 @@ impl App for RedSirenAU {
                         .process(frame_size, input.as_slice(), output.as_mut_slice());
 
                     caps.render.render();
-
-                    // model.prev_audio_data = model.audio_data.clone();
                 } else {
                     log::warn!("skipping new data, no system yet");
                 }
             }
-            PlayOperation::QueryInputDevices => todo!(),
-            PlayOperation::QueryOutputDevices => todo!(),
+            op => {
+                log::debug!("op: {op:?} reached hard bottom")
+            } // PlayOperation::Resume => {}
+              // PlayOperation::Suspend => {}
+              // PlayOperation::InstallAU => {}
+              // PlayOperation::Permissions => {}
+              // PlayOperation::QueryInputDevices => todo!(),
+              // PlayOperation::QueryOutputDevices => todo!(),
         }
     }
 

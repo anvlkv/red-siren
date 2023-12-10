@@ -1,43 +1,42 @@
+use std::sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender};
+use std::sync::{Arc, Mutex};
+
 use anyhow::anyhow;
-use core::f32::consts::PI;
 use futures::channel::mpsc::UnboundedSender;
 use lazy_static::lazy_static;
 use oboe::{
-    AudioOutputCallback, AudioOutputStream, AudioOutputStreamSafe, AudioStream, AudioStreamAsync,
-    AudioStreamBuilder, DataCallbackResult, Output, PerformanceMode, SharingMode, Status, Stereo,
+    AudioInputCallback, AudioInputStreamSafe, AudioOutputCallback, AudioOutputStream,
+    AudioOutputStreamSafe, AudioStream, AudioStreamAsync, AudioStreamBuilder, AudioStreamSafe,
+    ContentType, DataCallbackResult, Input, InputPreset, IsFrameType, Mono, Output,
+    PerformanceMode, SharingMode, Stereo, StreamState, Usage,
 };
+
+use aucore::{RedSirenAUCapabilities, ViewModel};
 use shared::play::{PlayOperation, PlayOperationOutput};
-use std::sync::{Arc, Mutex};
 
 type Core = aucore::Core<aucore::Effect, aucore::RedSirenAU>;
 
+lazy_static! {
+    // TODO: while this seem to work oboe-rs advises against using a mutex inside audio callback.
+    // consider how else to implement the full duplex, which would accept events from app
+    // https://github.com/katyo/oboe-rs/issues/56
+    static ref CORE: Arc<Mutex<Option<AAUCore>>> = Arc::new(Mutex::new(None));
+    static ref OUT_STREAM: Arc<Mutex<Option<AudioStreamAsync<Output, AAUReceiver>>>> =
+        Arc::new(Mutex::new(None));
+    static ref IN_STREAM: Arc<Mutex<Option<AudioStreamAsync<Input, AUCoreMtx>>>> =
+        Arc::new(Mutex::new(None));
+}
+
 pub struct AAUCore {
     core: Core,
-    vm: aucore::ViewModel,
-    // sine
-    frequency: f32,
-    gain: f32,
-    phase: f32,
-    delta: Option<f32>,
+    render_sender: SyncSender<ViewModel>,
+    resolve_sender: Sender<PlayOperationOutput>,
 }
 
 impl AAUCore {
-    fn new() -> Self {
-        Self {
-            core: aucore::Core::<aucore::Effect, aucore::RedSirenAU>::new::<
-                aucore::RedSirenAUCapabilities,
-            >(),
-            frequency: 440.0,
-            gain: 0.5,
-            phase: 0.0,
-            delta: None,
-            vm: Default::default(),
-        }
-    }
-
     fn update(
         &mut self,
-        event: shared::play::PlayOperation,
+        event: PlayOperation,
         mut rx: Option<UnboundedSender<PlayOperationOutput>>,
     ) {
         let effects = self.core.process_event(event);
@@ -53,138 +52,199 @@ impl AAUCore {
         rx: &mut Option<UnboundedSender<PlayOperationOutput>>,
     ) {
         match effect {
-            aucore::Effect::Render(_) => {
-                self.vm = self.core.view();
-            }
+            aucore::Effect::Render(_) => self
+                .render_sender
+                .send(self.core.view())
+                .expect("send render"),
             aucore::Effect::Resolve(output) => {
                 if let Some(rx) = rx.take() {
                     rx.unbounded_send(output.operation).expect("send resolve");
                 } else {
-                    todo!()
-                    // self.s_out.send(output.operation)
+                    self.resolve_sender
+                        .send(output.operation)
+                        .expect("send resolve")
                 }
             }
         }
     }
 }
 
-struct AUCoreMtx(Arc<Mutex<AAUCore>>);
+struct AUCoreMtx(Arc<Mutex<Option<AAUCore>>>);
 
-impl AudioOutputCallback for AUCoreMtx {
-    // Define type for frames which we would like to process
-    type FrameType = (f32, Stereo);
+impl AudioInputCallback for AUCoreMtx {
+    type FrameType = (f32, Mono);
 
-    // Implement sound data output callback
     fn on_audio_ready(
         &mut self,
-        stream: &mut dyn AudioOutputStreamSafe,
-        frames: &mut [(f32, f32)],
+        _: &mut dyn AudioInputStreamSafe,
+        frames: &[<Self::FrameType as IsFrameType>::Type],
     ) -> DataCallbackResult {
-        let mut aau = match self.0.try_lock() {
+        let mut aau = match self.0.lock() {
             Ok(a) => a,
-            Err(e) => {
-                log::error!("output skips turn {e:?}");
-                return DataCallbackResult::Continue;
+            Err(poisoned) => {
+                log::error!("poison in AudioInputCallback: {}", poisoned);
+                poisoned.into_inner()
             }
         };
-        log::debug!("playing frame");
-        // Configure out wave generator
-        if aau.delta.is_none() {
-            let sample_rate = stream.get_sample_rate() as f32;
-            aau.delta = (aau.frequency * 2.0 * PI / sample_rate).into();
-            log::info!(
-                "Prepare sine wave generator: samplerate={}, time delta={}",
-                sample_rate,
-                aau.delta.unwrap()
-            );
-        }
+        let aau = aau.as_mut().expect("core");
 
-        let delta = aau.delta.unwrap();
-
-        // Generate audio frames to fill the output buffer
-        for frame in frames.iter_mut() {
-            *frame = (
-                aau.gain * aau.phase.sin(),
-                aau.gain * aau.phase.sin() * -1.0,
-            );
-            aau.phase += delta;
-            while aau.phase > 2.0 * PI {
-                aau.phase -= 2.0 * PI;
-            }
-        }
-
-        log::debug!("frame: {frames:?}");
-
-        // Notify the oboe that stream is continued
+        aau.update(PlayOperation::Input(vec![Vec::from(frames)]), None);
         DataCallbackResult::Continue
     }
 }
 
-lazy_static! {
-    static ref CORE: Arc<Mutex<AAUCore>> = Arc::new(Mutex::new(AAUCore::new()));
-    static ref OUT_STREAM: Arc<Mutex<Option<AudioStreamAsync<Output, AUCoreMtx>>>> =
-        Arc::new(Mutex::new(None));
+struct AAUReceiver(Receiver<ViewModel>);
+
+impl AudioOutputCallback for AAUReceiver {
+    type FrameType = (f32, Stereo);
+
+    fn on_audio_ready(
+        &mut self,
+        _: &mut dyn AudioOutputStreamSafe,
+        frames: &mut [(f32, f32)],
+    ) -> DataCallbackResult {
+        match self.0.recv() {
+            Ok(vm) => {
+                let ch1 = vm.0.get(0).expect("ch1");
+                let ch2 = vm.0.get(1).unwrap_or(ch1);
+
+                for (frame, vm) in frames.iter_mut().zip(ch1.iter().zip(ch2)) {
+                    *frame = (*vm.0, *vm.1);
+                }
+
+                log::trace!("render frames: {frames:?}");
+
+                DataCallbackResult::Continue
+            }
+            Err(e) => {
+                log::error!("{e:?}");
+
+                DataCallbackResult::Stop
+            }
+        }
+    }
 }
 
 pub struct CoreStreamer;
 
 impl Default for CoreStreamer {
     fn default() -> Self {
-        let stream = AudioStreamBuilder::default()
-            // select desired performance mode
-            .set_performance_mode(PerformanceMode::LowLatency)
-            // select desired sharing mode
-            .set_sharing_mode(SharingMode::Shared)
-            // select sound sample format
-            .set_format::<f32>()
-            // select channels configuration
-            .set_channel_count::<Stereo>()
-            // set our generator as callback
-            .set_callback(AUCoreMtx(CORE.clone()))
-            // open the output stream
-            .open_stream()
-            .expect("create stream");
+        let (render_sender, render_receiver) = sync_channel(1);
+        let (resolve_sender, resolve_receiver) = channel();
+        let core = AAUCore {
+            core: aucore::Core::new::<RedSirenAUCapabilities>(),
+            render_sender,
+            resolve_sender,
+        };
 
-        _ = OUT_STREAM.lock().expect("stream lock").insert(stream);
+        _ = CORE.lock().expect("core lock").insert(core);
+
+        Self::create_new_input();
+
+        Self::create_new_output(render_receiver);
 
         Self
     }
 }
 impl CoreStreamer {
     fn start(&self) -> anyhow::Result<()> {
-        let mut stream = OUT_STREAM.lock().expect("already busy");
-
+        let mut stream = IN_STREAM.lock().expect("already busy");
         let stream = stream.as_mut().ok_or(anyhow!("no stream"))?;
+
+        match stream.get_state() {
+            StreamState::Open => {
+                stream.start()?;
+            }
+            StreamState::Disconnected => {
+                return Err(anyhow!("input stream gone"));
+            }
+            _ => {}
+        };
+
+        let mut stream = OUT_STREAM.lock().expect("already busy");
+        let stream = stream.as_mut().ok_or(anyhow!("no stream"))?;
+
         stream.start()?;
 
         Ok(())
     }
 
     fn pause(&self) -> anyhow::Result<()> {
-        match OUT_STREAM.try_lock() {
-            Ok(mut l) => {
-                let stream = l.as_mut();
-                let stream = stream.ok_or(anyhow!("no stream"))?;
-
-                stream.pause()?;
-
-                Ok(())
+        let mut stream = match OUT_STREAM.lock() {
+            Ok(s) => s,
+            Err(poisoned) => {
+                log::error!("poison in pause: {}", poisoned);
+                poisoned.into_inner()
             }
-            Err(_) => {
-                std::thread::sleep(std::time::Duration::from_micros(20));
-                self.pause()
-            }
-        }
+        };
+
+        let stream = stream.as_mut();
+        let stream = stream.ok_or(anyhow!("no stream"))?;
+
+        stream.pause()?;
+
+        // let mut stream = match IN_STREAM.lock() {
+        //     Ok(s) => s,
+        //     Err(poisoned) => {
+        //         log::error!("poison in pause: {}", poisoned);
+        //         poisoned.into_inner()
+        //     }
+        // };
+        //
+        // let stream = stream.as_mut();
+        // let stream = stream.ok_or(anyhow!("no stream"))?;
+        //
+        // stream.stop()?;
+
+        self.forward(PlayOperation::Suspend, None);
+
+        Ok(())
     }
 
-    fn forward(&self, event: PlayOperation, rx: UnboundedSender<PlayOperationOutput>) {
-        match CORE.try_lock() {
-            Ok(mut core) => core.update(event, Some(rx)),
-            Err(_) => {
-                std::thread::sleep(std::time::Duration::from_micros(20));
-                return self.forward(event, rx);
+    fn forward(&self, event: PlayOperation, rx: Option<UnboundedSender<PlayOperationOutput>>) {
+        let mut aau = match CORE.lock() {
+            Ok(core) => core,
+            Err(poisoned) => {
+                log::error!("poison in forwarding: {}", poisoned);
+                poisoned.into_inner()
             }
-        }
+        };
+        let aau = aau.as_mut().expect("core");
+
+        aau.update(event, rx);
+    }
+
+    fn create_new_input() {
+        let in_stream = AudioStreamBuilder::default()
+            .set_performance_mode(PerformanceMode::LowLatency)
+            .set_format::<f32>()
+            .set_channel_count::<Mono>()
+            .set_direction::<Input>()
+            .set_input_preset(InputPreset::Unprocessed)
+            .set_frames_per_callback(128)
+            .set_sample_rate(44100)
+            .set_callback(AUCoreMtx(CORE.clone()))
+            .open_stream()
+            .expect("create input stream");
+
+        _ = IN_STREAM.lock().expect("stream lock").insert(in_stream);
+    }
+
+    fn create_new_output(render_receiver: Receiver<ViewModel>) {
+        let out_stream = AudioStreamBuilder::default()
+            .set_performance_mode(PerformanceMode::LowLatency)
+            .set_sharing_mode(SharingMode::Shared)
+            .set_format::<f32>()
+            .set_channel_count::<Stereo>()
+            .set_frames_per_callback(128)
+            .set_usage(Usage::Game)
+            .set_content_type(ContentType::Music)
+            .set_sample_rate(44100)
+            .set_callback(AAUReceiver(render_receiver))
+            .open_stream()
+            .expect("create output stream");
+
+        _ = OUT_STREAM.lock().expect("stream lock").insert(out_stream);
     }
 
     pub fn update(&self, event: PlayOperation, rx: UnboundedSender<PlayOperationOutput>) {
@@ -213,7 +273,7 @@ impl CoreStreamer {
                         .expect("receiver is gone");
                 }
             },
-            _ => self.forward(event, rx),
+            _ => self.forward(event, Some(rx)),
         }
     }
 }

@@ -1,5 +1,6 @@
 use crux_core::capability::CapabilityContext;
 use crux_macros::Capability;
+
 use shared::play::PlayOperationOutput;
 
 #[derive(Capability)]
@@ -48,7 +49,7 @@ where
     pub fn resolve_none(&self) {
         let ctx = self.context.clone();
 
-        self.context.spawn(async move  {
+        self.context.spawn(async move {
             _ = ctx.request_from_shell(PlayOperationOutput::None).await;
         })
     }

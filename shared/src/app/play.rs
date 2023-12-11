@@ -1,7 +1,8 @@
-use super::instrument::{Config, Node};
 use crux_core::capability::{CapabilityContext, Operation};
 use crux_macros::Capability;
 use serde::{Deserialize, Serialize};
+
+use super::instrument::{Config, Node};
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum PlayOperation {
@@ -46,7 +47,7 @@ where
         Self { context }
     }
 
-    pub fn configure<F>(&self, config: &Config,nodes: &[Node], f: F)
+    pub fn configure<F>(&self, config: &Config, nodes: &[Node], f: F)
     where
         Ev: 'static,
         F: Fn(bool) -> Ev + Send + 'static,
@@ -55,9 +56,10 @@ where
         let config = config.clone();
         let nodes = Vec::from(nodes);
 
-
         self.context.spawn(async move {
-            let done = ctx.request_from_shell(PlayOperation::Config(config, nodes)).await;
+            let done = ctx
+                .request_from_shell(PlayOperation::Config(config, nodes))
+                .await;
             if let PlayOperationOutput::Success(done) = done {
                 ctx.update_app(f(done));
             } else {

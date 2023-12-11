@@ -1,14 +1,3 @@
-pub mod config;
-pub mod keyboard;
-pub mod layout;
-pub mod node;
-pub mod string;
-
-use crate::{
-    geometry::Rect,
-    play::Play,
-    Navigate,
-};
 use crux_core::render::Render;
 use crux_core::App;
 use crux_macros::Effect;
@@ -19,6 +8,14 @@ pub use config::Config;
 pub use layout::{Layout, LayoutRoot};
 use node::spawn_all_nodes;
 pub use node::Node;
+
+use crate::{geometry::Rect, play::Play, Navigate};
+
+pub mod config;
+pub mod keyboard;
+pub mod layout;
+pub mod node;
+pub mod string;
 
 #[derive(Default)]
 pub struct Instrument;

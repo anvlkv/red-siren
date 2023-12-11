@@ -1,6 +1,6 @@
 use keyframe_derive::CanTween;
-use mint::{Vector2, Point2};
-use serde::{Serialize, Deserialize};
+use mint::{Point2, Vector2};
+use serde::{Deserialize, Serialize};
 
 use super::rect::Rect;
 
@@ -28,7 +28,7 @@ impl Line {
     }
 
     pub fn vertical(len: f64) -> Self {
-        Self::new(0.0, 0.0, 0.0, len,)
+        Self::new(0.0, 0.0, 0.0, len)
     }
 
     pub fn horizontal(len: f64) -> Self {

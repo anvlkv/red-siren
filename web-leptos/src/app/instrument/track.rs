@@ -1,4 +1,5 @@
 use leptos::*;
+
 use shared::geometry::Rect;
 
 #[component]

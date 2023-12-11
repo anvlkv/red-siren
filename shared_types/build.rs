@@ -1,5 +1,6 @@
-use crux_core::typegen::TypeGen;
 use std::path::PathBuf;
+
+use crux_core::typegen::TypeGen;
 
 fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=../shared");
@@ -14,12 +15,14 @@ fn main() -> anyhow::Result<()> {
         gen.register_type::<Node>()?;
         gen.register_app::<RedSirenAU>()?;
 
-
         let output_root = PathBuf::from("./generated");
 
         gen.swift("AUTypes", output_root.join("swift"))?;
 
-        gen.java("com.anvlkv.redsiren.shared.au_types", output_root.join("java"))?;
+        gen.java(
+            "com.anvlkv.redsiren.shared.au_types",
+            output_root.join("java"),
+        )?;
 
         gen.typescript("au_types", output_root.join("typescript"))?;
     }
@@ -53,7 +56,10 @@ fn main() -> anyhow::Result<()> {
 
         gen.swift("SharedTypes", output_root.join("swift"))?;
 
-        gen.java("com.anvlkv.redsiren.shared.shared_types", output_root.join("java"))?;
+        gen.java(
+            "com.anvlkv.redsiren.shared.shared_types",
+            output_root.join("java"),
+        )?;
 
         gen.typescript("shared_types", output_root.join("typescript"))?;
     }

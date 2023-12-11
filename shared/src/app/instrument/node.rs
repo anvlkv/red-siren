@@ -1,6 +1,7 @@
-use super::keyboard::{Button, Track};
 use hecs::{Entity, World};
 use serde::{Deserialize, Serialize};
+
+use super::keyboard::{Button, Track};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Copy, Debug)]
 
@@ -13,17 +14,8 @@ pub struct Node {
 impl Eq for Node {}
 
 impl Node {
-    pub fn spawn(
-        world: &mut World,
-        freq: (f32, f32),
-        f_n: usize,
-        pan: i8,
-    ) -> Entity {
-        world.spawn((Self {
-            freq,
-            f_n,
-            pan
-        },))
+    pub fn spawn(world: &mut World, freq: (f32, f32), f_n: usize, pan: i8) -> Entity {
+        world.spawn((Self { freq, f_n, pan },))
     }
 }
 
@@ -40,8 +32,6 @@ pub fn spawn_all_nodes(world: &mut World) -> Vec<Entity> {
 
     nodes.sort_by(|a, b| a.1.cmp(&b.1));
     nodes.reverse();
-
-    
 
     nodes
         .into_iter()

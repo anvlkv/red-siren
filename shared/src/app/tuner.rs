@@ -1,29 +1,22 @@
-use serde::{Deserialize, Serialize};
-
 use crux_core::render::Render;
 use crux_core::App;
 use crux_kv::KeyValue;
 use crux_macros::Effect;
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Default)]
 pub struct Tuner;
 
 #[derive(Default, Serialize, Deserialize, Clone)]
-pub struct Model {
-
-}
+pub struct Model {}
 
 #[derive(Default, Serialize, Deserialize, Clone)]
-pub struct TunerVM {
-
-}
+pub struct TunerVM {}
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum TunerEV {
-  GetTuning,
-  SetTuning,
-
+    GetTuning,
+    SetTuning,
 }
 
 #[cfg_attr(feature = "typegen", derive(crux_macros::Export))]

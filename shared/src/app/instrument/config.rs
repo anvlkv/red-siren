@@ -10,7 +10,6 @@ const DPI_RANGE: &[usize] = &[120, 160, 240, 320, 480, 640];
 const F_BASE: f64 = 110.0;
 const F_MAX: f64 = 5500.0;
 
-
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Config {
     pub portrait: bool,
@@ -92,9 +91,11 @@ impl Config {
             let space = size as f64 * BUTTON_SPACE_RATIO * 2.0;
             let active_length = (safe_length - space).round() as usize;
             let slots = num_integer::gcd(space.round() as usize + size, active_length);
-            for (groups, buttons_group) in [(slots.div_euclid(5), 5),
+            for (groups, buttons_group) in [
+                (slots.div_euclid(5), 5),
                 (slots.div_euclid(3), 3),
-                (slots.div_euclid(2), 2)] {
+                (slots.div_euclid(2), 2),
+            ] {
                 let count = groups * buttons_group;
                 let used_space = space * count as f64;
                 let f_max = f0 as f64 * 2.0 * (groups * buttons_group) as f64;
@@ -150,7 +151,8 @@ impl Config {
             .iter()
             .position(|d| *d as f64 >= dpi)
             .map_or(0.0, |pos| {
-                candidates.len() as f64 - ((pos + 1) as f64 / DPI_RANGE.len() as f64) * candidates.len() as f64
+                candidates.len() as f64
+                    - ((pos + 1) as f64 / DPI_RANGE.len() as f64) * candidates.len() as f64
             })
             .abs()
             .round() as usize;

@@ -121,7 +121,7 @@ impl Rect {
         )
     }
 
-    pub fn offset_top_and_bottom(&self, top: f64, bottom: f64) -> Self  {
+    pub fn offset_top_and_bottom(&self, top: f64, bottom: f64) -> Self {
         Self::new(
             self.rect.x.x,
             self.rect.y.x,
@@ -129,8 +129,8 @@ impl Rect {
             self.rect.y.y + bottom,
         )
     }
-   
-    pub fn offset_left_and_right(&self, left: f64, right: f64) -> Self  {
+
+    pub fn offset_left_and_right(&self, left: f64, right: f64) -> Self {
         Self::new(
             self.rect.x.x - left,
             self.rect.y.x + right,

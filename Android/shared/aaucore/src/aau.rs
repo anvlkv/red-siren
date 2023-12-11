@@ -130,9 +130,9 @@ pub struct CoreStreamer;
 impl Default for CoreStreamer {
     fn default() -> Self {
         let (render_sender, render_receiver) = sync_channel(1);
-        let (resolve_sender, resolve_receiver) = channel();
+        let (resolve_sender, _resolve_receiver) = channel();
         let core = AAUCore {
-            core: aucore::Core::new::<RedSirenAUCapabilities>(),
+            core: Core::new::<RedSirenAUCapabilities>(),
             render_sender,
             resolve_sender,
         };

@@ -2,7 +2,6 @@ package com.anvlkv.redsiren.app
 
 import android.content.res.Resources
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,7 +23,6 @@ import com.anvlkv.redsiren.shared.shared_types.InstrumentEV
 import com.anvlkv.redsiren.shared.shared_types.InstrumentVM
 import com.anvlkv.redsiren.shared.shared_types.Line
 import com.anvlkv.redsiren.shared.shared_types.MenuPosition
-import com.anvlkv.redsiren.shared.shared_types.PlaybackEV
 import com.anvlkv.redsiren.shared.shared_types.Rect
 import kotlin.math.min
 

@@ -2,6 +2,7 @@
 
 package com.anvlkv.redsiren
 
+
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -11,11 +12,8 @@ import com.anvlkv.redsiren.shared.aaucore.auLogInit
 import com.anvlkv.redsiren.shared.aaucore.new
 import com.anvlkv.redsiren.shared.aaucore.request
 import com.anvlkv.redsiren.shared.handleResponse
-
-
-import com.anvlkv.redsiren.shared.processEvent
-import com.anvlkv.redsiren.shared.view
 import com.anvlkv.redsiren.shared.logInit
+import com.anvlkv.redsiren.shared.processEvent
 import com.anvlkv.redsiren.shared.shared_types.Activity
 import com.anvlkv.redsiren.shared.shared_types.Effect
 import com.anvlkv.redsiren.shared.shared_types.Event
@@ -25,7 +23,7 @@ import com.anvlkv.redsiren.shared.shared_types.PlayOperationOutput
 import com.anvlkv.redsiren.shared.shared_types.Request
 import com.anvlkv.redsiren.shared.shared_types.Requests
 import com.anvlkv.redsiren.shared.shared_types.ViewModel
-import com.novi.bincode.BincodeSerializer
+import com.anvlkv.redsiren.shared.view
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import kotlinx.coroutines.CompletableDeferred
@@ -34,7 +32,6 @@ import java.util.Optional
 
 open class Core : androidx.lifecycle.ViewModel() {
     var view: ViewModel by mutableStateOf(ViewModel.bincodeDeserialize(view()))
-        private set
 
     var navigateTo: Optional<Activity> = Optional.empty()
 

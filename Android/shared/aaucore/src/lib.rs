@@ -1,8 +1,9 @@
+use std::sync::{Arc, Mutex};
+
 use futures::channel::mpsc::unbounded;
 use futures::executor::ThreadPool;
 use futures::task::SpawnExt;
 use futures::StreamExt;
-use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "ndk")]
 mod aau;
@@ -49,6 +50,7 @@ pub fn new() -> Arc<AUCoreBridge> {
     // let (s_out, r_out) = channel::<shared::play::PlayOperationOutput>();
     let pool = ThreadPool::new().expect("create a thread pool for updates");
     Arc::new(AUCoreBridge {
+        #[allow(clippy::default_constructed_unit_structs)]
         core: Arc::new(Mutex::new(CoreStreamer::default())),
         // r_out: Arc::new(Mutex::new(r_out)),
         pool,

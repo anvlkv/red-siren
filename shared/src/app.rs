@@ -126,6 +126,8 @@ impl App for RedSiren {
             }
             Event::Activate(act) => {
                 model.activity = act;
+
+                #[allow(clippy::single_match)]
                 match act {
                     // aka resetting
                     Activity::Intro => {

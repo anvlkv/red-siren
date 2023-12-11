@@ -47,7 +47,7 @@ impl MenuPosition {
 
 impl CanTween for MenuPosition {
     fn ease(from: Self, to: Self, time: impl keyframe::num_traits::Float) -> Self {
-        let r1 = from.rect().clone();
+        let r1 = *from.rect();
 
         match to {
             MenuPosition::TopLeft(r) => MenuPosition::TopLeft(CanTween::ease(r1, r, time)),

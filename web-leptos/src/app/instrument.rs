@@ -12,6 +12,7 @@ mod string;
 mod track;
 
 #[component]
+#[allow(unused_variables)]
 pub fn InstrumentComponent(
     vm: Signal<instrument::InstrumentVM>,
     ev: SignalSetter<instrument::InstrumentEV>,

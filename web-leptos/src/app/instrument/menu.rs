@@ -4,6 +4,7 @@ use shared::instrument::layout::MenuPosition;
 use shared::{Activity, Event};
 
 #[component]
+#[allow(unused_variables)]
 pub fn MenuComponent(
     #[prop(into)] position: Signal<MenuPosition>,
     #[prop(optional)] expanded: bool,

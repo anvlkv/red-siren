@@ -66,7 +66,9 @@ pub fn RootComponent() -> impl IntoView {
         <Meta name="msapplication-wide310x150logo" content="/favicon/mstile-310x150.png" />
         <Meta name="msapplication-square310x310logo" content="/favicon/mstile-310x310.png" />
         <Meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-
+        <Style>
+            {"@import url('https://fonts.googleapis.com/css2?family=Rosarivo:ital@0;1&display=swap');"}
+        </Style>
 
         <Router fallback=|| {
           let mut outside_errors = Errors::default();

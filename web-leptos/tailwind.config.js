@@ -10,6 +10,9 @@ module.exports = {
       black: '#353839',
       gray: '#36454F',
       cinnabar: '#E44D2E'
+    },
+    fontFamily: {
+      'serif': ['"Rosarivo"', 'cursive']
     }
   },
   variants: {

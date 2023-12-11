@@ -1,8 +1,7 @@
-use super::*;
-use lazy_static::lazy_static;
 use crux_core::bridge::Bridge;
+use lazy_static::lazy_static;
 
-
+use super::*;
 
 uniffi::include_scaffolding!("shared");
 
@@ -10,16 +9,13 @@ lazy_static! {
     static ref CORE: Bridge<Effect, RedSiren> = Bridge::new(Core::new::<RedSirenCapabilities>());
 }
 
-
 pub fn process_event(data: &[u8]) -> Vec<u8> {
     CORE.process_event(data)
 }
 
-
 pub fn handle_response(uuid: &[u8], data: &[u8]) -> Vec<u8> {
     CORE.handle_response(uuid, data)
 }
-
 
 pub fn view() -> Vec<u8> {
     CORE.view()
@@ -37,6 +33,7 @@ pub fn log_init() {
                 .with_tag("red_siren::shared"),
         );
     }
+
     #[cfg(feature = "ios")]
     {
         oslog::OsLogger::new("com.anvlkv.RedSiren.Core")

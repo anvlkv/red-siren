@@ -1,13 +1,15 @@
+use anyhow::Result;
+use hecs::{Bundle, Entity, World};
+use keyframe::CanTween;
+use serde::{Deserialize, Serialize};
+
+use crate::geometry::{line::Line, rect::Rect};
+
 use super::{
     keyboard::{Button, ButtonGroup, Keyboard, Track},
     string::{InboundString, OutboundString},
     Config,
 };
-use crate::geometry::{line::Line, rect::Rect};
-use anyhow::Result;
-use hecs::{Bundle, Entity, World};
-use keyframe::CanTween;
-use serde::{Deserialize, Serialize};
 
 #[derive(Default, Serialize, Deserialize, Clone, PartialEq, Debug, Eq)]
 pub struct Layout {
@@ -126,7 +128,7 @@ impl Layout {
             .into_iter()
             .unzip();
 
-        log::debug!("{tracks:#?}");
+        log::debug!("tracks {tracks:#?}");
 
         let menu_position = tracks
             .first()

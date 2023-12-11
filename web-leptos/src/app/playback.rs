@@ -1,7 +1,8 @@
+use std::{cell::RefCell, rc::Rc};
+
 use js_sys::{Promise, Uint8Array};
 use leptos::*;
 use shared::play;
-use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
@@ -14,8 +15,8 @@ impl Playback {
     }
 
     pub async fn request(&self, op: play::PlayOperation) -> play::PlayOperationOutput {
-        log::trace!("{op:?}");
-        let data = Self::to_forwarded_event(op);
+        log::trace!("playback request {op:?}");
+        let data = Self::js_value_forwarded_event(op);
         let promise = self.0.borrow().request(&data);
 
         JsFuture::from(promise)
@@ -24,18 +25,16 @@ impl Playback {
             .expect("bridging error")
     }
 
-    fn to_forwarded_event(event: play::PlayOperation) -> JsValue {
+    fn js_value_forwarded_event(event: play::PlayOperation) -> JsValue {
         let bin = bincode::serialize(&event).expect("event serialization err");
         let data = Uint8Array::from(bin.as_slice());
         data.into()
     }
 
     fn from_forwarded_effect(result: JsValue) -> play::PlayOperationOutput {
-        log::trace!("{result:?}");
+        log::trace!("playback result {result:?}");
         let data = Uint8Array::from(result);
-        let mut dst = (0..data.length())
-            .map(|_| 0 as u8)
-            .collect::<Vec<_>>();
+        let mut dst = (0..data.length()).map(|_| 0 as u8).collect::<Vec<_>>();
         data.copy_to(dst.as_mut_slice());
         bincode::deserialize::<play::PlayOperationOutput>(dst.as_slice())
             .expect("effect deserialization err")

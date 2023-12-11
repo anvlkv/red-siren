@@ -166,6 +166,8 @@ impl CoreStreamer {
 
         stream.start()?;
 
+        log::info!("starting");
+
         Ok(())
     }
 
@@ -198,6 +200,8 @@ impl CoreStreamer {
 
         self.forward(PlayOperation::Suspend, None);
 
+        log::info!("pausing");
+
         Ok(())
     }
 
@@ -212,6 +216,8 @@ impl CoreStreamer {
         let aau = aau.as_mut().expect("core");
 
         aau.update(event, rx);
+
+        log::info!("forwarding");
     }
 
     fn create_new_input() {

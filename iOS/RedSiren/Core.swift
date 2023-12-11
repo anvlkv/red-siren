@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import SharedTypes
+import OSLog
 
 @MainActor
 class Core: ObservableObject {
@@ -44,6 +45,9 @@ class Core: ObservableObject {
             for request in requests {
                 processEffect(request)
             }
+        case .play(let op):
+            Logger().log("opeartion");
+            break
         }
     }
 }

@@ -6,6 +6,7 @@ resolver = "1"
 authors = ["a.nvlkv <a.nvlkv@protonmail.ch>"]
 repository = "https://github.com/anvlkv/red-siren"
 edition = "2021"
+version = "0.1.0"
 license = "CC0 1.0 Universal"
 rust-version = "1.67"
 keywords = ["music", "game"]

@@ -1,17 +1,19 @@
-mod core;
-mod instrument;
-mod intro;
+use cfg_if::cfg_if;
+use leptos::*;
+use leptos_meta::*;
+use leptos_router::*;
+use leptos_use::{use_event_listener, use_window};
+
+use shared::{Activity, Event};
 
 use crate::{
     error_template::{AppError, ErrorTemplate},
     util::use_dpi,
 };
-use leptos::*;
-use leptos_meta::*;
-use leptos_router::*;
-use leptos_use::{use_event_listener, use_window};
-use shared::{Activity, Event};
-use cfg_if::cfg_if;
+
+mod core;
+mod instrument;
+mod intro;
 
 cfg_if! { if #[cfg(feature="browser")]{
     mod playback;
@@ -28,7 +30,6 @@ cfg_if! { if #[cfg(feature="browser")]{
         }
     }
 }}
-
 
 pub fn provide_playback() {
     let (r_op, _) = create_signal::<playback::Playback>(playback::Playback::new());
@@ -78,7 +79,7 @@ pub fn RootComponent() -> impl IntoView {
           }
           .into_view()
       }>
-          <main class="bg-red dark:bg-black text-black dark:text-red">
+          <main class="bg-red dark:bg-black text-black dark:text-red font-serif">
               <RedSirenCore/>
           </main>
       </Router>
@@ -105,6 +106,7 @@ fn RedSirenCore() -> impl IntoView {
         "/tune" => set_event(Event::Activate(Activity::Tune)),
         "/play" => set_event(Event::Activate(Activity::Play)),
         "/listen" => set_event(Event::Activate(Activity::Listen)),
+        "/about" => set_event(Event::Activate(Activity::About)),
         _ => panic!("route not using activity"),
     });
 
@@ -115,6 +117,7 @@ fn RedSirenCore() -> impl IntoView {
             Activity::Tune => "/tune",
             Activity::Play => "/play",
             Activity::Listen => "/listen",
+            Activity::About => "/about",
         };
 
         navigate(path, Default::default())
@@ -151,6 +154,8 @@ fn RedSirenCore() -> impl IntoView {
     let intro_ev = SignalSetter::map(move |ev| set_event.set(Event::IntroEvent(ev)));
     let instrument_vm = create_read_slice(view_rw_signal, move |v| v.instrument.clone());
     let instrument_ev = SignalSetter::map(move |ev| set_event.set(Event::InstrumentEvent(ev)));
+
+    provide_context(set_event);
 
     view! {
         <Routes>

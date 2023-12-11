@@ -1,5 +1,3 @@
-use crate::instrument::layout::MenuPosition;
-use crate::{geometry::Rect, instrument, Navigate};
 use crux_core::render::Render;
 use crux_core::App;
 use crux_macros::Effect;
@@ -11,7 +9,11 @@ use keyframe_derive::CanTween;
 use mint::{Point2, Point3};
 use serde::{Deserialize, Serialize};
 
+use crate::instrument::layout::MenuPosition;
+use crate::{geometry::Rect, instrument, Activity, Navigate};
+
 const INTRO_DURATION: f64 = 2750.0;
+const EXIT_DURATION: f64 = 750.0;
 
 #[derive(Default)]
 pub struct Intro;
@@ -26,6 +28,9 @@ pub struct Model {
     ts_end: f64,
     ts_current: f64,
     reduced_motion: bool,
+    intro_animation_ended: bool,
+    transition_animation_started: bool,
+    transition_to: Option<Activity>,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, CanTween)]
@@ -38,6 +43,7 @@ pub struct IntroVM {
     pub flute_position: Point2<f64>,
     pub buttons_position: Point2<f64>,
     pub button_size: f64,
+    pub menu_opacity: f64,
 }
 
 impl Eq for IntroVM {}
@@ -49,6 +55,7 @@ impl Default for IntroVM {
             animation_progress: 0.0,
             view_box: Rect::size(430.0, 932.0),
             intro_opacity: 1.0,
+            menu_opacity: 0.0,
             flute_rotation: Point3 {
                 z: -17.1246,
                 x: 48.3365,
@@ -76,6 +83,7 @@ impl IntroVM {
             animation_progress: 0.0,
             view_box: Rect::size(width, height),
             intro_opacity: 1.0,
+            menu_opacity: 0.0,
             flute_rotation: Point3 {
                 z: -17.1246,
                 x: 48.3365 * scale,
@@ -100,6 +108,7 @@ pub enum IntroEV {
     StartAnimation { ts_start: f64, reduced_motion: bool },
     SetViewBoxInit { width: f64, height: f64 },
     TsNext(f64),
+    Menu(Activity),
 }
 
 impl Eq for IntroEV {}
@@ -129,7 +138,8 @@ impl App for Intro {
             IntroEV::SetInstrumentTarget(layout, config) => {
                 model.layout = *layout;
                 model.config = *config;
-                self.update_sequence(model);
+                model.intro_animation_ended = false;
+                self.build_intro_sequence(model);
                 self.update(IntroEV::TsNext(model.ts_current), model, caps);
                 caps.render.render();
             }
@@ -141,35 +151,67 @@ impl App for Intro {
                 model.ts_end = ts_start + INTRO_DURATION;
                 model.ts_current = ts_start;
                 model.reduced_motion = reduced_motion;
-
-                self.update_sequence(model);
+                model.intro_animation_ended = false;
+                self.build_intro_sequence(model);
                 caps.render.render();
             }
             IntroEV::TsNext(ts) => {
                 model.ts_current = ts;
-                let seq = model.sequence.as_mut();
-                let seq = seq.unwrap();
-                let advance_duration = (ts - model.ts_start) / INTRO_DURATION;
-                if model.reduced_motion {
-                    if seq.has_keyframe_at(advance_duration)
-                        || seq
-                            .pair()
-                            .1
-                            .map(|f| f.time() <= advance_duration)
-                            .unwrap_or(true)
-                    {
+                let advance_duration = (ts - model.ts_start)
+                    / if model.transition_animation_started {
+                        EXIT_DURATION
+                    } else {
+                        INTRO_DURATION
+                    };
+
+                if !model.intro_animation_ended || model.transition_animation_started {
+                    let seq = model.sequence.as_mut();
+                    let seq = seq.unwrap();
+                    if model.reduced_motion {
+                        if seq.has_keyframe_at(advance_duration)
+                            || seq
+                                .pair()
+                                .1
+                                .map(|f| f.time() <= advance_duration)
+                                .unwrap_or(true)
+                        {
+                            seq.advance_to(advance_duration);
+                        }
+                    } else {
                         seq.advance_to(advance_duration);
                     }
-                } else {
-                    seq.advance_to(advance_duration);
-                }
 
-                if !seq.finished() {
+                    if seq.finished() {
+                        if model.transition_animation_started {
+                            caps.navigate.to(model.transition_to.unwrap())
+                        } else {
+                            model.intro_animation_ended = true;
+                        }
+                    }
+
                     caps.render.render();
-                } else {
-                    caps.navigate.to(crate::Activity::Play);
-                    log::info!("intro played")
                 }
+            }
+            IntroEV::Menu(next_activity) => {
+                match &next_activity {
+                    Activity::Play => {}
+                    Activity::About => {
+                        todo!("implement layout")
+                    }
+                    Activity::Listen => {
+                        todo!("implement layout")
+                    }
+                    Activity::Tune => {
+                        todo!("implement layout")
+                    }
+                    Activity::Intro => unreachable!("already in intro"),
+                }
+                _ = model.transition_to.insert(next_activity);
+                model.transition_animation_started = true;
+                self.build_transition_sequence(model);
+                model.ts_start = model.ts_current;
+
+                caps.render.render()
             }
         }
     }
@@ -191,7 +233,28 @@ impl App for Intro {
 }
 
 impl Intro {
-    fn update_sequence(&self, model: &mut Model) {
+    fn build_transition_sequence(&self, model: &mut Model) {
+        if let Some(seq) = model.sequence.take() {
+            let vm = seq.now();
+
+            let transition = keyframes![
+                (vm.clone(), 0.0),
+                (
+                    IntroVM {
+                        layout: model.layout.clone(),
+                        ..vm.clone()
+                    },
+                    1.0,
+                    EaseOut
+                )
+            ];
+
+            _ = model.sequence.insert(transition)
+        } else {
+            log::warn!("no sequence to transition from")
+        }
+    }
+    fn build_intro_sequence(&self, model: &mut Model) {
         let init_vm = model.init_view_model.clone().unwrap_or_default();
         let vb_target = Rect::size(model.config.width, model.config.height);
 
@@ -226,32 +289,50 @@ impl Intro {
             vb_target.height(),
             vb_target.height() * 2.0,
         ));
+
+        let menu_offset_main = model.config.length / 5.0 * -1.0;
+        let menu_offset_side = model.config.breadth / 5.0 * -1.0;
         let target_menu_position = if model.config.portrait {
-            MenuPosition::Center(Rect::new(
-                model.config.safe_area[0],
-                vb_target.width() - model.config.safe_area[2],
-                vb_target.height() / 5.0,
-                vb_target.height() - vb_target.height() / 5.0,
-            ))
+            MenuPosition::Center(
+                vb_target
+                    .clone()
+                    .offset_top_and_bottom(menu_offset_main, menu_offset_main)
+                    .offset_left_and_right(menu_offset_side, menu_offset_side),
+            )
         } else {
-            MenuPosition::Center(Rect::new(
-                vb_target.width() / 5.0,
-                vb_target.width() - vb_target.width() / 5.0,
-                model.config.safe_area[1],
-                vb_target.height() - model.config.safe_area[3],
-            ))
+            MenuPosition::Center(
+                vb_target
+                    .clone()
+                    .offset_top_and_bottom(menu_offset_side, menu_offset_side)
+                    .offset_left_and_right(menu_offset_main, menu_offset_main),
+            )
+        };
+
+        let dummy_layout = instrument::Layout {
+            menu_position: off_screen_menu_position.clone(),
+            ..IntroVM::default().layout
+        };
+
+        let intermediate_layout = instrument::Layout {
+            menu_position: off_screen_menu_position.clone(),
+            tracks: vec![],
+            ..model.layout.clone()
         };
 
         let animation: AnimationSequence<IntroVM> = keyframes![
-            (IntroVM { ..init_vm.clone() }, 0.0, EaseIn),
+            (
+                IntroVM {
+                    layout: dummy_layout.clone(),
+                    ..init_vm.clone()
+                },
+                0.0,
+                EaseIn
+            ),
             (
                 IntroVM {
                     intro_opacity: 0.0,
                     button_size: target_button_size,
-                    layout: instrument::Layout {
-                        menu_position: off_screen_menu_position.clone(),
-                        ..model.layout.clone()
-                    },
+                    layout: dummy_layout.clone(),
                     ..init_vm.clone()
                 },
                 0.25,
@@ -260,11 +341,7 @@ impl Intro {
             (
                 IntroVM {
                     intro_opacity: 0.0,
-                    layout: instrument::Layout {
-                        menu_position: off_screen_menu_position.clone(),
-                        tracks: vec![],
-                        ..model.layout.clone()
-                    },
+                    layout: intermediate_layout.clone(),
                     view_box: vb_target,
                     button_size: target_button_size,
                     flute_rotation: flute_rotation_target,
@@ -280,8 +357,7 @@ impl Intro {
                     intro_opacity: 0.0,
                     layout: instrument::Layout {
                         tracks: tracks_intermediate,
-                        menu_position: off_screen_menu_position.clone(),
-                        ..model.layout.clone()
+                        ..intermediate_layout.clone()
                     },
                     view_box: vb_target,
                     button_size: target_button_size,
@@ -317,6 +393,7 @@ impl Intro {
                         menu_position: target_menu_position.clone(),
                         ..model.layout.clone()
                     },
+                    menu_opacity: 1.0,
                     view_box: vb_target,
                     button_size: target_button_size,
                     flute_rotation: flute_rotation_target,

@@ -1,7 +1,9 @@
-use crate::app::instrument::{ButtonComponent, StringComponent, TrackComponent};
 use leptos::*;
 use leptos_use::{use_media_query, use_timestamp};
+
 use shared::app::intro;
+
+use crate::app::instrument::{ButtonComponent, MenuComponent, StringComponent, TrackComponent};
 
 #[component]
 pub fn IntroComponent(
@@ -57,14 +59,18 @@ pub fn IntroComponent(
         )
     };
 
-    // let portrait = Signal::derive(move || config().portrait);
     let inbound_layout_line = Signal::derive(move || vm().layout.inbound);
     let outbound_layout_line = Signal::derive(move || vm().layout.outbound);
+
+    let menu_position = Signal::derive(move || vm().layout.menu_position);
+
+    let playing = Signal::derive(move || false);
 
     view! {
       <div class="h-full w-full bg-red dark:bg-black splash"
         style={move || format!("--intro-opacity: {};", vm().intro_opacity)}
       >
+
         <div class="absolute h-full w-full splash-dummy" class:hidden={move|| vm().animation_progress == 0.0 }>
           <svg fill="none" class="flute stroke-black dark:stroke-red" viewBox={view_box} xmlns="http://www.w3.org/2000/svg">
             <g transform={flute_transform}>
@@ -134,6 +140,9 @@ pub fn IntroComponent(
             <path d="M95.0463 573.976C93.2411 574.69 90.8342 559 92.6393 559C94.6333 559 94.7546 560.453 95.6481 562.566C96.0919 563.615 96.3228 573.472 95.0463 573.976Z" />
             <path d="M100.8 570.575C99.3555 570.215 106.417 558.455 107.476 559.299C108.645 560.231 107.932 561.272 107.315 563.122C107.009 564.041 101.821 570.83 100.8 570.575Z" />
           </svg>
+        </div>
+        <div class="w-full h-full" style={ move || format!("opacity: {};", vm().menu_opacity)} >
+            <MenuComponent position=menu_position playing=playing expanded={true} />
         </div>
       </div>
     }

@@ -45,3 +45,20 @@ main {
     width: 100%;
   }
 }
+
+.menu {
+  display: grid;
+  padding: .75rem;
+  grid-template-rows: repeat(auto-fill, 1fr);
+  align-items: stretch;
+  justify-items: stretch;
+  grid-row-gap: 1.5rem;
+
+  button {
+    @media not (prefers-reduced-motion) {
+      transition-property: color, background-color, box-shadow, border-color;
+      transition-duration: 350ms;
+      transition-timing-function: ease-in;
+    }
+  }
+}

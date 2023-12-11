@@ -1,15 +1,15 @@
+use leptos::*;
+
+pub use button::ButtonComponent;
+pub use menu::MenuComponent;
+use shared::instrument;
+pub use string::StringComponent;
+pub use track::TrackComponent;
+
 mod button;
 mod menu;
 mod string;
 mod track;
-
-use leptos::*;
-use shared::instrument;
-
-pub use button::ButtonComponent;
-pub use menu::MenuComponent;
-pub use string::StringComponent;
-pub use track::TrackComponent;
 
 #[component]
 pub fn InstrumentComponent(
@@ -32,11 +32,6 @@ pub fn InstrumentComponent(
 
     let playing = Signal::derive(move || vm().playing);
 
-    let toggle_playing = Callback::<()>::new(move |_| {
-        ev(instrument::InstrumentEV::Playback(
-            instrument::PlaybackEV::Play(!playing()),
-        ))
-    });
     let menu_position = Signal::derive(move || vm().layout.menu_position);
 
     view! {
@@ -59,7 +54,7 @@ pub fn InstrumentComponent(
             }
           ).collect_view()}
         </svg>
-        <MenuComponent position={menu_position} playing=playing toggle_playing=toggle_playing />
+        <MenuComponent position={menu_position} playing=playing />
       </div>
     }
 }

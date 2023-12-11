@@ -4,12 +4,6 @@ use crux_kv::KeyValue;
 use crux_macros::Effect;
 use serde::{Deserialize, Serialize};
 
-pub mod instrument;
-pub mod navigate;
-pub mod tuner;
-pub mod intro;
-pub mod play;
-
 pub use instrument::Instrument;
 pub use intro::Intro;
 pub use navigate::Navigate;
@@ -20,6 +14,12 @@ use self::{
     instrument::InstrumentCapabilities, intro::IntroCapabilities, tuner::TunerCapabilities,
 };
 
+pub mod instrument;
+pub mod intro;
+pub mod navigate;
+pub mod play;
+pub mod tuner;
+
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Activity {
     #[default]
@@ -27,9 +27,8 @@ pub enum Activity {
     Tune,
     Play,
     Listen,
+    About,
 }
-
-
 
 #[derive(Default)]
 pub struct Model {
@@ -37,6 +36,7 @@ pub struct Model {
     tuning: tuner::Model,
     intro: intro::Model,
     activity: Activity,
+    config: Option<instrument::Config>,
 }
 
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -61,6 +61,7 @@ pub enum Event {
         safe_areas: [f64; 4],
     },
     Activate(Activity),
+    Menu(Activity),
 }
 
 impl Eq for Event {}
@@ -111,8 +112,8 @@ impl From<&RedSirenCapabilities> for InstrumentCapabilities {
 }
 
 impl App for RedSiren {
-    type Model = Model;
     type Event = Event;
+    type Model = Model;
     type ViewModel = ViewModel;
     type Capabilities = RedSirenCapabilities;
 
@@ -125,8 +126,50 @@ impl App for RedSiren {
             }
             Event::Activate(act) => {
                 model.activity = act;
+                match act {
+                    // aka resetting
+                    Activity::Intro => {
+                        model.intro = intro::Model::default();
+                        if let Some(config) = model.config.as_ref() {
+                            self.update(Event::ConfigureApp(config.clone()), model, caps);
+                        }
+                    }
+                    _ => {}
+                }
                 caps.render.render();
             }
+            Event::Menu(act) => match (model.activity, act) {
+                (Activity::Intro, Activity::Play) => {
+                    self.intro
+                        .update(intro::IntroEV::Menu(act), &mut model.intro, &caps.into());
+                    self.instrument.update(
+                        instrument::InstrumentEV::Playback(instrument::PlaybackEV::Play(true)),
+                        &mut model.instrument,
+                        &caps.into(),
+                    );
+                }
+                (Activity::Intro, Activity::Tune) => {
+                    self.intro
+                        .update(intro::IntroEV::Menu(act), &mut model.intro, &caps.into());
+                }
+                (Activity::Play, Activity::Tune) => {
+                    self.instrument.update(
+                        instrument::InstrumentEV::Playback(instrument::PlaybackEV::Play(false)),
+                        &mut model.instrument,
+                        &caps.into(),
+                    );
+                }
+                (Activity::Play, Activity::Play) => {
+                    self.instrument.update(
+                        instrument::InstrumentEV::Playback(instrument::PlaybackEV::Play(
+                            !model.instrument.playing,
+                        )),
+                        &mut model.instrument,
+                        &caps.into(),
+                    );
+                }
+                _ => todo!("transition not implemented"),
+            },
             Event::CreateConfigAndConfigureApp {
                 width,
                 height,
@@ -150,6 +193,7 @@ impl App for RedSiren {
                     &mut model.intro,
                     &caps.into(),
                 );
+                _ = model.config.insert(model.instrument.config.clone());
             }
             Event::InstrumentEvent(event) => {
                 self.instrument

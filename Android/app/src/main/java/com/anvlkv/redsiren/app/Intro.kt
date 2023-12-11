@@ -17,17 +17,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.anvlkv.redsiren.R
 import com.anvlkv.redsiren.shared.shared_types.IntroEV
 import com.anvlkv.redsiren.shared.shared_types.IntroVM
+import com.anvlkv.redsiren.shared.shared_types.MenuPosition
 import kotlinx.coroutines.launch
 import java.lang.Float.min
 
@@ -67,7 +68,6 @@ fun AppIntro(vm: IntroVM, ev: (ev: IntroEV) -> Unit) {
         ev(IntroEV.StartAnimation(0.0, reducedMotion))
         animator.start()
     }
-
 
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -169,6 +169,28 @@ fun AppIntro(vm: IntroVM, ev: (ev: IntroEV) -> Unit) {
             }
 
         }
+    }
+
+    val menuRect = when (val position = vm.layout.menu_position) {
+        is MenuPosition.TopRight -> position.value
+        is MenuPosition.TopLeft -> position.value
+        is MenuPosition.BottomLeft -> position.value
+        is MenuPosition.Center -> position.value
+        else -> throw Error("unknown position")
+    }
+
+    val menuSize =
+        DpSize((menuRect.rect[1][0] - menuRect.rect[0][0]).dp, (menuRect.rect[1][1] - menuRect.rect[0][1]).dp)
+
+    Box(
+        Modifier
+            .size(menuSize)
+            .graphicsLayer(
+                translationX = (menuRect.rect[0][0] * density.toDouble()).toFloat(),
+                translationY = (menuRect.rect[0][1] * density.toDouble()).toFloat(),
+            )
+    ) {
+        Menu(true)
     }
 
 }

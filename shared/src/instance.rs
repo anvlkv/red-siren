@@ -36,11 +36,11 @@ pub fn log_init() {
 
     #[cfg(feature = "ios")]
     {
-        oslog::OsLogger::new("com.anvlkv.RedSiren.Core")
+        oslog::OsLogger::new("com.anvlkv.RedSiren.Shared")
             .level_filter(lvl)
             .init()
             .unwrap();
     }
 
-    log::debug!("init logging")
+    log::info!("init logging")
 }

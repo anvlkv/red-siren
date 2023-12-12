@@ -1,7 +1,8 @@
-use super::*;
 use crux_core::bridge::Bridge;
 use lazy_static::lazy_static;
 use wasm_bindgen::prelude::wasm_bindgen;
+
+use super::*;
 
 lazy_static! {
     static ref AU_CORE: Bridge<Effect, RedSirenAU> =
@@ -31,5 +32,5 @@ pub fn au_log_init() {
     _ = console_log::init_with_level(lvl.to_level().unwrap_or(log::Level::Warn));
     console_error_panic_hook::set_once();
 
-    log::debug!("init logging")
+    log::info!("init logging")
 }

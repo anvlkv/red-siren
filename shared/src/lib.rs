@@ -12,9 +12,11 @@ cfg_if::cfg_if! { if #[cfg(not(any(feature="worklet", feature="browser")))]{
     pub use instance::*;
 } else if #[cfg(feature="browser")]{
     pub fn log_init() {
-        let lvl = log::LevelFilter::Debug;
+        let lvl = log::Level::Debug;
 
-        _ = console_log::init_with_level(lvl.to_level().unwrap_or(log::Level::Warn));
+        _ = console_log::init_with_level(lvl);
         console_error_panic_hook::set_once();
+
+        log::info!("init logging")
     }
 }}

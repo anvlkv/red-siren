@@ -18,7 +18,7 @@ pub fn au_log_init() {
             .with_tag("red_siren::shared"),
     );
 
-    log::debug!("init logging")
+    log::info!("init logging")
 }
 
 // TODO: if there's a way to build uniffi with oboe-rs...

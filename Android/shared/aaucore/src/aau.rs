@@ -117,7 +117,7 @@ impl AudioOutputCallback for AAUReceiver {
                 DataCallbackResult::Continue
             }
             Err(e) => {
-                log::error!("{e:?}");
+                log::error!("receiver error {e:?}");
 
                 DataCallbackResult::Stop
             }
@@ -262,7 +262,7 @@ impl CoreStreamer {
                         .expect("receiver is gone");
                 }
                 Err(e) => {
-                    log::error!("{e:?}");
+                    log::error!("resume error {e:?}");
                     rx.unbounded_send(PlayOperationOutput::Success(false))
                         .expect("receiver is gone");
                 }
@@ -274,7 +274,7 @@ impl CoreStreamer {
                         .expect("receiver is gone");
                 }
                 Err(e) => {
-                    log::error!("{e:?}");
+                    log::error!("suspend error {e:?}");
                     rx.unbounded_send(PlayOperationOutput::Success(false))
                         .expect("receiver is gone");
                 }

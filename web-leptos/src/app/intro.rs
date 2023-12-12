@@ -3,7 +3,9 @@ use leptos_use::{use_media_query, use_timestamp};
 
 use shared::app::intro;
 
-use crate::app::instrument::{ButtonComponent, MenuComponent, StringComponent, TrackComponent};
+use crate::app::instrument::{ButtonComponent, StringComponent, TrackComponent};
+
+use super::menu::MenuComponent;
 
 #[component]
 pub fn IntroComponent(

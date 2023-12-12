@@ -14,6 +14,7 @@ use crate::{
 mod core;
 mod instrument;
 mod intro;
+mod menu;
 
 cfg_if! { if #[cfg(feature="browser")]{
     mod playback;

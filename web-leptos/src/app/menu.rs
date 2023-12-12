@@ -44,11 +44,11 @@ pub fn MenuComponent(
 
     view! {
       <div class={menu_class} style={menu_style}>
-        <h1 class="text-4xl text-center font-bold">{"Red Siren"}</h1>
+        <h1 class="text-4xl my-auto text-center font-bold">{"Red Siren"}</h1>
         <button class=btn_class on:click=move|_| menu_ev(Activity::Play)>
             {play_pause}
         </button>
-        <p class="text-2xl text-center">{"Red Siren is a noise chime. Please allow audio recording after you click Play or Tune"}</p>
+        <p class="text-2xl my-auto text-center">{"Red Siren is a noise chime. Please allow audio recording after you click Play or Tune"}</p>
         <button class=btn_class on:click=move|_| menu_ev(Activity::Tune)>
             {"Tune"}
         </button>

@@ -1,13 +1,13 @@
 use leptos::*;
 
 pub use button::ButtonComponent;
-pub use menu::MenuComponent;
 use shared::instrument;
 pub use string::StringComponent;
 pub use track::TrackComponent;
 
+use super::menu::MenuComponent;
+
 mod button;
-mod menu;
 mod string;
 mod track;
 

@@ -1,6 +1,6 @@
 import SharedTypes
 import SwiftUI
-
+import OSLog
 import Foundation
 
 
@@ -42,7 +42,7 @@ struct IntroView: View {
 
 
     var body: some View {
-        GeometryReader {proxy in
+        GeometryReader { proxy in
             ZStack(alignment: .topLeading) {
                 FluteGroup(inbound: self.vm.layout.inbound,
                            outbound: self.vm.layout.outbound,
@@ -52,36 +52,67 @@ struct IntroView: View {
                            hSize: self.hSize
                 )
                     .opacity(Double(1 - self.vm.intro_opacity))
-                
+
                 TracksGroup(tracks: self.vm.layout.tracks, vSize: self.vSize, hSize: self.hSize)
                     .opacity(Double(1 - self.vm.intro_opacity))
-                
+
                 ButtonsGroup(buttons: self.vm.layout.buttons, offset: self.vm.buttons_position, vSize: self.vSize, hSize: self.hSize)
                     .opacity(Double(1 - self.vm.intro_opacity))
-                    
-                
+
+
                 IntroViewController()
                     .opacity(Double(self.vm.intro_opacity))
+
+                MenuGroup(vSize: self.vSize, hSize: self.hSize, position: self.vm.layout.menu_position).opacity(self.vm.menu_opacity)
             }
                 .onAppear {
-                    self.clock.onTick = { ts in
-                        ev(IntroEV.tsNext(ts))
-                    }
-                    self.clock.onStart = { ts in
-                        ev(IntroEV.startAnimation(ts_start: ts, reduced_motion: self.reduceMotion))
-                    }
+                self.clock.onTick = { ts in
+                    ev(IntroEV.tsNext(ts))
+                }
+                self.clock.onStart = { ts in
+                    ev(IntroEV.startAnimation(ts_start: ts, reduced_motion: self.reduceMotion))
+                }
 
-                    self.clock.createDisplayLink()
-                }
+                self.clock.createDisplayLink()
+            }
                 .onDisappear {
-                    self.clock.deleteDisplayLink()
-                }
+                self.clock.deleteDisplayLink()
+            }
                 .frame(width: proxy.frame(in: .global).width, height: proxy.frame(in: .global).height)
         }
-        .ignoresSafeArea(.all)
+            .ignoresSafeArea(.all)
     }
 }
 
+
+struct MenuGroup: View {
+    var vSize: CGFloat
+    var hSize: CGFloat
+    var positionRect: Rect
+    var position: MenuPosition
+
+    init(vSize: CGFloat, hSize: CGFloat, position: MenuPosition) {
+        self.hSize = hSize
+        self.vSize = vSize
+        switch position {
+        case .topLeft(let r):
+            self.positionRect = r
+        case .topRight(let r):
+            self.positionRect = r
+        case .bottomLeft(let r):
+            self.positionRect = r
+        case .center(let r):
+            self.positionRect = r
+        }
+        self.position = position
+    }
+
+    var body: some View {
+        MenuView(position: self.position)
+            .frame(width: self.hSize, height: self.vSize, alignment: Alignment.topLeading)
+    }
+
+}
 
 
 struct FluteGroup: View {
@@ -107,8 +138,12 @@ struct FluteGroup: View {
     }
 
     var body: some View {
-        GeometryReader{ctx in
+        GeometryReader { ctx in
             ZStack(alignment: .bottomTrailing) {
+                Rectangle()
+                    .size(width: ctx.size.width, height: ctx.size.height)
+                    .opacity(0.0)
+                
                 Group {
                     Group {
                         InstrumentInboundStringView(line: self.inbound)
@@ -118,14 +153,10 @@ struct FluteGroup: View {
                         .rotationEffect(self.fluteRotation, anchor: self.fluteRotationAnchor)
                 }
                     .frame(width: hSize, height: vSize)
-                
-                Rectangle()
-                    .size(width: ctx.size.width, height: ctx.size.height)
-                    .opacity(0.0)
-                    
+
             }.frame(width: ctx.size.width, height: ctx.size.height)
         }
-        
+
     }
 
 }
@@ -147,7 +178,7 @@ struct TracksGroup: View {
                 InstrumentTrackView(rect: track)
             }
         }
-        .frame(width: self.hSize, height: self.vSize, alignment: .topLeading)
+            .frame(width: self.hSize, height: self.vSize, alignment: .topLeading)
     }
 }
 

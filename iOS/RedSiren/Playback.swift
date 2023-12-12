@@ -106,12 +106,7 @@ class Playback: NSObject, ObservableObject {
     var isAuthorized: Bool {
         get async {
             let status = AVCaptureDevice.authorizationStatus(for: .audio)
-            
-            // Determine if the user previously authorized camera access.
             var isAuthorized = status == .authorized
-            
-            // If the system hasn't determined the user's authorization status,
-            // explicitly prompt them for approval.
             if status == .notDetermined {
                 isAuthorized = await AVCaptureDevice.requestAccess(for: .audio)
             }

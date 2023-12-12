@@ -1,6 +1,5 @@
 import SharedTypes
 import SwiftUI
-import OSLog
 import UIScreenExtension
 
 struct SizePreferenceKey: PreferenceKey {

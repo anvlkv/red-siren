@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import UIKit
 import SharedTypes
 import OSLog
@@ -45,10 +46,37 @@ class Core: ObservableObject {
             for request in requests {
                 processEffect(request)
             }
-        case .play(let op):
+        case .play(let _):
             Logger().log("opeartion");
             break
         }
     }
 }
 
+protocol CoreEnv {
+    func update(_ ev: Event) -> Void
+}
+
+
+struct CoreEnvProvider: CoreEnv {
+    var core: Core
+    init(core: Core) {
+        self.core = core
+    }
+    
+    @MainActor func update(_ ev: Event) {
+        self.core.update(ev)
+    }
+}
+
+
+struct CoreEnvKey: EnvironmentKey {
+    static let defaultValue: CoreEnv? = nil
+}
+
+extension EnvironmentValues {
+    var coreEnv: CoreEnv? {
+        get {self[CoreEnvKey.self]}
+        set {self[CoreEnvKey.self] =  newValue}
+    }
+}

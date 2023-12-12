@@ -46,7 +46,7 @@ struct iOSApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView(core: self.core)
+            ContentView(core: self.core).environment(\.coreEnv, CoreEnvProvider(core: self.core))
         }
     }
 }

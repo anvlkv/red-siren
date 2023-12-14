@@ -49,7 +49,7 @@ Run `pod update` in `iOS` directory.
 
 Open `Android/` with Android studio.
 
-#### aaucore (oboe bridge)
+#### aucore (oboe bridge)
 
 Requires [cargo ndk](https://github.com/bbqsrc/cargo-ndk).
 

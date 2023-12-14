@@ -10,11 +10,11 @@ use oboe::{
     ContentType, DataCallbackResult, Input, InputPreset, IsFrameType, Mono, Output,
     PerformanceMode, SharingMode, Stereo, StreamState, Usage,
 };
-
-use aucore::{RedSirenAUCapabilities, ViewModel};
 use shared::play::{PlayOperation, PlayOperationOutput};
 
-type Core = aucore::Core<aucore::Effect, aucore::RedSirenAU>;
+use crate::{RedSirenAUCapabilities, ViewModel};
+
+type Core = crate::Core<crate::Effect, crate::RedSirenAU>;
 
 lazy_static! {
     // TODO: while this seem to work oboe-rs advises against using a mutex inside audio callback.
@@ -48,15 +48,15 @@ impl AAUCore {
 
     fn process_effect(
         &mut self,
-        effect: aucore::Effect,
+        effect: crate::Effect,
         rx: &mut Option<UnboundedSender<PlayOperationOutput>>,
     ) {
         match effect {
-            aucore::Effect::Render(_) => self
+            crate::Effect::Render(_) => self
                 .render_sender
                 .send(self.core.view())
                 .expect("send render"),
-            aucore::Effect::Resolve(output) => {
+            crate::Effect::Resolve(output) => {
                 if let Some(rx) = rx.take() {
                     rx.unbounded_send(output.operation).expect("send resolve");
                 } else {
@@ -79,13 +79,10 @@ impl AudioInputCallback for AUCoreMtx {
         _: &mut dyn AudioInputStreamSafe,
         frames: &[<Self::FrameType as IsFrameType>::Type],
     ) -> DataCallbackResult {
-        let mut aau = match self.0.lock() {
-            Ok(a) => a,
-            Err(poisoned) => {
-                log::error!("poison in AudioInputCallback: {}", poisoned);
-                poisoned.into_inner()
-            }
-        };
+        let mut aau = self.0.lock().unwrap_or_else(|poisoned| {
+            log::error!("poison in AudioInputCallback: {}", poisoned);
+            poisoned.into_inner()
+        });
         let aau = aau.as_mut().expect("core");
 
         aau.update(PlayOperation::Input(vec![Vec::from(frames)]), None);
@@ -172,13 +169,10 @@ impl CoreStreamer {
     }
 
     fn pause(&self) -> anyhow::Result<()> {
-        let mut stream = match OUT_STREAM.lock() {
-            Ok(s) => s,
-            Err(poisoned) => {
-                log::error!("poison in pause: {}", poisoned);
-                poisoned.into_inner()
-            }
-        };
+        let mut stream = OUT_STREAM.lock().unwrap_or_else(|poisoned| {
+            log::error!("poison in pause: {}", poisoned);
+            poisoned.into_inner()
+        });
 
         let stream = stream.as_mut();
         let stream = stream.ok_or(anyhow!("no stream"))?;
@@ -206,13 +200,10 @@ impl CoreStreamer {
     }
 
     fn forward(&self, event: PlayOperation, rx: Option<UnboundedSender<PlayOperationOutput>>) {
-        let mut aau = match CORE.lock() {
-            Ok(core) => core,
-            Err(poisoned) => {
-                log::error!("poison in forwarding: {}", poisoned);
-                poisoned.into_inner()
-            }
-        };
+        let mut aau = CORE.lock().unwrap_or_else(|poisoned| {
+            log::error!("poison in forwarding: {}", poisoned);
+            poisoned.into_inner()
+        });
         let aau = aau.as_mut().expect("core");
 
         aau.update(event, rx);
@@ -252,8 +243,9 @@ impl CoreStreamer {
 
         _ = OUT_STREAM.lock().expect("stream lock").insert(out_stream);
     }
-
-    pub fn update(&self, event: PlayOperation, rx: UnboundedSender<PlayOperationOutput>) {
+}
+impl super::StreamerUnit for CoreStreamer {
+    fn update(&self, event: PlayOperation, rx: UnboundedSender<PlayOperationOutput>) {
         match &event {
             PlayOperation::Resume => match self.start() {
                 Ok(_) => {

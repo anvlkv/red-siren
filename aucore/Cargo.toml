@@ -12,6 +12,9 @@ keywords = { workspace = true }
 crate-type = ["lib", "staticlib", "cdylib"]
 name = "aucore"
 
+[[bin]]
+name = "uniffi-bindgen-au"
+
 [dependencies]
 anyhow = "1.0.71"
 bincode = "1.3.3"
@@ -22,27 +25,41 @@ crux_macros = { workspace = true }
 crux_platform = { workspace = true }
 crux_time = { workspace = true }
 derive_more = "0.99.17"
-lazy_static = "1.4.0"
+lazy_static = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1.0.96"
 thiserror = "1.0.40"
 url = "2.3.1"
 wasm-bindgen = "0.2.86"
 log = { workspace = true }
+uniffi = { workspace = true }
 # project
 shared = { path = "../shared", features = ["worklet"] }
 fundsp = { version = "0.15.0", default-features = false }
+futures = { version = "0.3.29", features = ["executor", "thread-pool"] }
 # platforms
 cfg-if = "1"
 console_error_panic_hook = { version = "0.1.7", optional = true }
 console_log = { version = "1.0.0", optional = true }
+#android
+android_logger = { version = "0.13.1", optional = true }
+oboe = { version = "0.5.0", features = ["shared-link"], optional = true }
+#ios
+oslog = {version =  "0.2.0" , optional = true}
+coreaudio-rs = {version =  "0.11.3" , optional = true}
 
 [features]
 browser = ["shared/browser", "console_error_panic_hook", "console_log"]
-ios = ["shared/ios"]
-android = ["shared/android"]
+ios = ["shared/ios", "coreaudio-rs", "oslog"]
+android = ["shared/android", "android_logger", "oboe"]
 typegen = ["shared/typegen"]
 
 [dev-dependencies]
 assert_let_bind = "0.1.1"
 insta = { workspace = true }
+
+
+[target.uniffi-bindgen-au.dependencies]
+uniffi = { workspace = true, features = ["cli"] }
+[build-dependencies]
+uniffi = { workspace = true, features = ["build"] }

@@ -20,6 +20,7 @@
 		FA1248D22B279BDB00D6CEC8 /* MenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1248D12B279BDB00D6CEC8 /* MenuView.swift */; };
 		FA1248D42B2853A600D6CEC8 /* project_fonts in Resources */ = {isa = PBXBuildFile; fileRef = FA1248D32B2853A600D6CEC8 /* project_fonts */; };
 		FA3CD9922B19D3010002E8FF /* Playback.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA3CD9912B19D3010002E8FF /* Playback.swift */; };
+		FA61D5382B2B497200ED3CDF /* libaucore_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = FA61D52F2B2B492100ED3CDF /* libaucore_static.a */; };
 		FAAA65362B09DFB500B1F5D1 /* IntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAA65352B09DFB500B1F5D1 /* IntroView.swift */; };
 		FAAA65382B09E0E100B1F5D1 /* InstrumentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAA65372B09E0E100B1F5D1 /* InstrumentView.swift */; };
 		FAAA653A2B09EC8300B1F5D1 /* Intro.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FAAA65392B09EC8300B1F5D1 /* Intro.storyboard */; };
@@ -83,19 +84,42 @@
 			remoteGlobalIDString = CA0049BF7D4FD346A0A05154;
 			remoteInfo = "shared-staticlib";
 		};
-/* End PBXContainerItemProxy section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		FA5DE8F02B1B5DE500F4946C /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
+		FA61D52E2B2B492100ED3CDF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FA61D5282B2B492000ED3CDF /* aucore.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = CA0031F296449E08C6B19553;
+			remoteInfo = "aucore-staticlib";
 		};
-/* End PBXCopyFilesBuildPhase section */
+		FA61D5302B2B492100ED3CDF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FA61D5282B2B492000ED3CDF /* aucore.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = CA01C330A84EF278E41C3C39;
+			remoteInfo = "aucore-cdylib";
+		};
+		FA61D5322B2B492100ED3CDF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FA61D5282B2B492000ED3CDF /* aucore.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = CA02FC06DF244806301CECBB;
+			remoteInfo = "uniffi-bindgen-au-bin";
+		};
+		FA61D5342B2B495800ED3CDF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FA61D5282B2B492000ED3CDF /* aucore.xcodeproj */;
+			proxyType = 1;
+			remoteGlobalIDString = CA02FC06DF24DB18D70B7227;
+			remoteInfo = "uniffi-bindgen-au-bin";
+		};
+		FA61D5362B2B496000ED3CDF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FA61D5282B2B492000ED3CDF /* aucore.xcodeproj */;
+			proxyType = 1;
+			remoteGlobalIDString = CA0031F296446888A43980BA;
+			remoteInfo = "aucore-staticlib";
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		17F008C3C1A819A3D7658E59 /* RedSirenApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedSirenApp.swift; sourceTree = "<group>"; };
@@ -113,7 +137,9 @@
 		F7A91C46D50C923426AE058D /* Shared */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Shared; path = ../shared/shared.xcodeproj; sourceTree = "<group>"; };
 		FA1248D12B279BDB00D6CEC8 /* MenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuView.swift; sourceTree = "<group>"; };
 		FA1248D32B2853A600D6CEC8 /* project_fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; path = project_fonts; sourceTree = "<group>"; };
+		FA1248E62B28744900D6CEC8 /* generated */ = {isa = PBXFileReference; lastKnownFileType = text; path = generated; sourceTree = SOURCE_ROOT; };
 		FA3CD9912B19D3010002E8FF /* Playback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Playback.swift; sourceTree = "<group>"; };
+		FA61D5282B2B492000ED3CDF /* aucore.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = aucore.xcodeproj; path = ../aucore/aucore.xcodeproj; sourceTree = "<group>"; };
 		FAAA65352B09DFB500B1F5D1 /* IntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroView.swift; sourceTree = "<group>"; };
 		FAAA65372B09E0E100B1F5D1 /* InstrumentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstrumentView.swift; sourceTree = "<group>"; };
 		FAAA65392B09EC8300B1F5D1 /* Intro.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Intro.storyboard; sourceTree = "<group>"; };
@@ -126,6 +152,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FA61D5382B2B497200ED3CDF /* libaucore_static.a in Frameworks */,
 				F68573BF507ACC074620C5D8 /* libshared_static.a in Frameworks */,
 				8CEEE500CE6BE0647260B67F /* SharedTypes in Frameworks */,
 				45B5157CB6DC4BD490F119FC /* Pods_RedSiren.framework in Frameworks */,
@@ -138,6 +165,7 @@
 		0ECDC98F0209A1C6F2CAA14D /* RedSiren */ = {
 			isa = PBXGroup;
 			children = (
+				FA1248E62B28744900D6CEC8 /* generated */,
 				FAAA9AD32B1DC801003CCCD8 /* RedSiren.entitlements */,
 				6F004D450518226D7B50A267 /* Assets.xcassets */,
 				FA1248D32B2853A600D6CEC8 /* project_fonts */,
@@ -177,6 +205,7 @@
 		632E821FBB8ECA7154D2ED0E /* Projects */ = {
 			isa = PBXGroup;
 			children = (
+				FA61D5282B2B492000ED3CDF /* aucore.xcodeproj */,
 				F7A91C46D50C923426AE058D /* Shared */,
 			);
 			name = Projects;
@@ -237,6 +266,16 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		FA61D5292B2B492000ED3CDF /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				FA61D52F2B2B492100ED3CDF /* libaucore_static.a */,
+				FA61D5312B2B492100ED3CDF /* aucore.dylib */,
+				FA61D5332B2B492100ED3CDF /* uniffi-bindgen-au */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -249,12 +288,13 @@
 				17C3C3744E3DC17C1662F83C /* Resources */,
 				32E37407E09C303EE44B4C29 /* Frameworks */,
 				D591286300FFCD79D78BC9BB /* [CP] Embed Pods Frameworks */,
-				FA5DE8F02B1B5DE500F4946C /* CopyFiles */,
 			);
 			buildRules = (
 				325AF1D41F320967DD15643C /* PBXBuildRule */,
 			);
 			dependencies = (
+				FA61D5372B2B496000ED3CDF /* PBXTargetDependency */,
+				FA61D5352B2B495800ED3CDF /* PBXTargetDependency */,
 				33CF43CC5F4BFFB977CD0EC8 /* PBXTargetDependency */,
 				8606B16FCDBB49E044DC7922 /* PBXTargetDependency */,
 			);
@@ -288,6 +328,10 @@
 			projectDirPath = "";
 			projectReferences = (
 				{
+					ProductGroup = FA61D5292B2B492000ED3CDF /* Products */;
+					ProjectRef = FA61D5282B2B492000ED3CDF /* aucore.xcodeproj */;
+				},
+				{
 					ProductGroup = E0B8F6C21E620EB7C7D817BC /* Products */;
 					ProjectRef = F7A91C46D50C923426AE058D /* Shared */;
 				},
@@ -319,6 +363,27 @@
 			fileType = "compiled.mach-o.dylib";
 			path = shared.dylib;
 			remoteRef = CCE079142AA1F7F900CD4B57 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		FA61D52F2B2B492100ED3CDF /* libaucore_static.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libaucore_static.a;
+			remoteRef = FA61D52E2B2B492100ED3CDF /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		FA61D5312B2B492100ED3CDF /* aucore.dylib */ = {
+			isa = PBXReferenceProxy;
+			fileType = "compiled.mach-o.dylib";
+			path = aucore.dylib;
+			remoteRef = FA61D5302B2B492100ED3CDF /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		FA61D5332B2B492100ED3CDF /* uniffi-bindgen-au */ = {
+			isa = PBXReferenceProxy;
+			fileType = "compiled.mach-o.executable";
+			path = "uniffi-bindgen-au";
+			remoteRef = FA61D5322B2B492100ED3CDF /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 /* End PBXReferenceProxy section */
@@ -409,6 +474,16 @@
 			isa = PBXTargetDependency;
 			name = "shared-staticlib";
 			targetProxy = EC5B879D9A861F1E8FC33D84 /* PBXContainerItemProxy */;
+		};
+		FA61D5352B2B495800ED3CDF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = "uniffi-bindgen-au-bin";
+			targetProxy = FA61D5342B2B495800ED3CDF /* PBXContainerItemProxy */;
+		};
+		FA61D5372B2B496000ED3CDF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = "aucore-staticlib";
+			targetProxy = FA61D5362B2B496000ED3CDF /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 

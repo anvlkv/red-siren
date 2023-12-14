@@ -8,22 +8,22 @@ source = "shared"
 type_gen = "shared_types"
 crux_version = "0.6.3"
 
+[cores.aucore]
+source = "aucore"
+type_gen = "shared_types"
+crux_version = "0.6.3"
+
 [shells.android]
 template = "Android"
 source = "Android"
-cores = ["shared"]
+cores = ["shared", "aucore"]
 
 [shells.web_leptos]
 template = "web-leptos"
 source = "web-leptos"
-cores = ["shared"]
+cores = ["shared", "aucore"]
 
 [shells.iOS]
 template = "iOS"
 source = "iOS"
-cores = ["shared"]
-
-
-[shells.worklet]
-source = "worklet"
-cores = ["shared"]
+cores = ["shared", "aucore"]

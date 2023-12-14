@@ -77,8 +77,8 @@ apply plugin: 'com.github.willir.rust.cargo-ndk-android'
 cargoNdk {
     targets = ["arm", "arm64", "x86", "x86_64"]
     module = "../"
-    librariesNames = ["libaaucore.so"]
-    extraCargoBuildArguments = ['--package', 'aaucore', '--features', 'ndk']
+    librariesNames = ["libaucore.so"]
+    extraCargoBuildArguments = ['--package', 'aucore', '--features', 'android']
 }
 
 afterEvaluate {
@@ -135,8 +135,8 @@ tasks.register('bindGenAU', Exec) {
     if (System.getProperty('os.name').toLowerCase().contains('windows')) {
         commandLine(
                 "cmd", "/c",
-                "cargo build -p aaucore && " +
-                        "target\\debug\\uniffi-bindgen-aau generate --library target\\debug\\libaaucore.so" +
+                "cargo build -p aucore && " +
+                        "target\\debug\\uniffi-bindgen-au generate --library target\\debug\\libaucore.so" +
                         "--language kotlin " +
                         "--out-dir " + outDir.replace('/', '\\')
         )
@@ -144,8 +144,8 @@ tasks.register('bindGenAU', Exec) {
         commandLine(
                 "sh", "-c",
                 """\
-                cargo build -p aaucore && \
-                target/debug/uniffi-bindgen-aau generate --library target/debug/libaaucore.dylib \
+                cargo build -p aucore && \
+                target/debug/uniffi-bindgen-au generate --library target/debug/libaucore.dylib \
                 --language kotlin \
                 --out-dir $outDir
                 """

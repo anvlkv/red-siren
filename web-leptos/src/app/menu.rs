@@ -16,6 +16,40 @@ pub fn MenuComponent(
     })
     .into();
 
+    let (permission, set_permission) = create_signal(Some(true));
+
+    #[cfg(feature = "browser")]
+    {
+        use leptos_use::use_window;
+        use wasm_bindgen::closure::Closure;
+
+        let window = use_window();
+
+        let cb = Closure::new(move |status: wasm_bindgen::JsValue| {
+            let status = web_sys::PermissionStatus::from(status);
+
+            match status.state() {
+                web_sys::PermissionState::Granted => set_permission(Some(true)),
+                web_sys::PermissionState::Denied => set_permission(Some(false)),
+                web_sys::PermissionState::Prompt => set_permission(None),
+                _ => set_permission(None),
+            }
+        });
+
+        let err = Closure::new(move |_| set_permission(None));
+
+        create_effect(move |_| {
+            if let Some(navigator) = window.navigator() {
+                let permissions = navigator.permissions().expect("permissions api");
+                let query = js_sys::Object::new();
+                _ = js_sys::Reflect::set(&query, &"name".into(), &"microphone".into())
+                    .expect("set property");
+                let promise = permissions.query(&query).expect("query permission");
+                _ = promise.then(&cb).catch(&err);
+            }
+        });
+    }
+
     let menu_style = move || {
         let pos = position();
         let rect = pos.rect();
@@ -42,13 +76,23 @@ pub fn MenuComponent(
     let play_pause = move || if playing() { "Stop" } else { "Play" };
     let btn_class = "w-full rounded-2xl bg-red dark:bg-black text-black dark:text-red text-4xl hover:text-gray dark:hover:text-cinnabar";
 
+    let notice = move || match permission() {
+        Some(false) => Some(view! {
+            <p class="text-2xl my-auto text-center">{"Red Siren is a noise chime. As an instrument activated by external sounds it requires permission to record audio. Please allow audio recording."}</p>
+        }),
+        None => Some(view! {
+            <p class="text-2xl my-auto text-center">{"Red Siren is a noise chime. Please allow audio recording after you click Play or Tune"}</p>
+        }),
+        Some(true) => None,
+    };
+
     view! {
       <div class={menu_class} style={menu_style}>
         <h1 class="text-4xl my-auto text-center font-bold">{"Red Siren"}</h1>
         <button class=btn_class on:click=move|_| menu_ev(Activity::Play)>
             {play_pause}
         </button>
-        <p class="text-2xl my-auto text-center">{"Red Siren is a noise chime. Please allow audio recording after you click Play or Tune"}</p>
+        {notice}
         <button class=btn_class on:click=move|_| menu_ev(Activity::Tune)>
             {"Tune"}
         </button>

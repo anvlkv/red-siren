@@ -67,39 +67,39 @@ class Playback: NSObject, ObservableObject {
     func setupNodes(completion_setup: @escaping (Result<Bool, Error>) -> Void) {
         let engine = self.audioEngine!
         let audioUnit = self.avAudioUnit!
-//        let format = AVAudioFormat.init(commonFormat: .pcmFormatFloat32, sampleRate: config.sample_rate_hz, channels: .init(config.channels), interleaved: true)
-//        let input = engine.inputNode
-//        do {
-//            try input.setVoiceProcessingEnabled(true)
-//        }
-//        catch {
-//            completion_setup(.failure(error))
-//        }
-//        let mixer = engine.mainMixerNode
-//        engine.attach(audioUnit)
-//
-//        engine.connect(input, to: audioUnit, format: format)
-//        engine.connect(audioUnit, to: mixer, format: format)
-//        let hardwareFormat = engine.outputNode.outputFormat(forBus: 0)
-//        engine.connect(engine.mainMixerNode, to: engine.outputNode, format: hardwareFormat)
-//
-//
-//        engine.prepare()
-//
-//        do {
-//            try engine.start()
-//
-////           self.evChannel = audioUnit.auAudioUnit.messageChannel(for: "rsev")
-////           let channel = self.evChannel!
-////           let configEv = Event.instrumentEvent(InstrumentEV.createWithConfig(self.config))
-////           let data = try configEv.bincodeSerialize()
-////           _ = channel.callAudioUnit!(["ev": data])
-//
-//            completion_setup(.success(true))
-//        }
-//        catch {
-//            completion_setup(.failure(error))
-//        }
+        let format = AVAudioFormat.init(commonFormat: .pcmFormatFloat32, sampleRate: 44100, channels: .init(2), interleaved: true)
+        let input = engine.inputNode
+        do {
+            try input.setVoiceProcessingEnabled(true)
+        }
+        catch {
+            completion_setup(.failure(error))
+        }
+        let mixer = engine.mainMixerNode
+        engine.attach(audioUnit)
+
+        engine.connect(input, to: audioUnit, format: format)
+        engine.connect(audioUnit, to: mixer, format: format)
+        let hardwareFormat = engine.outputNode.outputFormat(forBus: 0)
+        engine.connect(engine.mainMixerNode, to: engine.outputNode, format: hardwareFormat)
+
+
+        engine.prepare()
+
+        do {
+            try engine.start()
+
+//           self.evChannel = audioUnit.auAudioUnit.messageChannel(for: "rsev")
+//           let channel = self.evChannel!
+//           let configEv = Event.instrumentEvent(InstrumentEV.createWithConfig(self.config))
+//           let data = try configEv.bincodeSerialize()
+//           _ = channel.callAudioUnit!(["ev": data])
+
+            completion_setup(.success(true))
+        }
+        catch {
+            completion_setup(.failure(error))
+        }
     }
 
     
@@ -141,11 +141,11 @@ class Playback: NSObject, ObservableObject {
             print("Could not set the audio category: \(error.localizedDescription)")
         }
 
-//        do {
-//            try session!.setPreferredSampleRate(self.config.sample_rate_hz)
-//        } catch {
-//            print("Could not set the preferred sample rate: \(error.localizedDescription)")
-//        }
+        do {
+            try session!.setPreferredSampleRate(44100)
+        } catch {
+            print("Could not set the preferred sample rate: \(error.localizedDescription)")
+        }
     }
     
     func setupAudioEngine() async -> Bool {

@@ -5,36 +5,56 @@ use futures::executor::ThreadPool;
 use futures::task::SpawnExt;
 use futures::StreamExt;
 
-#[cfg(feature = "ndk")]
-mod aau;
-
 #[uniffi::export]
 pub fn au_log_init() {
     let lvl = log::LevelFilter::Debug;
 
+    #[cfg(feature = "android")]
     android_logger::init_once(
         android_logger::Config::default()
             .with_max_level(lvl)
             .with_tag("red_siren::shared"),
     );
 
-    log::info!("init logging")
+    #[cfg(feature = "ios")]
+    oslog::OsLogger::new("com.anvlkv.RedSiren.AUCore")
+        .level_filter(lvl)
+        .init()
+        .unwrap();
+
+    log::info!("init logging: {lvl:?}");
+}
+
+pub trait StreamerUnit
+where
+    Self: Default,
+{
+    fn update(
+        &self,
+        _: shared::play::PlayOperation,
+        _: futures::channel::mpsc::UnboundedSender<shared::play::PlayOperationOutput>,
+    );
 }
 
 // TODO: if there's a way to build uniffi with oboe-rs...
 cfg_if::cfg_if! {
-  if #[cfg(not(feature = "ndk"))] {
+  if #[cfg(not(any(feature = "android", feature="ios")))] {
         #[derive(Default)]
         struct CoreStreamer;
 
-        impl CoreStreamer {
-            pub fn update(&self, _: shared::play::PlayOperation, _: futures::channel::mpsc::UnboundedSender<shared::play::PlayOperationOutput>) {
-                unreachable!("ndk feature not enabled")
+        impl StreamerUnit for CoreStreamer {
+            fn update(&self, _: shared::play::PlayOperation, _: futures::channel::mpsc::UnboundedSender<shared::play::PlayOperationOutput>){
+                unreachable!("not implemented")
             }
         }
 
-    }  else {
-        use aau::CoreStreamer;
+
+    } else if #[cfg(feature="android")]{
+        mod android_oboe;
+        use android_oboe::CoreStreamer;
+    } else if #[cfg(feature="ios")] {
+        mod ios_coreaudio;
+        use ios_coreaudio::CoreStreamer;
     }
 }
 
@@ -81,4 +101,4 @@ pub async fn request(arc_self: Arc<AUCoreBridge>, bytes: Vec<u8>) -> Vec<u8> {
     outs.pop().unwrap()
 }
 
-uniffi::include_scaffolding!("aaucore");
+uniffi::include_scaffolding!("aucore");

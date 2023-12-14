@@ -1,5 +1,5 @@
 [workspace]
-members = ["shared", "shared_types", "web-leptos", "aucore", "Android/shared/aaucore"]
+members = ["shared", "shared_types", "web-leptos", "aucore"]
 resolver = "1"
 
 [workspace.package]
@@ -31,6 +31,7 @@ crux_macros = {path="../crux/crux_macros"} #"0.3"
 crux_platform = {path="../crux/crux_platform"} #"0.1"
 crux_time = {path="../crux/crux_time"} #"0.1"
 insta = { version = "1.34.0", features = ["yaml"] }
+lazy_static = "1.4.0"
 
 # Defines a size-optimized profile for the WASM bundle in release mode
 [profile.wasm-release]

@@ -7,10 +7,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewModelScope
-import com.anvlkv.redsiren.shared.aaucore.AuCoreBridge
-import com.anvlkv.redsiren.shared.aaucore.auLogInit
-import com.anvlkv.redsiren.shared.aaucore.new
-import com.anvlkv.redsiren.shared.aaucore.request
+import com.anvlkv.redsiren.shared.aucore.AuCoreBridge
+import com.anvlkv.redsiren.shared.aucore.auLogInit
+import com.anvlkv.redsiren.shared.aucore.new
+import com.anvlkv.redsiren.shared.aucore.request
 import com.anvlkv.redsiren.shared.handleResponse
 import com.anvlkv.redsiren.shared.logInit
 import com.anvlkv.redsiren.shared.processEvent

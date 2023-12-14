@@ -24,13 +24,15 @@ pub fn au_view() -> Vec<u8> {
     AU_CORE.view()
 }
 
-#[wasm_bindgen]
-pub fn au_log_init() {
-    #[allow(unused_variables)]
-    let lvl = log::LevelFilter::Debug;
+cfg_if::cfg_if! {if #[cfg(feature="browser")] {
+    #[wasm_bindgen]
+    pub fn au_log_init() {
+        #[allow(unused_variables)]
+        let lvl = log::LevelFilter::Debug;
 
-    _ = console_log::init_with_level(lvl.to_level().unwrap_or(log::Level::Warn));
-    console_error_panic_hook::set_once();
+        _ = console_log::init_with_level(lvl.to_level().unwrap_or(log::Level::Warn));
+        console_error_panic_hook::set_once();
 
-    log::info!("init logging")
-}
+        log::info!("init logging")
+    }
+}}

@@ -1,0 +1,416 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 54;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		CA005D857DB36888A43980BA /* Cargo.toml in Sources */ = {isa = PBXBuildFile; fileRef = CAF959484CB73EF4668187A5 /* Cargo.toml */; settings = {COMPILER_FLAGS = "--lib"; }; };
+		CA015D857DB3E416BAC962B8 /* Cargo.toml in Sources */ = {isa = PBXBuildFile; fileRef = CAF959484CB73EF4668187A5 /* Cargo.toml */; settings = {COMPILER_FLAGS = "--lib"; }; };
+		CA025D857DB3DB18D70B7227 /* Cargo.toml in Sources */ = {isa = PBXBuildFile; fileRef = CAF959484CB73EF4668187A5 /* Cargo.toml */; settings = {COMPILER_FLAGS = "--bin 'uniffi-bindgen-au'"; }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXBuildRule section */
+		CAF459484CB7AC6C1400ACA8 /* PBXBuildRule */ = {
+			isa = PBXBuildRule;
+			compilerSpec = com.apple.compilers.proxy.script;
+			dependencyFile = "$(DERIVED_FILE_DIR)/$(CARGO_XCODE_TARGET_ARCH)-$(EXECUTABLE_NAME).d";
+			filePatterns = "*/Cargo.toml";
+			fileType = pattern.proxy;
+			inputFiles = (
+			);
+			isEditable = 0;
+			name = "Cargo project build";
+			outputFiles = (
+				"$(OBJECT_FILE_DIR)/$(CARGO_XCODE_TARGET_ARCH)-$(EXECUTABLE_NAME)",
+			);
+			script = "# generated with cargo-xcode 1.7.0\nset -xeu;\nexport PATH=\"$HOME/.cargo/bin:$PATH:/usr/local/bin:/opt/homebrew/bin\";\n\nif [ \"${IS_MACCATALYST-NO}\" = YES ]; then\n CARGO_XCODE_TARGET_OS=ios-macabi\nfi\nCARGO_XCODE_TARGET_TRIPLE=\"${CARGO_XCODE_TARGET_ARCH}-apple-${CARGO_XCODE_TARGET_OS}\"\nif [ \"$CARGO_XCODE_TARGET_OS\" != darwin ]; then\n export PATH=\"${PATH/\\/Contents\\/Developer\\/Toolchains\\/XcodeDefault.xctoolchain\\/usr\\/bin:/xcode-provided-ld-cant-link-lSystem-for-the-host-build-script:}\"\nfi\nif [ \"$CARGO_XCODE_BUILD_PROFILE\" == release ]; then\n OTHER_INPUT_FILE_FLAGS=\"${OTHER_INPUT_FILE_FLAGS} --release\"\nfi\n\nif [ \"$ACTION\" = clean ]; then\n cargo clean --verbose --manifest-path=\"$SCRIPT_INPUT_FILE\" ${OTHER_INPUT_FILE_FLAGS} --target=\"${CARGO_XCODE_TARGET_TRIPLE}\";\n rm -f \"$SCRIPT_OUTPUT_FILE_0\"\n exit 0\nfi\ncargo build --verbose --manifest-path=\"$SCRIPT_INPUT_FILE\" --features=\"${CARGO_XCODE_FEATURES:-}\" ${OTHER_INPUT_FILE_FLAGS} --target=\"${CARGO_XCODE_TARGET_TRIPLE}\" || {\n if command -v rustup &> /dev/null; then\n  if ! rustup target list --installed | grep -Eq \"${CARGO_XCODE_TARGET_TRIPLE}\"; then\n   echo >&2 \"warning: this build requires rustup toolchain for $CARGO_XCODE_TARGET_TRIPLE, but it isn't installed (will try rustup next)\"\n   rustup target add \"${CARGO_XCODE_TARGET_TRIPLE}\" || echo >&2 \"warning: can't install $CARGO_XCODE_TARGET_TRIPLE\"\n  fi\n fi\n echo >&2 \"error: cargo build failed\"; exit 1; }\n\n# it's too hard to explain Cargo's actual exe path to Xcode build graph, so hardlink to a known-good path instead\nBUILT_SRC=\"${CARGO_TARGET_DIR}/${CARGO_XCODE_TARGET_TRIPLE}/${CARGO_XCODE_BUILD_PROFILE}/${CARGO_XCODE_CARGO_FILE_NAME}\"\nln -f -- \"$BUILT_SRC\" \"$SCRIPT_OUTPUT_FILE_0\" || { echo >&2 \"can't hardlink $BUILT_SRC to $SCRIPT_OUTPUT_FILE_0\"; exit 1; }\n\n# cargo generates a dep file, but for its own path, so append our rename to it\nDEP_FILE_SRC=\"${CARGO_TARGET_DIR}/${CARGO_XCODE_TARGET_TRIPLE}/${CARGO_XCODE_BUILD_PROFILE}/${CARGO_XCODE_CARGO_DEP_FILE_NAME}\"\nif [ -f \"$DEP_FILE_SRC\" ]; then\n DEP_FILE_DST=\"${DERIVED_FILE_DIR}/${CARGO_XCODE_TARGET_ARCH}-${EXECUTABLE_NAME}.d\"\n cp -f \"$DEP_FILE_SRC\" \"$DEP_FILE_DST\" || { echo >&2 \"can't copy $DEP_FILE_SRC to $DEP_FILE_DST\"; exit 1; }\n\n echo >> \"$DEP_FILE_DST\" \"${SCRIPT_OUTPUT_FILE_0/ /\\\\ /}: ${BUILT_SRC/ /\\\\ /}\"\nfi\n\n# lipo script needs to know all the platform-specific files that have been built\n# archs is in the file name, so that paths don't stay around after archs change\n# must match input for LipoScript\nFILE_LIST=\"${DERIVED_FILE_DIR}/${ARCHS}-${EXECUTABLE_NAME}.xcfilelist\"\ntouch \"$FILE_LIST\"\nif ! grep -Eq \"$SCRIPT_OUTPUT_FILE_0\" \"$FILE_LIST\" ; then\n echo >> \"$FILE_LIST\" \"$SCRIPT_OUTPUT_FILE_0\"\nfi\n\necho \"success: $ACTION of $SCRIPT_OUTPUT_FILE_0 for $CARGO_XCODE_TARGET_TRIPLE\"\n";
+		};
+/* End PBXBuildRule section */
+
+/* Begin PBXContainerItemProxy section */
+		FA61D5432B2B6B2000ED3CDF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CAF359484CB7E04653AD465F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CA01C330A84EE416BAC962B8;
+			remoteInfo = "aucore-cdylib";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		CA0031F296449E08C6B19553 /* libaucore_static.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libaucore_static.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		CA01C330A84EF278E41C3C39 /* aucore.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = aucore.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
+		CA02FC06DF244806301CECBB /* uniffi-bindgen-au */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "uniffi-bindgen-au"; sourceTree = BUILT_PRODUCTS_DIR; };
+		CAF959484CB73EF4668187A5 /* Cargo.toml */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Cargo.toml; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		CAF059484CB7D65BC3C892A8 = {
+			isa = PBXGroup;
+			children = (
+				CAF959484CB73EF4668187A5 /* Cargo.toml */,
+				CAF159484CB722869D176AE5 /* Products */,
+				CAF259484CB798AF0B5890DB /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		CAF159484CB722869D176AE5 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				CA0031F296449E08C6B19553 /* libaucore_static.a */,
+				CA01C330A84EF278E41C3C39 /* aucore.dylib */,
+				CA02FC06DF244806301CECBB /* uniffi-bindgen-au */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		CAF259484CB798AF0B5890DB /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		CA0031F296446888A43980BA /* aucore-staticlib */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CA00E8C5366F6888A43980BA /* Build configuration list for PBXNativeTarget "aucore-staticlib" */;
+			buildPhases = (
+				CA000AAD11816888A43980BA /* Sources */,
+				CAF559484CB7AF6EBB7F357C /* Universal Binary lipo */,
+			);
+			buildRules = (
+				CAF459484CB7AC6C1400ACA8 /* PBXBuildRule */,
+			);
+			dependencies = (
+			);
+			name = "aucore-staticlib";
+			productName = libaucore_static.a;
+			productReference = CA0031F296449E08C6B19553 /* libaucore_static.a */;
+			productType = "com.apple.product-type.library.static";
+		};
+		CA01C330A84EE416BAC962B8 /* aucore-cdylib */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CA01E8C5366FE416BAC962B8 /* Build configuration list for PBXNativeTarget "aucore-cdylib" */;
+			buildPhases = (
+				CA010AAD1181E416BAC962B8 /* Sources */,
+				CAF559484CB7AF6EBB7F357C /* Universal Binary lipo */,
+			);
+			buildRules = (
+				CAF459484CB7AC6C1400ACA8 /* PBXBuildRule */,
+			);
+			dependencies = (
+			);
+			name = "aucore-cdylib";
+			productName = aucore.dylib;
+			productReference = CA01C330A84EF278E41C3C39 /* aucore.dylib */;
+			productType = "com.apple.product-type.library.dynamic";
+		};
+		CA02FC06DF24DB18D70B7227 /* uniffi-bindgen-au-bin */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CA02E8C5366FDB18D70B7227 /* Build configuration list for PBXNativeTarget "uniffi-bindgen-au-bin" */;
+			buildPhases = (
+				CA020AAD1181DB18D70B7227 /* Sources */,
+				CAF559484CB7AF6EBB7F357C /* Universal Binary lipo */,
+				FA61D5452B2B6B2900ED3CDF /* ShellScript */,
+			);
+			buildRules = (
+				CAF459484CB7AC6C1400ACA8 /* PBXBuildRule */,
+			);
+			dependencies = (
+				FA61D5442B2B6B2000ED3CDF /* PBXTargetDependency */,
+			);
+			name = "uniffi-bindgen-au-bin";
+			productName = "uniffi-bindgen-au";
+			productReference = CA02FC06DF244806301CECBB /* uniffi-bindgen-au */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		CAF359484CB7E04653AD465F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					CA0031F296446888A43980BA = {
+						CreatedOnToolsVersion = 9.2;
+						ProvisioningStyle = Automatic;
+					};
+					CA01C330A84EE416BAC962B8 = {
+						CreatedOnToolsVersion = 9.2;
+						ProvisioningStyle = Automatic;
+					};
+					CA02FC06DF24DB18D70B7227 = {
+						CreatedOnToolsVersion = 9.2;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = CAF659484CB780E02D6C7F57 /* Build configuration list for PBXProject "aucore" */;
+			compatibilityVersion = "Xcode 11.4";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = CAF059484CB7D65BC3C892A8;
+			productRefGroup = CAF159484CB722869D176AE5 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				CA0031F296446888A43980BA /* aucore-staticlib */,
+				CA01C330A84EE416BAC962B8 /* aucore-cdylib */,
+				CA02FC06DF24DB18D70B7227 /* uniffi-bindgen-au-bin */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		CAF559484CB7AF6EBB7F357C /* Universal Binary lipo */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(DERIVED_FILE_DIR)/$(ARCHS)-$(EXECUTABLE_NAME).xcfilelist",
+			);
+			name = "Universal Binary lipo";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# generated with cargo-xcode 1.7.0\nset -eux;\ntr '\\n' '\\0' < \"$DERIVED_FILE_DIR/$ARCHS-$EXECUTABLE_NAME.xcfilelist\" | xargs -0 lipo -create -output \"$TARGET_BUILD_DIR/$EXECUTABLE_PATH\"\nif [ ${LD_DYLIB_INSTALL_NAME:+1} ]; then\n  install_name_tool -id \"$LD_DYLIB_INSTALL_NAME\" \"$TARGET_BUILD_DIR/$EXECUTABLE_PATH\"\nfi\n";
+		};
+		FA61D5452B2B6B2900ED3CDF /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\n\n#!/bin/bash\nset -e\n\ncd ..\n\nexport RUST_BACKTRACE=1\nexport PATH=\"$HOME/.cargo/bin:$PATH:/usr/local/bin:/opt/homebrew/bin\";\n\n\"target/debug/uniffi-bindgen-au\" generate --library \"target/debug/libaucore.a\" --language swift --out-dir \"iOS/generated\" --no-format\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		CA000AAD11816888A43980BA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CA005D857DB36888A43980BA /* Cargo.toml in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CA010AAD1181E416BAC962B8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CA015D857DB3E416BAC962B8 /* Cargo.toml in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CA020AAD1181DB18D70B7227 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CA025D857DB3DB18D70B7227 /* Cargo.toml in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		FA61D5442B2B6B2000ED3CDF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CA01C330A84EE416BAC962B8 /* aucore-cdylib */;
+			targetProxy = FA61D5432B2B6B2000ED3CDF /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		CA00B90BC13A6888A43980BA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CARGO_XCODE_CARGO_DEP_FILE_NAME = libaucore.d;
+				CARGO_XCODE_CARGO_FILE_NAME = libaucore.a;
+				INSTALL_GROUP = "";
+				INSTALL_MODE_FLAG = "";
+				INSTALL_OWNER = "";
+				PRODUCT_NAME = aucore_static;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "macosx iphonesimulator iphoneos appletvsimulator appletvos";
+			};
+			name = Release;
+		};
+		CA00C34B610A6888A43980BA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CARGO_XCODE_CARGO_DEP_FILE_NAME = libaucore.d;
+				CARGO_XCODE_CARGO_FILE_NAME = libaucore.a;
+				INSTALL_GROUP = "";
+				INSTALL_MODE_FLAG = "";
+				INSTALL_OWNER = "";
+				PRODUCT_NAME = aucore_static;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "macosx iphonesimulator iphoneos appletvsimulator appletvos";
+			};
+			name = Debug;
+		};
+		CA01B90BC13AE416BAC962B8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CARGO_XCODE_CARGO_DEP_FILE_NAME = libaucore.d;
+				CARGO_XCODE_CARGO_FILE_NAME = libaucore.dylib;
+				DYLIB_COMPATIBILITY_VERSION = 0;
+				PRODUCT_NAME = aucore;
+				SUPPORTED_PLATFORMS = macosx;
+			};
+			name = Release;
+		};
+		CA01C34B610AE416BAC962B8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CARGO_XCODE_CARGO_DEP_FILE_NAME = libaucore.d;
+				CARGO_XCODE_CARGO_FILE_NAME = libaucore.dylib;
+				DYLIB_COMPATIBILITY_VERSION = 0;
+				PRODUCT_NAME = aucore;
+				SUPPORTED_PLATFORMS = macosx;
+			};
+			name = Debug;
+		};
+		CA02B90BC13ADB18D70B7227 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CARGO_XCODE_CARGO_DEP_FILE_NAME = "uniffi-bindgen-au.d";
+				CARGO_XCODE_CARGO_FILE_NAME = "uniffi-bindgen-au";
+				PRODUCT_NAME = "uniffi-bindgen-au";
+				SUPPORTED_PLATFORMS = macosx;
+			};
+			name = Release;
+		};
+		CA02C34B610ADB18D70B7227 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CARGO_XCODE_CARGO_DEP_FILE_NAME = "uniffi-bindgen-au.d";
+				CARGO_XCODE_CARGO_FILE_NAME = "uniffi-bindgen-au";
+				PRODUCT_NAME = "uniffi-bindgen-au";
+				SUPPORTED_PLATFORMS = macosx;
+			};
+			name = Debug;
+		};
+		CAF74F431A8A3CC16B37690B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CARGO_TARGET_DIR = "$(PROJECT_TEMP_DIR)/cargo_target";
+				CARGO_XCODE_BUILD_PROFILE = release;
+				CARGO_XCODE_FEATURES = "";
+				"CARGO_XCODE_TARGET_ARCH[arch=arm64*]" = aarch64;
+				"CARGO_XCODE_TARGET_ARCH[arch=i386]" = i686;
+				"CARGO_XCODE_TARGET_ARCH[arch=x86_64*]" = x86_64;
+				"CARGO_XCODE_TARGET_OS[sdk=appletvos*]" = tvos;
+				"CARGO_XCODE_TARGET_OS[sdk=appletvsimulator*]" = tvos;
+				"CARGO_XCODE_TARGET_OS[sdk=iphoneos*]" = ios;
+				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*]" = "ios-sim";
+				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*][arch=x86_64*]" = ios;
+				"CARGO_XCODE_TARGET_OS[sdk=macosx*]" = darwin;
+				CURRENT_PROJECT_VERSION = 0.1;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_NAME = aucore;
+				RUSTUP_TOOLCHAIN = "";
+				SDKROOT = macosx;
+				SUPPORTS_MACCATALYST = YES;
+			};
+			name = Release;
+		};
+		CAF84F431A8A228BE02872F8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CARGO_TARGET_DIR = "$(PROJECT_TEMP_DIR)/cargo_target";
+				CARGO_XCODE_BUILD_PROFILE = debug;
+				CARGO_XCODE_FEATURES = "";
+				"CARGO_XCODE_TARGET_ARCH[arch=arm64*]" = aarch64;
+				"CARGO_XCODE_TARGET_ARCH[arch=i386]" = i686;
+				"CARGO_XCODE_TARGET_ARCH[arch=x86_64*]" = x86_64;
+				"CARGO_XCODE_TARGET_OS[sdk=appletvos*]" = tvos;
+				"CARGO_XCODE_TARGET_OS[sdk=appletvsimulator*]" = tvos;
+				"CARGO_XCODE_TARGET_OS[sdk=iphoneos*]" = ios;
+				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*]" = "ios-sim";
+				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*][arch=x86_64*]" = ios;
+				"CARGO_XCODE_TARGET_OS[sdk=macosx*]" = darwin;
+				CURRENT_PROJECT_VERSION = 0.1;
+				MARKETING_VERSION = 0.1.0;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = aucore;
+				RUSTUP_TOOLCHAIN = "";
+				SDKROOT = macosx;
+				SUPPORTS_MACCATALYST = YES;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		CA00E8C5366F6888A43980BA /* Build configuration list for PBXNativeTarget "aucore-staticlib" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA00B90BC13A6888A43980BA /* Release */,
+				CA00C34B610A6888A43980BA /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CA01E8C5366FE416BAC962B8 /* Build configuration list for PBXNativeTarget "aucore-cdylib" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA01B90BC13AE416BAC962B8 /* Release */,
+				CA01C34B610AE416BAC962B8 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CA02E8C5366FDB18D70B7227 /* Build configuration list for PBXNativeTarget "uniffi-bindgen-au-bin" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA02B90BC13ADB18D70B7227 /* Release */,
+				CA02C34B610ADB18D70B7227 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CAF659484CB780E02D6C7F57 /* Build configuration list for PBXProject "aucore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CAF74F431A8A3CC16B37690B /* Release */,
+				CAF84F431A8A228BE02872F8 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = CAF359484CB7E04653AD465F /* Project object */;
+}

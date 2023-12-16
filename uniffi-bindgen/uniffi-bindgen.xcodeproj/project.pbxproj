@@ -222,7 +222,7 @@
 				INSTALL_OWNER = "";
 				PRODUCT_NAME = ffirs_static;
 				SKIP_INSTALL = YES;
-				SUPPORTED_PLATFORMS = "macosx iphonesimulator iphoneos appletvsimulator appletvos";
+				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
 			};
 			name = Debug;
 		};
@@ -237,7 +237,7 @@
 				INSTALL_OWNER = "";
 				PRODUCT_NAME = ffirs_static;
 				SKIP_INSTALL = YES;
-				SUPPORTED_PLATFORMS = "macosx iphonesimulator iphoneos appletvsimulator appletvos";
+				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
 			};
 			name = Release;
 		};
@@ -249,6 +249,7 @@
 				CARGO_XCODE_FEATURES = ios;
 				DYLIB_COMPATIBILITY_VERSION = 0;
 				PRODUCT_NAME = ffirs;
+				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
 			};
 			name = Debug;
@@ -261,6 +262,7 @@
 				CARGO_XCODE_FEATURES = ios;
 				DYLIB_COMPATIBILITY_VERSION = 0;
 				PRODUCT_NAME = ffirs;
+				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
 			};
 			name = Release;
@@ -270,7 +272,11 @@
 			buildSettings = {
 				CARGO_XCODE_CARGO_DEP_FILE_NAME = "uniffi-bindgen.d";
 				CARGO_XCODE_CARGO_FILE_NAME = "uniffi-bindgen";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				DEVELOPMENT_TEAM = M59X77GZ2V;
+				PRODUCT_BUNDLE_IDENTIFIER = "uniffi-bindgen";
 				PRODUCT_NAME = "uniffi-bindgen";
+				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
 			};
 			name = Debug;
@@ -280,7 +286,11 @@
 			buildSettings = {
 				CARGO_XCODE_CARGO_DEP_FILE_NAME = "uniffi-bindgen.d";
 				CARGO_XCODE_CARGO_FILE_NAME = "uniffi-bindgen";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				DEVELOPMENT_TEAM = M59X77GZ2V;
+				PRODUCT_BUNDLE_IDENTIFIER = "uniffi-bindgen";
 				PRODUCT_NAME = "uniffi-bindgen";
+				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
 			};
 			name = Release;
@@ -303,9 +313,10 @@
 				"CARGO_XCODE_TARGET_OS[sdk=macosx*]" = darwin;
 				CURRENT_PROJECT_VERSION = 0.1;
 				MARKETING_VERSION = 0.1.0;
+				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "uniffi-bindgen";
 				RUSTUP_TOOLCHAIN = "";
-				SDKROOT = macosx;
+				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = YES;
 			};
 			name = Release;
@@ -331,7 +342,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "uniffi-bindgen";
 				RUSTUP_TOOLCHAIN = "";
-				SDKROOT = macosx;
+				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = YES;
 			};
 			name = Debug;

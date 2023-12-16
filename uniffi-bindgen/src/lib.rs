@@ -22,13 +22,13 @@ pub struct AUCoreBridge(aucore::AUCoreBridge);
 
 #[uniffi::export]
 pub fn au_new() -> Arc<AUCoreBridge> {
-    Arc::new(AUCoreBridge(aucore::new()))
+    Arc::new(AUCoreBridge(aucore::AUCoreBridge::new()))
 }
 
 #[uniffi::export]
 pub async fn au_request(arc_self: Arc<AUCoreBridge>, bytes: Vec<u8>) -> Vec<u8> {
     let au = arc_self.clone();
-    aucore::request(&au.0, bytes).await
+    au.0.request(bytes).await
 }
 
 uniffi::include_scaffolding!("ffirs");

@@ -12,7 +12,7 @@ use oboe::{
 };
 use shared::play::{PlayOperation, PlayOperationOutput};
 
-use crate::{RedSirenAUCapabilities, ViewModel};
+use crate::{streamer::CoreStreamer, RedSirenAUCapabilities, ViewModel};
 
 type Core = crate::Core<crate::Effect, crate::RedSirenAU>;
 
@@ -122,8 +122,6 @@ impl AudioOutputCallback for AAUReceiver {
     }
 }
 
-pub struct CoreStreamer;
-
 impl Default for CoreStreamer {
     fn default() -> Self {
         let (render_sender, render_receiver) = sync_channel(1);
@@ -144,6 +142,40 @@ impl Default for CoreStreamer {
     }
 }
 impl CoreStreamer {
+    fn create_new_input() {
+        let in_stream = AudioStreamBuilder::default()
+            .set_performance_mode(PerformanceMode::LowLatency)
+            .set_format::<f32>()
+            .set_channel_count::<Mono>()
+            .set_direction::<Input>()
+            .set_input_preset(InputPreset::Unprocessed)
+            .set_frames_per_callback(128)
+            .set_sample_rate(44100)
+            .set_callback(AUCoreMtx(CORE.clone()))
+            .open_stream()
+            .expect("create input stream");
+
+        _ = IN_STREAM.lock().expect("stream lock").insert(in_stream);
+    }
+
+    fn create_new_output(render_receiver: Receiver<ViewModel>) {
+        let out_stream = AudioStreamBuilder::default()
+            .set_performance_mode(PerformanceMode::LowLatency)
+            .set_sharing_mode(SharingMode::Shared)
+            .set_format::<f32>()
+            .set_channel_count::<Stereo>()
+            .set_frames_per_callback(128)
+            .set_usage(Usage::Game)
+            .set_content_type(ContentType::Music)
+            .set_sample_rate(44100)
+            .set_callback(AAUReceiver(render_receiver))
+            .open_stream()
+            .expect("create output stream");
+
+        _ = OUT_STREAM.lock().expect("stream lock").insert(out_stream);
+    }
+}
+impl super::StreamerUnit for CoreStreamer {
     fn start(&self) -> anyhow::Result<()> {
         let mut stream = IN_STREAM.lock().expect("already busy");
         let stream = stream.as_mut().ok_or(anyhow!("no stream"))?;
@@ -209,69 +241,5 @@ impl CoreStreamer {
         aau.update(event, rx);
 
         log::info!("forwarding");
-    }
-
-    fn create_new_input() {
-        let in_stream = AudioStreamBuilder::default()
-            .set_performance_mode(PerformanceMode::LowLatency)
-            .set_format::<f32>()
-            .set_channel_count::<Mono>()
-            .set_direction::<Input>()
-            .set_input_preset(InputPreset::Unprocessed)
-            .set_frames_per_callback(128)
-            .set_sample_rate(44100)
-            .set_callback(AUCoreMtx(CORE.clone()))
-            .open_stream()
-            .expect("create input stream");
-
-        _ = IN_STREAM.lock().expect("stream lock").insert(in_stream);
-    }
-
-    fn create_new_output(render_receiver: Receiver<ViewModel>) {
-        let out_stream = AudioStreamBuilder::default()
-            .set_performance_mode(PerformanceMode::LowLatency)
-            .set_sharing_mode(SharingMode::Shared)
-            .set_format::<f32>()
-            .set_channel_count::<Stereo>()
-            .set_frames_per_callback(128)
-            .set_usage(Usage::Game)
-            .set_content_type(ContentType::Music)
-            .set_sample_rate(44100)
-            .set_callback(AAUReceiver(render_receiver))
-            .open_stream()
-            .expect("create output stream");
-
-        _ = OUT_STREAM.lock().expect("stream lock").insert(out_stream);
-    }
-}
-impl super::StreamerUnit for CoreStreamer {
-    fn update(&self, event: PlayOperation, rx: UnboundedSender<PlayOperationOutput>) {
-        match &event {
-            PlayOperation::Resume => match self.start() {
-                Ok(_) => {
-                    log::info!("playing");
-                    rx.unbounded_send(PlayOperationOutput::Success(true))
-                        .expect("receiver is gone");
-                }
-                Err(e) => {
-                    log::error!("resume error {e:?}");
-                    rx.unbounded_send(PlayOperationOutput::Success(false))
-                        .expect("receiver is gone");
-                }
-            },
-            PlayOperation::Suspend => match self.pause() {
-                Ok(_) => {
-                    log::info!("paused");
-                    rx.unbounded_send(PlayOperationOutput::Success(true))
-                        .expect("receiver is gone");
-                }
-                Err(e) => {
-                    log::error!("suspend error {e:?}");
-                    rx.unbounded_send(PlayOperationOutput::Success(false))
-                        .expect("receiver is gone");
-                }
-            },
-            _ => self.forward(event, Some(rx)),
-        }
     }
 }

@@ -12,14 +12,13 @@ use ::shared::{
 use super::resolve::Resolve;
 use super::system::System;
 
-const FRAME_SIZE: usize = 128;
-
 #[derive(Default)]
 pub struct Model {
     system: Option<System>,
     config: Config,
     nodes: Vec<Node>,
     audio_data: Vec<Vec<f32>>,
+    frame_size: usize,
 }
 
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -53,14 +52,19 @@ impl App for RedSirenAU {
                     .system
                     .insert(System::new(model.nodes.as_slice(), &model.config));
 
-                model.audio_data = (0..model.system.as_ref().unwrap().channels)
-                    .map(|_| (0..FRAME_SIZE).map(|_| 0.0_f32).collect())
-                    .collect();
-
                 caps.render.render();
                 caps.resolve.resolve_success(true);
             }
             PlayOperation::Input(input) => {
+                let frame_size = input.get(0).map_or(0, |ch| ch.len());
+
+                if frame_size != model.frame_size {
+                    model.frame_size = frame_size;
+                    model.audio_data = (0..model.system.as_ref().unwrap().channels)
+                        .map(|_| (0..frame_size).map(|_| 0.0_f32).collect())
+                        .collect();
+                }
+
                 if let Some(sys) = model.system.as_mut() {
                     let input = input
                         .iter()
@@ -75,7 +79,7 @@ impl App for RedSirenAU {
                         .collect::<Vec<_>>();
 
                     sys.net_be
-                        .process(FRAME_SIZE, input.as_slice(), output.as_mut_slice());
+                        .process(model.frame_size, input.as_slice(), output.as_mut_slice());
 
                     caps.render.render();
                 } else {

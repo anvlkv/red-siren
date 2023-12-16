@@ -32,9 +32,22 @@ class Playback: NSObject, ObservableObject {
             let grant = await isAuthorized
             return try! [UInt8](PlayOperationOutput.permission(grant).bincodeSerialize())
         case .installAU:
-            let success = setupAudioSession()
+            guard setupAudioSession() else {
+                let opData = try! PlayOperationOutput.success(false).bincodeSerialize()
+                let data = await auRequest(self.auCore!, Data.init(opData))
+
+                return [UInt8](data)
+            }
             auCore = auNew()
-            return try! [UInt8](PlayOperationOutput.success(success).bincodeSerialize())
+            do {
+                let opData = try op.bincodeSerialize()
+                let data = await auRequest(self.auCore!, Data.init(opData))
+
+                return [UInt8](data)
+            }
+            catch {
+                return try! [UInt8](PlayOperationOutput.success(false).bincodeSerialize())
+            }
         default:
             do {
                 let opData = try op.bincodeSerialize()

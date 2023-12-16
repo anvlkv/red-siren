@@ -8,6 +8,8 @@ import OSLog
 class Core: ObservableObject {
     @Published var view: ViewModel
 
+    @State var playback: Playback = Playback()
+
     init() {
         self.view = try! .bincodeDeserialize(input: [UInt8](RedSiren.view()))
         logInit()
@@ -46,8 +48,18 @@ class Core: ObservableObject {
             for request in requests {
                 processEffect(request)
             }
-        case .play(let _):
-            Logger().log("opeartion");
+        case .play(let op):
+            Task {
+                let response = await playback.request(op)
+
+
+                let effects = [UInt8](handleResponse(Data(request.uuid), Data(response)))
+
+                let requests: [Request] = try! .bincodeDeserialize(input: effects)
+                for request in requests {
+                    processEffect(request)
+                }
+            }
             break
         }
     }
@@ -63,7 +75,7 @@ struct CoreEnvProvider: CoreEnv {
     init(core: Core) {
         self.core = core
     }
-    
+
     @MainActor func update(_ ev: Event) {
         self.core.update(ev)
     }
@@ -76,7 +88,7 @@ struct CoreEnvKey: EnvironmentKey {
 
 extension EnvironmentValues {
     var coreEnv: CoreEnv? {
-        get {self[CoreEnvKey.self]}
-        set {self[CoreEnvKey.self] =  newValue}
+        get { self[CoreEnvKey.self] }
+        set { self[CoreEnvKey.self] = newValue }
     }
 }

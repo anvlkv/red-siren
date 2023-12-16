@@ -1,0 +1,7 @@
+[bindings.kotlin]
+cdylib_name = "ffirs"
+package_name = "com.anvlkv.redsiren.ffirs"
+
+[bindings.swift]
+cdylib_name = "ffirs_ffi"
+omit_argument_labels = true

@@ -385,7 +385,6 @@ dependencies = [
  "serde_json",
  "shared",
  "thiserror",
- "uniffi",
  "url",
  "wasm-bindgen",
 ]
@@ -3359,7 +3358,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "uniffi",
  "url",
  "wasm-bindgen",
 ]
@@ -3894,6 +3892,15 @@ dependencies = [
  "uniffi_build",
  "uniffi_core",
  "uniffi_macros",
+]
+
+[[package]]
+name = "uniffi-bindgen"
+version = "0.1.0"
+dependencies = [
+ "aucore",
+ "shared",
+ "uniffi",
 ]
 
 [[package]]

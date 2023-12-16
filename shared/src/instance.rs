@@ -3,8 +3,6 @@ use lazy_static::lazy_static;
 
 use super::*;
 
-uniffi::include_scaffolding!("shared");
-
 lazy_static! {
     static ref CORE: Bridge<Effect, RedSiren> = Bridge::new(Core::new::<RedSirenCapabilities>());
 }

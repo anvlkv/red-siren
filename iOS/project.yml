@@ -14,7 +14,7 @@ targets:
     deploymentTarget: "15.0"
     sources:
       - RedSiren
-      - path: ../shared/src/shared.udl
+      - path: ../shared/src/ffirs.udl
         buildPhase: sources
     dependencies:
       - target: Shared/uniffi-bindgen-bin

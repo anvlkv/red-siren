@@ -12,8 +12,6 @@ keywords = { workspace = true }
 crate-type = ["lib", "staticlib", "cdylib"]
 name = "aucore"
 
-[[bin]]
-name = "uniffi-bindgen-au"
 
 [dependencies]
 anyhow = "1.0.71"
@@ -32,7 +30,6 @@ thiserror = "1.0.40"
 url = "2.3.1"
 wasm-bindgen = "0.2.86"
 log = { workspace = true }
-uniffi = { workspace = true }
 # project
 shared = { path = "../shared", features = ["worklet"] }
 fundsp = { version = "0.15.0", default-features = false }
@@ -57,9 +54,3 @@ typegen = ["shared/typegen"]
 [dev-dependencies]
 assert_let_bind = "0.1.1"
 insta = { workspace = true }
-
-
-[target.uniffi-bindgen-au.dependencies]
-uniffi = { workspace = true, features = ["cli"] }
-[build-dependencies]
-uniffi = { workspace = true, features = ["build"] }

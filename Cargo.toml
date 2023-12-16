@@ -1,5 +1,5 @@
 [workspace]
-members = ["shared", "shared_types", "web-leptos", "aucore"]
+members = ["shared", "shared_types", "web-leptos", "aucore", "uniffi-bindgen"]
 resolver = "1"
 
 [workspace.package]

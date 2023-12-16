@@ -7,7 +7,7 @@ pub use app::*;
 pub mod geometry;
 
 pub mod app;
-cfg_if::cfg_if! { if #[cfg(not(any(feature="worklet", feature="browser")))]{
+cfg_if::cfg_if! { if #[cfg(feature="instance")]{
     mod instance;
     pub use instance::*;
 } else if #[cfg(feature="browser")]{

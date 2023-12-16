@@ -1,7 +1,6 @@
 plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
-    id 'org.mozilla.rust-android-gradle.rust-android'
     id 'com.github.willir.rust.cargo-ndk-android'
 }
 
@@ -61,24 +60,13 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
 }
 
-apply plugin: 'org.mozilla.rust-android-gradle.rust-android'
-
-cargo {
-    targets = ["arm", "arm64", "x86", "x86_64"]
-    module  = "../.."
-    libname = "shared"
-    rustupChannel = "stable"
-    extraCargoBuildArguments = ['--package', 'shared', '--features', 'android']
-    pythonCommand = "python3"
-}
-
 apply plugin: 'com.github.willir.rust.cargo-ndk-android'
 
 cargoNdk {
     targets = ["arm", "arm64", "x86", "x86_64"]
     module = "../"
-    librariesNames = ["libaucore.so"]
-    extraCargoBuildArguments = ['--package', 'aucore', '--features', 'android']
+    librariesNames = ["libffirs.so"]
+    extraCargoBuildArguments = ['--package', 'uniffi-bindgen', '--lib', '--features', 'android']
 }
 
 afterEvaluate {
@@ -91,15 +79,11 @@ afterEvaluate {
         def buildType = "${variant.buildType.name.capitalize()}"
 
         tasks.named("compile${buildType}Kotlin") {
-            it.dependsOn(tasks.named("typesGen"), tasks.named("bindGenAU"), tasks.named("bindGen"))
-        }
-
-        tasks.named("generate${productFlavor}${buildType}Assets") {
-            it.dependsOn(tasks.named("cargoBuild"))
+            it.dependsOn(tasks.named("typesGen"), tasks.named("bindGen"))
         }
 
         tasks.named("compile${buildType}JavaWithJavac") {
-            it.dependsOn(tasks.named("typesGen"), tasks.named("bindGenAU"), tasks.named("bindGen"), tasks.named("buildCargoNdk${buildType}"))
+            it.dependsOn(tasks.named("typesGen"), tasks.named("bindGen"), tasks.named("buildCargoNdk${buildType}"))
         }
     }
 }
@@ -111,8 +95,8 @@ tasks.register('bindGen', Exec) {
     if (System.getProperty('os.name').toLowerCase().contains('windows')) {
         commandLine(
                 "cmd", "/c",
-                "cargo build -p shared && " +
-                        "target\\debug\\uniffi-bindgen generate shared\\src\\shared.udl " +
+                "cargo build -p uniffi-bindgen && " +
+                        "target\\debug\\uniffi-bindgen generate --library target\\debug\\libffirs.so" +
                         "--language kotlin " +
                         "--out-dir " + outDir.replace('/', '\\')
         )
@@ -120,32 +104,8 @@ tasks.register('bindGen', Exec) {
         commandLine(
                 "sh", "-c",
                 """\
-                cargo build -p shared && \
-                target/debug/uniffi-bindgen generate shared/src/shared.udl \
-                --language kotlin \
-                --out-dir $outDir
-                """
-        )
-    }
-}
-
-tasks.register('bindGenAU', Exec) {
-    def outDir = "${projectDir}/../../shared_types/generated/java"
-    workingDir "../../"
-    if (System.getProperty('os.name').toLowerCase().contains('windows')) {
-        commandLine(
-                "cmd", "/c",
-                "cargo build -p aucore && " +
-                        "target\\debug\\uniffi-bindgen-au generate --library target\\debug\\libaucore.so" +
-                        "--language kotlin " +
-                        "--out-dir " + outDir.replace('/', '\\')
-        )
-    } else {
-        commandLine(
-                "sh", "-c",
-                """\
-                cargo build -p aucore && \
-                target/debug/uniffi-bindgen-au generate --library target/debug/libaucore.dylib \
+                cargo build -p uniffi-bindgen && \
+                target/debug/uniffi-bindgen generate --library target/debug/libffirs.dylib \
                 --language kotlin \
                 --out-dir $outDir
                 """

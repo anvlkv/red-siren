@@ -7,13 +7,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewModelScope
-import com.anvlkv.redsiren.shared.aucore.AuCoreBridge
-import com.anvlkv.redsiren.shared.aucore.auLogInit
-import com.anvlkv.redsiren.shared.aucore.new
-import com.anvlkv.redsiren.shared.aucore.request
-import com.anvlkv.redsiren.shared.handleResponse
-import com.anvlkv.redsiren.shared.logInit
-import com.anvlkv.redsiren.shared.processEvent
+import com.anvlkv.redsiren.ffirs.AuCoreBridge
+import com.anvlkv.redsiren.ffirs.auNew
+import com.anvlkv.redsiren.ffirs.auRequest
+import com.anvlkv.redsiren.ffirs.handleResponse
+import com.anvlkv.redsiren.ffirs.logInit
+import com.anvlkv.redsiren.ffirs.processEvent
+import com.anvlkv.redsiren.ffirs.view
 import com.anvlkv.redsiren.shared.shared_types.Activity
 import com.anvlkv.redsiren.shared.shared_types.Effect
 import com.anvlkv.redsiren.shared.shared_types.Event
@@ -23,7 +23,6 @@ import com.anvlkv.redsiren.shared.shared_types.PlayOperationOutput
 import com.anvlkv.redsiren.shared.shared_types.Request
 import com.anvlkv.redsiren.shared.shared_types.Requests
 import com.anvlkv.redsiren.shared.shared_types.ViewModel
-import com.anvlkv.redsiren.shared.view
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import kotlinx.coroutines.CompletableDeferred
@@ -111,13 +110,12 @@ open class Core : androidx.lifecycle.ViewModel() {
         private var auBridge: AuCoreBridge? = null
 
         fun installAu() {
-            auLogInit()
-            auBridge = new()
+            auBridge = auNew()
         }
 
         suspend fun forward(op: PlayOperation): PlayOperationOutput? {
             return auBridge?.let {
-                val out = request(it, op.bincodeSerialize())
+                val out = auRequest(it, op.bincodeSerialize())
                 PlayOperationOutput.bincodeDeserialize(out)
             }
         }

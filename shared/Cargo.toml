@@ -13,7 +13,7 @@ typegen = ["crux_core/typegen"]
 android = ["android_logger"]
 ios = ["oslog"]
 worklet = []
-instance=[]
+instance = []
 browser = ["console_error_panic_hook", "console_log"]
 
 [dependencies]

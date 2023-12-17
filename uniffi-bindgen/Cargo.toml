@@ -1,12 +1,12 @@
 [package]
 name = "uniffi-bindgen"
-authors.workspace = true
-repository.workspace = true
-edition.workspace = true
-version.workspace = true
-license.workspace = true
-rust-version.workspace = true
-keywords.workspace = true
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+rust-version = { workspace = true }
+keywords = { workspace = true }
 
 
 [lib]

@@ -1,7 +1,6 @@
 extern crate coreaudio;
 
 use std::sync::mpsc::{channel, TryRecvError};
-use std::sync::{Arc, Mutex, TryLockError};
 
 use anyhow::Result;
 use coreaudio::audio_unit::audio_format::LinearPcmFlags;
@@ -12,15 +11,14 @@ use coreaudio::sys::{
 };
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use lazy_static::lazy_static;
-
 use shared::play::{PlayOperation, PlayOperationOutput};
 
-use crate::streamer::CoreStreamer;
 use crate::{Effect, ViewModel};
+
+use super::{Core, CoreStreamer};
 
 type S = f32;
 const SAMPLE_FORMAT: SampleFormat = SampleFormat::F32;
-type Core = crate::Core<crate::Effect, crate::RedSirenAU>;
 
 lazy_static! {
     static ref CORE: Arc<Mutex<Core>> =
@@ -99,10 +97,8 @@ impl super::StreamerUnit for CoreStreamer {
         let input_render_sender = render_sender.clone();
         log::debug!("set_input_callback");
         input_audio_unit.set_input_callback(move |args| {
-            let Args {
-                data, num_frames, ..
-            } = args;
-            let core = core.lock().unwrap();
+            let Args { data, .. } = args;
+            let core = core.lock().expect("input core lock");
             let input: Vec<Vec<f32>> =
                 Vec::from_iter(data.channels().into_iter().map(|s| Vec::from(s)));
 
@@ -206,43 +202,8 @@ impl super::StreamerUnit for CoreStreamer {
         Ok(())
     }
 
-    fn forward(&self, op: PlayOperation, rx: UnboundedSender<PlayOperationOutput>) {
-        let op_sender = self.op_sender.clone();
-        let op_sender = op_sender.lock().expect("lock op sender");
-        let render_sender = self.render_sender.clone();
-
-        let render_sender = render_sender.lock().expect("lock render sender");
-
-        match CORE.try_lock() {
-            Err(TryLockError::WouldBlock) => {
-                if let Some(sender) = op_sender.as_ref() {
-                    sender.send((op, rx)).expect("send op");
-                } else {
-                    log::warn!("no sender");
-                }
-            }
-            Ok(core) => {
-                if let Some(sender) = render_sender.as_ref() {
-                    for effect in core.process_event(op) {
-                        match effect {
-                            Effect::Render(_) => {
-                                sender.send(core.view()).expect("send render");
-                            }
-                            Effect::Resolve(output) => {
-                                rx.unbounded_send(output.operation).expect("send output")
-                            }
-                        }
-                    }
-                } else {
-                    log::warn!("no sender");
-                }
-            }
-            Err(TryLockError::Poisoned(e)) => {
-                log::error!("poisoned {e:?}");
-                rx.unbounded_send(PlayOperationOutput::Success(false))
-                    .expect("send error");
-            }
-        }
+    fn forward(&self, op: PlayOperation, resolve_id_sender: UnboundedSender<PlayOperationOutput>) {
+        self.forward_op(CORE.clone(), op, resolve_id_sender);
     }
 }
 

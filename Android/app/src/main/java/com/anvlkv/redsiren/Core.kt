@@ -97,7 +97,7 @@ open class Core : androidx.lifecycle.ViewModel() {
 
             is PlayOperation.InstallAU -> {
                 installAu()
-                return PlayOperationOutput.Success(true)
+                return forward(value) ?: PlayOperationOutput.Success(false)
             }
 
             else -> {

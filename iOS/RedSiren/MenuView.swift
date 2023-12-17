@@ -10,14 +10,14 @@ struct MenuView: View {
     var rect: Rect
     var height: CGFloat
     var width: CGFloat
-    
+    var expanded: Bool
     var positionX: CGFloat
     var positionY: CGFloat
     
     let padding = CGFloat(12)
     let gap = CGFloat(24)
 
-    init(position: MenuPosition) {
+    init(position: MenuPosition, expanded: Bool) {
         self.position = position
         switch position {
         case .topLeft(let r):
@@ -34,6 +34,7 @@ struct MenuView: View {
         self.width = CGFloat(self.rect.rect[1][0] - self.rect.rect[0][0])
         self.positionX = CGFloat(self.rect.rect[0][0] + self.width / 2)
         self.positionY = CGFloat(self.rect.rect[0][1] + self.height / 2)
+        self.expanded = expanded
     }
 
     var isAuthorized = {

@@ -1,5 +1,5 @@
 use std::sync::mpsc::Sender;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, TryLockError};
 
 use anyhow::Result;
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
@@ -11,11 +11,18 @@ use shared::play::{PlayOperation, PlayOperationOutput};
 
 use crate::ViewModel;
 
+#[cfg_attr(not(any(feature = "android", feature = "ios")), allow(dead_code))]
+pub type Core = crate::Core<crate::Effect, crate::RedSirenAU>;
+
 pub trait StreamerUnit {
     fn init(&self) -> Result<UnboundedReceiver<PlayOperationOutput>>;
     fn pause(&self) -> Result<()>;
     fn start(&self) -> Result<()>;
-    fn forward(&self, op: PlayOperation, rx: UnboundedSender<PlayOperationOutput>);
+    fn forward(
+        &self,
+        event: PlayOperation,
+        resolve_id_sender: UnboundedSender<PlayOperationOutput>,
+    );
 }
 
 #[derive(Default)]
@@ -23,6 +30,54 @@ pub trait StreamerUnit {
 struct CoreStreamer {
     op_sender: Arc<Mutex<Option<Sender<(PlayOperation, UnboundedSender<PlayOperationOutput>)>>>>,
     render_sender: Arc<Mutex<Option<Sender<ViewModel>>>>,
+}
+
+#[cfg_attr(not(any(feature = "android", feature = "ios")), allow(dead_code))]
+impl CoreStreamer {
+    fn forward_op(
+        &self,
+        core: Arc<Mutex<Core>>,
+        event: PlayOperation,
+        resolve_id_sender: UnboundedSender<PlayOperationOutput>,
+    ) {
+        let op_sender = self.op_sender.clone();
+        let op_sender = op_sender.lock().expect("lock op sender");
+        let render_sender = self.render_sender.clone();
+
+        let render_sender = render_sender.lock().expect("lock render sender");
+
+        match core.try_lock() {
+            Err(TryLockError::WouldBlock) => {
+                if let Some(sender) = op_sender.as_ref() {
+                    sender.send((event, resolve_id_sender)).expect("send op");
+                } else {
+                    log::warn!("no sender, core blocked");
+                }
+            }
+            Ok(core) => {
+                if let Some(sender) = render_sender.as_ref() {
+                    for effect in core.process_event(event) {
+                        match effect {
+                            crate::Effect::Render(_) => {
+                                sender.send(core.view()).expect("send render");
+                            }
+                            crate::Effect::Resolve(output) => resolve_id_sender
+                                .unbounded_send(output.operation)
+                                .expect("send output"),
+                        }
+                    }
+                } else {
+                    log::warn!("no sender, core");
+                }
+            }
+            Err(TryLockError::Poisoned(e)) => {
+                log::error!("poisoned {e:?}");
+                resolve_id_sender
+                    .unbounded_send(PlayOperationOutput::Success(false))
+                    .expect("send error");
+            }
+        }
+    }
 }
 
 cfg_if::cfg_if! {
@@ -41,11 +96,9 @@ cfg_if::cfg_if! {
             fn start(&self) -> Result<()> {
                 unreachable!("no platform feature")
             }
-
             fn forward(&self, _: PlayOperation, _: UnboundedSender<PlayOperationOutput>) {
                 unreachable!("no platform feature")
             }
-
         }
     }
 }
@@ -73,6 +126,7 @@ impl AUCoreBridge {
         let event =
             bincode::deserialize::<PlayOperation>(bytes.as_slice()).expect("deserialize op");
 
+        log::debug!("{event:?}");
         let core = self.core.clone();
         let resolve_receiver = self.resolve_receiver.clone();
 

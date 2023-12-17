@@ -59,6 +59,10 @@ impl App for RedSirenAU {
                 let frame_size = input.get(0).map_or(0, |ch| ch.len());
 
                 if frame_size != model.frame_size {
+                    if model.frame_size > 0 {
+                        log::warn!("resizing at runtime")
+                    }
+
                     model.frame_size = frame_size;
                     model.audio_data = (0..model.system.as_ref().unwrap().channels)
                         .map(|_| (0..frame_size).map(|_| 0.0_f32).collect())
@@ -87,13 +91,9 @@ impl App for RedSirenAU {
                 }
             }
             op => {
-                log::debug!("op: {op:?} reached hard bottom")
-            } // PlayOperation::Resume => {}
-              // PlayOperation::Suspend => {}
-              // PlayOperation::InstallAU => {}
-              // PlayOperation::Permissions => {}
-              // PlayOperation::QueryInputDevices => todo!(),
-              // PlayOperation::QueryOutputDevices => todo!(),
+                log::debug!("op: {op:?} reached hard bottom");
+                caps.resolve.resolve_success(true);
+            }
         }
     }
 

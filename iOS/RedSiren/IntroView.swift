@@ -108,10 +108,9 @@ struct MenuGroup: View {
     }
 
     var body: some View {
-        MenuView(position: self.position)
+        MenuView(position: self.position, expanded: true)
             .frame(width: self.hSize, height: self.vSize, alignment: Alignment.topLeading)
     }
-
 }
 
 

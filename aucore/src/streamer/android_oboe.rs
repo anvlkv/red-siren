@@ -122,9 +122,9 @@ impl AudioOutputCallback for AAUOutput {
     ) -> DataCallbackResult {
         match self.0.recv() {
             Ok(vm) => {
-                let ch1 = vm.0.get(0);
+                let ch1 = vm.0.first();
                 let ch1 = ch1.iter().flat_map(|v| *v).into_iter();
-                let ch2 = vm.0.get(1).or_else(|| vm.0.get(0));
+                let ch2 = vm.0.get(1).or_else(|| vm.0.first());
                 let ch2 = ch2.iter().flat_map(|v| *v).into_iter();
 
                 for (frame, vm) in frames.iter_mut().zip(ch1.zip(ch2)) {

@@ -25,10 +25,11 @@ pub trait StreamerUnit {
     );
 }
 
+pub type OPSender = Sender<(PlayOperation, UnboundedSender<PlayOperationOutput>)>;
 #[derive(Default)]
 #[cfg_attr(not(any(feature = "android", feature = "ios")), allow(dead_code))]
 struct CoreStreamer {
-    op_sender: Arc<Mutex<Option<Sender<(PlayOperation, UnboundedSender<PlayOperationOutput>)>>>>,
+    op_sender: Arc<Mutex<Option<OPSender>>>,
     render_sender: Arc<Mutex<Option<Sender<ViewModel>>>>,
 }
 
@@ -107,6 +108,12 @@ pub struct AUCoreBridge {
     core: Arc<Mutex<CoreStreamer>>,
     pool: ThreadPool,
     resolve_receiver: Arc<Mutex<Option<UnboundedReceiver<PlayOperationOutput>>>>,
+}
+
+impl Default for AUCoreBridge {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AUCoreBridge {

@@ -56,7 +56,7 @@ impl App for RedSirenAU {
                 caps.resolve.resolve_success(true);
             }
             PlayOperation::Input(input) => {
-                let frame_size = input.get(0).map_or(0, |ch| ch.len());
+                let frame_size = input.first().map_or(0, |ch| ch.len());
 
                 if frame_size != model.frame_size {
                     if model.frame_size > 0 {

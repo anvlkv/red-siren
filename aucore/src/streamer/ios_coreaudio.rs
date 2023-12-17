@@ -144,7 +144,7 @@ impl super::StreamerUnit for CoreStreamer {
                 for (ch, channel) in data.channels_mut().enumerate() {
                     let sample: &S = buffer
                         .get(ch)
-                        .or_else(|| buffer.get(0))
+                        .or_else(|| buffer.first())
                         .and_then(|b| b.get(i))
                         .unwrap_or(&0_f32);
                     channel[i] = *sample;

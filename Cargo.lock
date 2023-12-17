@@ -935,6 +935,7 @@ dependencies = [
 [[package]]
 name = "crux_core"
 version = "0.7.0"
+source = "git+https://github.com/anvlkv/crux.git#3161b359cd9ddf6818e79e62f453436e42adebe8"
 dependencies = [
  "anyhow",
  "bincode",
@@ -953,6 +954,7 @@ dependencies = [
 [[package]]
 name = "crux_http"
 version = "0.4.4"
+source = "git+https://github.com/anvlkv/crux.git#3161b359cd9ddf6818e79e62f453436e42adebe8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -970,6 +972,7 @@ dependencies = [
 [[package]]
 name = "crux_kv"
 version = "0.1.6"
+source = "git+https://github.com/anvlkv/crux.git#3161b359cd9ddf6818e79e62f453436e42adebe8"
 dependencies = [
  "anyhow",
  "crux_core",
@@ -980,6 +983,7 @@ dependencies = [
 [[package]]
 name = "crux_macros"
 version = "0.3.4"
+source = "git+https://github.com/anvlkv/crux.git#3161b359cd9ddf6818e79e62f453436e42adebe8"
 dependencies = [
  "darling 0.20.3",
  "proc-macro-error",
@@ -991,6 +995,7 @@ dependencies = [
 [[package]]
 name = "crux_platform"
 version = "0.1.6"
+source = "git+https://github.com/anvlkv/crux.git#3161b359cd9ddf6818e79e62f453436e42adebe8"
 dependencies = [
  "anyhow",
  "crux_core",
@@ -1001,6 +1006,7 @@ dependencies = [
 [[package]]
 name = "crux_time"
 version = "0.1.7"
+source = "git+https://github.com/anvlkv/crux.git#3161b359cd9ddf6818e79e62f453436e42adebe8"
 dependencies = [
  "anyhow",
  "crux_core",

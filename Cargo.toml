@@ -24,12 +24,12 @@ uniffi = "0.25.3"
 # crux_macros = "0.3"
 # crux_platform = "0.1"
 # crux_time = "0.1"
-crux_core = {path="../crux/crux_core"} #"0.6"
-crux_http = {path="../crux/crux_http"} #"0.4"
-crux_kv = {path="../crux/crux_kv"} #"0.1"
-crux_macros = {path="../crux/crux_macros"} #"0.3"
-crux_platform = {path="../crux/crux_platform"} #"0.1"
-crux_time = {path="../crux/crux_time"} #"0.1"
+crux_core = {git="https://github.com/anvlkv/crux.git", package = "crux_core"}
+crux_http = {git="https://github.com/anvlkv/crux.git", package = "crux_http"}
+crux_kv = {git="https://github.com/anvlkv/crux.git", package = "crux_kv"}
+crux_macros = {git="https://github.com/anvlkv/crux.git", package = "crux_macros"}
+crux_platform = {git="https://github.com/anvlkv/crux.git", package = "crux_platform"}
+crux_time = {git="https://github.com/anvlkv/crux.git", package = "crux_time"}
 insta = { version = "1.34.0", features = ["yaml"] }
 lazy_static = "1.4.0"
 

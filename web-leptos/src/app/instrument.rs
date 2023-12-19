@@ -1,4 +1,5 @@
 use leptos::*;
+use leptos_meta::Title;
 
 pub use button::ButtonComponent;
 use shared::instrument;
@@ -37,6 +38,7 @@ pub fn InstrumentComponent(
 
     view! {
       <div class="h-full w-full bg-red dark:bg-black instrument">
+        <Title text="Red Siren - Play"/>
         <svg fill="none" class="stroke-black dark:stroke-red" viewBox={view_box} xmlns="http://www.w3.org/2000/svg">
           <StringComponent layout_line={inbound_layout_line} />
           <StringComponent layout_line={outbound_layout_line} />

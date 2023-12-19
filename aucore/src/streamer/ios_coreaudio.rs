@@ -1,6 +1,7 @@
 extern crate coreaudio;
 
 use std::sync::mpsc::{channel, TryRecvError};
+use std::sync::{Arc, Mutex, TryLockError};
 
 use anyhow::Result;
 use coreaudio::audio_unit::audio_format::LinearPcmFlags;

@@ -11,17 +11,13 @@ struct IntroViewController: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
-        // Update the view controller if needed
+        
     }
 }
 
 struct IntroView: View {
     var vm: IntroVM
     var ev: (IntroEV) -> Void
-
-    @StateObject var clock: AnimationClock = AnimationClock()
-    private var observer: NSKeyValueObservation!
-
 
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
@@ -63,20 +59,11 @@ struct IntroView: View {
                 IntroViewController()
                     .opacity(Double(self.vm.intro_opacity))
 
-                MenuGroup(vSize: self.vSize, hSize: self.hSize, position: self.vm.layout.menu_position).opacity(self.vm.menu_opacity)
-            }
-                .onAppear {
-                self.clock.onTick = { ts in
-                    ev(IntroEV.tsNext(ts))
-                }
-                self.clock.onStart = { ts in
-                    ev(IntroEV.startAnimation(ts_start: ts, reduced_motion: self.reduceMotion))
-                }
-
-                self.clock.createDisplayLink()
-            }
-                .onDisappear {
-                self.clock.deleteDisplayLink()
+                MenuGroup(vSize: self.vSize, hSize: self.hSize, position: self.vm.layout.menu_position, flip: self.vm.menu_flip).opacity(self.vm.menu_opacity)
+            }.onAppear {
+                self.ev(.setReducedMotion(self.reduceMotion))
+                self.ev(.start)
+                Logger().log("start animation")
             }
                 .frame(width: proxy.frame(in: .global).width, height: proxy.frame(in: .global).height)
         }
@@ -90,8 +77,9 @@ struct MenuGroup: View {
     var hSize: CGFloat
     var positionRect: Rect
     var position: MenuPosition
+    var flip: Double
 
-    init(vSize: CGFloat, hSize: CGFloat, position: MenuPosition) {
+    init(vSize: CGFloat, hSize: CGFloat, position: MenuPosition, flip: Double) {
         self.hSize = hSize
         self.vSize = vSize
         switch position {
@@ -105,11 +93,11 @@ struct MenuGroup: View {
             self.positionRect = r
         }
         self.position = position
+        self.flip = flip
     }
 
     var body: some View {
-        MenuView(position: self.position, expanded: true)
-            .frame(width: self.hSize, height: self.vSize, alignment: Alignment.topLeading)
+        MenuView(position: self.position, expanded: true, flip: self.flip)
     }
 }
 

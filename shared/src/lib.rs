@@ -12,7 +12,7 @@ cfg_if::cfg_if! { if #[cfg(feature="instance")]{
     pub use instance::*;
 } else if #[cfg(feature="browser")]{
     pub fn log_init() {
-        let lvl = log::Level::Debug;
+        let lvl = log::Level::Trace;
 
         _ = console_log::init_with_level(lvl);
         console_error_panic_hook::set_once();

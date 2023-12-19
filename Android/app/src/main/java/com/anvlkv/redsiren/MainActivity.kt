@@ -1,7 +1,9 @@
 package com.anvlkv.redsiren
 
+import android.animation.TimeAnimator
 import android.content.res.Resources
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -24,6 +26,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.anvlkv.redsiren.app.AppAbout
 import com.anvlkv.redsiren.app.AppInstrument
 import com.anvlkv.redsiren.app.AppIntro
 import com.anvlkv.redsiren.shared.shared_types.Event
@@ -146,18 +149,44 @@ fun RedSiren(core: Core) {
             is CoreActivity.Listen -> {
                 navController.navigate("listen")
             }
+
+            is CoreActivity.About -> {
+                navController.navigate("about")
+            }
         }
     }
 
-    val navigationTarget = core.navigateTo
-
-    LaunchedEffect(navigationTarget) {
-        if (navigationTarget.isPresent) {
-            val activity = navigationTarget.get()
-            navigateTo(activity)
-            core.update(Event.Activate(activity))
+    LaunchedEffect(core.navigateTo) {
+        if (core.navigateTo != null) {
+            navigateTo(core.navigateTo!!)
+            core.update(Event.ReflectActivity(core.navigateTo))
         }
     }
+
+
+    var animator: TimeAnimator? by remember {
+        mutableStateOf(null)
+    }
+
+
+    LaunchedEffect(core.animationSender) {
+        if (core.animationSender != null) {
+            val listener = fun(_: TimeAnimator, time: Long, _: Long) {
+                core.animationSender?.trySend(time)?.getOrNull()
+            }
+            animator = TimeAnimator()
+            animator!!.setTimeListener(listener)
+            animator!!.start()
+            Log.d("redsiren::android", "animation listener added")
+        }
+        else {
+            animator?.cancel()
+            animator = null
+            Log.d("redsiren::android", "animation listener removed")
+        }
+    }
+
+
 
     val context = LocalContext.current
     val cutouts = context.display?.cutout
@@ -200,6 +229,9 @@ fun RedSiren(core: Core) {
             }
             composable("tune") {
 //                AppInstrument(tunerVm, tunerEv)
+            }
+            composable("about") {
+                AppAbout(introVm, introEv)
             }
         }
     }

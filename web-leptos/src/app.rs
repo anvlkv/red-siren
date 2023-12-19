@@ -2,7 +2,11 @@ use cfg_if::cfg_if;
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
-use leptos_use::{use_event_listener, use_window};
+use leptos_use::{
+    use_event_listener, use_timestamp_with_controls_and_options, use_window, UseTimestampOptions,
+    UseTimestampReturn,
+};
+use futures::channel::mpsc::Sender;
 
 use shared::{Activity, Event};
 
@@ -15,6 +19,8 @@ mod core;
 mod instrument;
 mod intro;
 mod menu;
+
+mod about;
 
 cfg_if! { if #[cfg(feature="browser")]{
     mod playback;
@@ -91,37 +97,67 @@ pub fn RootComponent() -> impl IntoView {
 fn RedSirenCore() -> impl IntoView {
     let core = core::new();
     let view_rw_signal = create_rw_signal(core.view());
-    let view = view_rw_signal.read_only();
     let render = view_rw_signal.write_only();
     let playback = use_context::<ReadSignal<playback::Playback>>().unwrap();
     let (event, set_event) = create_signal(Event::Start);
 
+    let navigate = leptos_router::use_navigate();
+    let navigate_cb = Callback::new(move |path| navigate(path, Default::default()));
+
+    let UseTimestampReturn {
+        timestamp,
+        pause,
+        resume,
+        ..
+    } = use_timestamp_with_controls_and_options(UseTimestampOptions::default().immediate(false));
+    let (animate_send, set_animate_send) = create_signal(None);
+    let animate_cb = Callback::new(move |sender: Option<Sender<f64>>| {
+        if let Some(sender) = sender {
+            set_animate_send(Some(sender));
+            resume();
+            log::debug!("timestamp animation resumed");
+        } else {
+            set_animate_send(None);
+            pause();
+            log::debug!("timestamp animation paused");
+        }
+    });
+
+    create_effect(move |last| {
+        let ts = timestamp.get();
+
+        if last != Some(ts) {
+            if let Some(sender) = animate_send().as_mut() {
+                sender.try_send(ts).expect("send ts");
+            }
+        }
+
+        ts
+    });
+
     create_effect(move |_| {
-        core::update(&core, event.get(), render, playback.get());
+        core::update(
+            &core,
+            event.get(),
+            render,
+            playback.get(),
+            navigate_cb,
+            animate_cb,
+        );
     });
 
     let location = leptos_router::use_location();
 
-    create_effect(move |_| match (location.pathname)().as_str() {
-        "/" | "" => set_event(Event::Activate(Activity::Intro)),
-        "/tune" => set_event(Event::Activate(Activity::Tune)),
-        "/play" => set_event(Event::Activate(Activity::Play)),
-        "/listen" => set_event(Event::Activate(Activity::Listen)),
-        "/about" => set_event(Event::Activate(Activity::About)),
-        _ => panic!("route not using activity"),
-    });
-
-    let navigate = leptos_router::use_navigate();
     create_effect(move |_| {
-        let path = match view.get().activity {
-            Activity::Intro => "/",
-            Activity::Tune => "/tune",
-            Activity::Play => "/play",
-            Activity::Listen => "/listen",
-            Activity::About => "/about",
-        };
-
-        navigate(path, Default::default())
+        let pathname = (location.pathname)();
+        log::debug!("browser or user activated pathname: {pathname}");
+        match pathname.as_str() {
+            "/tune" => set_event(Event::ReflectActivity(Activity::Tune)),
+            "/play" => set_event(Event::ReflectActivity(Activity::Play)),
+            "/listen" => set_event(Event::ReflectActivity(Activity::Listen)),
+            "/about" => set_event(Event::ReflectActivity(Activity::About)),
+            _ => set_event(Event::ReflectActivity(Activity::Intro)),
+        }
     });
 
     let (size, set_size) = create_signal((0, 0));
@@ -162,6 +198,12 @@ fn RedSirenCore() -> impl IntoView {
         <Routes>
             <Route path="" view=move || view! {
                 <intro::IntroComponent
+                    vm=intro_vm
+                    ev=intro_ev
+                />
+            } />
+            <Route path="about" view=move || view! {
+                <about::AboutComponent
                     vm=intro_vm
                     ev=intro_ev
                 />

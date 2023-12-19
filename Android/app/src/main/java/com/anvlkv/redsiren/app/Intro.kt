@@ -44,29 +44,20 @@ fun isReducedMotionEnabled(resolver: ContentResolver): Boolean {
 
 @Composable
 fun AppIntro(vm: IntroVM, ev: (ev: IntroEV) -> Unit) {
-    val coroutineScope = rememberCoroutineScope()
-    val sun = ImageVector.vectorResource(id = R.drawable.intro_sun)
-    val waves = ImageVector.vectorResource(id = R.drawable.intro_shine)
     val sirenComp = ImageVector.vectorResource(id = R.drawable.intro_siren)
     val density = Resources.getSystem().displayMetrics.density
 
-    val sunPainter = rememberVectorPainter(image = sun)
-    val wavesPainter = rememberVectorPainter(image = waves)
     val sirenPainter = rememberVectorPainter(image = sirenComp)
 
     val reducedMotion = isReducedMotionEnabled(LocalContext.current.contentResolver)
 
-    LaunchedEffect(Unit, reducedMotion, sirenPainter) {
-        val listener = fun(_: TimeAnimator, time: Long, _: Long) {
-            coroutineScope.launch {
-                ev(IntroEV.TsNext(time.toDouble()))
-            }
-        }
-        val animator = TimeAnimator()
 
-        animator.setTimeListener(listener)
-        ev(IntroEV.StartAnimation(0.0, reducedMotion))
-        animator.start()
+    LaunchedEffect(reducedMotion) {
+        ev(IntroEV.SetReducedMotion(reducedMotion))
+    }
+
+    LaunchedEffect(Unit) {
+        ev(IntroEV.Start())
     }
 
 
@@ -126,71 +117,62 @@ fun AppIntro(vm: IntroVM, ev: (ev: IntroEV) -> Unit) {
             }
         }
 
-        Box(
-            modifier = Modifier
-                .alpha(vm.intro_opacity.toFloat())
-                .fillMaxSize()
-        ) {
-
-            Canvas(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .align(Alignment.TopStart)
-            ) {
-                with(sunPainter) {
-                    draw(intrinsicSize)
-                }
-            }
-
-
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .align(Alignment.BottomStart)
-                    .blur(1F.dp)
-            ) {
-                Image(
-                    painter = wavesPainter,
-                    contentDescription = "Sun reflecting on water",
-                    modifier = Modifier.align(Alignment.BottomStart)
-                )
-            }
-
-            Box(
-                modifier = Modifier.fillMaxSize()
-
-            ) {
-                Image(
-                    painter = sirenPainter,
-                    contentDescription = "Siren playing on a flute",
-                    modifier = Modifier.align(Alignment.BottomEnd)
-                )
-            }
-
-        }
+        IntroDrawing(modifier = Modifier
+            .alpha(vm.intro_opacity.toFloat())
+            .fillMaxSize())
     }
 
-    val menuRect = when (val position = vm.layout.menu_position) {
-        is MenuPosition.TopRight -> position.value
-        is MenuPosition.TopLeft -> position.value
-        is MenuPosition.BottomLeft -> position.value
-        is MenuPosition.Center -> position.value
-        else -> throw Error("unknown position")
+    Box (modifier = Modifier.alpha(vm.menu_opacity.toFloat())){
+        Menu(true, vm.menu_flip, vm.layout.menu_position)
     }
 
-    val menuSize =
-        DpSize((menuRect.rect[1][0] - menuRect.rect[0][0]).dp, (menuRect.rect[1][1] - menuRect.rect[0][1]).dp)
+}
+
+
+@Composable
+fun IntroDrawing(modifier: Modifier) {
+    val sun = ImageVector.vectorResource(id = R.drawable.intro_sun)
+    val waves = ImageVector.vectorResource(id = R.drawable.intro_shine)
+    val sirenComp = ImageVector.vectorResource(id = R.drawable.intro_siren)
+    val sunPainter = rememberVectorPainter(image = sun)
+    val wavesPainter = rememberVectorPainter(image = waves)
+    val sirenPainter = rememberVectorPainter(image = sirenComp)
 
     Box(
-        Modifier
-            .size(menuSize)
-            .graphicsLayer(
-                translationX = (menuRect.rect[0][0] * density.toDouble()).toFloat(),
-                translationY = (menuRect.rect[0][1] * density.toDouble()).toFloat(),
-            )
+        modifier = modifier
     ) {
-        Menu(true)
-    }
 
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .align(Alignment.TopStart)
+        ) {
+            with(sunPainter) {
+                draw(intrinsicSize)
+            }
+        }
+
+        Canvas(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .blur(1F.dp)
+                .fillMaxSize()
+        ) {
+            with(wavesPainter) {
+                draw(intrinsicSize)
+            }
+        }
+
+        Box(
+            modifier = Modifier.fillMaxSize()
+
+        ) {
+            Image(
+                painter = sirenPainter,
+                contentDescription = "Siren playing on a flute",
+                modifier = Modifier.align(Alignment.BottomEnd)
+            )
+        }
+
+    }
 }

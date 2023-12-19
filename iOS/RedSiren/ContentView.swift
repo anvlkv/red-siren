@@ -1,6 +1,7 @@
 import SharedTypes
 import SwiftUI
 import UIScreenExtension
+import OSLog
 
 struct SizePreferenceKey: PreferenceKey {
     static var defaultValue: CGSize = .zero
@@ -12,9 +13,10 @@ struct SizePreferenceKey: PreferenceKey {
 
 struct ContentView: View {
     @ObservedObject var core: Core
-
-
+    
     @Environment(\.safeAreaInsets) private var safeAreaInsets
+    @StateObject var clock: AnimationClock = AnimationClock()
+    private var observer: NSKeyValueObservation!
 
     init(core: Core) {
         self.core = core
@@ -47,10 +49,12 @@ struct ContentView: View {
 
     @ViewBuilder func ActivityView() -> some View {
         switch self.core.view.activity {
-        case Activity.intro:
+        case .intro:
             IntroView(vm: self.core.view.intro, ev: self.introEv)
-        case Activity.play:
+        case .play:
             InstrumentView(vm: self.core.view.instrument, ev: self.instrumentEv)
+        case .about:
+            AboutView(vm: self.core.view.intro, ev: self.introEv)
         default:
             VStack {
                 Text("Not implemented")
@@ -63,6 +67,20 @@ struct ContentView: View {
             AnyView(
                 ActivityView()
             )
+        }.onAppear{
+            Logger().log("set cbs");
+            self.core.startClock = { cb in
+                self.clock.onTick = cb
+                self.clock.createDisplayLink()
+                Logger().log("starting");
+            }
+            self.core.stopClock = {
+                self.clock.deleteDisplayLink()
+            }
+        }
+        .onDisappear {
+            self.core.startClock = nil
+            self.core.stopClock =  nil
         }
             .ignoresSafeArea(.all)
             .statusBarHidden(true)

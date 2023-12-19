@@ -3,6 +3,7 @@
 package com.anvlkv.redsiren
 
 
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -15,6 +16,8 @@ import com.anvlkv.redsiren.ffirs.logInit
 import com.anvlkv.redsiren.ffirs.processEvent
 import com.anvlkv.redsiren.ffirs.view
 import com.anvlkv.redsiren.shared.shared_types.Activity
+import com.anvlkv.redsiren.shared.shared_types.AnimateOperation
+import com.anvlkv.redsiren.shared.shared_types.AnimateOperationOutput
 import com.anvlkv.redsiren.shared.shared_types.Effect
 import com.anvlkv.redsiren.shared.shared_types.Event
 import com.anvlkv.redsiren.shared.shared_types.NavigateOperation
@@ -26,13 +29,19 @@ import com.anvlkv.redsiren.shared.shared_types.ViewModel
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.SendChannel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.util.Optional
 
 open class Core : androidx.lifecycle.ViewModel() {
     var view: ViewModel by mutableStateOf(ViewModel.bincodeDeserialize(view()))
-
-    var navigateTo: Optional<Activity> = Optional.empty()
+    var navigateTo: Activity? by mutableStateOf(null)
+    var animationSender: SendChannel<Long>? by mutableStateOf(null)
 
     private val httpClient = HttpClient(CIO)
 
@@ -63,8 +72,7 @@ open class Core : androidx.lifecycle.ViewModel() {
             is Effect.Navigate -> {
                 when (val op = effect.value) {
                     is NavigateOperation.To -> {
-                        this.navigateTo = Optional.of(op.value)
-                        this.view = ViewModel.bincodeDeserialize(view())
+                        this.navigateTo = op.value
                     }
                 }
             }
@@ -81,7 +89,49 @@ open class Core : androidx.lifecycle.ViewModel() {
                     processEffect(request)
                 }
             }
+
+            is Effect.Animate -> {
+                when (effect.value) {
+                    is AnimateOperation.Start -> {
+                        Log.i("redsiren::android", "starting animation loop")
+                        val channel = Channel<Long>(Channel.CONFLATED)
+
+                        animationSender = channel
+                        animateStream(channel, request.uuid.toByteArray())
+                    }
+                    is AnimateOperation.Stop -> {
+                        Log.i("redsiren::android", "stopping animation loop")
+                        animationSender?.close()
+                        animationSender = null
+
+                        val response = AnimateOperationOutput.Done()
+                        val effects =
+                            handleResponse(request.uuid.toByteArray(), response.bincodeSerialize())
+                        val requests = Requests.bincodeDeserialize(effects)
+                        for (request in requests) {
+                            processEffect(request)
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    private suspend fun animateStream(channel: ReceiveChannel<Long>, uuid: ByteArray) {
+        do {
+            val ts = channel.receiveCatching().getOrNull() ?: break
+
+            val response = AnimateOperationOutput.Timestamp(ts.toDouble())
+            val effects =
+                handleResponse(uuid, response.bincodeSerialize())
+            val requests = Requests.bincodeDeserialize(effects)
+            for (request in requests) {
+                processEffect(request)
+            }
+            Log.d("redsiren::android", "animation stream tick")
+        } while (true)
+
+        Log.i("redsiren::android", "animation stream loop exited")
     }
 
     private suspend fun playEffect(value: PlayOperation): PlayOperationOutput {

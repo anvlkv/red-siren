@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import UIKit
 import SharedTypes
+import Serde
 import OSLog
 
 @MainActor
@@ -9,6 +10,13 @@ class Core: ObservableObject {
     @Published var view: ViewModel
 
     @State var playback: Playback = Playback()
+    
+    var startClock: ((
+        @escaping(Double) -> Void
+    ) -> Void)?
+    
+    var stopClock: (() -> Void)?
+    
 
     init() {
         self.view = try! .bincodeDeserialize(input: [UInt8](RedSiren.view()))
@@ -28,7 +36,7 @@ class Core: ObservableObject {
         case .render:
             view = try! .bincodeDeserialize(input: [UInt8](RedSiren.view()))
         case let .navigate(.to(activity)):
-            self.update(Event.activate(activity))
+            self.update(Event.reflectActivity(activity))
             break
         case .keyValue(.read):
             let response = KeyValueOutput.read(.none)
@@ -61,7 +69,34 @@ class Core: ObservableObject {
                 }
             }
             break
+        case .animate(.start):
+            Task {
+                self.startClock!({ ts in
+                    let data = try! AnimateOperationOutput.timestamp(ts).bincodeSerialize()
+                    let effects = [UInt8](handleResponse(Data(request.uuid), Data(data)))
+
+                    let requests: [Request] = try! .bincodeDeserialize(input: effects)
+                    for request in requests {
+                        self.processEffect(request)
+                    }
+                })
+            }
+            break
+        case .animate(.stop):
+            Task {
+                self.stopClock!()
+                let data = try! AnimateOperationOutput.done.bincodeSerialize()
+                let effects = [UInt8](handleResponse(Data(request.uuid), Data(data)))
+
+                let requests: [Request] = try! .bincodeDeserialize(input: effects)
+                for request in requests {
+                    self.processEffect(request)
+                }
+            }
+            break
         }
+
+        
     }
 }
 

@@ -115,29 +115,9 @@ fun AppInstrument(vm: InstrumentVM, ev: (ev: InstrumentEV) -> Unit) {
         vm.layout.buttons.forEach { rect ->
             InstrumentButton(layoutRect = rect)
         }
+
+        Menu(false, flip = null, position = vm.layout.menu_position)
     }
 
-    val menuRect = when (val position = vm.layout.menu_position) {
-        is MenuPosition.TopRight -> position.value
-        is MenuPosition.TopLeft -> position.value
-        is MenuPosition.BottomLeft -> position.value
-        is MenuPosition.Center -> position.value
-        else -> throw Error("unknown position")
-    }
-
-    val menuSize =
-        DpSize((menuRect.rect[1][0] - menuRect.rect[0][0]).dp, (menuRect.rect[1][1] - menuRect.rect[0][1]).dp)
-    val density = Resources.getSystem().displayMetrics.density
-
-    Box(
-        Modifier
-            .size(menuSize)
-            .graphicsLayer(
-                translationX = (menuRect.rect[0][0] * density.toDouble()).toFloat(),
-                translationY = (menuRect.rect[0][1] * density.toDouble()).toFloat(),
-            )
-    ) {
-        Menu(false)
-    }
 }
 

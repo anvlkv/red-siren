@@ -11,18 +11,22 @@ main {
 
 .splash {
   position: relative;
+
   .splash-dummy {
     opacity: calc(1 - var(--intro-opacity));
   }
+
   .splash-picture {
     opacity: var(--intro-opacity);
   }
+
   svg {
     position: absolute;
     height: 100%;
     width: auto;
     top: 0;
     left: 0;
+
     &.siren,
     &.siren-front,
     &.flute,
@@ -39,6 +43,7 @@ main {
 
 .instrument {
   position: relative;
+
   svg {
     position: absolute;
     height: 100%;
@@ -46,10 +51,9 @@ main {
   }
 }
 
-.menu {
+.menu, .about {
   display: grid;
   padding: .75rem;
-  grid-template-rows: repeat(auto-fill, 1fr);
   align-items: stretch;
   justify-items: stretch;
   grid-row-gap: 1.5rem;
@@ -59,6 +63,36 @@ main {
       transition-property: color, background-color, box-shadow, border-color;
       transition-duration: 350ms;
       transition-timing-function: ease-in;
+    }
+  }
+
+  &, &::after {
+    backface-visibility: hidden;
+    transform-style: preserve-3d;
+  }
+  &::after {
+    position: absolute;
+    content: ' ';
+    top:0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    transform: rotateY(180deg);
+  }
+}
+
+.about {
+  dl {
+    display: grid;
+    grid-auto-columns: auto auto;
+    grid-gap: 1rem;
+    dt {
+      grid-column: 1;
+      text-align: right;
+      font-style: italic;
+    }
+    dd {
+      grid-column: 2;
     }
   }
 }

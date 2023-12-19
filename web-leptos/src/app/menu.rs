@@ -8,7 +8,8 @@ use shared::{Activity, Event};
 pub fn MenuComponent(
     #[prop(into)] position: Signal<MenuPosition>,
     #[prop(optional)] expanded: bool,
-    #[prop(into)] playing: Signal<bool>,
+    #[prop(optional, into)] style: Signal<String>,
+    #[prop(optional, into)] playing: Signal<bool>,
 ) -> impl IntoView {
     let ev_ctx = use_context::<WriteSignal<Event>>().expect("root ev context");
     let menu_ev: Callback<Activity> = (move |activity: Activity| {
@@ -53,12 +54,19 @@ pub fn MenuComponent(
     let menu_style = move || {
         let pos = position();
         let rect = pos.rect();
+        let style = style();
         format!(
-            "width: {}px; height: {}px; top: {}px; left: {}px",
+            r#"
+            width: {}px; 
+            height: {}px; 
+            top: {}px; 
+            left: {}px;
+            {style}
+            "#,
             rect.width(),
             rect.height(),
             rect.top_left().y,
-            rect.top_left().x
+            rect.top_left().x,
         )
     };
 
@@ -70,7 +78,7 @@ pub fn MenuComponent(
             MenuPosition::Center(_) => "center",
         };
 
-        format!("absolute bg-black dark:bg-red text-red dark:text-black rounded-3xl shadow-lg menu menu-{corner} ")
+        format!("absolute after:bg-black dark:after:bg-red after:rounded-3xl after:shadow-lg bg-black dark:bg-red text-red dark:text-black rounded-3xl shadow-lg menu menu-{corner} ")
     };
 
     let play_pause = move || if playing() { "Stop" } else { "Play" };
@@ -88,7 +96,7 @@ pub fn MenuComponent(
 
     view! {
       <div class={menu_class} style={menu_style}>
-        <h1 class="text-4xl my-auto text-center font-bold">{"Red Siren"}</h1>
+        <h1 class="text-4xl my-auto text-center">{"Red Siren"}</h1>
         <button class=btn_class on:click=move|_| menu_ev(Activity::Play)>
             {play_pause}
         </button>

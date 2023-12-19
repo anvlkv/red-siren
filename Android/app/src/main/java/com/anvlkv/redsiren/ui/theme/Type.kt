@@ -13,17 +13,10 @@ val appFontFamily = FontFamily(
     fonts = listOf(
         Font(
             resId = R.font.rosarivo_regular,
-            weight = FontWeight.W600,
             style = FontStyle.Normal
         ),
         Font(
             resId = R.font.rosarivo_italic,
-            weight = FontWeight.W600,
-            style = FontStyle.Italic
-        ),
-        Font(
-            resId = R.font.rosarivo_italic,
-            weight = FontWeight.W900,
             style = FontStyle.Italic
         ),
     )
@@ -31,17 +24,35 @@ val appFontFamily = FontFamily(
 
 // Set of Material typography styles to start with
 val typography = Typography(
+    bodyMedium = TextStyle(
+        fontFamily = appFontFamily,
+        fontStyle = FontStyle.Italic,
+        fontSize = 18.sp,
+        lineHeight = 24.sp,
+        letterSpacing = 0.5.sp
+    ),
+    bodySmall = TextStyle(
+        fontFamily = appFontFamily,
+        fontSize = 16.sp,
+        lineHeight = 19.2.sp,
+        letterSpacing = 0.5.sp
+    ),
     bodyLarge = TextStyle(
         fontFamily = appFontFamily,
-        fontWeight = FontWeight.W600,
         fontSize = 18.sp,
         lineHeight = 24.sp,
         letterSpacing = 0.5.sp
     ),
     titleLarge = TextStyle(
         fontFamily = appFontFamily,
-        fontWeight = FontWeight.W900,
         fontSize = 36.sp,
+        lineHeight = 42.sp,
+        letterSpacing = 0.sp
+    ),
+    titleMedium = TextStyle(
+        fontFamily = appFontFamily,
+        fontSize = 30.7.sp,
+        fontStyle = FontStyle.Italic,
         lineHeight = 42.sp,
         letterSpacing = 0.sp
     ),

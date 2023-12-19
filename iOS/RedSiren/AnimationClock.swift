@@ -15,7 +15,9 @@ class AnimationClock: NSObject, ObservableObject {
     }
     
     func createDisplayLink() {
-        self.deleteDisplayLink()
+        if (self.link != nil) {
+            self.deleteDisplayLink()
+        }
         
         self.link = CADisplayLink(target: self,
                                         selector: #selector(step))

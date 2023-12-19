@@ -4,6 +4,7 @@ use crux_kv::KeyValue;
 use crux_macros::Effect;
 use serde::{Deserialize, Serialize};
 
+use crate::animate::Animate;
 pub use instrument::Instrument;
 pub use intro::Intro;
 pub use navigate::Navigate;
@@ -14,6 +15,7 @@ use self::{
     instrument::InstrumentCapabilities, intro::IntroCapabilities, tuner::TunerCapabilities,
 };
 
+pub mod animate;
 pub mod instrument;
 pub mod intro;
 pub mod navigate;
@@ -60,7 +62,7 @@ pub enum Event {
         dpi: f64,
         safe_areas: [f64; 4],
     },
-    Activate(Activity),
+    ReflectActivity(Activity),
     Menu(Activity),
 }
 
@@ -81,6 +83,7 @@ pub struct RedSirenCapabilities {
     pub key_value: KeyValue<Event>,
     pub navigate: Navigate<Event>,
     pub play: Play<Event>,
+    pub animate: Animate<Event>,
 }
 
 impl From<&RedSirenCapabilities> for IntroCapabilities {
@@ -88,6 +91,7 @@ impl From<&RedSirenCapabilities> for IntroCapabilities {
         IntroCapabilities {
             render: incoming.render.map_event(super::Event::IntroEvent),
             navigate: incoming.navigate.map_event(super::Event::IntroEvent),
+            animate: incoming.animate.map_event(super::Event::IntroEvent),
         }
     }
 }
@@ -124,20 +128,9 @@ impl App for RedSiren {
             Event::Start => {
                 caps.render.render();
             }
-            Event::Activate(act) => {
+            Event::ReflectActivity(act) => {
                 model.activity = act;
-
-                #[allow(clippy::single_match)]
-                match act {
-                    // aka resetting
-                    Activity::Intro => {
-                        model.intro = intro::Model::default();
-                        if let Some(config) = model.config.as_ref() {
-                            self.update(Event::ConfigureApp(config.clone()), model, caps);
-                        }
-                    }
-                    _ => {}
-                }
+                model.intro.current_activity = act;
                 caps.render.render();
             }
             Event::Menu(act) => match (model.activity, act) {
@@ -151,6 +144,14 @@ impl App for RedSiren {
                     );
                 }
                 (Activity::Intro, Activity::Tune) => {
+                    self.intro
+                        .update(intro::IntroEV::Menu(act), &mut model.intro, &caps.into());
+                }
+                (Activity::Intro, Activity::About) => {
+                    self.intro
+                        .update(intro::IntroEV::Menu(act), &mut model.intro, &caps.into());
+                }
+                (Activity::About, Activity::Intro) => {
                     self.intro
                         .update(intro::IntroEV::Menu(act), &mut model.intro, &caps.into());
                 }

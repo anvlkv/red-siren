@@ -21,7 +21,7 @@ pub fn view() -> Vec<u8> {
 
 pub fn log_init() {
     #[allow(unused_variables)]
-    let lvl = log::LevelFilter::Debug;
+    let lvl = log::LevelFilter::Trace;
 
     #[cfg(feature = "android")]
     {

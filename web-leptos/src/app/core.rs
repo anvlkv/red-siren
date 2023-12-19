@@ -1,5 +1,8 @@
+use futures::{
+    channel::mpsc::{channel, Sender},
+    StreamExt,
+};
 use std::rc::Rc;
-use futures::{channel::mpsc::{channel, Sender}, StreamExt};
 
 use leptos::*;
 
@@ -25,14 +28,7 @@ pub fn update(
     animate_cb: Callback<Option<Sender<f64>>>,
 ) {
     for effect in core.process_event(event) {
-        process_effect(
-            core,
-            effect,
-            render,
-            playback.clone(),
-            navigate,
-            animate_cb,
-        );
+        process_effect(core, effect, render, playback.clone(), navigate, animate_cb);
     }
 }
 
@@ -72,7 +68,14 @@ pub fn process_effect(
 
                 navigate(path);
 
-                update(core, Event::ReflectActivity(activity), render, playback, navigate, animate_cb);
+                update(
+                    core,
+                    Event::ReflectActivity(activity),
+                    render,
+                    playback,
+                    navigate,
+                    animate_cb,
+                );
             }
         },
         #[allow(unused_mut, unused_variables)]
@@ -104,7 +107,8 @@ pub fn process_effect(
                 let playback = playback.clone();
                 spawn_local(async move {
                     while let Some(ts) = rx.next().await {
-                        for effect in core.resolve(&mut req, AnimateOperationOutput::Timestamp(ts)) {
+                        for effect in core.resolve(&mut req, AnimateOperationOutput::Timestamp(ts))
+                        {
                             process_effect(
                                 &core,
                                 effect,

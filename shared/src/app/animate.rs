@@ -46,8 +46,7 @@ where
                 while let Some(response) = stream.next().await {
                     if let AnimateOperationOutput::Timestamp(ts) = response {
                         context.update_app(notify(ts));
-                    }
-                    else {
+                    } else {
                         break;
                     }
                 }

@@ -7,9 +7,7 @@ use shared::{intro, Activity, Event};
 use super::intro::SplashPicture;
 
 #[component]
-pub fn AboutComponent(
-    vm: Signal<intro::IntroVM>,
-) -> impl IntoView {
+pub fn AboutComponent(vm: Signal<intro::IntroVM>) -> impl IntoView {
     let position = Signal::derive(move || vm().layout.menu_position);
 
     view! {

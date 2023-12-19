@@ -1,4 +1,5 @@
 use cfg_if::cfg_if;
+use futures::channel::mpsc::Sender;
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
@@ -6,7 +7,6 @@ use leptos_use::{
     use_event_listener, use_timestamp_with_controls_and_options, use_window, UseTimestampOptions,
     UseTimestampReturn,
 };
-use futures::channel::mpsc::Sender;
 
 use shared::{Activity, Event};
 

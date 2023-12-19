@@ -30,8 +30,8 @@ pub fn update(
             effect,
             render,
             playback.clone(),
-            navigate.clone(),
-            animate_cb.clone(),
+            navigate,
+            animate_cb,
         );
     }
 }
@@ -90,8 +90,8 @@ pub fn process_effect(
                             effect,
                             render,
                             playback.clone(),
-                            navigate.clone(),
-                            animate_cb.clone(),
+                            navigate,
+                            animate_cb,
                         );
                     }
                 })
@@ -110,8 +110,8 @@ pub fn process_effect(
                                 effect,
                                 render,
                                 playback.clone(),
-                                navigate.clone(),
-                                animate_cb.clone(),
+                                navigate,
+                                animate_cb,
                             );
                         }
                     }
@@ -122,8 +122,8 @@ pub fn process_effect(
                             effect,
                             render,
                             playback.clone(),
-                            navigate.clone(),
-                            animate_cb.clone(),
+                            navigate,
+                            animate_cb,
                         );
                     }
 

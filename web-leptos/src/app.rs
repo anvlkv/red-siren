@@ -205,7 +205,6 @@ fn RedSirenCore() -> impl IntoView {
             <Route path="about" view=move || view! {
                 <about::AboutComponent
                     vm=intro_vm
-                    ev=intro_ev
                 />
             } />
             <Route path="play" view=move || view! {

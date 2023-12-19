@@ -9,7 +9,6 @@ use super::intro::SplashPicture;
 #[component]
 pub fn AboutComponent(
     vm: Signal<intro::IntroVM>,
-    ev: SignalSetter<intro::IntroEV>,
 ) -> impl IntoView {
     let position = Signal::derive(move || vm().layout.menu_position);
 

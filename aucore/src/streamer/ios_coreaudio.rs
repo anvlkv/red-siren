@@ -24,26 +24,22 @@ const SAMPLE_FORMAT: SampleFormat = SampleFormat::F32;
 lazy_static! {
     static ref CORE: Arc<Mutex<Core>> =
         Arc::new(Mutex::new(Core::new::<crate::RedSirenAUCapabilities>()));
-    static ref OUT_STREAM: Arc<Mutex<Option<AudioUnit>>> = Arc::new(Mutex::new(None));
-    static ref IN_STREAM: Arc<Mutex<Option<AudioUnit>>> = Arc::new(Mutex::new(None));
+    static ref AU_UNIT: Arc<Mutex<Option<AudioUnit>>> = Arc::new(Mutex::new(None));
 }
 
 impl super::StreamerUnit for CoreStreamer {
     fn init(&self) -> Result<UnboundedReceiver<PlayOperationOutput>> {
-        let mut input_audio_unit = AudioUnit::new(coreaudio::audio_unit::IOType::RemoteIO)?;
-        let mut output_audio_unit = AudioUnit::new(coreaudio::audio_unit::IOType::RemoteIO)?;
+        let mut audio_unit = AudioUnit::new(coreaudio::audio_unit::EffectType::AUFilter)?;
 
-        // Read device sample rate off the output stream
         let id = kAudioUnitProperty_StreamFormat;
         let asbd: AudioStreamBasicDescription =
-            output_audio_unit.get_property(id, Scope::Output, Element::Output)?;
+            audio_unit.get_property(id, Scope::Output, Element::Output)?;
         let sample_rate = asbd.mSampleRate;
 
-        // iOS doesn't let you reconfigure an "initialized" audio unit, so uninitialize them
-        input_audio_unit.uninitialize()?;
-        output_audio_unit.uninitialize()?;
+        
+        audio_unit.uninitialize()?;
 
-        configure_for_recording(&mut input_audio_unit)?;
+        configure_for_recording(&mut audio_unit)?;
 
         let format_flag = match SAMPLE_FORMAT {
             SampleFormat::F32 => LinearPcmFlags::IS_FLOAT,
@@ -55,37 +51,29 @@ impl super::StreamerUnit for CoreStreamer {
             }
         };
 
-        let in_stream_format = StreamFormat {
-            sample_rate,
-            sample_format: SAMPLE_FORMAT,
-            flags: format_flag | LinearPcmFlags::IS_PACKED | LinearPcmFlags::IS_NON_INTERLEAVED,
-            channels: 1,
-        };
-
-        let out_stream_format = StreamFormat {
+        let stream_format = StreamFormat {
             sample_rate,
             sample_format: SAMPLE_FORMAT,
             flags: format_flag | LinearPcmFlags::IS_PACKED | LinearPcmFlags::IS_NON_INTERLEAVED,
             channels: 2,
         };
 
-        log::debug!("input={:#?}", &in_stream_format);
-        log::debug!("output={:#?}", &out_stream_format);
-        log::debug!("input_asbd={:#?}", &in_stream_format.to_asbd());
-        log::debug!("output_asbd={:#?}", &out_stream_format.to_asbd());
+        log::debug!("format={:#?}", &stream_format);
+        
+        log::debug!("format_asbd={:#?}", &stream_format.to_asbd());
 
         let id = kAudioUnitProperty_StreamFormat;
-        input_audio_unit.set_property(
+        audio_unit.set_property(
             id,
             Scope::Output,
             Element::Input,
-            Some(&in_stream_format.to_asbd()),
+            Some(&stream_format.to_asbd()),
         )?;
-        output_audio_unit.set_property(
+        audio_unit.set_property(
             id,
             Scope::Input,
             Element::Output,
-            Some(&out_stream_format.to_asbd()),
+            Some(&stream_format.to_asbd()),
         )?;
 
         let (render_sender, render_receiver) = channel::<ViewModel>();
@@ -97,7 +85,7 @@ impl super::StreamerUnit for CoreStreamer {
         let core = CORE.clone();
         let input_render_sender = render_sender.clone();
         log::debug!("set_input_callback");
-        input_audio_unit.set_input_callback(move |args| {
+        audio_unit.set_input_callback(move |args| {
             let Args { data, .. } = args;
             let core = core.lock().expect("input core lock");
             let input: Vec<Vec<f32>> =
@@ -130,10 +118,10 @@ impl super::StreamerUnit for CoreStreamer {
 
             Ok(())
         })?;
-        input_audio_unit.initialize()?;
+        
 
         log::debug!("set_render_callback");
-        output_audio_unit.set_render_callback(move |args: Args| {
+        audio_unit.set_render_callback(move |args: Args| {
             let Args {
                 num_frames,
                 mut data,
@@ -153,10 +141,11 @@ impl super::StreamerUnit for CoreStreamer {
             }
             Ok(())
         })?;
-        output_audio_unit.initialize()?;
 
-        _ = IN_STREAM.lock().unwrap().insert(input_audio_unit);
-        _ = OUT_STREAM.lock().unwrap().insert(output_audio_unit);
+        audio_unit.initialize()?;
+
+        _ = AU_UNIT.lock().unwrap().insert(audio_unit);
+       
         _ = self
             .op_sender
             .lock()
@@ -172,15 +161,11 @@ impl super::StreamerUnit for CoreStreamer {
     }
 
     fn pause(&self) -> Result<()> {
-        let mut input_audio_unit = IN_STREAM.lock().unwrap();
+        let mut input_audio_unit = AU_UNIT.lock().unwrap();
         let input_audio_unit = input_audio_unit.as_mut().unwrap();
 
         input_audio_unit.stop()?;
 
-        let mut output_audio_unit = OUT_STREAM.lock().unwrap();
-        let output_audio_unit = output_audio_unit.as_mut().unwrap();
-
-        output_audio_unit.stop()?;
 
         log::info!("paused");
 
@@ -188,15 +173,10 @@ impl super::StreamerUnit for CoreStreamer {
     }
 
     fn start(&self) -> Result<()> {
-        let mut input_audio_unit = IN_STREAM.lock().unwrap();
+        let mut input_audio_unit = AU_UNIT.lock().unwrap();
         let input_audio_unit = input_audio_unit.as_mut().unwrap();
 
         input_audio_unit.start()?;
-
-        let mut output_audio_unit = OUT_STREAM.lock().unwrap();
-        let output_audio_unit = output_audio_unit.as_mut().unwrap();
-
-        output_audio_unit.start()?;
 
         log::info!("started");
 
@@ -221,12 +201,12 @@ fn configure_for_recording(audio_unit: &mut AudioUnit) -> Result<(), coreaudio::
     )?;
 
     // Disable output
-    let disable_output = 0u32;
+    let enable_output = 1u32;
     audio_unit.set_property(
         kAudioOutputUnitProperty_EnableIO,
         Scope::Output,
         Element::Output,
-        Some(&disable_output),
+        Some(&enable_output),
     )?;
 
     Ok(())

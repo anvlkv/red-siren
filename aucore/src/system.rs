@@ -10,8 +10,9 @@ pub struct System {
     pub channels: usize,
     pub sample_rate: f64,
     pub nodes: Vec<NodeId>,
-    pub amps: Vec<Shared<f32>>,
-    pub tunes: Vec<Shared<f32>>,
+    pub b_centres: Vec<Shared<f32>>,
+    pub b_qs: Vec<Shared<f32>>,
+    pub n_fs: Vec<Shared<f32>>,
 }
 
 impl System {
@@ -19,170 +20,149 @@ impl System {
         let sample_rate = SAMPLE_RATE;
         let channels = Ord::min(config.groups, CHANNELS);
         let mut net = Net32::new(1, channels);
+        net.set_sample_rate(sample_rate);
+        
         let size = nodes_data.len();
+        let mut nodes = vec![];
+        let mut b_centres = vec![];
+        let mut b_qs = vec![];
+        let mut n_fs = vec![];
 
-        let mut amps = Vec::with_capacity(size);
-        let mut tunes = Vec::with_capacity(size);
-        let mut nodes = Vec::with_capacity(size);
+        let mut input_subnet = Net32::new(1, size);
+        let mut output_subnet = Net32::new(size, channels);
 
-        // let input_unit = pass() >> dcblock() >> input_branch;
+        let input_pipe = dcblock() >> declick_s(0.75);
 
-        // let input_id = net.push(Box::new(input_unit));
-        // net.pipe_input(input_id);
+        let input_pipe_id = match nodes_data.len() {
+            2 => input_subnet.push(Box::new(input_pipe >> split::<U2>())),
+            3 => input_subnet.push(Box::new(input_pipe >> split::<U3>())),
+            4 => input_subnet.push(Box::new(input_pipe >> split::<U4>())),
+            5 => input_subnet.push(Box::new(input_pipe >> split::<U5>())),
+            6 => input_subnet.push(Box::new(input_pipe >> split::<U6>())),
+            9 => input_subnet.push(Box::new(input_pipe >> split::<U9>())),
+            10 => input_subnet.push(Box::new(input_pipe >> split::<U10>())),
+            12 => input_subnet.push(Box::new(input_pipe >> split::<U12>())),
+            n => todo!("support for {n} nodes"),
+        };
 
-        for Node {
-            freq: (base_freq, max_freq),
-            f_n,
-            ..
-        } in nodes_data.iter()
-        {
-            let c = sine_hz(*base_freq); //envelope(|t| sin_hz(base_freq.clone(), t));
+        input_subnet.connect_input(0, input_pipe_id, 0);
 
-            let a = shared(1.0);
+        for (i, node_data) in nodes_data.iter().enumerate() {
+            // todo: use tuner input
+            let bp_f = shared(node_data.freq.0);
+            // todo: use hid input
+            let bp_q = shared(0.75);
 
-            let t = shared(0.0);
+            let bp_n = (pass() | var(&bp_f) | var(&bp_q))
+                >> bandpass()
+                >> pluck(node_data.freq.0, 0.75, 0.25);
+            b_centres.push(bp_f);
+            b_qs.push(bp_q);
 
-            let d = sine_hz(max_freq - base_freq);
+            let bp_id = input_subnet.push(Box::new(bp_n));
 
-            let max_freq = *max_freq;
+            input_subnet.connect(input_pipe_id, i, bp_id, 0);
+            input_subnet.connect_output(bp_id, 0, i);
 
-            let node = (biquad(0.0, 0.0, 1.0 / *f_n as f32, 2.0, 1.0) * var(&a))
-                >> hold_hz(10.0 * (*f_n as f32), 0.25)
-                >> clip()
-                >> follow(0.2)
-                >> pluck(max_freq, 0.17, 0.13)
-                >> clip_to(0.0, (size - f_n + 2) as f32);
-
-            let mut node = node * (c + d * var(&t));
+            let n_f = shared(node_data.freq.0);
+            let mut node = (var(&n_f) | clip()) >> (sine() * follow(0.25));
+            n_fs.push(n_f);
 
             log::debug!("created node: {}", node.display());
 
-            let id = net.push(Box::new(node));
+            let node_id = output_subnet.push(Box::new(node));
 
-            nodes.push(id);
-            amps.push(a);
-            tunes.push(t);
+            output_subnet.connect_input(i, node_id, 0);
+
+            nodes.push(node_id);
         }
 
-        let mut subnet = Net32::new(size, channels);
+        let output_pipe_id = match channels {
+            1 => {
+                let (r_f, d_f) = nodes_data
+                    .last()
+                    .map(|n| (n.freq.1, n.freq.1 - n.freq.0))
+                    .unwrap();
+                let r = resonator_hz(r_f, d_f);
 
-        let lp = nodes_data.last().map(|n| n.freq.1).unwrap_or_default();
-        let hp = nodes_data.first().map(|n| n.freq.0).unwrap_or_default();
-        let subs_join = join::<U2>()
-            >> declick_s(1.0)
-            >> clip() // TODO: make it nicer...
-            >> split::<U3>()
-            >> (pinkpass() | lowpass_hz(lp, 1.0) | highpass_hz(hp, 1.0))
-            >> (chorus(size as i64, 0.015, 0.005, 0.5)
-                | highpass_hz(hp, 0.25)
-                | lowpass_hz(lp, 0.25))
-            >> join::<U3>();
-        let mut left_join_id = Some(subnet.push(Box::new(subs_join.clone())));
-        let mut right_join_id = if channels > 1 {
-            Some(subnet.push(Box::new(subs_join.clone())))
-        } else {
-            None
+                match nodes_data.len() {
+                    2 => output_subnet.push(Box::new(join::<U2>() >> r)),
+                    3 => output_subnet.push(Box::new(join::<U3>() >> r)),
+                    5 => output_subnet.push(Box::new(join::<U5>() >> r)),
+                    n => todo!("support {n} nodes, 1 channel"),
+                }
+            }
+            2 => {
+                let (lr_f, ld_f) = nodes_data
+                    .iter()
+                    .filter(|n| n.pan < 0)
+                    .last()
+                    .map(|n| (n.freq.1, n.freq.1 - n.freq.0))
+                    .unwrap();
+                let (rr_f, rd_f) = nodes_data
+                    .iter()
+                    .filter(|n| n.pan > 0)
+                    .last()
+                    .map(|n| (n.freq.1, n.freq.1 - n.freq.0))
+                    .unwrap();
+                let r = resonator_hz(lr_f, ld_f) | resonator_hz(rr_f, rd_f);
+
+                match nodes_data.len() {
+                    4 => output_subnet.push(Box::new((join::<U2>() | join::<U2>()) >> r)),
+                    6 => output_subnet.push(Box::new((join::<U3>() | join::<U3>()) >> r)),
+                    9 => {
+                        let right = nodes_data.iter().filter(|n| n.pan > 0).count();
+                        let left = nodes_data.iter().filter(|n| n.pan < 0).count();
+                        if right > left {
+                            output_subnet.push(Box::new((join::<U3>() | join::<U6>()) >> r))
+                        } else {
+                            output_subnet.push(Box::new((join::<U6>() | join::<U3>()) >> r))
+                        }
+                    }
+                    10 => output_subnet.push(Box::new((join::<U5>() | join::<U5>()) >> r)),
+                    12 => output_subnet.push(Box::new((join::<U6>() | join::<U6>()) >> r)),
+                    n => todo!("support {n} nodes, 2 channels"),
+                }
+            }
+            n => todo!("support {n} channels"),
         };
 
-        if let Some(left) = left_join_id {
-            subnet.connect_output(left, 0, 0);
-        }
-        if let Some(right) = right_join_id {
-            subnet.connect_output(right, 0, 1);
-        }
-
-        let (left, right) = nodes_data.iter().fold((vec![], vec![]), |mut acc, node| {
-            if node.pan > 0 && channels > 1 {
-                acc.1.push(node)
-            } else {
-                acc.0.push(node)
+        match channels {
+            1 => {
+                output_subnet.connect_output(output_pipe_id, 0, 0);
             }
-            acc
-        });
+            2 => {
+                output_subnet.connect_output(output_pipe_id, 0, 0);
+                output_subnet.connect_output(output_pipe_id, 1, 1);
+            }
+            n => todo!("support {n} channels"),
+        }
 
-        let mut it = left.iter().peekable();
-
-        while let Some(Node { f_n, .. }) = it.next() {
-            let left = left_join_id.take().unwrap();
-            if it.peek().is_some() {
-                subnet.connect_input(f_n - 1, left, 0);
-
-                let next_left_join_id = subnet.push(Box::new(join::<U2>()));
-                subnet.connect(next_left_join_id, 0, left, 1);
-                left_join_id = Some(next_left_join_id);
+        for (node_id, node_data) in nodes.iter().zip(nodes_data) {
+            if node_data.pan > 0 && channels > 1 {
+                output_subnet.connect(*node_id, 0, output_pipe_id, 1);
             } else {
-                subnet.connect_input(f_n - 1, left, 1);
+                output_subnet.connect(*node_id, 0, output_pipe_id, 0);
             }
         }
 
-        let mut it = right.iter().peekable();
+        input_subnet.set_sample_rate(8000.0);
 
-        while let Some(Node { f_n, .. }) = it.next() {
-            let right = right_join_id.take().unwrap();
-            if it.peek().is_some() {
-                subnet.connect_input(f_n - 1, right, 0);
+        log::debug!("created input network: {}", input_subnet.display());
+        log::debug!("created output network: {}", output_subnet.display());
 
-                let next_right_join_id = subnet.push(Box::new(join::<U2>()));
-                subnet.connect(next_right_join_id, 0, right, 1);
-                right_join_id = Some(next_right_join_id);
-            } else {
-                subnet.connect_input(f_n - 1, right, 1);
-            }
-        }
-        log::debug!("created sub network: {}", subnet.display());
+        let in_id = net.push(Box::new(input_subnet));
+        let out_id = net.push(Box::new(output_subnet));
 
-        let subnet_id = net.push(Box::new(subnet));
+        net.connect_input(0, in_id, 0);
 
-        for (Node { f_n, .. }, id) in nodes_data.iter().zip(nodes.iter()) {
-            net.connect(*id, 0, subnet_id, f_n - 1);
+        for ch in 0..channels {
+            net.connect_output(out_id, ch, ch);
         }
 
-        for n in 0..channels {
-            net.connect_output(subnet_id, n, n);
+        for i in 0..size {
+            net.connect(in_id, i, out_id, i);
         }
-
-        let input_branch = dcblock() >> pass() ^ pass();
-        let mut input_branch_id = net.push(Box::new(input_branch));
-        net.connect_input(0, input_branch_id, 0);
-
-        // let (anti, anti_id) = {
-
-        //     let node = pass();
-        //     let mut node_id = net.push(Box::new(node));
-        //     for n in 0..channels {
-        //         net.connect_input(n, node_id, 0);
-        //         if n > 0 && n < channels - 1 {
-        //             let node = join::<U2>();
-        //             let next_node_id = net.push(Box::new(node));
-        //             net.connect(node_id, 0, next_node_id, 1);
-        //             node_id = next_node_id;
-        //         }
-        //     }
-
-        //     (pass() ,node_id)
-        // };
-
-        // let input_branch = (dcblock() - anti) >> (pass() ^ pass());
-        // let mut input_branch_id = net.push(Box::new(input_branch));
-        // net.connect(anti_id, 0, input_branch_id, 1);
-
-        // net.connect_input(channels, input_branch_id, 0);
-
-        let mut rng_it = nodes.iter().peekable();
-
-        while let Some(n) = rng_it.next() {
-            if rng_it.peek().is_some() {
-                net.connect(input_branch_id, 0, *n, 0);
-                let input_branch = pass() >> pass() ^ pass();
-                let next_input_branch_id = net.push(Box::new(input_branch));
-                net.connect(input_branch_id, 1, next_input_branch_id, 0);
-                input_branch_id = next_input_branch_id;
-            } else {
-                net.connect(input_branch_id, 0, *n, 0);
-            }
-        }
-
-        net.set_sample_rate(sample_rate);
 
         net.check();
         log::debug!("created network: {}", net.display());
@@ -196,8 +176,9 @@ impl System {
             sample_rate,
             net_be,
             size,
-            amps,
-            tunes,
+            b_centres,
+            b_qs,
+            n_fs,
             nodes,
         }
     }

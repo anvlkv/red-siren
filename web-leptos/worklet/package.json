@@ -17,10 +17,12 @@
   "scripts": {
     "dev": "pnpm types:build && pnpm wasm:build && pnpm vite",
     "build": "pnpm types:build && pnpm wasm:build && pnpm tsc && pnpm vite build",
+    "build:dev": "pnpm types:build && pnpm wasm:build:dev && pnpm tsc && pnpm vite build",
     "preview": "pnpm types:build && pnpm wasm:build && pnpm vite preview",
     "vite:build": "pnpm tsc && pnpm vite build",
     "types:build": "cd ../../shared_types && cargo build",
-    "wasm:build": "cd ../../aucore && wasm-pack build --target web --features browser"
+    "wasm:build": "cd ../../aucore && wasm-pack build --target web --features browser",
+    "wasm:build:dev": "cd ../../aucore && RUST_BACKTRACE=1 wasm-pack build --debug --target web --features browser"
   },
   "devDependencies": {
     "@types/audioworklet": "^0.0.52",

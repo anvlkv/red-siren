@@ -102,14 +102,15 @@ async function create_ctx() {
           config.safe_area,
           config.f0
         ),
-        Array.from({ length: config.groups * config.buttons_group }).map(
-          (_, i) => {
-            return new Node(
-              [[i * config.f0 * 2], [(i + 1) * config.f0 * 2]],
-              BigInt(i + 1),
-              0
-            );
-          }
+        Array.from({ length: config.groups }).flatMap(
+          (_, i) => Array.from({length: config.buttons_group}).map((_, j) => {
+              const n = (i + 1) * (j + 1);
+              return new Node(
+                [[n * config.f0 * 2], [(n + 1) * config.f0 * 2]],
+                BigInt(i + 1),
+                i % 2 ? -1 : 1,
+              );
+            })
         )
       )
     ),

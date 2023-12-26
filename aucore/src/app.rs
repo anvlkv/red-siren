@@ -3,7 +3,7 @@ pub use crux_core::App;
 use crux_macros::Effect;
 use fundsp::hacker32::*;
 use serde::{Deserialize, Serialize};
-
+use logging_timer::timer;
 use ::shared::{
     instrument::{Config, Node},
     play::PlayOperation,
@@ -21,7 +21,7 @@ pub struct Model {
     frame_size: usize,
 }
 
-#[derive(Serialize, Deserialize, Default, Clone)]
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
 pub struct ViewModel(pub Vec<Vec<f32>>);
 
 #[derive(Default)]
@@ -42,8 +42,6 @@ impl App for RedSirenAU {
     type Capabilities = RedSirenAUCapabilities;
 
     fn update(&self, msg: PlayOperation, model: &mut Model, caps: &RedSirenAUCapabilities) {
-        log::trace!("msg: {:?}", msg);
-
         match msg {
             PlayOperation::Config(config, nodes) => {
                 model.config = config;
@@ -57,19 +55,20 @@ impl App for RedSirenAU {
             }
             PlayOperation::Input(input) => {
                 let frame_size = input.first().map_or(0, |ch| ch.len());
-
-                if frame_size != model.frame_size {
+                let channels = model.system.as_ref().unwrap().channels;
+                if frame_size != model.frame_size || model.audio_data.len() != channels{
                     if model.frame_size > 0 {
                         log::warn!("resizing at runtime")
                     }
 
                     model.frame_size = frame_size;
-                    model.audio_data = (0..model.system.as_ref().unwrap().channels)
-                        .map(|_| (0..frame_size).map(|_| 0.0_f32).collect())
+                    model.audio_data = (0..channels)
+                        .map(|_| (0..frame_size).map(|_| 0_f32).collect())
                         .collect();
                 }
 
                 if let Some(sys) = model.system.as_mut() {
+                    
                     let input = input
                         .iter()
                         .take(1)
@@ -81,9 +80,11 @@ impl App for RedSirenAU {
                         .iter_mut()
                         .map(|ch| ch.as_mut_slice())
                         .collect::<Vec<_>>();
-
-                    sys.net_be
-                        .process(model.frame_size, input.as_slice(), output.as_mut_slice());
+                    {
+                        let _tmr = timer!("Net processing");
+                        sys.net_be
+                            .process(model.frame_size, input.as_slice(), output.as_mut_slice());
+                    }
 
                     caps.render.render();
                 } else {

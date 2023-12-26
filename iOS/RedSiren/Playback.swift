@@ -85,13 +85,15 @@ class Playback: NSObject, ObservableObject {
             print("Could not set the audio category: \(error.localizedDescription)")
             return false
         }
+        
+        
 
-        do {
-            try session!.setPreferredSampleRate(44100)
-        } catch {
-            print("Could not set the preferred sample rate: \(error.localizedDescription)")
-            return false
-        }
+         do {
+             try session!.setPreferredSampleRate(44100)
+         } catch {
+             print("Could not set the preferred sample rate: \(error.localizedDescription)")
+             return false
+         }
 
         do {
             try session!.setActive(true)

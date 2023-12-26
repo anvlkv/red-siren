@@ -42,68 +42,74 @@ struct AboutView: View {
                             .font(Font.custom("Rosarivo-Regular", size: 22))
                             .foregroundColor(Color("Main"))
 
-                        Grid(alignment: .leading, horizontalSpacing: self.gap, verticalSpacing: self.gap) {
-                            GridRow {
-                                Text("Red")
-                                    .font(Font.custom("Rosarivo-Italic", size: 22))
-                                    .multilineTextAlignment(.trailing)
-                                    .gridColumnAlignment(.trailing)
-                                Text("The color red and its many meanings.")
-                                    .font(Font.custom("Rosarivo-Regular", size: 22))
-                                    .multilineTextAlignment(.leading)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            GridRow {
-                                Text("Siren")
-                                    .font(Font.custom("Rosarivo-Italic", size: 22))
-                                    .multilineTextAlignment(.trailing)
-                                    .gridColumnAlignment(.trailing)
-                                Text("Siren - the mythical creature, but also the alarm.")
-                                    .font(Font.custom("Rosarivo-Regular", size: 22))
-                                    .multilineTextAlignment(.leading)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            GridRow {
-                                Text("is")
-                                    .font(Font.custom("Rosarivo-Italic", size: 22))
-                                    .multilineTextAlignment(.trailing)
-                                    .gridColumnAlignment(.trailing)
-                                Text("It exists right now.")
-                                    .font(Font.custom("Rosarivo-Regular", size: 22))
-                                    .multilineTextAlignment(.leading)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            GridRow {
-                                Text("a")
-                                    .font(Font.custom("Rosarivo-Italic", size: 22))
-                                    .multilineTextAlignment(.trailing)
-                                    .gridColumnAlignment(.trailing)
-                                Text("It's a choice, one of many, and therefore any.")
-                                    .font(Font.custom("Rosarivo-Regular", size: 22))
-                                    .multilineTextAlignment(.leading)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            GridRow {
-                                Text("noise")
-                                    .font(Font.custom("Rosarivo-Italic", size: 22))
-                                    .multilineTextAlignment(.trailing)
-                                    .gridColumnAlignment(.trailing)
-                                Text("Random or unwanted sounds.")
-                                    .font(Font.custom("Rosarivo-Regular", size: 22))
-                                    .multilineTextAlignment(.leading)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            GridRow {
-                                Text("chime")
-                                    .font(Font.custom("Rosarivo-Italic", size: 22))
-                                    .multilineTextAlignment(.trailing)
-                                    .gridColumnAlignment(.trailing)
-                                Text("The musical instrument.")
-                                    .font(Font.custom("Rosarivo-Regular", size: 22))
-                                    .multilineTextAlignment(.leading)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }.foregroundColor(Color("Main"))
+                        
+                        if #available(iOS 16.0, *) {
+                            Grid(alignment: .leading, horizontalSpacing: self.gap, verticalSpacing: self.gap) {
+                                GridRow {
+                                    Text("Red")
+                                        .font(Font.custom("Rosarivo-Italic", size: 22))
+                                        .multilineTextAlignment(.trailing)
+                                        .gridColumnAlignment(.trailing)
+                                    Text("The color red and its many meanings.")
+                                        .font(Font.custom("Rosarivo-Regular", size: 22))
+                                        .multilineTextAlignment(.leading)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                
+                                GridRow {
+                                    Text("Siren")
+                                        .font(Font.custom("Rosarivo-Italic", size: 22))
+                                        .multilineTextAlignment(.trailing)
+                                        .gridColumnAlignment(.trailing)
+                                    Text("Siren - the mythical creature, but also the alarm.")
+                                        .font(Font.custom("Rosarivo-Regular", size: 22))
+                                        .multilineTextAlignment(.leading)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                GridRow {
+                                    Text("is")
+                                        .font(Font.custom("Rosarivo-Italic", size: 22))
+                                        .multilineTextAlignment(.trailing)
+                                        .gridColumnAlignment(.trailing)
+                                    Text("It exists right now.")
+                                        .font(Font.custom("Rosarivo-Regular", size: 22))
+                                        .multilineTextAlignment(.leading)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                GridRow {
+                                    Text("a")
+                                        .font(Font.custom("Rosarivo-Italic", size: 22))
+                                        .multilineTextAlignment(.trailing)
+                                        .gridColumnAlignment(.trailing)
+                                    Text("It's a choice, one of many, and therefore any.")
+                                        .font(Font.custom("Rosarivo-Regular", size: 22))
+                                        .multilineTextAlignment(.leading)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                GridRow {
+                                    Text("noise")
+                                        .font(Font.custom("Rosarivo-Italic", size: 22))
+                                        .multilineTextAlignment(.trailing)
+                                        .gridColumnAlignment(.trailing)
+                                    Text("Random or unwanted sounds.")
+                                        .font(Font.custom("Rosarivo-Regular", size: 22))
+                                        .multilineTextAlignment(.leading)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                GridRow {
+                                    Text("chime")
+                                        .font(Font.custom("Rosarivo-Italic", size: 22))
+                                        .multilineTextAlignment(.trailing)
+                                        .gridColumnAlignment(.trailing)
+                                    Text("The musical instrument.")
+                                        .font(Font.custom("Rosarivo-Regular", size: 22))
+                                        .multilineTextAlignment(.leading)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }.foregroundColor(Color("Main"))
+                        } else {
+                            Text("fallback")
+                        }
 
                         MenuButton(action: onLeave, label: "Clear")
                             .frame(maxWidth: .infinity, maxHeight: .infinity)

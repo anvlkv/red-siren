@@ -188,7 +188,7 @@ impl AUCoreBridge {
             .collect::<Vec<_>>()
             .await;
 
-        assert_eq!(outs.len(), 1);
+        assert_eq!(outs.len(), 1, "expected exactly one output for play operation");
 
         outs.pop().unwrap()
     }

@@ -146,8 +146,6 @@ impl System {
             }
         }
 
-        input_subnet.set_sample_rate(8000.0);
-
         log::debug!("created input network: {}", input_subnet.display());
         log::debug!("created output network: {}", output_subnet.display());
 

@@ -196,7 +196,7 @@ impl super::StreamerUnit for CoreStreamer {
                         .and_then(|b| b.get(i))
                         .unwrap_or(&0_f32);
 
-                    channel[i] = *sample;
+                    channel[i] = *sample * 10.0;
                 }
             }
             Ok(())

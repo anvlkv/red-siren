@@ -80,11 +80,9 @@ impl App for RedSirenAU {
                         .iter_mut()
                         .map(|ch| ch.as_mut_slice())
                         .collect::<Vec<_>>();
-                    {
-                        let _tmr = timer!("Net processing");
-                        sys.net_be
-                            .process(model.frame_size, input.as_slice(), output.as_mut_slice());
-                    }
+
+                    sys.net_be
+                        .process(model.frame_size, input.as_slice(), output.as_mut_slice());
 
                     caps.render.render();
                 } else {

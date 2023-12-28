@@ -8,8 +8,7 @@ use coreaudio::audio_unit::audio_format::LinearPcmFlags;
 use coreaudio::audio_unit::render_callback::{self, data};
 use coreaudio::audio_unit::{AudioUnit, Element, SampleFormat, Scope, StreamFormat};
 use coreaudio::sys::{
-    kAudioOutputUnitProperty_EnableIO, kAudioSessionProperty_CurrentHardwareIOBufferDuration,
-    kAudioUnitProperty_StreamFormat, AudioStreamBasicDescription,
+    kAudioOutputUnitProperty_EnableIO, kAudioUnitProperty_StreamFormat, AudioStreamBasicDescription,
 };
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use lazy_static::lazy_static;
@@ -22,7 +21,6 @@ use super::{Core, CoreStreamer};
 
 type S = f32;
 const SAMPLE_FORMAT: SampleFormat = SampleFormat::F32;
-const BASE_FRAME: usize = 64;
 
 lazy_static! {
     static ref CORE: Arc<Mutex<Core>> =
@@ -62,7 +60,7 @@ impl super::StreamerUnit for CoreStreamer {
             flags: format_flag | LinearPcmFlags::IS_PACKED | LinearPcmFlags::IS_NON_INTERLEAVED,
             channels: 2,
         };
-        
+
         let in_stream_format = StreamFormat {
             sample_rate,
             sample_format: SAMPLE_FORMAT,
@@ -93,34 +91,6 @@ impl super::StreamerUnit for CoreStreamer {
         let (render_sender, render_receiver) = channel::<ViewModel>();
         let (op_sender, op_receiver) = channel();
         let (resolve_sender, resolve_receiver) = futures::channel::mpsc::unbounded();
-
-        // let id = kAudioSessionProperty_CurrentHardwareIOBufferDuration;
-        // cfg_if::cfg_if! {
-        //     if #[cfg(target_os = "ios")] {
-        //         let buffer_duration: f32 = coreaudio::audio_unit::audio_session_get_property(id)?;
-        //     }
-        //     else {
-        //         let buffer_duration: f32 = audio_unit.get_property(id, Scope::Output, Element::Output)?;
-        //     }
-        // };
-
-        // log::debug!("buffer duration {buffer_duration}");
-
-        // let buffer_size = (44100.0 * buffer_duration).round() as usize;
-
-        // log::debug!("buffer size {buffer_size}");
-
-        // let dummy_vm = ViewModel(Vec::from_iter(
-        //     (0..2)
-        //         .into_iter()
-        //         .map(|_| Vec::from_iter((0..buffer_size).map(|_| 0.0_f32))),
-        // ));
-
-        // for _ in 0..116{//buffer_size / BASE_FRAME {
-        //     render_sender
-        //         .send(dummy_vm.clone())
-        //         .expect("send warmup buffers");
-        // }
 
         type Args = render_callback::Args<data::NonInterleaved<S>>;
 

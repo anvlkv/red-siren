@@ -1,7 +1,7 @@
 use ::shared::instrument::{Config, Node};
 use fundsp::hacker32::*;
 
-const SAMPLE_RATE: f64 = 44100.0;
+pub const SAMPLE_RATE: f64 = 44100.0;
 const CHANNELS: usize = 2;
 
 pub struct System {
@@ -21,7 +21,7 @@ impl System {
         let channels = Ord::min(config.groups, CHANNELS);
         let mut net = Net32::new(1, channels);
         net.set_sample_rate(sample_rate);
-        
+
         let size = nodes_data.len();
         let mut nodes = vec![];
         let mut b_centres = vec![];

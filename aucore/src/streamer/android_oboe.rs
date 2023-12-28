@@ -13,7 +13,7 @@ use oboe::{
 
 use shared::play::{PlayOperation, PlayOperationOutput};
 
-use crate::{RedSirenAUCapabilities, ViewModel};
+use crate::{RedSirenAUCapabilities, ViewModel, system::SAMPLE_RATE};
 
 use super::{Core, CoreStreamer};
 
@@ -154,7 +154,7 @@ impl super::StreamerUnit for CoreStreamer {
             .set_direction::<Input>()
             .set_input_preset(InputPreset::Unprocessed)
             .set_frames_per_callback(256)
-            .set_sample_rate(44100)
+            .set_sample_rate(SAMPLE_RATE as i32)
             .set_callback(AAUInput {
                 resolve_sender: resolve_sender.clone(),
                 render_sender: render_sender.clone(),
@@ -171,7 +171,7 @@ impl super::StreamerUnit for CoreStreamer {
             .set_frames_per_callback(256)
             .set_usage(Usage::Game)
             .set_content_type(ContentType::Music)
-            .set_sample_rate(44100)
+            .set_sample_rate(SAMPLE_RATE as i32)
             .set_callback(AAUOutput(render_receiver, resolve_sender))
             .open_stream()
             .expect("create output stream");

@@ -4,10 +4,9 @@ use wasm_bindgen::prelude::wasm_bindgen;
 pub use app::*;
 pub use streamer::*;
 
+pub mod app;
 mod resolve;
 pub mod system;
-
-pub mod app;
 
 mod streamer;
 cfg_if::cfg_if! {if #[cfg(feature="browser")] {

@@ -1,13 +1,12 @@
+use ::shared::{
+    instrument::{Config, Node},
+    play::PlayOperation,
+};
 use crux_core::render::Render;
 pub use crux_core::App;
 use crux_macros::Effect;
 use fundsp::hacker32::*;
 use serde::{Deserialize, Serialize};
-use logging_timer::timer;
-use ::shared::{
-    instrument::{Config, Node},
-    play::PlayOperation,
-};
 
 use super::resolve::Resolve;
 use super::system::System;
@@ -56,7 +55,7 @@ impl App for RedSirenAU {
             PlayOperation::Input(input) => {
                 let frame_size = input.first().map_or(0, |ch| ch.len());
                 let channels = model.system.as_ref().unwrap().channels;
-                if frame_size != model.frame_size || model.audio_data.len() != channels{
+                if frame_size != model.frame_size || model.audio_data.len() != channels {
                     if model.frame_size > 0 {
                         log::warn!("resizing at runtime")
                     }
@@ -68,7 +67,6 @@ impl App for RedSirenAU {
                 }
 
                 if let Some(sys) = model.system.as_mut() {
-                    
                     let input = input
                         .iter()
                         .take(1)

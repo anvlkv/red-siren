@@ -64,6 +64,7 @@ apply plugin: 'com.github.willir.rust.cargo-ndk-android'
 
 cargoNdk {
     targets = ["arm", "arm64", "x86", "x86_64"]
+    buildType = "release"
     module = "../"
     librariesNames = ["libffirs.so"]
     extraCargoBuildArguments = ['--package', 'uniffi-bindgen', '--lib', '--features', 'android']

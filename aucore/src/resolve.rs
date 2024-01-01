@@ -16,23 +16,22 @@ where
         Self { context }
     }
 
-    pub fn resolve_capture_fft(&self, captured: Vec<(f32, f32)>, id: String) {
+    pub fn resolve_capture_fft(&self, captured: Vec<(f32, f32)>) {
         let ctx = self.context.clone();
 
         self.context.spawn(async move {
             _ = ctx
-                .notify_shell(BridgedPlayOperationOutput(
-                    id,
-                    PlayOperationOutput::CapturedFFT(captured),
-                ))
+                .notify_shell(PlayOperationOutput::CapturedFFT(captured))
                 .await;
         })
     }
+
+    pub fn resolve_permission(&self, result: bool) {
         let ctx = self.context.clone();
 
         self.context.spawn(async move {
             _ = ctx
-                .request_from_shell(PlayOperationOutput::Permission(result))
+                .notify_shell(PlayOperationOutput::Permission(result))
                 .await;
         })
     }
@@ -42,7 +41,7 @@ where
 
         self.context.spawn(async move {
             _ = ctx
-                .request_from_shell(PlayOperationOutput::Success(success))
+                .notify_shell(PlayOperationOutput::Success(success))
                 .await;
         })
     }
@@ -52,7 +51,7 @@ where
 
         self.context.spawn(async move {
             _ = ctx
-                .request_from_shell(PlayOperationOutput::Devices(devices))
+                .notify_shell(PlayOperationOutput::Devices(devices))
                 .await;
         })
     }
@@ -61,7 +60,7 @@ where
         let ctx = self.context.clone();
 
         self.context.spawn(async move {
-            _ = ctx.request_from_shell(PlayOperationOutput::None).await;
+            _ = ctx.notify_shell(PlayOperationOutput::None).await;
         })
     }
 }

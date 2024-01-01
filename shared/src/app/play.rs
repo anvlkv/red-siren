@@ -20,7 +20,6 @@ pub enum PlayOperation {
 
 impl Eq for PlayOperation {}
 
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum PlayOperationOutput {
     CapturedFFT(Vec<(f32, f32)>),
@@ -31,6 +30,8 @@ pub enum PlayOperationOutput {
 }
 
 impl Eq for PlayOperationOutput {}
+impl Operation for PlayOperation {
+    type Output = PlayOperationOutput;
 }
 
 impl Operation for PlayOperationOutput {
@@ -144,14 +145,12 @@ where
         F: Fn(Vec<(f32, f32)>) -> Ev + Send + 'static,
     {
         let ctx = self.context.clone();
-        let id = uuid::Uuid::new_v4().to_string();
         self.context.spawn({
             async move {
                 let mut stream =
-                    ctx.stream_from_shell(BridgedPlayOperation(id.clone(), PlayOperation::Capture(true)));
+                    ctx.stream_from_shell(PlayOperation::Capture(true));
                 while let Some(response) = stream.next().await {
-                    assert_eq!(response.0, id);
-                    if let PlayOperationOutput::CapturedFFT(data) = response.1 {
+                    if let PlayOperationOutput::CapturedFFT(data) = response {
                         ctx.update_app(notify(data));
                     } else {
                         break;
@@ -169,13 +168,11 @@ where
         F: Fn(bool) -> Ev + Send + 'static,
     {
         let ctx = self.context.clone();
-        let id = uuid::Uuid::new_v4().to_string();
         self.context.spawn(async move {
             let stopped = ctx
-                .request_from_shell(BridgedPlayOperation(id.clone(), PlayOperation::Capture(false)))
+                .request_from_shell(PlayOperation::Capture(false))
                 .await;
-            assert_eq!(stopped.0, id);
-            if let PlayOperationOutput::Success(stopped) = stopped.1 {
+            if let PlayOperationOutput::Success(stopped) = stopped {
                 ctx.update_app(f(stopped));
             } else {
                 log::warn!("pause unexpected variant: {stopped:?}");

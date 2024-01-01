@@ -13,10 +13,11 @@ import { RedSirenNode } from "./lib";
 interface IConfig
   extends Omit<
     Config,
-    "serialize" | "deserialize" | "groups" | "buttons_group"
+    "serialize" | "deserialize" | "groups" | "buttons_group" | "n_buttons"
   > {
   groups: number;
   buttons_group: number;
+  n_buttons: number;
 }
 
 const gui = new dat.GUI({ name: "worklet" });
@@ -32,6 +33,7 @@ const config: IConfig = {
   safe_area: [0, 30, 0, 30] as ListTuple<any>,
   groups: 2,
   buttons_group: 3,
+  n_buttons: 6,
   button_size: 78,
   button_track_margin: 0.2,
   f0: 110,
@@ -97,6 +99,7 @@ async function create_ctx() {
           config.whitespace,
           BigInt(config.groups),
           BigInt(config.buttons_group),
+          BigInt(config.buttons_group *  config.groups),
           config.button_size,
           config.button_track_margin,
           config.safe_area,
@@ -180,6 +183,7 @@ playing.onChange(async (playing) => {
             config.whitespace,
             BigInt(config.groups),
             BigInt(config.buttons_group),
+            BigInt(config.buttons_group *  config.groups),
             config.button_size,
             config.button_track_margin,
             config.safe_area,

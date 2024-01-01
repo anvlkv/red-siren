@@ -26,7 +26,7 @@ pub struct Model {
     analyze_samples: Vec<f32>,
     frame_size: usize,
     capturing: bool,
-    capture_id: String
+    capture_id: String,
 }
 
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
@@ -84,23 +84,22 @@ impl App for RedSirenAU {
                                 .data()
                                 .iter()
                                 .map(|(freq, value)| (freq.val(), value.val())),
-                        ), model.capture_id.clone());
+                        ));
                     }
                 } else if let Some(sys) = model.system.as_mut() {
-                let frame_size = input.first().map_or(0, |ch| ch.len());
+                    let frame_size = input.first().map_or(0, |ch| ch.len());
                     let channels = sys.channels;
-                if frame_size != model.frame_size || model.audio_data.len() != channels {
-                    if model.frame_size > 0 {
-                        log::warn!("resizing at runtime")
+                    if frame_size != model.frame_size || model.audio_data.len() != channels {
+                        if model.frame_size > 0 {
+                            log::warn!("resizing at runtime")
+                        }
+
+                        model.frame_size = frame_size;
+                        model.audio_data = (0..channels)
+                            .map(|_| (0..frame_size).map(|_| 0_f32).collect())
+                            .collect();
                     }
 
-                    model.frame_size = frame_size;
-                    model.audio_data = (0..channels)
-                        .map(|_| (0..frame_size).map(|_| 0_f32).collect())
-                        .collect();
-                }
-
-                if let Some(sys) = model.system.as_mut() {
                     let input = input
                         .iter()
                         .take(1)
@@ -124,9 +123,9 @@ impl App for RedSirenAU {
             PlayOperation::Capture(capturing) => {
                 model.capturing = capturing;
                 if !capturing {
-                    caps.resolve.resolve_success(true, id);
+                    caps.resolve.resolve_success(true);
                 } else {
-                    model.capture_id = id;
+                    // model.capture_id = id;
                     caps.render.render();
                 }
             }

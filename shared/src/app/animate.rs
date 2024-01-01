@@ -38,8 +38,9 @@ where
     where
         F: Fn(f64) -> Ev + Send + 'static,
     {
+        let context = self.context.clone();
+
         self.context.spawn({
-            let context = self.context.clone();
             async move {
                 let mut stream = context.stream_from_shell(AnimateOperation::Start);
 
@@ -57,8 +58,9 @@ where
     }
 
     pub fn stop(&self) {
+        let context = self.context.clone();
+        
         self.context.spawn({
-            let context = self.context.clone();
             async move {
                 _ = context.request_from_shell(AnimateOperation::Stop).await;
             }

@@ -1,3 +1,5 @@
+use std::sync::{Mutex, Arc};
+
 use crux_core::render::Render;
 use crux_core::App;
 use crux_macros::Effect;
@@ -9,7 +11,7 @@ pub use layout::{Layout, LayoutRoot};
 use node::spawn_all_nodes;
 pub use node::Node;
 
-use crate::{geometry::Rect, play::Play, Navigate};
+use crate::{play::Play, Navigate};
 
 pub mod config;
 pub mod keyboard;
@@ -20,10 +22,11 @@ pub mod string;
 #[derive(Default)]
 pub struct Instrument;
 
+
 #[derive(Default)]
 pub struct Model {
     pub config: Config,
-    pub world: World,
+    pub world: Arc<Mutex<World>>,
     pub inbound: Option<Entity>,
     pub outbound: Option<Entity>,
     pub keyboard: Option<Entity>,
@@ -34,12 +37,21 @@ pub struct Model {
     pub setup_complete: bool,
 }
 
+impl Model {
+    #[must_use]
+    pub fn new(world: Arc<Mutex<World>>) -> Self {
+        Self {
+            world,
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct InstrumentVM {
     pub config: Config,
     pub nodes: Vec<Node>,
     pub playing: bool,
-    pub view_box: Rect,
     pub layout: Layout,
 }
 
@@ -87,15 +99,15 @@ impl App for Instrument {
         match event {
             InstrumentEV::CreateWithConfig(config) => {
                 model.config = config.clone();
-                model.world = World::new();
+                let mut world = model.world.lock().expect("world lock");
 
-                let inbound = string::InboundString::spawn(&mut model.world, &config);
-                let outbound = string::OutboundString::spawn(&mut model.world, &config);
-                let keyboard = keyboard::Keyboard::spawn(&mut model.world, &config);
+                let inbound = string::InboundString::spawn(&mut world, &config);
+                let outbound = string::OutboundString::spawn(&mut world, &config);
+                let keyboard = keyboard::Keyboard::spawn(&mut world, &config);
 
-                let root = layout::LayoutRoot::spawn(&mut model.world, inbound, outbound, keyboard);
+                let root = layout::LayoutRoot::spawn(&mut world, inbound, outbound, keyboard);
 
-                let layout = Layout::new(&model.world, &root, &config).expect("Layout failed");
+                let layout = Layout::new(&world, &root, &config).expect("Layout failed");
                 _ = model.layout.insert(layout);
 
                 _ = model.root.insert(root);
@@ -103,7 +115,7 @@ impl App for Instrument {
                 _ = model.outbound.insert(outbound);
                 _ = model.keyboard.insert(keyboard);
 
-                model.nodes = spawn_all_nodes(&mut model.world);
+                model.nodes = spawn_all_nodes(&mut world);
 
                 if model.setup_complete {
                     let nodes = self.get_nodes(model);
@@ -160,7 +172,7 @@ impl App for Instrument {
             InstrumentEV::Playback(playback_ev) => match playback_ev {
                 PlaybackEV::Play(playing) => {
                     model.playing = playing;
-                    if !model.setup_complete && playing {
+                    if !model.setup_complete {
                         caps.play.permissions(InstrumentEV::PlayOpPermission)
                     } else if playing {
                         caps.play.play(InstrumentEV::PlayOpPlay)
@@ -185,17 +197,17 @@ impl App for Instrument {
             playing: model.playing,
             config: model.config.clone(),
             layout: model.layout.clone().unwrap_or_default(),
-            view_box: Rect::size(model.config.width, model.config.height),
         }
     }
 }
 
 impl Instrument {
     fn get_nodes(&self, model: &Model) -> Vec<Node> {
+        let world = model.world.lock().expect("world lock");
         model
             .nodes
             .iter()
-            .map(|e| *model.world.get::<&Node>(*e).expect("node for entity"))
+            .map(|e| *world.get::<&Node>(*e).expect("node for entity"))
             .collect()
     }
 }

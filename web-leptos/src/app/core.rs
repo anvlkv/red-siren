@@ -45,16 +45,34 @@ pub fn process_effect(
         Effect::Render(_) => {
             render.update(|view| *view = core.view());
         }
-        Effect::KeyValue(_req) => {
-            // let response = match &req.operation {
-            //     shared::key_value::KeyValueOperation::Read(key) => {
-            //         shared::key_value::KeyValueOutput::Read(kv_ctx.borrow_mut().remove(key))
-            //     }
-            //     shared::key_value::KeyValueOperation::Write(key, data) => {
-            //         _ = kv_ctx.borrow_mut().insert(key.clone(), data.clone());
-            //         shared::key_value::KeyValueOutput::Write(true)
-            //     }
-            // };
+        #[cfg_attr(any(feature="ssr", feature="hydrate"), allow(unused_mut))]
+        Effect::KeyValue(mut req) => {
+            #[cfg(feature = "browser")]
+            {
+                use gloo_storage::{LocalStorage, Storage};
+
+                let response = match &req.operation {
+                    shared::key_value::KeyValueOperation::Read(key) => {
+                        shared::key_value::KeyValueOutput::Read(LocalStorage::get(key).ok())
+                    }
+                    shared::key_value::KeyValueOperation::Write(key, data) => {
+                        shared::key_value::KeyValueOutput::Write(
+                            LocalStorage::set(key, data).is_ok(),
+                        )
+                    }
+                };
+
+                for effect in core.resolve(&mut req, response) {
+                    process_effect(
+                        &core,
+                        effect,
+                        render,
+                        playback.clone(),
+                        navigate,
+                        animate_cb,
+                    );
+                }
+            }
         }
         Effect::Navigate(nav) => match nav.operation {
             NavigateOperation::To(activity) => {

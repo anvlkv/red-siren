@@ -15,12 +15,12 @@ use crate::{
     util::use_dpi,
 };
 
+mod about;
 mod core;
 mod instrument;
 mod intro;
 mod menu;
-
-mod about;
+mod tuner;
 
 cfg_if! { if #[cfg(feature="browser")]{
     mod playback;
@@ -191,6 +191,19 @@ fn RedSirenCore() -> impl IntoView {
     let intro_ev = SignalSetter::map(move |ev| set_event.set(Event::IntroEvent(ev)));
     let instrument_vm = create_read_slice(view_rw_signal, move |v| v.instrument.clone());
     let instrument_ev = SignalSetter::map(move |ev| set_event.set(Event::InstrumentEvent(ev)));
+    let tuner_vm = create_read_slice(view_rw_signal, move |v| v.tuning.clone());
+    let tuner_ev = SignalSetter::map(move |ev| set_event.set(Event::TunerEvent(ev)));
+
+    let view_box = Signal::derive(move || {
+        let vb = view_rw_signal.get().view_box;
+        format!(
+            "{} {} {} {}",
+            vb.top_left().x,
+            vb.top_left().y,
+            vb.bottom_right().x,
+            vb.bottom_right().y
+        )
+    });
 
     provide_context(set_event);
 
@@ -209,8 +222,16 @@ fn RedSirenCore() -> impl IntoView {
             } />
             <Route path="play" view=move || view! {
                 <instrument::InstrumentComponent
+                    view_box=view_box
                     vm=instrument_vm
                     ev=instrument_ev
+                />
+            } />
+            <Route path="tune" view=move || view! {
+                <tuner::TunerComponent
+                    view_box=view_box
+                    vm=tuner_vm
+                    ev=tuner_ev
                 />
             } />
         </Routes>

@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-
+use hecs::{Entity, World, Bundle};
 use serde::{Deserialize, Serialize};
 
 const MIN_BUTTON_SIZE_IN: f64 = 0.75;
@@ -10,7 +10,7 @@ const DPI_RANGE: &[usize] = &[120, 160, 240, 320, 480, 640];
 const F_BASE: f64 = 110.0;
 const F_MAX: f64 = 5500.0;
 
-#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Bundle)]
 pub struct Config {
     pub portrait: bool,
     pub width: f64,
@@ -20,6 +20,7 @@ pub struct Config {
     pub whitespace: f64,
     pub groups: usize,
     pub buttons_group: usize,
+    pub n_buttons: usize,
     pub button_size: f64,
     pub button_track_margin: f64,
     pub safe_area: [f64; 4],
@@ -183,11 +184,16 @@ impl Config {
             button_size,
             groups,
             buttons_group,
+            n_buttons: buttons_group * groups,
             button_track_margin: BUTTON_TRACK_MARGIN_RATION,
             safe_area,
             whitespace,
             f0,
         }
+    }
+
+    pub fn spawn(&self, world: &mut World) -> Entity {
+        world.spawn((self.clone(),))
     }
 }
 

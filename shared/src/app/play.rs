@@ -1,5 +1,6 @@
 use crux_core::capability::{CapabilityContext, Operation};
 use crux_macros::Capability;
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
 use super::instrument::{Config, Node};
@@ -10,6 +11,7 @@ pub enum PlayOperation {
     InstallAU,
     Suspend,
     Resume,
+    Capture(bool),
     QueryInputDevices,
     QueryOutputDevices,
     Config(Config, Vec<Node>),
@@ -19,15 +21,16 @@ pub enum PlayOperation {
 impl Eq for PlayOperation {}
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum PlayOperationOutput {
+    CapturedFFT(Vec<(f32, f32)>),
     Devices(Vec<String>),
     Success(bool),
     Permission(bool),
     None,
 }
 
-impl Operation for PlayOperation {
-    type Output = PlayOperationOutput;
+impl Eq for PlayOperationOutput {}
 }
 
 impl Operation for PlayOperationOutput {
@@ -132,6 +135,50 @@ where
                 ctx.update_app(f(done));
             } else {
                 log::warn!("permissions unexpected variant: {done:?}");
+            }
+        })
+    }
+    pub fn capture_fft<F>(&self, notify: F)
+    where
+        Ev: 'static,
+        F: Fn(Vec<(f32, f32)>) -> Ev + Send + 'static,
+    {
+        let ctx = self.context.clone();
+        let id = uuid::Uuid::new_v4().to_string();
+        self.context.spawn({
+            async move {
+                let mut stream =
+                    ctx.stream_from_shell(BridgedPlayOperation(id.clone(), PlayOperation::Capture(true)));
+                while let Some(response) = stream.next().await {
+                    assert_eq!(response.0, id);
+                    if let PlayOperationOutput::CapturedFFT(data) = response.1 {
+                        ctx.update_app(notify(data));
+                    } else {
+                        break;
+                    }
+                }
+
+                log::info!("capture exited");
+            }
+        });
+    }
+
+    pub fn stop_capture_fft<F>(&self, f: F)
+    where
+        Ev: 'static,
+        F: Fn(bool) -> Ev + Send + 'static,
+    {
+        let ctx = self.context.clone();
+        let id = uuid::Uuid::new_v4().to_string();
+        self.context.spawn(async move {
+            let stopped = ctx
+                .request_from_shell(BridgedPlayOperation(id.clone(), PlayOperation::Capture(false)))
+                .await;
+            assert_eq!(stopped.0, id);
+            if let PlayOperationOutput::Success(stopped) = stopped.1 {
+                ctx.update_app(f(stopped));
+            } else {
+                log::warn!("pause unexpected variant: {stopped:?}");
             }
         })
     }

@@ -15,20 +15,10 @@ mod track;
 #[component]
 #[allow(unused_variables)]
 pub fn InstrumentComponent(
+    view_box: Signal<String>,
     vm: Signal<instrument::InstrumentVM>,
     ev: SignalSetter<instrument::InstrumentEV>,
 ) -> impl IntoView {
-    let view_box = move || {
-        let vb = vm().view_box;
-        format!(
-            "{} {} {} {}",
-            vb.top_left().x,
-            vb.top_left().y,
-            vb.bottom_right().x,
-            vb.bottom_right().y
-        )
-    };
-
     let inbound_layout_line = Signal::derive(move || vm().layout.inbound);
     let outbound_layout_line = Signal::derive(move || vm().layout.outbound);
 

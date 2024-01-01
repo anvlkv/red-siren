@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::geometry::Rect;
+use crate::geometry::{Line, Rect};
 use crate::instrument::layout::MenuPosition;
 use crate::intro::{IntroVM, Model};
 use crate::{instrument, Activity};
@@ -42,6 +42,16 @@ impl IntroAnimation {
             },
             (Activity::Play, _) => Self {
                 animation: Animation::play_intro(model, true),
+                running: None,
+                duration: EXIT_DURATION,
+            },
+            (_, Activity::Tune) => Self {
+                animation: Animation::tuner_intro(model, false),
+                running: None,
+                duration: INTRO_DURATION,
+            },
+            (Activity::Tune, Activity::Intro) => Self {
+                animation: Animation::tuner_intro(model, true),
                 running: None,
                 duration: EXIT_DURATION,
             },
@@ -101,6 +111,7 @@ pub enum Animation {
     LoadingIntro(AnimationSequence<IntroVM>),
     PlayInto(AnimationSequence<IntroVM>),
     MenuIntro(AnimationSequence<IntroVM>),
+    TunerIntro(AnimationSequence<IntroVM>),
 }
 
 impl Debug for Animation {
@@ -109,6 +120,7 @@ impl Debug for Animation {
             Self::LoadingIntro(_) => f.write_str("LoadingIntro"),
             Self::PlayInto(_) => f.write_str("PlayInto"),
             Self::MenuIntro(_) => f.write_str("MenuIntro"),
+            Self::TunerIntro(_) => f.write_str("TunerIntro"),
         }
     }
 }
@@ -116,13 +128,19 @@ impl Debug for Animation {
 impl Animation {
     fn sequence_mut(&mut self) -> &mut AnimationSequence<IntroVM> {
         match self {
-            Animation::LoadingIntro(s) | Animation::PlayInto(s) | Animation::MenuIntro(s) => s,
+            Animation::LoadingIntro(s)
+            | Animation::PlayInto(s)
+            | Animation::MenuIntro(s)
+            | Animation::TunerIntro(s) => s,
         }
     }
 
     fn sequence(&self) -> &AnimationSequence<IntroVM> {
         match self {
-            Animation::LoadingIntro(s) | Animation::PlayInto(s) | Animation::MenuIntro(s) => s,
+            Animation::LoadingIntro(s)
+            | Animation::PlayInto(s)
+            | Animation::MenuIntro(s)
+            | Animation::TunerIntro(s) => s,
         }
     }
 
@@ -231,6 +249,94 @@ impl Animation {
         }
 
         Self::PlayInto(transition)
+    }
+
+    // pub fn pairs_from_buttons(model: &Model) -> Vec<Rect> {
+    //     if model.config.portrait {
+    //         model
+    //             .layout
+    //             .buttons
+    //             .iter()
+    //             .enumerate()
+    //             .map(|(i, _)| {
+
+    //             })
+    //             .collect()
+    //     } else {
+    //         model.layout.buttons.clone()
+    //     }
+    // }
+
+    pub fn tuner_intro(model: &Model, reverse: bool) -> Self {
+        let init_menu_position = Self::central_menu_position(model);
+        let menu_button_position = MenuPosition::TopLeft(
+            Rect::size(64.0, 64.0)
+                .offset_left(model.config.safe_area[0])
+                .offset_top(model.config.safe_area[1]),
+        );
+
+        let vm = Self::final_layout(model);
+        let center = vm.view_box.center();
+        let line_position = Line::new(0.0, vm.view_box.width(), center.y, center.y);
+        // let buttons_position = model.tuning.as_ref().map_or_else(
+        //     || Self::pairs_from_buttons(model),
+        //     |v| {
+        //         let mut init = Self::pairs_from_buttons(model);
+        //         let full_h = vm.view_box.height() / 2.0;
+        //         let pairs = Into::<Vec<f32>>::into(v.clone());
+        //         init.iter_mut().enumerate().for_each(|(i, rect)| {
+        //             *rect = rect.offset_top(full_h * pairs.get(i).cloned().unwrap_or(0.0) as f64);
+        //         });
+        //         init
+        //     },
+        // );
+
+        let mut transition = keyframes![
+            (
+                IntroVM {
+                    layout: instrument::Layout {
+                        menu_position: init_menu_position.clone(),
+                        ..vm.layout.clone()
+                    },
+                    ..vm.clone()
+                },
+                0.0
+            ),
+            (
+                IntroVM {
+                    menu_flip: 180.0,
+                    layout: instrument::Layout {
+                        menu_position: menu_button_position.clone(),
+                        tracks: vec![],
+                        ..vm.layout.clone()
+                    },
+                    ..vm.clone()
+                },
+                0.2,
+                EaseOut
+            ),
+            (
+                IntroVM {
+                    menu_flip: 180.0,
+                    layout: instrument::Layout {
+                        menu_position: menu_button_position.clone(),
+                        tracks: vec![],
+                        inbound: line_position.clone(),
+                        outbound: line_position.clone(),
+                        ..vm.layout.clone()
+                    },
+                    ..vm.clone()
+                },
+                0.35,
+                EaseOut
+            )
+        ];
+
+        if reverse {
+            transition.reverse();
+        }
+
+        Self::TunerIntro(transition)
     }
 
     pub fn loading_intro(model: &Model) -> Self {

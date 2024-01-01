@@ -1,10 +1,13 @@
+use std::sync::{Arc, Mutex};
+
 pub use crux_core::App;
 use crux_core::{render::Render, Capability};
 use crux_kv::KeyValue;
 use crux_macros::Effect;
+use hecs::World;
 use serde::{Deserialize, Serialize};
 
-use crate::animate::Animate;
+use crate::{animate::Animate, geometry::Rect};
 pub use instrument::Instrument;
 pub use intro::Intro;
 pub use navigate::Navigate;
@@ -32,13 +35,29 @@ pub enum Activity {
     About,
 }
 
-#[derive(Default)]
 pub struct Model {
     instrument: instrument::Model,
-    tuning: tuner::Model,
+    tuner: tuner::Model,
     intro: intro::Model,
     activity: Activity,
+    _world: Arc<Mutex<World>>,
     config: Option<instrument::Config>,
+    view_box: Rect,
+}
+
+impl Default for Model {
+    fn default() -> Self {
+        let world = Arc::new(Mutex::new(World::new()));
+        Self {
+            instrument: instrument::Model::new(world.clone()),
+            tuner: tuner::Model::new(world.clone()),
+            _world: world.clone(),
+            intro: Default::default(),
+            activity: Default::default(),
+            view_box: Default::default(),
+            config: None,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -47,6 +66,7 @@ pub struct ViewModel {
     pub intro: intro::IntroVM,
     pub tuning: tuner::TunerVM,
     pub instrument: instrument::InstrumentVM,
+    pub view_box: Rect,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -101,6 +121,8 @@ impl From<&RedSirenCapabilities> for TunerCapabilities {
         TunerCapabilities {
             key_value: incoming.key_value.map_event(super::Event::TunerEvent),
             render: incoming.render.map_event(super::Event::TunerEvent),
+            play: incoming.play.map_event(super::Event::TunerEvent),
+            navigate: incoming.navigate.map_event(super::Event::TunerEvent),
         }
     }
 }
@@ -126,12 +148,27 @@ impl App for RedSiren {
 
         match msg {
             Event::Start => {
+                self.tuner.update(
+                    tuner::TunerEV::CheckHasTuning,
+                    &mut model.tuner,
+                    &caps.into(),
+                );
                 caps.render.render();
             }
             Event::ReflectActivity(act) => {
                 model.activity = act;
                 model.intro.current_activity = act;
                 caps.render.render();
+
+                if act == Activity::Play
+                    && model.config.is_some()
+                    && model.tuner.pairs.len() < model.config.as_ref().unwrap().n_buttons
+                {
+                    self.update(Event::Menu(Activity::Tune), model, caps);
+                }
+                else if act == Activity::Tune {
+                    self.tuner.update(tuner::TunerEV::Activate(true), &mut model.tuner, &caps.into());
+                }
             }
             Event::Menu(act) => match (model.activity, act) {
                 (Activity::Intro, Activity::Play) => {
@@ -144,6 +181,7 @@ impl App for RedSiren {
                     );
                 }
                 (Activity::Intro, Activity::Tune) => {
+                    model.tuner.setup_complete = model.instrument.setup_complete;
                     self.intro
                         .update(intro::IntroEV::Menu(act), &mut model.intro, &caps.into());
                 }
@@ -156,11 +194,15 @@ impl App for RedSiren {
                         .update(intro::IntroEV::Menu(act), &mut model.intro, &caps.into());
                 }
                 (Activity::Play, Activity::Tune) => {
+                    model.tuner.setup_complete = model.instrument.setup_complete;
                     self.instrument.update(
                         instrument::InstrumentEV::Playback(instrument::PlaybackEV::Play(false)),
                         &mut model.instrument,
                         &caps.into(),
                     );
+                    self.intro
+                        .update(intro::IntroEV::Menu(act), &mut model.intro, &caps.into());
+                    self.update(Event::ReflectActivity(Activity::Intro), model, caps);
                 }
                 (Activity::Play, Activity::Play) => {
                     self.instrument.update(
@@ -170,6 +212,13 @@ impl App for RedSiren {
                         &mut model.instrument,
                         &caps.into(),
                     );
+                }
+                (Activity::Tune, _) => {
+                    self.tuner.update(tuner::TunerEV::Activate(false), &mut model.tuner, &caps.into());
+                    model.instrument.setup_complete = model.tuner.setup_complete;
+                    self.intro
+                        .update(intro::IntroEV::Menu(act), &mut model.intro, &caps.into());
+                    self.update(Event::ReflectActivity(Activity::Intro), model, caps);
                 }
                 _ => todo!("transition not implemented"),
             },
@@ -184,25 +233,33 @@ impl App for RedSiren {
             }
             Event::ConfigureApp(config) => {
                 self.instrument.update(
-                    instrument::InstrumentEV::CreateWithConfig(config),
+                    instrument::InstrumentEV::CreateWithConfig(config.clone()),
                     &mut model.instrument,
+                    &caps.into(),
+                );
+                self.tuner.update(
+                    tuner::TunerEV::SetConfig(config.clone()),
+                    &mut model.tuner,
                     &caps.into(),
                 );
                 self.intro.update(
                     intro::IntroEV::SetInstrumentTarget(
                         Box::new(model.instrument.layout.as_ref().unwrap().clone()),
-                        Box::new(model.instrument.config.clone()),
+                        Box::new(config.clone()),
                     ),
                     &mut model.intro,
                     &caps.into(),
                 );
-                _ = model.config.insert(model.instrument.config.clone());
+                model.view_box = Rect::size(config.width, config.height);
+                _ = model.config.insert(config);
             }
             Event::InstrumentEvent(event) => {
                 self.instrument
-                    .update(event, &mut model.instrument, &caps.into())
+                    .update(event, &mut model.instrument, &caps.into());
             }
-            Event::TunerEvent(event) => self.tuner.update(event, &mut model.tuning, &caps.into()),
+            Event::TunerEvent(event) => {
+                self.tuner.update(event, &mut model.tuner, &caps.into());
+            }
             Event::IntroEvent(event) => self.intro.update(event, &mut model.intro, &caps.into()),
         }
     }
@@ -210,9 +267,10 @@ impl App for RedSiren {
     fn view(&self, model: &Model) -> ViewModel {
         ViewModel {
             activity: model.activity,
-            tuning: self.tuner.view(&model.tuning),
+            tuning: self.tuner.view(&model.tuner),
             intro: self.intro.view(&model.intro),
             instrument: self.instrument.view(&model.instrument),
+            view_box: model.view_box.clone(),
         }
     }
 }

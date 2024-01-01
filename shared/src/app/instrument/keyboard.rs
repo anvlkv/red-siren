@@ -69,7 +69,7 @@ impl Button {
         let button_space_main = (config.length / (config.groups * config.buttons_group) as f64
             - config.button_size)
             / 2.0;
-        let total_buttons = config.buttons_group * config.groups;
+        let total_buttons = config.n_buttons;
         let idx = (group - 1) * config.buttons_group + (button - 1);
 
         let side = config.breadth + button_space_side;

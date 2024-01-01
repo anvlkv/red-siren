@@ -16,7 +16,18 @@ where
         Self { context }
     }
 
-    pub fn resolve_permission(&self, result: bool) {
+    pub fn resolve_capture_fft(&self, captured: Vec<(f32, f32)>, id: String) {
+        let ctx = self.context.clone();
+
+        self.context.spawn(async move {
+            _ = ctx
+                .notify_shell(BridgedPlayOperationOutput(
+                    id,
+                    PlayOperationOutput::CapturedFFT(captured),
+                ))
+                .await;
+        })
+    }
         let ctx = self.context.clone();
 
         self.context.spawn(async move {

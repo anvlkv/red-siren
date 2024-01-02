@@ -64,7 +64,7 @@ impl Default for Model {
 pub struct ViewModel {
     pub activity: Activity,
     pub intro: intro::IntroVM,
-    pub tuning: tuner::TunerVM,
+    pub tuner: tuner::TunerVM,
     pub instrument: instrument::InstrumentVM,
     pub view_box: Rect,
 }
@@ -160,68 +160,101 @@ impl App for RedSiren {
                 model.intro.current_activity = act;
                 caps.render.render();
 
-                if act == Activity::Play
-                    && model.config.is_some()
-                    && model.tuner.pairs.len() < model.config.as_ref().unwrap().n_buttons
-                {
+                log::debug!("reflect {act:?}");
+
+                if act == Activity::Play && !self.tuner.is_tuned(&model.tuner) {
                     self.update(Event::Menu(Activity::Tune), model, caps);
-                }
-                else if act == Activity::Tune {
-                    self.tuner.update(tuner::TunerEV::Activate(true), &mut model.tuner, &caps.into());
+                } else if act == Activity::Tune {
+                    self.tuner.update(
+                        tuner::TunerEV::Activate(true),
+                        &mut model.tuner,
+                        &caps.into(),
+                    );
                 }
             }
-            Event::Menu(act) => match (model.activity, act) {
-                (Activity::Intro, Activity::Play) => {
-                    self.intro
-                        .update(intro::IntroEV::Menu(act), &mut model.intro, &caps.into());
-                    self.instrument.update(
-                        instrument::InstrumentEV::Playback(instrument::PlaybackEV::Play(true)),
-                        &mut model.instrument,
-                        &caps.into(),
-                    );
+            Event::Menu(act) => {
+                log::debug!("menu {act:?}");
+                match (model.activity, act) {
+                    (Activity::Intro, Activity::Play) => {
+                        if !self.tuner.is_tuned(&model.tuner) {
+                            self.update(Event::Menu(Activity::Tune), model, caps);
+                        } else {
+                            self.intro.update(
+                                intro::IntroEV::Menu(act),
+                                &mut model.intro,
+                                &caps.into(),
+                            );
+                            self.instrument.update(
+                                instrument::InstrumentEV::Playback(instrument::PlaybackEV::Play(
+                                    true,
+                                )),
+                                &mut model.instrument,
+                                &caps.into(),
+                            );
+                        }
+                    }
+                    (Activity::Intro, Activity::Tune) => {
+                        model.tuner.setup_complete = model.instrument.setup_complete;
+                        self.intro.update(
+                            intro::IntroEV::Menu(act),
+                            &mut model.intro,
+                            &caps.into(),
+                        );
+                    }
+                    (Activity::Intro, Activity::About) => {
+                        self.intro.update(
+                            intro::IntroEV::Menu(act),
+                            &mut model.intro,
+                            &caps.into(),
+                        );
+                    }
+                    (Activity::About, Activity::Intro) => {
+                        self.intro.update(
+                            intro::IntroEV::Menu(act),
+                            &mut model.intro,
+                            &caps.into(),
+                        );
+                    }
+                    (Activity::Play, Activity::Tune) => {
+                        model.tuner.setup_complete = model.instrument.setup_complete;
+                        self.instrument.update(
+                            instrument::InstrumentEV::Playback(instrument::PlaybackEV::Play(false)),
+                            &mut model.instrument,
+                            &caps.into(),
+                        );
+                        self.intro.update(
+                            intro::IntroEV::Menu(act),
+                            &mut model.intro,
+                            &caps.into(),
+                        );
+                        self.update(Event::ReflectActivity(Activity::Intro), model, caps);
+                    }
+                    (Activity::Play, Activity::Play) => {
+                        self.instrument.update(
+                            instrument::InstrumentEV::Playback(instrument::PlaybackEV::Play(
+                                !model.instrument.playing,
+                            )),
+                            &mut model.instrument,
+                            &caps.into(),
+                        );
+                    }
+                    (Activity::Tune, _) => {
+                        self.tuner.update(
+                            tuner::TunerEV::Activate(false),
+                            &mut model.tuner,
+                            &caps.into(),
+                        );
+                        model.instrument.setup_complete = model.tuner.setup_complete;
+                        self.intro.update(
+                            intro::IntroEV::Menu(act),
+                            &mut model.intro,
+                            &caps.into(),
+                        );
+                        self.update(Event::ReflectActivity(Activity::Intro), model, caps);
+                    }
+                    _ => todo!("transition not implemented"),
                 }
-                (Activity::Intro, Activity::Tune) => {
-                    model.tuner.setup_complete = model.instrument.setup_complete;
-                    self.intro
-                        .update(intro::IntroEV::Menu(act), &mut model.intro, &caps.into());
-                }
-                (Activity::Intro, Activity::About) => {
-                    self.intro
-                        .update(intro::IntroEV::Menu(act), &mut model.intro, &caps.into());
-                }
-                (Activity::About, Activity::Intro) => {
-                    self.intro
-                        .update(intro::IntroEV::Menu(act), &mut model.intro, &caps.into());
-                }
-                (Activity::Play, Activity::Tune) => {
-                    model.tuner.setup_complete = model.instrument.setup_complete;
-                    self.instrument.update(
-                        instrument::InstrumentEV::Playback(instrument::PlaybackEV::Play(false)),
-                        &mut model.instrument,
-                        &caps.into(),
-                    );
-                    self.intro
-                        .update(intro::IntroEV::Menu(act), &mut model.intro, &caps.into());
-                    self.update(Event::ReflectActivity(Activity::Intro), model, caps);
-                }
-                (Activity::Play, Activity::Play) => {
-                    self.instrument.update(
-                        instrument::InstrumentEV::Playback(instrument::PlaybackEV::Play(
-                            !model.instrument.playing,
-                        )),
-                        &mut model.instrument,
-                        &caps.into(),
-                    );
-                }
-                (Activity::Tune, _) => {
-                    self.tuner.update(tuner::TunerEV::Activate(false), &mut model.tuner, &caps.into());
-                    model.instrument.setup_complete = model.tuner.setup_complete;
-                    self.intro
-                        .update(intro::IntroEV::Menu(act), &mut model.intro, &caps.into());
-                    self.update(Event::ReflectActivity(Activity::Intro), model, caps);
-                }
-                _ => todo!("transition not implemented"),
-            },
+            }
             Event::CreateConfigAndConfigureApp {
                 width,
                 height,
@@ -267,7 +300,7 @@ impl App for RedSiren {
     fn view(&self, model: &Model) -> ViewModel {
         ViewModel {
             activity: model.activity,
-            tuning: self.tuner.view(&model.tuner),
+            tuner: self.tuner.view(&model.tuner),
             intro: self.intro.view(&model.intro),
             instrument: self.instrument.view(&model.instrument),
             view_box: model.view_box.clone(),

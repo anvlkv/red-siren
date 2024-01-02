@@ -46,6 +46,10 @@ struct ContentView: View {
     func instrumentEv(ev: InstrumentEV) {
         self.core.update(Event.instrumentEvent(ev))
     }
+    
+    func tunerEv(ev: TunerEV) {
+        self.core.update(Event.tunerEvent(ev))
+    }
 
     @ViewBuilder func ActivityView() -> some View {
         switch self.core.view.activity {
@@ -55,6 +59,12 @@ struct ContentView: View {
             InstrumentView(vm: self.core.view.instrument, ev: self.instrumentEv)
         case .about:
             AboutView(vm: self.core.view.intro, ev: self.introEv)
+        case .tune:
+            TunerView(vm: self.core.view.tuner,
+                      ev: self.tunerEv,
+                      vSize: CGFloat(self.core.view.view_box.rect[1][1] - self.core.view.view_box.rect[0][0]),
+                      hSize: CGFloat(self.core.view.view_box.rect[1][0] - self.core.view.view_box.rect[0][0])
+            )
         default:
             VStack {
                 Text("Not implemented")
@@ -94,13 +104,5 @@ struct ContentView: View {
                 self.viewSize(size: value)
             }
             .background(Color("Main"))
-    }
-}
-
-
-
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView(core: Core())
     }
 }

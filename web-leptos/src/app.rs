@@ -191,7 +191,7 @@ fn RedSirenCore() -> impl IntoView {
     let intro_ev = SignalSetter::map(move |ev| set_event.set(Event::IntroEvent(ev)));
     let instrument_vm = create_read_slice(view_rw_signal, move |v| v.instrument.clone());
     let instrument_ev = SignalSetter::map(move |ev| set_event.set(Event::InstrumentEvent(ev)));
-    let tuner_vm = create_read_slice(view_rw_signal, move |v| v.tuning.clone());
+    let tuner_vm = create_read_slice(view_rw_signal, move |v| v.tuner.clone());
     let tuner_ev = SignalSetter::map(move |ev| set_event.set(Event::TunerEvent(ev)));
 
     let view_box = Signal::derive(move || {

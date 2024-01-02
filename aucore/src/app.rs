@@ -26,7 +26,6 @@ pub struct Model {
     analyze_samples: Vec<f32>,
     frame_size: usize,
     capturing: bool,
-    capture_id: String,
 }
 
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]

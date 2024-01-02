@@ -19,6 +19,7 @@
 		FA1F7C062B306D43001FABAC /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1F7C052B306D43001FABAC /* AboutView.swift */; };
 		FA1F7C082B307A34001FABAC /* RedCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1F7C072B307A34001FABAC /* RedCardView.swift */; };
 		FA3CD9922B19D3010002E8FF /* Playback.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA3CD9912B19D3010002E8FF /* Playback.swift */; };
+		FA64C7BE2B42F453003E3CA9 /* TunerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA64C7BD2B42F453003E3CA9 /* TunerView.swift */; };
 		FAAA65362B09DFB500B1F5D1 /* IntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAA65352B09DFB500B1F5D1 /* IntroView.swift */; };
 		FAAA65382B09E0E100B1F5D1 /* InstrumentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAA65372B09E0E100B1F5D1 /* InstrumentView.swift */; };
 		FAAA653A2B09EC8300B1F5D1 /* Intro.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FAAA65392B09EC8300B1F5D1 /* Intro.storyboard */; };
@@ -111,6 +112,7 @@
 		FA1F7C052B306D43001FABAC /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		FA1F7C072B307A34001FABAC /* RedCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedCardView.swift; sourceTree = "<group>"; };
 		FA3CD9912B19D3010002E8FF /* Playback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Playback.swift; sourceTree = "<group>"; };
+		FA64C7BD2B42F453003E3CA9 /* TunerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunerView.swift; sourceTree = "<group>"; };
 		FAAA65352B09DFB500B1F5D1 /* IntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroView.swift; sourceTree = "<group>"; };
 		FAAA65372B09E0E100B1F5D1 /* InstrumentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstrumentView.swift; sourceTree = "<group>"; };
 		FAAA65392B09EC8300B1F5D1 /* Intro.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Intro.storyboard; sourceTree = "<group>"; };
@@ -143,6 +145,7 @@
 				FA1248D32B2853A600D6CEC8 /* project_fonts */,
 				17F008C3C1A819A3D7658E59 /* RedSirenApp.swift */,
 				FA1F7C052B306D43001FABAC /* AboutView.swift */,
+				FA64C7BD2B42F453003E3CA9 /* TunerView.swift */,
 				1E4056BAC32CC8AC7A9740CA /* ContentView.swift */,
 				FAAA65352B09DFB500B1F5D1 /* IntroView.swift */,
 				FA1F7C072B307A34001FABAC /* RedCardView.swift */,
@@ -397,6 +400,7 @@
 				7D03E7045F57CA28148D2CA4 /* Core.swift in Sources */,
 				FAAA65382B09E0E100B1F5D1 /* InstrumentView.swift in Sources */,
 				FAAA653C2B0A23E500B1F5D1 /* AnimationClock.swift in Sources */,
+				FA64C7BE2B42F453003E3CA9 /* TunerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

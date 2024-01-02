@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Bundle, Clone, Copy, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Pair {
-    pub value: f32,
+    pub value: Option<f32>,
     pub f_n: usize,
     pub rect: Rect,
 }
@@ -12,7 +12,7 @@ pub struct Pair {
 impl Eq for Pair {}
 
 impl Pair {
-    fn new(f_n: usize, config: &Config, value: f32) -> Self {
+    fn new(f_n: usize, config: &Config, value: Option<f32>) -> Self {
         let pair_space_x = config.width / config.n_buttons as f64;
         let pair_mid_y = config.height / 2.0;
 
@@ -24,7 +24,7 @@ impl Pair {
         };
 
         let x = pair_space_x * (f_n - 1) as f64 + (pair_space_x - pair_rect_size) / 2.0;
-        let y = (pair_mid_y - pair_rect_size / 2.0) - value as f64 * pair_mid_y;
+        let y = (pair_mid_y - pair_rect_size / 2.0) - value.clone().unwrap_or_default() as f64 * pair_mid_y;
         let rect = Rect::size(pair_rect_size, pair_rect_size)
             .offset_left_and_right(-x, x)
             .offset_top_and_bottom(-y, y);
@@ -37,7 +37,7 @@ impl Pair {
     }
 
     pub fn spawn(world: &mut World, config: &Config, f_n: usize) -> Entity {
-        world.spawn((Self::new(f_n, config, 0.0),))
+        world.spawn((Self::new(f_n, config, None),))
     }
 
     pub fn update_from_values(&mut self, values: &[(usize, f32)], config: &Config) {
@@ -47,7 +47,7 @@ impl Pair {
     }
 
     pub fn set_value(&mut self, value: f32, config: &Config)  {
-      let next = Self::new(self.f_n, config, value);
+      let next = Self::new(self.f_n, config, Some(value));
       *self = Self{
         ..next
       }

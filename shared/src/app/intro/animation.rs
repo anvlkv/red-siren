@@ -19,6 +19,8 @@ pub struct IntroAnimation {
 
 impl IntroAnimation {
     pub fn new(model: &Model, to: Activity) -> Self {
+        log::debug!("new transition: {:?} -> {:?}", model.current_activity, to);
+
         match (model.current_activity, to) {
             (Activity::Intro, Activity::Intro) => Self {
                 animation: Animation::loading_intro(model),
@@ -48,7 +50,7 @@ impl IntroAnimation {
             (_, Activity::Tune) => Self {
                 animation: Animation::tuner_intro(model, false),
                 running: None,
-                duration: INTRO_DURATION,
+                duration: EXIT_DURATION,//INTRO_DURATION,
             },
             (Activity::Tune, Activity::Intro) => Self {
                 animation: Animation::tuner_intro(model, true),
@@ -118,7 +120,7 @@ impl Debug for Animation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::LoadingIntro(_) => f.write_str("LoadingIntro"),
-            Self::PlayInto(_) => f.write_str("PlayInto"),
+            Self::PlayInto(_) => f.write_str("PlayIntro"),
             Self::MenuIntro(_) => f.write_str("MenuIntro"),
             Self::TunerIntro(_) => f.write_str("TunerIntro"),
         }
@@ -327,7 +329,7 @@ impl Animation {
                     },
                     ..vm.clone()
                 },
-                0.35,
+                1.0,//0.35,
                 EaseOut
             )
         ];

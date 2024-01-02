@@ -211,7 +211,7 @@ impl App for Tuner {
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
         TunerVM {
             pairs: self.get_pairs(model),
-            needs_tuning: self.needs_tuning(model),
+            needs_tuning: !self.is_tuned(model),
             line: self.get_line(model),
             range: model.config.height,
             fft: self.get_fft(model)
@@ -220,14 +220,7 @@ impl App for Tuner {
 }
 
 impl Tuner {
-    fn needs_tuning(&self, model: &Model) -> bool {
-        model.pairs.len() == 0
-            || model.pairs.len() < {
-                let world = model.world.lock().expect("world lock");
-                let len = world.query::<&instrument::Node>().iter().len();
-                len
-            }
-    }
+    
     fn get_pairs(&self, model: &Model) -> Vec<Pair> {
         let world = model.world.lock().expect("world lock");
         model
@@ -253,5 +246,9 @@ impl Tuner {
         } else {
             vec![]
         }
+    }
+
+    pub fn is_tuned(&self, model: &Model) -> bool {
+        self.get_pairs(model).iter().filter(|p| p.value.is_some()).count() >= model.config.n_buttons
     }
 }

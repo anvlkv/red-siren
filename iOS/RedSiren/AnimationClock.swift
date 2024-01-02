@@ -1,15 +1,16 @@
 import Foundation
 import UIKit
+import OSLog
 
 @MainActor
 class AnimationClock: NSObject, ObservableObject {
     @Published var ts: Double = 0
-    var onTick: (Double) -> Void
+    var onTick: (Double?) -> Void
     var onStart: (Double) -> Void
     
     var link: CADisplayLink?
     
-    init(onTick: @escaping (Double) -> Void = {_ in}, onStart: @escaping (Double) -> Void = {_ in}) {
+    init(onTick: @escaping (Double?) -> Void = {_ in}, onStart: @escaping (Double) -> Void = {_ in}) {
         self.onTick = onTick
         self.onStart = onStart
     }
@@ -27,7 +28,13 @@ class AnimationClock: NSObject, ObservableObject {
     }
     
     func deleteDisplayLink() {
-        self.link?.invalidate()
+        if let link = self.link {
+            link.invalidate()
+            self.onTick(nil)
+        }
+        else {
+            Logger().log("deleteDisplayLink called with no link")
+        }
         self.link = nil
     }
     

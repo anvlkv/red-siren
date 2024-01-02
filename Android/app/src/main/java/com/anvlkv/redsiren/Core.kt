@@ -3,10 +3,18 @@
 package com.anvlkv.redsiren
 
 
+import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.datastore.core.DataStore
+import androidx.datastore.dataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.viewModelScope
 import com.anvlkv.redsiren.ffirs.AuCoreBridge
 import com.anvlkv.redsiren.ffirs.auNew
@@ -20,6 +28,8 @@ import com.anvlkv.redsiren.shared.shared_types.AnimateOperation
 import com.anvlkv.redsiren.shared.shared_types.AnimateOperationOutput
 import com.anvlkv.redsiren.shared.shared_types.Effect
 import com.anvlkv.redsiren.shared.shared_types.Event
+import com.anvlkv.redsiren.shared.shared_types.KeyValueOperation
+import com.anvlkv.redsiren.shared.shared_types.KeyValueOutput
 import com.anvlkv.redsiren.shared.shared_types.NavigateOperation
 import com.anvlkv.redsiren.shared.shared_types.PlayOperation
 import com.anvlkv.redsiren.shared.shared_types.PlayOperationOutput
@@ -35,13 +45,18 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.util.Optional
 
-open class Core : androidx.lifecycle.ViewModel() {
+
+open class Core(val store: DataStore<Preferences>) : androidx.lifecycle.ViewModel() {
+
     var view: ViewModel by mutableStateOf(ViewModel.bincodeDeserialize(view()))
     var navigateTo: Activity? by mutableStateOf(null)
     var animationSender: SendChannel<Long>? by mutableStateOf(null)
+
 
     private val httpClient = HttpClient(CIO)
 
@@ -78,7 +93,56 @@ open class Core : androidx.lifecycle.ViewModel() {
             }
 
 
-            is Effect.KeyValue -> {}
+            is Effect.KeyValue -> {
+                when (val kv = effect.value) {
+                    is KeyValueOperation.Read -> {
+
+                        coroutineScope {
+                            val key = stringPreferencesKey(kv.value)
+                            val value = store.data.map { kv ->
+                                kv[key] ?: ""
+                            }
+                            val entry = value.first()
+
+
+
+                            var response = KeyValueOutput.Read(Optional.empty())
+
+                            if (entry.isNotEmpty()) {
+                                val data = entry.split(",").map {
+                                    it.toByte()
+                                }
+                               response = KeyValueOutput.Read(Optional.of(data))
+                            }
+
+                            val effects =
+                                handleResponse(request.uuid.toByteArray(), response.bincodeSerialize())
+                            val requests = Requests.bincodeDeserialize(effects)
+                            for (request in requests) {
+                                processEffect(request)
+                            }
+                        }
+                    }
+
+                    is KeyValueOperation.Write -> {
+                        coroutineScope {
+                            val key = stringPreferencesKey(kv.field0)
+                            val data = kv.field1
+                            store.edit { kv ->
+                                kv[key] = data.joinToString(",")
+                            }
+                            val response = KeyValueOutput.Write(true)
+
+                            val effects =
+                                handleResponse(request.uuid.toByteArray(), response.bincodeSerialize())
+                            val requests = Requests.bincodeDeserialize(effects)
+                            for (request in requests) {
+                                processEffect(request)
+                            }
+                        }
+                    }
+                }
+            }
 
             is Effect.Play -> {
                 val response = playEffect(effect.value)
@@ -97,20 +161,14 @@ open class Core : androidx.lifecycle.ViewModel() {
                         val channel = Channel<Long>(Channel.CONFLATED)
 
                         animationSender = channel
-                        animateStream(channel, request.uuid.toByteArray())
+                        coroutineScope {
+                            animateStream(channel, request.uuid.toByteArray())
+                        }
                     }
                     is AnimateOperation.Stop -> {
                         Log.i("redsiren::android", "stopping animation loop")
                         animationSender?.close()
                         animationSender = null
-
-                        val response = AnimateOperationOutput.Done()
-                        val effects =
-                            handleResponse(request.uuid.toByteArray(), response.bincodeSerialize())
-                        val requests = Requests.bincodeDeserialize(effects)
-                        for (request in requests) {
-                            processEffect(request)
-                        }
                     }
                 }
             }
@@ -130,6 +188,15 @@ open class Core : androidx.lifecycle.ViewModel() {
             }
             Log.d("redsiren::android", "animation stream tick")
         } while (true)
+
+        val response = AnimateOperationOutput.Done()
+
+        val effects =
+            handleResponse(uuid, response.bincodeSerialize())
+        val requests = Requests.bincodeDeserialize(effects)
+        for (request in requests) {
+            processEffect(request)
+        }
 
         Log.i("redsiren::android", "animation stream loop exited")
     }

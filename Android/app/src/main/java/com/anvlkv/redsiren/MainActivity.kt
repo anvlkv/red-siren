@@ -1,6 +1,7 @@
 package com.anvlkv.redsiren
 
 import android.animation.TimeAnimator
+import android.content.Context
 import android.content.res.Resources
 import android.os.Bundle
 import android.util.Log
@@ -22,6 +23,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -29,6 +33,7 @@ import androidx.navigation.compose.rememberNavController
 import com.anvlkv.redsiren.app.AppAbout
 import com.anvlkv.redsiren.app.AppInstrument
 import com.anvlkv.redsiren.app.AppIntro
+import com.anvlkv.redsiren.app.AppTuner
 import com.anvlkv.redsiren.shared.shared_types.Event
 import com.anvlkv.redsiren.shared.shared_types.InstrumentEV
 import com.anvlkv.redsiren.shared.shared_types.IntroEV
@@ -40,6 +45,9 @@ import com.google.accompanist.permissions.rememberPermissionState
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import com.anvlkv.redsiren.shared.shared_types.Activity as CoreActivity
+
+
+val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "kv")
 
 class MainActivity : ComponentActivity() {
     var core: Core? = null
@@ -53,10 +61,9 @@ class MainActivity : ComponentActivity() {
         windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
-
         setContent {
             ApplyTheme(content = {
-                core = viewModel()
+                core = Core(this.baseContext.dataStore)
 
                 Surface {
                     RedSiren(core!!)
@@ -111,7 +118,7 @@ fun RedSiren(core: Core) {
 
     val introVm = core.view.intro
     val instrumentVm = core.view.instrument
-    val tunerVm = core.view.tuning
+    val tunerVm = core.view.tuner
 
 
     val introEv = fun(ev: IntroEV) {
@@ -228,7 +235,7 @@ fun RedSiren(core: Core) {
                 AppInstrument(instrumentVm, instrumentEv)
             }
             composable("tune") {
-//                AppInstrument(tunerVm, tunerEv)
+                AppTuner(tunerVm, tunerEv)
             }
             composable("about") {
                 AppAbout(introVm, introEv)

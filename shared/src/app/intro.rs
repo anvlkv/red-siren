@@ -99,7 +99,14 @@ impl App for Intro {
 
     fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) {
         match event {
-            IntroEV::Start => caps.animate.start(IntroEV::TsNext),
+            IntroEV::Start => caps.animate.start(
+                IntroEV::TsNext,
+                model
+                    .sequence
+                    .as_ref()
+                    .map(|a| format!("{:?}", a.animation))
+                    .unwrap_or("none".to_string()),
+            ),
             IntroEV::SetInstrumentTarget(layout, config) => {
                 model.layout = *layout;
                 model.config = *config;
@@ -133,13 +140,17 @@ impl App for Intro {
             }
             IntroEV::Menu(next_activity) => {
                 model.sequence = Some(IntroAnimation::new(model, next_activity));
+                caps.animate.stop();
                 match next_activity {
                     Activity::Intro => {
                         caps.navigate.to(Activity::Intro);
                     }
                     _ => {
                         _ = model.transition_to.insert(next_activity);
-                        caps.animate.start(IntroEV::TsNext);
+                        caps.animate.start(
+                            IntroEV::TsNext,
+                            model.sequence.as_ref().map(|s| format!("{:?}", s.animation)).unwrap(),
+                        );
                     }
                 }
                 log::info!("scheduled transition to {next_activity:?}");

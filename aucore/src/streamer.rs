@@ -175,6 +175,7 @@ impl AUCoreBridge {
             bincode::deserialize::<PlayOperation>(bytes.as_slice()).expect("deserialize op");
 
         log::trace!("request {event:?}");
+        
         let core = self.core.clone();
 
         let tx_bridge = async move {

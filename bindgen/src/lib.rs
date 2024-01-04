@@ -38,7 +38,9 @@ pub fn au_request(arc_self: Arc<AUCoreBridge>, bytes: Vec<u8>) -> Arc<AUReceiver
 
 #[uniffi::export]
 pub async fn au_receive(arc_self: Arc<AUReceiver>) -> Option<Vec<u8>> {
+    log::trace!("wait for receiver lock");
     let mut rx = arc_self.0.lock().await;
+    log::trace!("wait for sender message");
     rx.next().await
 }
 

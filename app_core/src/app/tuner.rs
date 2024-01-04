@@ -108,12 +108,12 @@ impl App for Tuner {
             TunerEV::Activate(start) => {
                 if model.setup_complete {
                     if start {
-                        caps.play.capture_fft(TunerEV::FftData);
                         caps.play.play(TunerEV::PlayOpSuccess);
+                        caps.play.capture_fft(TunerEV::FftData);
                     }
                     else {
-                        caps.play.stop_capture_fft(TunerEV::PlayOpSuccess);
                         caps.play.pause(TunerEV::PlayOpSuccess);
+                        caps.play.stop_capture_fft(TunerEV::PlayOpSuccess);
                     }
                 }
                 else {
@@ -147,7 +147,11 @@ impl App for Tuner {
             }
             TunerEV::PlayOpSuccess(success) => {
                 if !success {
-                    log::error!("tuner play op failed")
+                    log::error!("tuner play op failed");
+                    caps.navigate.to(crate::Activity::Intro)
+                }
+                else {
+                    log::info!("play operation completed with success");
                 }
             }
             TunerEV::SetTuning(value) => {

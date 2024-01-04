@@ -13,7 +13,7 @@ cfg_if! { if #[cfg(feature = "hydrate")] {
     #[wasm_bindgen]
     pub fn hydrate() {
         #[cfg(feature = "browser")]
-        shared::log_init();
+        app_core::log_init();
 
         leptos::mount_to_body(RootComponent);
     }

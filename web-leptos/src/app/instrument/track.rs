@@ -1,6 +1,6 @@
 use leptos::*;
 
-use shared::geometry::Rect;
+use app_core::geometry::Rect;
 
 #[component]
 pub fn TrackComponent(#[prop(into)] layout_rect: Signal<Rect>) -> impl IntoView {

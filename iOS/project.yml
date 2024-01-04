@@ -1,10 +1,10 @@
 name: RedSiren
 projectReferences:
   Shared:
-    path: ../shared/shared.xcodeproj
+    path: ../app_core/core.xcodeproj
 packages:
-  SharedTypes:
-    path: ../shared_types/generated/swift/SharedTypes
+  CoreTypes:
+    path: ../typegen/generated/swift/CoreTypes
 options:
   bundleIdPrefix: com.anvlkv.redsiren
 targets:
@@ -14,12 +14,12 @@ targets:
     deploymentTarget: "15.0"
     sources:
       - RedSiren
-      - path: ../shared/src/ffirs.udl
+      - path: ../app_core/src/ffirs.udl
         buildPhase: sources
     dependencies:
-      - target: Shared/uniffi-bindgen-bin
-      - target: Shared/shared-staticlib
-      - package: SharedTypes
+      - target: Shared/bindgen-bin
+      - target: Shared/core-staticlib
+      - package: CoreTypes
     info:
       path: RedSiren/Info.plist
       properties:
@@ -52,7 +52,7 @@ targets:
           fi
 
           cd "${INPUT_FILE_DIR}/.."
-          "${BUILD_DIR}/debug/uniffi-bindgen" generate "src/${INPUT_FILE_NAME}" --language swift --out-dir "${PROJECT_DIR}/generated"
+          "${BUILD_DIR}/debug/bindgen" generate "src/${INPUT_FILE_NAME}" --language swift --out-dir "${PROJECT_DIR}/generated"
         outputFiles:
           - $(PROJECT_DIR)/generated/$(INPUT_FILE_BASE).swift
           - $(PROJECT_DIR)/generated/$(INPUT_FILE_BASE)FFI.h

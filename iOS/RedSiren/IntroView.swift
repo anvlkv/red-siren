@@ -1,4 +1,4 @@
-import SharedTypes
+import CoreTypes
 import SwiftUI
 import OSLog
 import Foundation

@@ -1,7 +1,7 @@
 use leptos::*;
 
-use shared::instrument::layout::MenuPosition;
-use shared::{Activity, Event};
+use app_core::instrument::layout::MenuPosition;
+use app_core::{Activity, Event};
 
 #[component]
 #[allow(unused_variables)]

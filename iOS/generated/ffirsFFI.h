@@ -65,6 +65,8 @@ typedef void (*UniFfiRustFutureContinuation)(void * _Nonnull, int8_t);
 // Scaffolding functions
 void uniffi_ffirs_fn_free_aucorebridge(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
+void uniffi_ffirs_fn_free_aureceiver(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
 RustBuffer uniffi_ffirs_fn_func_handle_response(RustBuffer uuid, RustBuffer res, RustCallStatus *_Nonnull out_status
 );
 void uniffi_ffirs_fn_func_log_init(RustCallStatus *_Nonnull out_status
@@ -78,7 +80,9 @@ RustBuffer uniffi_ffirs_fn_func_view(RustCallStatus *_Nonnull out_status
 void*_Nonnull uniffi_ffirs_fn_func_au_new(RustCallStatus *_Nonnull out_status
     
 );
-void* _Nonnull uniffi_ffirs_fn_func_au_request(void*_Nonnull arc_self, RustBuffer bytes
+void* _Nonnull uniffi_ffirs_fn_func_au_receive(void*_Nonnull arc_self
+);
+void*_Nonnull uniffi_ffirs_fn_func_au_request(void*_Nonnull arc_self, RustBuffer bytes, RustCallStatus *_Nonnull out_status
 );
 RustBuffer ffi_ffirs_rustbuffer_alloc(int32_t size, RustCallStatus *_Nonnull out_status
 );
@@ -207,6 +211,9 @@ uint16_t uniffi_ffirs_checksum_func_view(void
     
 );
 uint16_t uniffi_ffirs_checksum_func_au_new(void
+    
+);
+uint16_t uniffi_ffirs_checksum_func_au_receive(void
     
 );
 uint16_t uniffi_ffirs_checksum_func_au_request(void

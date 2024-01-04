@@ -20,10 +20,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.anvlkv.redsiren.MainActivity
-import com.anvlkv.redsiren.shared.shared_types.Activity
-import com.anvlkv.redsiren.shared.shared_types.Event
-import com.anvlkv.redsiren.shared.shared_types.IntroEV
-import com.anvlkv.redsiren.shared.shared_types.IntroVM
+import com.anvlkv.redsiren.core.typegen.Activity
+import com.anvlkv.redsiren.core.typegen.Event
+import com.anvlkv.redsiren.core.typegen.IntroEV
+import com.anvlkv.redsiren.core.typegen.IntroVM
 import kotlinx.coroutines.launch
 
 @Composable

@@ -19,11 +19,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import com.anvlkv.redsiren.shared.shared_types.InstrumentEV
-import com.anvlkv.redsiren.shared.shared_types.InstrumentVM
-import com.anvlkv.redsiren.shared.shared_types.Line
-import com.anvlkv.redsiren.shared.shared_types.MenuPosition
-import com.anvlkv.redsiren.shared.shared_types.Rect
+import com.anvlkv.redsiren.core.typegen.InstrumentEV
+import com.anvlkv.redsiren.core.typegen.InstrumentVM
+import com.anvlkv.redsiren.core.typegen.Line
+import com.anvlkv.redsiren.core.typegen.MenuPosition
+import com.anvlkv.redsiren.core.typegen.Rect
 import kotlin.math.min
 
 

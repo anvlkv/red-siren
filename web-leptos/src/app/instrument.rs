@@ -2,7 +2,7 @@ use leptos::*;
 use leptos_meta::Title;
 
 pub use button::ButtonComponent;
-use shared::instrument;
+use app_core::instrument;
 pub use string::StringComponent;
 pub use track::TrackComponent;
 

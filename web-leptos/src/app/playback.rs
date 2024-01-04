@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use js_sys::{Promise, Uint8Array};
 use leptos::*;
-use shared::play;
+use app_core::play;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 

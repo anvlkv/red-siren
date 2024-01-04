@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 import UIKit
-import SharedTypes
+import CoreTypes
 import Serde
 import OSLog
 
@@ -71,15 +71,14 @@ class Core: ObservableObject {
                 processEffect(request)
             }
         case .play(let op):
-            Task {
-                let response = await playback.request(op)
+            playback.request(op) { response in
+                DispatchQueue.main.async {
+                    let effects = [UInt8](handleResponse(Data(request.uuid), Data(response)))
 
-
-                let effects = [UInt8](handleResponse(Data(request.uuid), Data(response)))
-
-                let requests: [Request] = try! .bincodeDeserialize(input: effects)
-                for request in requests {
-                    processEffect(request)
+                    let requests: [Request] = try! .bincodeDeserialize(input: effects)
+                    for request in requests {
+                        self.processEffect(request)
+                    }
                 }
             }
             break

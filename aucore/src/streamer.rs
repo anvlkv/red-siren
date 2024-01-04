@@ -1,83 +1,77 @@
-use std::sync::mpsc::Sender;
-use std::sync::{Arc, Mutex, TryLockError};
+use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
+use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
-use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use futures::channel::mpsc::{unbounded, UnboundedSender};
 use futures::executor::ThreadPool;
 use futures::task::SpawnExt;
 use futures::StreamExt;
 
-use shared::play::{PlayOperation, PlayOperationOutput};
+use lazy_static::lazy_static;
+use app_core::play::{PlayOperation, PlayOperationOutput};
 
-use crate::ViewModel;
+pub use futures::channel::mpsc::UnboundedReceiver;
+
+use crate::{Effect, RedSirenAUCapabilities, ViewModel};
 
 #[cfg_attr(not(any(feature = "android", feature = "ios")), allow(dead_code))]
 pub type Core = crate::Core<crate::Effect, crate::RedSirenAU>;
 
-pub trait StreamerUnit {
-    fn init(&self) -> Result<UnboundedReceiver<PlayOperationOutput>>;
-    fn pause(&self) -> Result<()>;
-    fn start(&self) -> Result<()>;
-    fn forward(
-        &self,
-        event: PlayOperation,
-        resolve_id_sender: UnboundedSender<PlayOperationOutput>,
-    );
+lazy_static! {
+    static ref CORE: Arc<Mutex<Core>> = Arc::new(Mutex::new(Core::new::<RedSirenAUCapabilities>()));
 }
 
-pub type OPSender = Sender<(PlayOperation, UnboundedSender<PlayOperationOutput>)>;
-#[derive(Default)]
+pub trait StreamerUnit {
+    fn init(&self) -> Result<()>;
+    fn pause(&self) -> Result<()>;
+    fn start(&self) -> Result<()>;
+}
+
+#[derive(Clone)]
 #[cfg_attr(not(any(feature = "android", feature = "ios")), allow(dead_code))]
 struct CoreStreamer {
-    op_sender: Arc<Mutex<Option<OPSender>>>,
-    render_sender: Arc<Mutex<Option<Sender<ViewModel>>>>,
+    pub op_receiver: Arc<Mutex<Receiver<PlayOperation>>>,
+    pub op_sender: Arc<Mutex<Sender<PlayOperation>>>,
+    pub resolve_sender: Arc<Mutex<UnboundedSender<PlayOperationOutput>>>,
+    pub render_sender: Arc<Mutex<Sender<ViewModel>>>,
+    pub render_receiver: Arc<Mutex<Receiver<ViewModel>>>,
+    pub input_sender: Arc<Mutex<Sender<Vec<Vec<f32>>>>>,
+    pub input_receiver: Arc<Mutex<Receiver<Vec<Vec<f32>>>>>,
 }
 
 #[cfg_attr(not(any(feature = "android", feature = "ios")), allow(dead_code))]
 impl CoreStreamer {
-    fn forward_op(
+    fn new() -> (Self, UnboundedReceiver<PlayOperationOutput>) {
+        let (render_sender, render_receiver) = channel::<ViewModel>();
+        let (op_sender, op_receiver) = channel::<PlayOperation>();
+        let (input_sender, input_receiver) = channel::<Vec<Vec<f32>>>();
+        let (resolve_sender, resolve_receiver) = unbounded::<PlayOperationOutput>();
+
+        (
+            Self {
+                render_sender: Arc::new(Mutex::new(render_sender)),
+                render_receiver: Arc::new(Mutex::new(render_receiver)),
+                resolve_sender: Arc::new(Mutex::new(resolve_sender)),
+                op_sender: Arc::new(Mutex::new(op_sender)),
+                op_receiver: Arc::new(Mutex::new(op_receiver)),
+                input_sender: Arc::new(Mutex::new(input_sender)),
+                input_receiver: Arc::new(Mutex::new(input_receiver)),
+            },
+            resolve_receiver,
+        )
+    }
+
+    fn forward(
         &self,
-        core: Arc<Mutex<Core>>,
         event: PlayOperation,
         resolve_id_sender: UnboundedSender<PlayOperationOutput>,
     ) {
-        let op_sender = self.op_sender.clone();
-        let op_sender = op_sender.lock().expect("lock op sender");
-        let render_sender = self.render_sender.clone();
+        let op_sender = self.op_sender.lock().expect("lock op sender");
 
-        let render_sender = render_sender.lock().expect("lock render sender");
+        let mut resolve = self.resolve_sender.lock().expect("lock resolve");
+        *resolve = resolve_id_sender;
 
-        match core.try_lock() {
-            Err(TryLockError::WouldBlock) => {
-                if let Some(sender) = op_sender.as_ref() {
-                    sender.send((event, resolve_id_sender)).expect("send op");
-                } else {
-                    log::warn!("no sender, core blocked");
-                }
-            }
-            Ok(core) => {
-                if let Some(sender) = render_sender.as_ref() {
-                    for effect in core.process_event(event) {
-                        match effect {
-                            crate::Effect::Render(_) => {
-                                sender.send(core.view()).expect("send render");
-                            }
-                            crate::Effect::Resolve(output) => resolve_id_sender
-                                .unbounded_send(output.operation)
-                                .expect("send output"),
-                        }
-                    }
-                } else {
-                    log::warn!("no sender, core");
-                }
-            }
-            Err(TryLockError::Poisoned(e)) => {
-                log::error!("poisoned {e:?}");
-                resolve_id_sender
-                    .unbounded_send(PlayOperationOutput::Success(false))
-                    .expect("send error");
-            }
-        }
+        op_sender.send(event).expect("send op");
     }
 }
 
@@ -88,16 +82,13 @@ cfg_if::cfg_if! {
         mod ios_coreaudio;
     } else {
         impl StreamerUnit for CoreStreamer {
-            fn init(&self) -> Result<UnboundedReceiver<PlayOperationOutput>> {
+            fn init(&self) -> Result<()> {
                 unreachable!("no platform feature")
             }
             fn pause(&self) -> Result<()> {
                 unreachable!("no platform feature")
             }
             fn start(&self) -> Result<()> {
-                unreachable!("no platform feature")
-            }
-            fn forward(&self, _: PlayOperation, _: UnboundedSender<PlayOperationOutput>) {
                 unreachable!("no platform feature")
             }
         }
@@ -107,7 +98,6 @@ cfg_if::cfg_if! {
 pub struct AUCoreBridge {
     core: Arc<Mutex<CoreStreamer>>,
     pool: ThreadPool,
-    resolve_receiver: Arc<Mutex<Option<UnboundedReceiver<PlayOperationOutput>>>>,
 }
 
 impl Default for AUCoreBridge {
@@ -119,31 +109,80 @@ impl Default for AUCoreBridge {
 impl AUCoreBridge {
     pub fn new() -> Self {
         let pool = ThreadPool::new().expect("create a thread pool for updates");
+        let (core_streamer, _) = CoreStreamer::new();
+        let CoreStreamer {
+            op_receiver,
+            resolve_sender,
+            render_sender,
+            input_receiver,
+            ..
+        } = core_streamer.clone();
+
+        let core = CORE.clone();
+        pool.spawn(async move {
+            let input_receiver = input_receiver.lock().expect("input receiver lock");
+
+            while let Ok(input) = input_receiver.recv() {
+                let core = core.lock().expect("tick core lock");
+                let render_sender = render_sender.lock().expect("render lock");
+                let op_receiver = op_receiver.lock().expect("op receiver lock");
+                let resolve_sender = resolve_sender.lock().expect("resolve sender lock");
+                let mut ops = vec![PlayOperation::Input(input)];
+
+                match op_receiver.try_recv() {
+                    Ok(op) => {
+                        ops.push(op);
+                    }
+                    Err(TryRecvError::Empty) => {}
+                    Err(e) => {
+                        log::error!("op recv error: {e:?}");
+                    }
+                };
+
+                log::trace!("processor process events");
+
+                for op in ops {
+                    for effect in core.process_event(op) {
+                        match effect {
+                            Effect::Render(_) => {
+                                let view = core.view();
+                                render_sender.send(view).expect("send render");
+                            }
+                            Effect::Resolve(op) => resolve_sender
+                                .unbounded_send(op.operation)
+                                .expect("send resolve"),
+                        }
+                    }
+                }
+
+                log::trace!("processor tick");
+            }
+
+            log::debug!("processor job exited");
+        })
+        .expect("process handle");
 
         AUCoreBridge {
             pool,
-            core: Default::default(),
-            resolve_receiver: Default::default(),
+            core: Arc::new(Mutex::new(core_streamer)),
         }
     }
 
-    pub async fn request(&self, bytes: Vec<u8>) -> Vec<u8> {
-        let (s_id, r_id) = unbounded::<PlayOperationOutput>();
+    pub fn request(&self, bytes: Vec<u8>) -> UnboundedReceiver<Vec<u8>> {
+        let (s_id, mut r_id) = unbounded::<PlayOperationOutput>();
 
         let event =
             bincode::deserialize::<PlayOperation>(bytes.as_slice()).expect("deserialize op");
 
-        log::debug!("{event:?}");
+        log::trace!("request {event:?}");
         let core = self.core.clone();
-        let resolve_receiver = self.resolve_receiver.clone();
 
-        let tx_result = async move {
+        let tx_bridge = async move {
             let core = core.lock().expect("lock core");
             match &event {
                 PlayOperation::InstallAU => match core.init() {
-                    Ok(receiver) => {
+                    Ok(_) => {
                         log::info!("init au");
-                        _ = resolve_receiver.lock().unwrap().insert(receiver);
                         s_id.unbounded_send(PlayOperationOutput::Success(true))
                             .expect("receiver is gone");
                     }
@@ -181,19 +220,21 @@ impl AUCoreBridge {
             }
         };
 
-        self.pool.spawn(tx_result).expect("cant spawn task");
+        self.pool.spawn(tx_bridge).expect("spawn bridge");
 
-        let mut outs = r_id
-            .map(|out| bincode::serialize(&out).expect("serialize output"))
-            .collect::<Vec<_>>()
-            .await;
+        let (sx, rx) = unbounded();
 
-        assert_eq!(
-            outs.len(),
-            1,
-            "expected exactly one output for play operation"
-        );
+        let cx_future = async move {
+            while let Some(d) = r_id.next().await {
+                log::trace!("send play op output");
+                sx.unbounded_send(bincode::serialize(&d).expect("serialize output"))
+                    .expect("send msg");
+            }
+            log::debug!("request receive complete");
+        };
 
-        outs.pop().unwrap()
+        self.pool.spawn(cx_future).expect("spawn convert");
+
+        rx
     }
 }

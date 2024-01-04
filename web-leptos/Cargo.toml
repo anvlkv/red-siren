@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow = "1.0.71"
-shared = { path = "../shared" }
+app_core = { path = "../app_core" }
 leptos = { version = "0.5.4", features = ["nightly"] }
 leptos_meta = { version = "0.5.4", features = ["nightly"] }
 leptos_router = { version = "0.5.4", features = ["nightly"] }
@@ -55,9 +55,9 @@ hydrate = [
     "leptos/hydrate",
     "leptos_meta/hydrate",
     "leptos_router/hydrate",
-    "shared/browser",
+    "app_core/browser",
 ]
-browser = ["web-sys", "js-sys", "bincode", "shared/browser", "gloo-storage"]
+browser = ["web-sys", "js-sys", "bincode", "app_core/browser", "gloo-storage"]
 ssr = [
     "dep:axum",
     "dep:tokio",

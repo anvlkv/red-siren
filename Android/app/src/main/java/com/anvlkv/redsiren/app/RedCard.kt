@@ -18,7 +18,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import com.anvlkv.redsiren.shared.shared_types.MenuPosition
+import com.anvlkv.redsiren.core.typegen.MenuPosition
 
 @Composable
 fun RedCard(

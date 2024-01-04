@@ -23,9 +23,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.anvlkv.redsiren.MainActivity
 import com.anvlkv.redsiren.conditional
-import com.anvlkv.redsiren.shared.shared_types.Activity
-import com.anvlkv.redsiren.shared.shared_types.Event
-import com.anvlkv.redsiren.shared.shared_types.MenuPosition
+import com.anvlkv.redsiren.core.typegen.Activity
+import com.anvlkv.redsiren.core.typegen.Event
+import com.anvlkv.redsiren.core.typegen.MenuPosition
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState

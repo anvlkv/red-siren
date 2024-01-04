@@ -5,14 +5,14 @@
 
 Shared and AuCore are distinct crux cores communicating via current shell's `play` and `resolve` capabilities.
 
-iOS and Android shells are using cores via `uniffi-bindgen` package.
+iOS and Android shells are using cores via `bindgen` package.
 
-Web version uses Shared core as is (rust), and AuCore via the `worklet` package.
+Web version uses Shared app_core as is (rust), and AuCore via the `worklet` package.
 
 ### Cores, types and bindgen
 
 ```
-cargo build --package shared  
+cargo build --package app_core  
 ```
 
 ```
@@ -20,11 +20,11 @@ cargo build --package aucore
 ```
 
 ```
-cargo build --package shared_types
+cargo build --package typegen
 ```
 
 ```
-cargo build --package uniffi-bindgen
+cargo build --package bindgen
 ```
 
 ### Web (leptos)
@@ -52,7 +52,7 @@ Requires [cocoapods](https://cocoapods.org/).
 
 Run `pod update` in `iOS` directory.
 
-Rebuild `uniffi-bindgen` upon interface changes.
+Rebuild `bindgen` upon interface changes.
 
 ### Android
 

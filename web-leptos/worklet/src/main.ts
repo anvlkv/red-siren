@@ -1,12 +1,12 @@
 import * as dat from "dat.gui";
-import { ListTuple } from "shared_types/serde/types";
+import { ListTuple } from "typegen/serde/types";
 import {
   Config,
   PlayOperationVariantConfig,
   PlayOperationVariantSuspend,
   PlayOperationVariantResume,
   Node,
-} from "shared_types/types/au_types";
+} from "typegen/types/au_types";
 import { to_bin } from "./core";
 import { RedSirenNode } from "./lib";
 

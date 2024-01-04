@@ -79,7 +79,7 @@ dependencies {
     implementation("androidx.compose.runtime:runtime-livedata")
 
 
-    implementation project(path: ':shared')
+    implementation project(path: ':core')
 
     implementation "androidx.compose.material:material-icons-extended:1.5.4"
 

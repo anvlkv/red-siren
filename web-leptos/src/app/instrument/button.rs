@@ -1,5 +1,5 @@
 use leptos::{ev::PointerEvent, *};
-use shared::geometry::Rect;
+use app_core::geometry::Rect;
 
 #[component]
 pub fn ButtonComponent(

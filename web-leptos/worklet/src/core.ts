@@ -2,14 +2,14 @@ import { au_process_event, au_view } from "aucore/aucore";
 import {
   BincodeDeserializer,
   BincodeSerializer,
-} from "shared_types/bincode/mod";
-import type { Effect, PlayOperation } from "shared_types/types/au_types";
+} from "typegen/bincode/mod";
+import type { Effect, PlayOperation } from "typegen/types/au_types";
 import {
   EffectVariantRender,
   EffectVariantResolve,
   Request,
   ViewModel,
-} from "shared_types/types/au_types";
+} from "typegen/types/au_types";
 
 type RenderCB = (vm: ViewModel) => void;
 type ResolveCB = (output: Uint8Array) => void;

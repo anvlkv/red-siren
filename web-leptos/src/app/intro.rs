@@ -2,7 +2,7 @@ use leptos::*;
 use leptos_meta::Title;
 use leptos_use::use_media_query;
 
-use shared::app::intro;
+use app_core::app::intro;
 
 use super::instrument::{ButtonComponent, StringComponent, TrackComponent};
 use super::menu::MenuComponent;

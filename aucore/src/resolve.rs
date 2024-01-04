@@ -1,7 +1,7 @@
 use crux_core::capability::CapabilityContext;
 use crux_macros::Capability;
 
-use shared::play::PlayOperationOutput;
+use app_core::play::PlayOperationOutput;
 
 #[derive(Capability)]
 pub struct Resolve<Ev> {

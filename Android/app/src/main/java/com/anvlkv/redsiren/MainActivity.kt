@@ -34,17 +34,17 @@ import com.anvlkv.redsiren.app.AppAbout
 import com.anvlkv.redsiren.app.AppInstrument
 import com.anvlkv.redsiren.app.AppIntro
 import com.anvlkv.redsiren.app.AppTuner
-import com.anvlkv.redsiren.shared.shared_types.Event
-import com.anvlkv.redsiren.shared.shared_types.InstrumentEV
-import com.anvlkv.redsiren.shared.shared_types.IntroEV
-import com.anvlkv.redsiren.shared.shared_types.TunerEV
+import com.anvlkv.redsiren.core.typegen.Event
+import com.anvlkv.redsiren.core.typegen.InstrumentEV
+import com.anvlkv.redsiren.core.typegen.IntroEV
+import com.anvlkv.redsiren.core.typegen.TunerEV
 import com.anvlkv.redsiren.ui.theme.ApplyTheme
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
-import com.anvlkv.redsiren.shared.shared_types.Activity as CoreActivity
+import com.anvlkv.redsiren.core.typegen.Activity as CoreActivity
 
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "kv")

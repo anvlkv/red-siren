@@ -1,0 +1,21 @@
+[package]
+name = "typegen"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+keywords = { workspace = true }
+rust-version = { workspace = true }
+
+[dependencies]
+
+[build-dependencies]
+anyhow = "1.0.71"
+crux_core = { workspace = true, features = ["typegen"] }
+crux_http = { workspace = true }
+crux_kv = { workspace = true }
+crux_platform = { workspace = true }
+crux_time = { workspace = true }
+app_core = { path = "../app_core", features = ["typegen"] }
+aucore = { path = "../aucore", features = ["typegen"] }

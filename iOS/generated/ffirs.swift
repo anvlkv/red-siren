@@ -413,6 +413,91 @@ public func FfiConverterTypeAUCoreBridge_lift(_ pointer: UnsafeMutableRawPointer
 public func FfiConverterTypeAUCoreBridge_lower(_ value: AuCoreBridge) -> UnsafeMutableRawPointer {
     return FfiConverterTypeAUCoreBridge.lower(value)
 }
+
+
+public protocol AUReceiverProtocol {
+    
+}
+
+public class AuReceiver: AUReceiverProtocol {
+    fileprivate let pointer: UnsafeMutableRawPointer
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+    required init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    deinit {
+        try! rustCall { uniffi_ffirs_fn_free_aureceiver(pointer, $0) }
+    }
+
+    
+
+    
+    
+}
+
+public struct FfiConverterTypeAUReceiver: FfiConverter {
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = AuReceiver
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuReceiver {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: AuReceiver, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> AuReceiver {
+        return AuReceiver(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: AuReceiver) -> UnsafeMutableRawPointer {
+        return value.pointer
+    }
+}
+
+
+public func FfiConverterTypeAUReceiver_lift(_ pointer: UnsafeMutableRawPointer) throws -> AuReceiver {
+    return try FfiConverterTypeAUReceiver.lift(pointer)
+}
+
+public func FfiConverterTypeAUReceiver_lower(_ value: AuReceiver) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeAUReceiver.lower(value)
+}
+
+fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
+    typealias SwiftType = Data?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterData.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterData.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
 private let UNIFFI_RUST_FUTURE_POLL_READY: Int8 = 0
 private let UNIFFI_RUST_FUTURE_POLL_MAYBE_READY: Int8 = 1
 
@@ -519,24 +604,33 @@ public func auNew()  -> AuCoreBridge {
     )
 }
 
-public func auRequest(_ arcSelf: AuCoreBridge, _ bytes: Data) async  -> Data {
+public func auReceive(_ arcSelf: AuReceiver) async  -> Data? {
     return try!  await uniffiRustCallAsync(
         rustFutureFunc: {
-            uniffi_ffirs_fn_func_au_request(
-                FfiConverterTypeAUCoreBridge.lower(arcSelf),
-                FfiConverterData.lower(bytes)
+            uniffi_ffirs_fn_func_au_receive(
+                FfiConverterTypeAUReceiver.lower(arcSelf)
             )
         },
         pollFunc: ffi_ffirs_rust_future_poll_rust_buffer,
         completeFunc: ffi_ffirs_rust_future_complete_rust_buffer,
         freeFunc: ffi_ffirs_rust_future_free_rust_buffer,
-        liftFunc: FfiConverterData.lift,
+        liftFunc: FfiConverterOptionData.lift,
         errorHandler: nil
         
     )
 }
 
 
+
+public func auRequest(_ arcSelf: AuCoreBridge, _ bytes: Data)  -> AuReceiver {
+    return try!  FfiConverterTypeAUReceiver.lift(
+        try! rustCall() {
+    uniffi_ffirs_fn_func_au_request(
+        FfiConverterTypeAUCoreBridge.lower(arcSelf),
+        FfiConverterData.lower(bytes),$0)
+}
+    )
+}
 
 private enum InitializationResult {
     case ok
@@ -568,7 +662,10 @@ private var initializationResult: InitializationResult {
     if (uniffi_ffirs_checksum_func_au_new() != 30906) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_ffirs_checksum_func_au_request() != 11194) {
+    if (uniffi_ffirs_checksum_func_au_receive() != 27963) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_ffirs_checksum_func_au_request() != 39197) {
         return InitializationResult.apiChecksumMismatch
     }
 

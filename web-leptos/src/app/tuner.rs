@@ -4,7 +4,7 @@ use leptos::*;
 use leptos_meta::Title;
 
 pub use super::instrument::ButtonComponent;
-use shared::{geometry::Line, tuner};
+use app_core::{geometry::Line, tuner};
 // pub use string::StringComponent;
 // pub use track::TrackComponent;
 

@@ -8,7 +8,7 @@ use leptos_use::{
     UseTimestampReturn,
 };
 
-use shared::{Activity, Event};
+use app_core::{Activity, Event};
 
 use crate::{
     error_template::{AppError, ErrorTemplate},
@@ -16,7 +16,7 @@ use crate::{
 };
 
 mod about;
-mod core;
+mod core_bindings;
 mod instrument;
 mod intro;
 mod menu;
@@ -95,7 +95,7 @@ pub fn RootComponent() -> impl IntoView {
 
 #[component]
 fn RedSirenCore() -> impl IntoView {
-    let core = core::new();
+    let core = core_bindings::new();
     let view_rw_signal = create_rw_signal(core.view());
     let render = view_rw_signal.write_only();
     let playback = use_context::<ReadSignal<playback::Playback>>().unwrap();
@@ -136,7 +136,7 @@ fn RedSirenCore() -> impl IntoView {
     });
 
     create_effect(move |_| {
-        core::update(
+        core_bindings::update(
             &core,
             event.get(),
             render,

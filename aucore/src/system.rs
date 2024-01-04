@@ -1,4 +1,4 @@
-use ::shared::instrument::{Config, Node};
+use app_core::instrument::{Config, Node};
 use fundsp::hacker32::*;
 
 pub const SAMPLE_RATE: f64 = 44100.0;

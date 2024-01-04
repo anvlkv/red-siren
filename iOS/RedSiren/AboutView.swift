@@ -1,7 +1,7 @@
 import SwiftUI
 import AVFoundation
 import Foundation
-import SharedTypes
+import CoreTypes
 
 struct AboutView: View {
     @Environment(\.coreEnv) var core: CoreEnv?

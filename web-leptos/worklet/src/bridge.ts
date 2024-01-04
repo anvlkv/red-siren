@@ -6,12 +6,12 @@ import {
   PlayOperationVariantInstallAU,
   PlayOperationVariantResume,
   PlayOperationVariantSuspend,
-} from "shared_types/types/au_types";
+} from "typegen/types/au_types";
 import { RedSirenNode } from "./node";
 import {
   BincodeDeserializer,
   BincodeSerializer,
-} from "shared_types/bincode/mod";
+} from "typegen/bincode/mod";
 
 export class PlaybackBridge {
   private ctx?: AudioContext;

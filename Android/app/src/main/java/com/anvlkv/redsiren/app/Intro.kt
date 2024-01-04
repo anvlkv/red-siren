@@ -26,9 +26,9 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.anvlkv.redsiren.R
-import com.anvlkv.redsiren.shared.shared_types.IntroEV
-import com.anvlkv.redsiren.shared.shared_types.IntroVM
-import com.anvlkv.redsiren.shared.shared_types.MenuPosition
+import com.anvlkv.redsiren.core.typegen.IntroEV
+import com.anvlkv.redsiren.core.typegen.IntroVM
+import com.anvlkv.redsiren.core.typegen.MenuPosition
 import kotlinx.coroutines.launch
 import java.lang.Float.min
 

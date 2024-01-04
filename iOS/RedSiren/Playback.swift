@@ -1,16 +1,10 @@
-//
-//  playback.swift
-//  RedSiren
-//
-//  Created by a.nvlkv on 01/12/2023.
-//
-
 import Foundation
 import AVFoundation
 import AVFAudio
-import SharedTypes
+import CoreTypes
 import UIKit
 import SwiftUI
+import OSLog
 
 
 
@@ -26,37 +20,57 @@ class Playback: NSObject, ObservableObject {
 
     }
 
-    public func request(_ op: PlayOperation) async -> [UInt8] {
+    public func request(_ op: PlayOperation, onData: @escaping (_ data: Data) -> Void) -> Void {
         switch op {
         case .permissions:
-            let grant = await isAuthorized
-            return try! [UInt8](PlayOperationOutput.permission(grant).bincodeSerialize())
+            Task {
+                let grant = await isAuthorized
+                let data = try! [UInt8](PlayOperationOutput.permission(grant).bincodeSerialize())
+                onData(Data(data))
+                
+                Logger().log("playback permissions task complete")
+            }
         case .installAU:
             guard setupAudioSession() else {
-                let opData = try! PlayOperationOutput.success(false).bincodeSerialize()
-                let data = await auRequest(self.auCore!, Data.init(opData))
+                let data = try! PlayOperationOutput.success(false).bincodeSerialize()
 
-                return [UInt8](data)
+                onData(Data(data))
+                
+                return
             }
             auCore = auNew()
             do {
                 let opData = try op.bincodeSerialize()
-                let data = await auRequest(self.auCore!, Data.init(opData))
+                let rcv = auRequest(self.auCore!, Data.init(opData))
 
-                return [UInt8](data)
+                Task {
+                    if let data = await auReceive(rcv) {
+                        onData(data)
+                    }
+                    
+                    Logger().log("playback install au task complete")
+                }
             }
             catch {
-                return try! [UInt8](PlayOperationOutput.success(false).bincodeSerialize())
+                let data = try! [UInt8](PlayOperationOutput.success(false).bincodeSerialize())
+                onData(Data(data))
             }
         default:
             do {
                 let opData = try op.bincodeSerialize()
-                let data = await auRequest(self.auCore!, Data.init(opData))
+                let rcv = auRequest(self.auCore!, Data.init(opData))
 
-                return [UInt8](data)
+                Task {
+                    while let data = await auReceive(rcv) {
+                        onData(data)
+                    }
+                    
+                    Logger().log("playback forwarded task complete")
+                }
             }
             catch {
-                return try! [UInt8](PlayOperationOutput.success(false).bincodeSerialize())
+                let data = try! [UInt8](PlayOperationOutput.success(false).bincodeSerialize())
+                onData(Data(data))
             }
 
         }

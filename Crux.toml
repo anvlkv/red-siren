@@ -3,27 +3,27 @@ description = "Musical instrument"
 authors = ["a.nvlkv <a.nvlkv@protonmail.ch>"]
 repository = "https://github.com/anvlkv/red-siren"
 
-[cores.shared]
-source = "shared"
-type_gen = "shared_types"
+[cores.app_core]
+source = "app_core"
+type_gen = "typegen"
 crux_version = "0.6.3"
 
 [cores.aucore]
 source = "aucore"
-type_gen = "shared_types"
+type_gen = "typegen"
 crux_version = "0.6.3"
 
 [shells.android]
 template = "Android"
 source = "Android"
-cores = ["shared", "aucore"]
+cores = ["app_core", "aucore"]
 
 [shells.web_leptos]
 template = "web-leptos"
 source = "web-leptos"
-cores = ["shared", "aucore"]
+cores = ["app_core", "aucore"]
 
 [shells.iOS]
 template = "iOS"
 source = "iOS"
-cores = ["shared", "aucore"]
+cores = ["app_core", "aucore"]

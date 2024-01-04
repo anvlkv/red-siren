@@ -1,6 +1,6 @@
 use leptos::*;
 
-use shared::geometry::Line;
+use app_core::geometry::Line;
 
 #[component]
 pub fn StringComponent(#[prop(into)] layout_line: Signal<Line>) -> impl IntoView {

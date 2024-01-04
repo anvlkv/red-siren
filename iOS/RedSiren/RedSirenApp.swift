@@ -1,5 +1,5 @@
 import SwiftUI
-import SharedTypes
+import CoreTypes
 
 extension UIApplication {
     var currentWindow: UIWindow? {

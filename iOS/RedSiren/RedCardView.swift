@@ -1,7 +1,7 @@
 import SwiftUI
 import AVFoundation
 import Foundation
-import SharedTypes
+import CoreTypes
 import OSLog
 
 struct RedCardView<C: View>: View {

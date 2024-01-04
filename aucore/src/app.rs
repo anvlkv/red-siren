@@ -1,4 +1,4 @@
-use ::shared::{
+use app_core::{
     instrument::{Config, Node},
     play::PlayOperation,
 };
@@ -49,6 +49,8 @@ impl App for RedSirenAU {
     type Capabilities = RedSirenAUCapabilities;
 
     fn update(&self, msg: PlayOperation, model: &mut Model, caps: &RedSirenAUCapabilities) {
+        log::trace!("au msg: {msg:?}");
+        
         match msg {
             PlayOperation::Config(config, nodes) => {
                 model.config = config;

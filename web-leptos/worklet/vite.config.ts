@@ -13,7 +13,7 @@ export default defineConfig({
     emptyOutDir: true,
   },
   optimizeDeps: {
-    include: ['shared_types/types/au_types', 'shared_types/bincode/mod',  'aucore'],
+    include: ['typegen/types/au_types', 'typegen/bincode/mod',  'aucore'],
   },
   server: {
     fs: {

@@ -12,7 +12,6 @@
 		5CB93AF904772A9440AC765F /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E4056BAC32CC8AC7A9740CA /* ContentView.swift */; };
 		7D03E7045F57CA28148D2CA4 /* Core.swift in Sources */ = {isa = PBXBuildFile; fileRef = 194A00C08EEF11C3CC1340EE /* Core.swift */; };
 		831E091105B555E7D0085CF4 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BEED0A11FB2044F35FBCD25B /* Preview Assets.xcassets */; };
-		8CEEE500CE6BE0647260B67F /* SharedTypes in Frameworks */ = {isa = PBXBuildFile; productRef = 585C187420F6F4F4142F646D /* SharedTypes */; };
 		91A375A39D8A4F827B873AF3 /* RedSirenApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17F008C3C1A819A3D7658E59 /* RedSirenApp.swift */; };
 		FA1248D22B279BDB00D6CEC8 /* MenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1248D12B279BDB00D6CEC8 /* MenuView.swift */; };
 		FA1248D42B2853A600D6CEC8 /* project_fonts in Resources */ = {isa = PBXBuildFile; fileRef = FA1248D32B2853A600D6CEC8 /* project_fonts */; };
@@ -26,6 +25,7 @@
 		FAAA653C2B0A23E500B1F5D1 /* AnimationClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAA653B2B0A23E500B1F5D1 /* AnimationClock.swift */; };
 		FAC9D7452B2CA9D900372B53 /* ffirs.udl in Sources */ = {isa = PBXBuildFile; fileRef = FAC9D7442B2CA9D800372B53 /* ffirs.udl */; };
 		FAC9D74E2B2CACF100372B53 /* libffirs_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = FAC9D7492B2CACE200372B53 /* libffirs_static.a */; };
+		FADC9BC32B46EBB700925051 /* CoreTypes in Frameworks */ = {isa = PBXBuildFile; productRef = FADC9BC22B46EBB700925051 /* CoreTypes */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXBuildRule section */
@@ -45,52 +45,52 @@
 			outputFilesCompilerFlags = (
 			);
 			runOncePerArchitecture = 0;
-			script = "#!/bin/bash\nset -e\n\n# Skip during indexing phase in XCode 13+\nif [ \"$ACTION\" == \"indexbuild\" ]; then\n  echo \"Not building *.udl files during indexing.\"\n  exit 0\nfi\n\n# Skip for preview builds\nif [ \"$ENABLE_PREVIEWS\" = \"YES\" ]; then\n  echo \"Not building *.udl files during preview builds.\"\n  exit 0\nfi\n\nfilename=$(basename -- \"$INPUT_FILE_NAME\")\nextension=\"${filename##*.}\"\nfilename=\"${filename%.*}\"\n\nexport PATH=\"$HOME/.cargo/bin:$PATH:/usr/local/bin:/opt/homebrew/bin\";\n\ncd \"${INPUT_FILE_DIR}/../..\"\n\n\n\"${BUILD_DIR}/${BUILD_TYPE}/uniffi-bindgen\" generate --library \"target/debug/lib${filename}.dylib\" --language swift --out-dir \"${PROJECT_DIR}/generated\"\n";
+			script = "#!/bin/bash\nset -e\n\n# Skip during indexing phase in XCode 13+\nif [ \"$ACTION\" == \"indexbuild\" ]; then\n  echo \"Not building *.udl files during indexing.\"\n  exit 0\nfi\n\n# Skip for preview builds\nif [ \"$ENABLE_PREVIEWS\" = \"YES\" ]; then\n  echo \"Not building *.udl files during preview builds.\"\n  exit 0\nfi\n\nfilename=$(basename -- \"$INPUT_FILE_NAME\")\nextension=\"${filename##*.}\"\nfilename=\"${filename%.*}\"\n\nexport PATH=\"$HOME/.cargo/bin:$PATH:/usr/local/bin:/opt/homebrew/bin\";\n\ncd \"${INPUT_FILE_DIR}/../..\"\n\n\n\"${BUILD_DIR}/${BUILD_TYPE}/bindgen\" generate --library \"target/debug/lib${filename}.dylib\" --language swift --out-dir \"${PROJECT_DIR}/generated\"\n";
 		};
 /* End PBXBuildRule section */
 
 /* Begin PBXContainerItemProxy section */
 		FAC9D73B2B2CA41300372B53 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = FAC9D7312B2CA41200372B53 /* uniffi-bindgen.xcodeproj */;
+			containerPortal = FAC9D7312B2CA41200372B53 /* bindgen.xcodeproj */;
 			proxyType = 2;
 			remoteGlobalIDString = CA024C604E778109328FB0D5;
-			remoteInfo = "uniffi-bindgen-bin";
+			remoteInfo = "bindgen-bin";
 		};
 		FAC9D7482B2CACE200372B53 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = FAC9D7312B2CA41200372B53 /* uniffi-bindgen.xcodeproj */;
+			containerPortal = FAC9D7312B2CA41200372B53 /* bindgen.xcodeproj */;
 			proxyType = 2;
 			remoteGlobalIDString = CA008D52D11A660CC13A153F;
 			remoteInfo = "ffirs-staticlib";
 		};
 		FAC9D74A2B2CACE200372B53 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = FAC9D7312B2CA41200372B53 /* uniffi-bindgen.xcodeproj */;
+			containerPortal = FAC9D7312B2CA41200372B53 /* bindgen.xcodeproj */;
 			proxyType = 2;
 			remoteGlobalIDString = CA010BC8801E593EC81F498D;
 			remoteInfo = "ffirs-cdylib";
 		};
 		FAC9D74C2B2CACE600372B53 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = FAC9D7312B2CA41200372B53 /* uniffi-bindgen.xcodeproj */;
+			containerPortal = FAC9D7312B2CA41200372B53 /* bindgen.xcodeproj */;
 			proxyType = 1;
 			remoteGlobalIDString = CA008D52D11A3B800E696F07;
 			remoteInfo = "ffirs-staticlib";
 		};
 		FAC9D7512B2D631900372B53 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = FAC9D7312B2CA41200372B53 /* uniffi-bindgen.xcodeproj */;
+			containerPortal = FAC9D7312B2CA41200372B53 /* bindgen.xcodeproj */;
 			proxyType = 1;
 			remoteGlobalIDString = CA010BC8801EED898C1ED5C7;
 			remoteInfo = "ffirs-cdylib";
 		};
 		FAC9D7532B2D631900372B53 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = FAC9D7312B2CA41200372B53 /* uniffi-bindgen.xcodeproj */;
+			containerPortal = FAC9D7312B2CA41200372B53 /* bindgen.xcodeproj */;
 			proxyType = 1;
 			remoteGlobalIDString = CA024C604E771DB2CCB25D48;
-			remoteInfo = "uniffi-bindgen-bin";
+			remoteInfo = "bindgen-bin";
 		};
 /* End PBXContainerItemProxy section */
 
@@ -101,7 +101,7 @@
 		457F08D9BCEE7D38DA310B0D /* Pods-RedSiren.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RedSiren.release.xcconfig"; path = "Target Support Files/Pods-RedSiren/Pods-RedSiren.release.xcconfig"; sourceTree = "<group>"; };
 		6F004D450518226D7B50A267 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		85AA482E612CD48B918497C9 /* RedSiren.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RedSiren.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		B159CE6ED67571255C05D2C3 /* SharedTypes */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SharedTypes; path = ../shared_types/generated/swift/SharedTypes; sourceTree = SOURCE_ROOT; };
+		B159CE6ED67571255C05D2C3 /* CoreTypes */ = {isa = PBXFileReference; lastKnownFileType = folder; name = CoreTypes; path = ../typegen/generated/swift/CoreTypes; sourceTree = SOURCE_ROOT; };
 		BA04D6CC7F18E9A653D26BDD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		BEED0A11FB2044F35FBCD25B /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		CB737D623C3D7CA99A86C4B0 /* Pods-RedSiren.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RedSiren.debug.xcconfig"; path = "Target Support Files/Pods-RedSiren/Pods-RedSiren.debug.xcconfig"; sourceTree = "<group>"; };
@@ -118,8 +118,8 @@
 		FAAA65392B09EC8300B1F5D1 /* Intro.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Intro.storyboard; sourceTree = "<group>"; };
 		FAAA653B2B0A23E500B1F5D1 /* AnimationClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationClock.swift; sourceTree = "<group>"; };
 		FAAA9AD32B1DC801003CCCD8 /* RedSiren.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RedSiren.entitlements; sourceTree = "<group>"; };
-		FAC9D7312B2CA41200372B53 /* uniffi-bindgen.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = "uniffi-bindgen.xcodeproj"; path = "../uniffi-bindgen/uniffi-bindgen.xcodeproj"; sourceTree = "<group>"; };
-		FAC9D7442B2CA9D800372B53 /* ffirs.udl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = ffirs.udl; path = "../../uniffi-bindgen/src/ffirs.udl"; sourceTree = "<group>"; };
+		FAC9D7312B2CA41200372B53 /* bindgen.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = bindgen.xcodeproj; path = ../bindgen/bindgen.xcodeproj; sourceTree = "<group>"; };
+		FAC9D7442B2CA9D800372B53 /* ffirs.udl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = ffirs.udl; path = ../../bindgen/src/ffirs.udl; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -128,7 +128,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FAC9D74E2B2CACF100372B53 /* libffirs_static.a in Frameworks */,
-				8CEEE500CE6BE0647260B67F /* SharedTypes in Frameworks */,
+				FADC9BC32B46EBB700925051 /* CoreTypes in Frameworks */,
 				45B5157CB6DC4BD490F119FC /* Pods_RedSiren.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -176,13 +176,13 @@
 				FAC9D7442B2CA9D800372B53 /* ffirs.udl */,
 			);
 			name = src;
-			path = ../shared/src;
+			path = ../app_core/src;
 			sourceTree = "<group>";
 		};
 		632E821FBB8ECA7154D2ED0E /* Projects */ = {
 			isa = PBXGroup;
 			children = (
-				FAC9D7312B2CA41200372B53 /* uniffi-bindgen.xcodeproj */,
+				FAC9D7312B2CA41200372B53 /* bindgen.xcodeproj */,
 			);
 			name = Projects;
 			sourceTree = "<group>";
@@ -219,7 +219,7 @@
 		CFF2128F5908E2CBC07A8E3E /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				B159CE6ED67571255C05D2C3 /* SharedTypes */,
+				B159CE6ED67571255C05D2C3 /* CoreTypes */,
 			);
 			name = Packages;
 			sourceTree = SOURCE_ROOT;
@@ -237,7 +237,7 @@
 			children = (
 				FAC9D7492B2CACE200372B53 /* libffirs_static.a */,
 				FAC9D74B2B2CACE200372B53 /* ffirs.dylib */,
-				FAC9D73C2B2CA41300372B53 /* uniffi-bindgen */,
+				FAC9D73C2B2CA41300372B53 /* bindgen */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -265,7 +265,7 @@
 			);
 			name = RedSiren;
 			packageProductDependencies = (
-				585C187420F6F4F4142F646D /* SharedTypes */,
+				FADC9BC22B46EBB700925051 /* CoreTypes */,
 			);
 			productName = RedSiren;
 			productReference = 85AA482E612CD48B918497C9 /* RedSiren.app */;
@@ -294,7 +294,7 @@
 			projectReferences = (
 				{
 					ProductGroup = FAC9D7322B2CA41200372B53 /* Products */;
-					ProjectRef = FAC9D7312B2CA41200372B53 /* uniffi-bindgen.xcodeproj */;
+					ProjectRef = FAC9D7312B2CA41200372B53 /* bindgen.xcodeproj */;
 				},
 			);
 			projectRoot = "";
@@ -305,10 +305,10 @@
 /* End PBXProject section */
 
 /* Begin PBXReferenceProxy section */
-		FAC9D73C2B2CA41300372B53 /* uniffi-bindgen */ = {
+		FAC9D73C2B2CA41300372B53 /* bindgen */ = {
 			isa = PBXReferenceProxy;
 			fileType = "compiled.mach-o.executable";
-			path = "uniffi-bindgen";
+			path = bindgen;
 			remoteRef = FAC9D73B2B2CA41300372B53 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
@@ -419,7 +419,7 @@
 		};
 		FAC9D7542B2D631900372B53 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			name = "uniffi-bindgen-bin";
+			name = "bindgen-bin";
 			targetProxy = FAC9D7532B2D631900372B53 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -641,9 +641,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		585C187420F6F4F4142F646D /* SharedTypes */ = {
+		FADC9BC22B46EBB700925051 /* CoreTypes */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = SharedTypes;
+			productName = CoreTypes;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

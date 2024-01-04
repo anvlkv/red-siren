@@ -1,8 +1,7 @@
-use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
+use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
 
 use anyhow::anyhow;
-use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use lazy_static::lazy_static;
 use oboe::{
     AudioInputCallback, AudioInputStreamSafe, AudioOutputCallback, AudioOutputStream,
@@ -11,30 +10,19 @@ use oboe::{
     PerformanceMode, SharingMode, Stereo, StreamState, Usage,
 };
 
-use shared::play::{PlayOperation, PlayOperationOutput};
+use app_core::play::PlayOperationOutput;
 
-use crate::{RedSirenAUCapabilities, ViewModel, system::SAMPLE_RATE};
+use crate::system::SAMPLE_RATE;
 
-use super::{Core, CoreStreamer};
+use super::CoreStreamer;
 
 lazy_static! {
-    // TODO: while this seem to work oboe-rs advises against using a mutex inside audio callback.
-    // consider how else to implement the full duplex, which would accept events from app
-    // https://github.com/katyo/oboe-rs/issues/56
-    static ref CORE: Arc<Mutex<Core>> =
-        Arc::new(Mutex::new(Core::new::<RedSirenAUCapabilities>()));
-    static ref OUT_STREAM: Arc<Mutex<Option<AudioStreamAsync<Output, AAUOutput >>>> =
+    static ref OUT_STREAM: Arc<Mutex<Option<AudioStreamAsync<Output, CoreStreamer>>>> =
         Arc::new(Mutex::new(None));
-    static ref IN_STREAM: Arc<Mutex<Option<AudioStreamAsync<Input, AAUInput>>>> =
+    static ref IN_STREAM: Arc<Mutex<Option<AudioStreamAsync<Input, CoreStreamer>>>> =
         Arc::new(Mutex::new(None));
 }
-
-struct AAUInput {
-    render_sender: Sender<ViewModel>,
-    op_receiver: Receiver<(PlayOperation, UnboundedSender<PlayOperationOutput>)>,
-    resolve_sender: UnboundedSender<PlayOperationOutput>,
-}
-impl AudioInputCallback for AAUInput {
+impl AudioInputCallback for CoreStreamer {
     type FrameType = (f32, Mono);
 
     fn on_error_before_close(
@@ -43,8 +31,11 @@ impl AudioInputCallback for AAUInput {
         error: Error,
     ) {
         log::error!("{error:?}");
-        self.resolve_sender
-            .unbounded_send(PlayOperationOutput::Success(false))
+        let rs = self.resolve_sender
+            .lock()
+            .expect("lock resolve");
+
+            rs.unbounded_send(PlayOperationOutput::Success(false))
             .expect("send error");
     }
 
@@ -57,43 +48,22 @@ impl AudioInputCallback for AAUInput {
         _: &mut dyn AudioInputStreamSafe,
         frames: &[<Self::FrameType as IsFrameType>::Type],
     ) -> DataCallbackResult {
-        let core = CORE.lock().expect("input core lock");
-
         let input: Vec<Vec<f32>> = vec![Vec::from(frames)];
-        let mut ops = vec![(PlayOperation::Input(input), self.resolve_sender.clone())];
-
-        match self.op_receiver.try_recv() {
-            Ok(op) => {
-                ops.push(op);
-            }
-            Err(TryRecvError::Empty) => {}
-            Err(TryRecvError::Disconnected) => {
-                log::error!("op receiver disconnected");
-                return DataCallbackResult::Stop;
-            }
-        };
-
-        for (op, resolve) in ops {
-            for effect in core.process_event(op) {
-                match effect {
-                    crate::Effect::Render(_) => {
-                        let view = core.view();
-                        self.render_sender.send(view).expect("send render");
-                    }
-                    crate::Effect::Resolve(op) => {
-                        resolve.unbounded_send(op.operation).expect("send resolve");
-                    }
-                }
+        let input_sender = self.input_sender.lock().expect("lock input");
+        match input_sender.send(input) {
+            Ok(_) => {
+                log::trace!("sending input");
+                DataCallbackResult::Continue
+            },
+            Err(e) => {
+                log::error!("send input: {e:?}");
+                DataCallbackResult::Stop
             }
         }
-
-        DataCallbackResult::Continue
     }
 }
 
-struct AAUOutput(Receiver<ViewModel>, UnboundedSender<PlayOperationOutput>);
-
-impl AudioOutputCallback for AAUOutput {
+impl AudioOutputCallback for CoreStreamer {
     type FrameType = (f32, Stereo);
 
     fn on_error_before_close(
@@ -102,9 +72,13 @@ impl AudioOutputCallback for AAUOutput {
         error: Error,
     ) {
         log::error!("{error:?}");
-        self.1
-            .unbounded_send(PlayOperationOutput::Success(false))
-            .expect("send error");
+        let rs = self
+            .resolve_sender
+            .lock()
+            .expect("resolve lock");
+
+        rs.unbounded_send(PlayOperationOutput::Success(false))
+            .expect("send error")
     }
 
     fn on_error_after_close(
@@ -120,7 +94,8 @@ impl AudioOutputCallback for AAUOutput {
         _: &mut dyn AudioOutputStreamSafe,
         frames: &mut [(f32, f32)],
     ) -> DataCallbackResult {
-        match self.0.recv() {
+        let render = self.render_receiver.lock().expect("render lock");
+        match render.try_recv() {
             Ok(vm) => {
                 let ch1 = vm.0.first();
                 let ch1 = ch1.iter().flat_map(|v| *v).into_iter();
@@ -133,8 +108,9 @@ impl AudioOutputCallback for AAUOutput {
 
                 DataCallbackResult::Continue
             }
-            Err(_) => {
-                log::error!("receiver error");
+            Err(TryRecvError::Empty) => DataCallbackResult::Continue,
+            Err(e) => {
+                log::error!("receiver error: {e:?}");
                 DataCallbackResult::Stop
             }
         }
@@ -142,11 +118,7 @@ impl AudioOutputCallback for AAUOutput {
 }
 
 impl super::StreamerUnit for CoreStreamer {
-    fn init(&self) -> anyhow::Result<UnboundedReceiver<PlayOperationOutput>> {
-        let (render_sender, render_receiver) = channel::<ViewModel>();
-        let (op_sender, op_receiver) = channel();
-        let (resolve_sender, resolve_receiver) = futures::channel::mpsc::unbounded();
-
+    fn init(&self) -> anyhow::Result<()> {
         let in_stream = AudioStreamBuilder::default()
             .set_performance_mode(PerformanceMode::LowLatency)
             .set_format::<f32>()
@@ -155,11 +127,7 @@ impl super::StreamerUnit for CoreStreamer {
             .set_input_preset(InputPreset::Unprocessed)
             .set_frames_per_callback(256)
             .set_sample_rate(SAMPLE_RATE as i32)
-            .set_callback(AAUInput {
-                resolve_sender: resolve_sender.clone(),
-                render_sender: render_sender.clone(),
-                op_receiver,
-            })
+            .set_callback(self.clone())
             .open_stream()
             .expect("create input stream");
 
@@ -172,7 +140,7 @@ impl super::StreamerUnit for CoreStreamer {
             .set_usage(Usage::Game)
             .set_content_type(ContentType::Music)
             .set_sample_rate(SAMPLE_RATE as i32)
-            .set_callback(AAUOutput(render_receiver, resolve_sender))
+            .set_callback(self.clone())
             .open_stream()
             .expect("create output stream");
 
@@ -180,18 +148,7 @@ impl super::StreamerUnit for CoreStreamer {
 
         _ = OUT_STREAM.lock().expect("stream lock").insert(out_stream);
 
-        _ = self
-            .op_sender
-            .lock()
-            .expect("op sender lock")
-            .insert(op_sender);
-        _ = self
-            .render_sender
-            .lock()
-            .expect("render sender lock")
-            .insert(render_sender);
-
-        Ok(resolve_receiver)
+        Ok(())
     }
 
     fn pause(&self) -> anyhow::Result<()> {
@@ -232,13 +189,5 @@ impl super::StreamerUnit for CoreStreamer {
         log::info!("starting");
 
         Ok(())
-    }
-
-    fn forward(
-        &self,
-        event: PlayOperation,
-        resolve_id_sender: UnboundedSender<PlayOperationOutput>,
-    ) {
-        self.forward_op(CORE.clone(), event, resolve_id_sender);
     }
 }

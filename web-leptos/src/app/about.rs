@@ -1,8 +1,8 @@
 use leptos::*;
 use leptos_meta::Title;
 
-use shared::instrument::layout::MenuPosition;
-use shared::{intro, Activity, Event};
+use app_core::instrument::layout::MenuPosition;
+use app_core::{intro, Activity, Event};
 
 use super::intro::SplashPicture;
 

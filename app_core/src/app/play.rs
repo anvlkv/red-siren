@@ -89,20 +89,11 @@ where
         })
     }
 
-    pub fn pause<F>(&self, f: F)
-    where
-        Ev: 'static,
-        F: Fn(bool) -> Ev + Send + 'static,
-    {
+    pub fn pause(&self) {
         let ctx = self.context.clone();
 
         self.context.spawn(async move {
-            let paused = ctx.request_from_shell(PlayOperation::Suspend).await;
-            if let PlayOperationOutput::Success(paused) = paused {
-                ctx.update_app(f(paused));
-            } else {
-                log::warn!("pause unexpected variant: {paused:?}");
-            }
+            ctx.notify_shell(PlayOperation::Suspend).await;
         })
     }
 
@@ -147,8 +138,7 @@ where
         let ctx = self.context.clone();
         self.context.spawn({
             async move {
-                let mut stream =
-                    ctx.stream_from_shell(PlayOperation::Capture(true));
+                let mut stream = ctx.stream_from_shell(PlayOperation::Capture(true));
                 while let Some(response) = stream.next().await {
                     if let PlayOperationOutput::CapturedFFT(data) = response {
                         ctx.update_app(notify(data));
@@ -169,9 +159,7 @@ where
     {
         let ctx = self.context.clone();
         self.context.spawn(async move {
-            let stopped = ctx
-                .request_from_shell(PlayOperation::Capture(false))
-                .await;
+            let stopped = ctx.request_from_shell(PlayOperation::Capture(false)).await;
             if let PlayOperationOutput::Success(stopped) = stopped {
                 ctx.update_app(f(stopped));
             } else {

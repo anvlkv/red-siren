@@ -43,7 +43,9 @@ export class RedSirenNode extends AudioWorkletNode {
     }
   }
 
-  onResolve = (out: Uint8Array, id?: string) => {};
+  onResolve = (out: Uint8Array): void => {
+    throw new Error("no resolver")
+  };
 
   onprocessorerror = (err: Event) => {
     console.error(`An error from AudioWorkletProcessor: ${err}`);
@@ -62,7 +64,7 @@ export class RedSirenNode extends AudioWorkletNode {
       this.onprocessorerror(msg.data.error);
     }
     else if (msg.data.type === "red-siren-resolve") {
-      this.onResolve(msg.data.output, msg.data.id)
+      this.onResolve(msg.data.output)
     }
   };
 
@@ -70,14 +72,6 @@ export class RedSirenNode extends AudioWorkletNode {
     this.port.postMessage({
       type: "red-siren-ev",
       ev,
-    });
-  }
-  
-  public forwardWithId(ev: Uint8Array, id: string) {
-    this.port.postMessage({
-      type: "red-siren-ev-id",
-      ev,
-      id
     });
   }
 }

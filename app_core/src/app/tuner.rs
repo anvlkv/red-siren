@@ -25,7 +25,8 @@ pub struct Model {
     pub config: instrument::Config,
     pub tuning: Option<Vec<(usize, f32)>>,
     pub setup_complete: bool,
-
+    pub setup_in_progress: bool,
+    pub capturing: bool,
 }
 
 impl Model {
@@ -109,15 +110,16 @@ impl App for Tuner {
                 if model.setup_complete {
                     if start {
                         caps.play.play(TunerEV::PlayOpSuccess);
-                        caps.play.capture_fft(TunerEV::FftData);
                     }
                     else {
-                        caps.play.pause(TunerEV::PlayOpSuccess);
                         caps.play.stop_capture_fft(TunerEV::PlayOpSuccess);
                     }
+
+                    model.capturing = start;
                 }
-                else {
+                else if !model.setup_in_progress {
                     caps.play.permissions(TunerEV::PlayOpPermission);
+                    model.setup_in_progress = true;
                 }
             }
             TunerEV::FftData(data) => {
@@ -132,9 +134,10 @@ impl App for Tuner {
             }
             TunerEV::PlayOpPermission(grant) => {
                 if grant {
-                    caps.play.install_au(TunerEV::PlayOpInstall)
+                    caps.play.install_au(TunerEV::PlayOpInstall);
                 } else {
-                    caps.navigate.to(crate::Activity::Intro)
+                    caps.navigate.to(crate::Activity::Intro);
+                    model.setup_in_progress = false;
                 }
             }
             TunerEV::PlayOpInstall(success) => {
@@ -144,13 +147,18 @@ impl App for Tuner {
                     model.setup_complete = true;
                     self.update(TunerEV::Activate(true), model, caps);
                 }
+                model.setup_in_progress = false;
             }
             TunerEV::PlayOpSuccess(success) => {
                 if !success {
                     log::error!("tuner play op failed");
                     caps.navigate.to(crate::Activity::Intro)
                 }
+                else if model.capturing {
+                    caps.play.capture_fft(TunerEV::FftData);
+                }
                 else {
+                    caps.play.pause();
                     log::info!("play operation completed with success");
                 }
             }

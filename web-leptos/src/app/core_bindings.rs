@@ -98,23 +98,30 @@ pub fn process_effect(
         },
         #[allow(unused_mut, unused_variables)]
         Effect::Play(mut req) => {
+            log::trace!("play request: {:?}", req.operation);
+            
             #[cfg(feature = "browser")]
             {
                 let core = core.clone();
-                let playback = playback.clone();
+                let mut playback = playback.clone();
                 spawn_local(async move {
-                    let response = playback.request(req.operation.clone()).await;
+                    let mut rx = playback.request(req.operation.clone()).await;
 
-                    for effect in core.resolve(&mut req, response) {
-                        process_effect(
-                            &core,
-                            effect,
-                            render,
-                            playback.clone(),
-                            navigate,
-                            animate_cb,
-                        );
+                    while let Some(response) = rx.next().await {
+                        log::trace!("process next response: {response:?}");
+                        for effect in core.resolve(&mut req, response) {
+                            process_effect(
+                                &core,
+                                effect,
+                                render,
+                                playback.clone(),
+                                navigate,
+                                animate_cb,
+                            );
+                        }
                     }
+
+                    log::debug!("{:?} exited", req.operation);
                 })
             }
         }

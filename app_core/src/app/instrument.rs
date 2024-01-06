@@ -177,7 +177,7 @@ impl App for Instrument {
                     } else if playing {
                         caps.play.play(InstrumentEV::PlayOpPlay)
                     } else {
-                        caps.play.pause(InstrumentEV::PlayOpPause)
+                        caps.play.pause()
                     }
                     caps.render.render();
                 }

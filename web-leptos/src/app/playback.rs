@@ -1,28 +1,49 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{borrow::BorrowMut, cell::RefCell, rc::Rc};
 
-use js_sys::{Promise, Uint8Array};
-use leptos::*;
 use app_core::play;
+use futures::channel::mpsc::{unbounded, UnboundedReceiver};
+use js_sys::Uint8Array;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::JsFuture;
 
 #[derive(Clone)]
-pub struct Playback(Rc<RefCell<PlaybackJs>>);
+pub struct Playback(
+    Rc<RefCell<PlaybackBridgeJs>>,
+    Rc<RefCell<Closure<dyn FnMut(JsValue)>>>,
+);
 
 impl Playback {
     pub fn new() -> Self {
-        Self(Rc::new(RefCell::new(PlaybackJs::new())))
+        Self(
+            Rc::new(RefCell::new(PlaybackBridgeJs::new())),
+            Rc::new(RefCell::new(Closure::wrap(Box::new(move |_: JsValue| {
+                unimplemented!("no resolve")
+            })
+                as Box<dyn FnMut(JsValue)>))),
+        )
     }
 
-    pub async fn request(&self, op: play::PlayOperation) -> play::PlayOperationOutput {
+    pub async fn request(
+        &mut self,
+        op: play::PlayOperation,
+    ) -> UnboundedReceiver<play::PlayOperationOutput> {
         log::trace!("playback request {op:?}");
-        let data = Self::js_value_forwarded_event(op);
-        let promise = self.0.borrow().request(&data);
 
-        JsFuture::from(promise)
-            .await
-            .map(|op| Self::from_forwarded_effect(op))
-            .expect("bridging error")
+        let (sx, rx) = unbounded::<play::PlayOperationOutput>();
+
+        _ = self
+            .1
+            .borrow_mut()
+            .replace(Closure::wrap(Box::new(move |d: JsValue| {
+                let data = Self::from_forwarded_effect(d);
+                sx.unbounded_send(data).expect("send data");
+            }) as Box<dyn FnMut(JsValue)>));
+
+
+        let data = Self::js_value_forwarded_event(op);
+        
+        self.0.borrow().request(&data, self.1.borrow().as_ref().unchecked_ref());
+
+        rx
     }
 
     fn js_value_forwarded_event(event: play::PlayOperation) -> JsValue {
@@ -32,12 +53,15 @@ impl Playback {
     }
 
     fn from_forwarded_effect(result: JsValue) -> play::PlayOperationOutput {
-        log::trace!("playback result {result:?}");
         let data = Uint8Array::from(result);
         let mut dst = (0..data.length()).map(|_| 0 as u8).collect::<Vec<_>>();
         data.copy_to(dst.as_mut_slice());
-        bincode::deserialize::<play::PlayOperationOutput>(dst.as_slice())
-            .expect("effect deserialization err")
+        let result = bincode::deserialize::<play::PlayOperationOutput>(dst.as_slice())
+            .expect("effect deserialization err");
+
+        log::trace!("playback result {result:?}");
+
+        result
     }
 }
 
@@ -46,17 +70,11 @@ extern "C" {
 
     #[derive(Clone)]
     #[wasm_bindgen(js_name = PlaybackBridge)]
-    pub type PlaybackJs;
+    pub type PlaybackBridgeJs;
 
     #[wasm_bindgen(constructor, js_class = "PlaybackBridge")]
-    pub fn new() -> PlaybackJs;
+    pub fn new() -> PlaybackBridgeJs;
 
     #[wasm_bindgen(method, js_class = "PlaybackBridge")]
-    pub fn request(this: &PlaybackJs, req: &JsValue) -> Promise;
-
-    #[wasm_bindgen(structural, method, getter, js_name = callHost, js_class = "PlaybackBridge")]
-    pub fn call_host_block(this: &PlaybackJs) -> Option<::js_sys::Function>;
-
-    #[wasm_bindgen(structural, method, setter, js_name = callHost, js_class = "PlaybackBridge")]
-    pub fn set_call_host_block(this: &PlaybackJs, val: Option<&::js_sys::Function>);
+    pub fn request(this: &PlaybackBridgeJs, req: &JsValue, sender: &::js_sys::Function);
 }

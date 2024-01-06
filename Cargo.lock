@@ -159,7 +159,6 @@ dependencies = [
  "serde_json",
  "thiserror",
  "url",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -545,6 +544,7 @@ version = "0.1.0"
 dependencies = [
  "app_core",
  "aucore",
+ "cfg-if",
  "futures",
  "log",
  "uniffi",
@@ -4288,6 +4288,7 @@ dependencies = [
  "gloo-storage",
  "http",
  "js-sys",
+ "lazy_static",
  "leptos",
  "leptos-use",
  "leptos_axum",

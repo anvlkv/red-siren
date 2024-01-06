@@ -7,8 +7,9 @@ pub use crux_core::App;
 use crux_macros::Effect;
 use fundsp::hacker32::*;
 use serde::{Deserialize, Serialize};
-use spectrum_analyzer::windows::hann_window;
-use spectrum_analyzer::{samples_fft_to_spectrum, FrequencyLimit};
+use spectrum_analyzer::{
+    samples_fft_to_spectrum, scaling::divide_by_N_sqrt, windows::hann_window, FrequencyLimit,
+};
 
 use crate::system::SAMPLE_RATE;
 
@@ -49,8 +50,8 @@ impl App for RedSirenAU {
     type Capabilities = RedSirenAUCapabilities;
 
     fn update(&self, msg: PlayOperation, model: &mut Model, caps: &RedSirenAUCapabilities) {
-        log::trace!("au msg: {msg:?}");
-        
+        // log::trace!("au msg: {msg:?}");
+
         match msg {
             PlayOperation::Config(config, nodes) => {
                 model.config = config;
@@ -76,7 +77,7 @@ impl App for RedSirenAU {
                             &hann_window,
                             SAMPLE_RATE as u32,
                             FrequencyLimit::All,
-                            None,
+                            Some(&divide_by_N_sqrt),
                         )
                         .unwrap();
 
@@ -126,7 +127,6 @@ impl App for RedSirenAU {
                 if !capturing {
                     caps.resolve.resolve_success(true);
                 } else {
-                    // model.capture_id = id;
                     caps.render.render();
                 }
             }

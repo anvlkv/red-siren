@@ -1,6 +1,5 @@
 package com.anvlkv.redsiren.app
 
-import android.animation.TimeAnimator
 import android.content.ContentResolver
 import android.content.res.Resources
 import android.provider.Settings
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -23,13 +21,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.vectorResource
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.anvlkv.redsiren.R
 import com.anvlkv.redsiren.core.typegen.IntroEV
 import com.anvlkv.redsiren.core.typegen.IntroVM
-import com.anvlkv.redsiren.core.typegen.MenuPosition
-import kotlinx.coroutines.launch
 import java.lang.Float.min
 
 fun isReducedMotionEnabled(resolver: ContentResolver): Boolean {

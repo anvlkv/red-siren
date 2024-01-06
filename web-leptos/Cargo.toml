@@ -48,6 +48,7 @@ wasm-bindgen-futures = "0.4.36"
 futures = "0.3.29"
 gloo-storage = { version = "0.3.0", optional = true }
 uuid = { version = "1.6.1" }
+lazy_static = { workspace = true }
 
 
 [features]

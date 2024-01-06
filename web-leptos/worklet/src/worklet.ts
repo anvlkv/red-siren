@@ -6,11 +6,12 @@ import {
   PlayOperationVariantInput,
   PlayOperationOutput,
 } from "typegen/types/au_types";
-import { update, update_plain } from "./core.js";
+import { update, update_plain } from "./core";
 
 export class RedSirenWorklet extends AudioWorkletProcessor {
   private vm: ViewModel["value"] | null = null;
-  private core: any;
+  private initOutput?: any;
+
   constructor() {
     super();
 
@@ -21,11 +22,10 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
     this.vm = vm.value;
   };
 
-  onResolve = (output: Uint8Array, id?: string) => {
+  onResolve = (output: Uint8Array) => {
     this.port.postMessage({
       type: "red-siren-resolve",
       output,
-      id,
     });
   };
 
@@ -33,7 +33,7 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
     try {
       switch (msg.data.type) {
         case "send-wasm-module": {
-          this.core = initSync(msg.data.wasmBytes);
+          this.initOutput = initSync(msg.data.wasmBytes);
           console.info("wasm-ready");
           au_log_init();
           this.port.postMessage({
@@ -47,15 +47,8 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
           update_plain(ev, this.onRender, this.onResolve);
           break;
         }
-        case "red-siren-ev-id": {
-          const ev = msg.data.ev as Uint8Array;
-          const id = msg.data.id as string;
-          console.info("event id");
-          update_plain(ev, this.onRender, (d) => this.onResolve(d, id));
-          break;
-        }
         default:
-          console.log(msg);
+          console.warn("unknown msg", msg);
           super.port.onmessage && super.port.onmessage(msg);
       }
     } catch (error) {
@@ -72,8 +65,8 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
     outputs: Float32Array[][],
     parameters: Record<string, Float32Array>
   ): boolean {
-    if (!inputs || !this.vm) {
-      console.warn("playing no vm");
+    if (!inputs) {
+      console.warn("playing no input");
       return true;
     }
 
@@ -83,7 +76,7 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
       this.onResolve
     );
 
-    if (this.vm.length && inputs) {
+    if (this.vm?.length) {
       for (let output of outputs) {
         for (let ch = 0; ch < output.length; ch++) {
           for (let s = 0; s < output[ch].length; s++) {
@@ -95,6 +88,9 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
           }
         }
       }
+    }
+    else {
+      console.log("playing no vm")
     }
 
     return true;

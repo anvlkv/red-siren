@@ -23,3 +23,13 @@ pub fn au_handle_response(uuid: &[u8], data: &[u8]) -> Vec<u8> {
 pub fn au_view() -> Vec<u8> {
     AU_CORE.view()
 }
+
+#[wasm_bindgen]
+pub fn au_log_init() {
+    let lvl = log::LevelFilter::Trace;
+
+    _ = console_log::init_with_level(lvl.to_level().unwrap());
+        console_error_panic_hook::set_once();
+}
+
+

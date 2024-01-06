@@ -18,12 +18,14 @@ name = "bindgen"
 
 [dependencies]
 uniffi = { workspace = true }
-app_core = { path = "../app_core", features = ["instance"] }
+app_core = { path = "../app_core"}
 aucore = { path = "../aucore" }
 futures = { version = "0.3.28"}
 log = { workspace = true}
+cfg-if = "1"
 
 [features]
+default=["app_core/instance"]
 ios=["app_core/ios", "aucore/ios"]
 android=["app_core/android", "aucore/android"]
 

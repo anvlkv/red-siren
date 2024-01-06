@@ -78,18 +78,20 @@ impl CoreStreamer {
 cfg_if::cfg_if! {
     if #[cfg(feature="android")]{
         mod android_oboe;
-    } else if #[cfg(feature="ios")] {
+    } 
+    else if #[cfg(feature="ios")] {
         mod ios_coreaudio;
-    } else {
+    } 
+    else {
         impl StreamerUnit for CoreStreamer {
             fn init(&self) -> Result<()> {
-                unreachable!("no platform feature")
+                unimplemented!()
             }
             fn pause(&self) -> Result<()> {
-                unreachable!("no platform feature")
+                unimplemented!()
             }
             fn start(&self) -> Result<()> {
-                unreachable!("no platform feature")
+                unimplemented!()
             }
         }
     }
@@ -208,13 +210,9 @@ impl AUCoreBridge {
                 PlayOperation::Suspend => match core.pause() {
                     Ok(_) => {
                         log::info!("paused");
-                        s_id.unbounded_send(PlayOperationOutput::Success(true))
-                            .expect("receiver is gone");
                     }
                     Err(e) => {
                         log::error!("suspend error {e:?}");
-                        s_id.unbounded_send(PlayOperationOutput::Success(false))
-                            .expect("receiver is gone");
                     }
                 },
                 _ => core.forward(event, s_id),

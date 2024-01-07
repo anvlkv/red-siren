@@ -63,7 +63,8 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContent {
             ApplyTheme(content = {
-                core = Core(this.baseContext.dataStore)
+                core = viewModel()
+                core!!.store = this.baseContext.dataStore
 
                 Surface {
                     RedSiren(core!!)
@@ -79,6 +80,10 @@ class MainActivity : ComponentActivity() {
 fun RedSiren(core: Core) {
     val navController = rememberNavController()
     val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(core) {
+        core.update(Event.Start())
+    }
 
     val recordAudioPermissionState = rememberPermissionState(
         android.Manifest.permission.RECORD_AUDIO

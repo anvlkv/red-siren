@@ -1,5 +1,6 @@
 package com.anvlkv.redsiren.app
 
+import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,6 +37,8 @@ fun TunerFFT(
         }
 
         path.lineTo(layoutLine.line[1][0].dp.toPx(), layoutLine.line[1][1].dp.toPx())
+
+        Log.d("fft draw", data.toString())
 
         drawPath(
             color = color,

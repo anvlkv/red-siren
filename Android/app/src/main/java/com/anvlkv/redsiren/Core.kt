@@ -48,12 +48,12 @@ import kotlinx.coroutines.launch
 import java.util.Optional
 
 
-open class Core(val store: DataStore<Preferences>) : androidx.lifecycle.ViewModel() {
+open class Core : androidx.lifecycle.ViewModel() {
 
     var view: ViewModel by mutableStateOf(ViewModel.bincodeDeserialize(view()))
     var navigateTo: Activity? by mutableStateOf(null)
     var animationSender: SendChannel<Long>? by mutableStateOf(null)
-
+    var store: DataStore<Preferences>? by mutableStateOf(null)
 
     private val httpClient = HttpClient(CIO)
 
@@ -61,7 +61,6 @@ open class Core(val store: DataStore<Preferences>) : androidx.lifecycle.ViewMode
 
     init {
         viewModelScope.launch {
-            update(Event.Start())
             logInit()
         }
     }
@@ -95,21 +94,21 @@ open class Core(val store: DataStore<Preferences>) : androidx.lifecycle.ViewMode
                     is KeyValueOperation.Read -> {
 
                         coroutineScope {
-                            val key = stringPreferencesKey(kv.value)
-                            val value = store.data.map { kv ->
-                                kv[key] ?: ""
-                            }
-                            val entry = value.first()
-
-
-
                             var response = KeyValueOutput.Read(Optional.empty())
-
-                            if (entry.isNotEmpty()) {
-                                val data = entry.split(",").map {
-                                    it.toByte()
+                            if (store != null) {
+                                val key = stringPreferencesKey(kv.value)
+                                val value = store!!.data.map { kv ->
+                                    kv[key] ?: ""
                                 }
-                               response = KeyValueOutput.Read(Optional.of(data))
+
+                                val entry = value.first()
+
+                                if (entry.isNotEmpty()) {
+                                    val data = entry.split(",").map {
+                                        it.toByte()
+                                    }
+                                    response = KeyValueOutput.Read(Optional.of(data))
+                                }
                             }
 
                             val effects =
@@ -125,7 +124,7 @@ open class Core(val store: DataStore<Preferences>) : androidx.lifecycle.ViewMode
                         coroutineScope {
                             val key = stringPreferencesKey(kv.field0)
                             val data = kv.field1
-                            store.edit { kv ->
+                            store!!.edit { kv ->
                                 kv[key] = data.joinToString(",")
                             }
                             val response = KeyValueOutput.Write(true)

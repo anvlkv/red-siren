@@ -138,4 +138,16 @@ impl Rect {
             self.rect.y.y,
         )
     }
+
+    pub fn move_x(&mut self, to: f64) {
+        let d = self.center().x - to;
+        self.rect.x.x -= d;
+        self.rect.y.x -= d;
+    }
+
+    pub fn move_y(&mut self, to: f64) {
+        let d = self.center().y - to;
+        self.rect.x.y -= d;
+        self.rect.y.y -= d;
+    }
 }

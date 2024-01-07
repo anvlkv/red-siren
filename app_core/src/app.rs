@@ -194,7 +194,11 @@ impl App for RedSiren {
                         }
                     }
                     (Activity::Intro, Activity::Tune) => {
-                        model.tuner.setup_complete = model.instrument.setup_complete;
+                        model.tuner.state = if model.instrument.setup_complete {
+                            tuner::State::SetupComplete
+                        } else {
+                            tuner::State::None
+                        };
                         self.intro.update(
                             intro::IntroEV::Menu(act),
                             &mut model.intro,
@@ -216,7 +220,11 @@ impl App for RedSiren {
                         );
                     }
                     (Activity::Play, Activity::Tune) => {
-                        model.tuner.setup_complete = model.instrument.setup_complete;
+                        model.tuner.state = if model.instrument.setup_complete {
+                            tuner::State::SetupComplete
+                        } else {
+                            tuner::State::None
+                        };
                         self.instrument.update(
                             instrument::InstrumentEV::Playback(instrument::PlaybackEV::Play(false)),
                             &mut model.instrument,
@@ -244,7 +252,8 @@ impl App for RedSiren {
                             &mut model.tuner,
                             &caps.into(),
                         );
-                        model.instrument.setup_complete = model.tuner.setup_complete;
+                        model.instrument.setup_complete =
+                            model.tuner.state == tuner::State::SetupComplete;
                         self.intro.update(
                             intro::IntroEV::Menu(act),
                             &mut model.intro,

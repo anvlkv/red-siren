@@ -99,4 +99,8 @@ main {
 
 .instrument-button {
   touch-action: none;
+  &, & + text {
+    cursor: move;
+    user-select: none;
+  }
 }

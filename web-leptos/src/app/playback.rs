@@ -30,13 +30,15 @@ impl Playback {
 
         let (sx, rx) = unbounded::<play::PlayOperationOutput>();
 
-        _ = self
+        let old = self
             .1
             .borrow_mut()
             .replace(Closure::wrap(Box::new(move |d: JsValue| {
                 let data = Self::from_forwarded_effect(d);
                 sx.unbounded_send(data).expect("send data");
             }) as Box<dyn FnMut(JsValue)>));
+
+        drop(old);
 
 
         let data = Self::js_value_forwarded_event(op);

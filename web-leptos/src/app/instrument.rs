@@ -43,7 +43,7 @@ pub fn InstrumentComponent(
         <svg class="fill-black dark:fill-red" viewBox={view_box} xmlns="http://www.w3.org/2000/svg">
           {move || vm().layout.buttons.into_iter().zip(vm().nodes).map(|(rect, node)|
             view!{
-              <ButtonComponent layout_rect={Signal::derive(move || rect)} f_n={node.f_n}/>
+              <ButtonComponent layout_rect={Signal::derive(move || rect)}/>
             }
           ).collect_view()}
         </svg>

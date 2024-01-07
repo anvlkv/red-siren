@@ -1,10 +1,16 @@
-use crate::{geometry::{Rect, Line}, instrument::Config};
+use crate::{
+    geometry::{Line, Rect},
+    instrument::Config,
+};
 use hecs::{Bundle, Entity, World};
+use mint::Point2;
 use serde::{Deserialize, Serialize};
+
+use super::{MAX_F, MIN_F};
 
 #[derive(Bundle, Clone, Copy, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Pair {
-    pub value: Option<f32>,
+    pub value: Option<(f32, f32)>,
     pub f_n: usize,
     pub rect: Rect,
 }
@@ -12,9 +18,8 @@ pub struct Pair {
 impl Eq for Pair {}
 
 impl Pair {
-    fn new(f_n: usize, config: &Config, value: Option<f32>) -> Self {
+    fn new(f_n: usize, config: &Config, value: Option<(f32, f32)>) -> Self {
         let pair_space_x = config.width / config.n_buttons as f64;
-        let pair_mid_y = config.height / 2.0;
 
         let pair_rect_size = if config.button_size * 2.0 > pair_space_x {
             log::debug!("resize button for tuning");
@@ -23,60 +28,156 @@ impl Pair {
             config.button_size
         };
 
-        let x = pair_space_x * (f_n - 1) as f64 + (pair_space_x - pair_rect_size) / 2.0;
-        let y = (pair_mid_y - pair_rect_size / 2.0) - value.unwrap_or_default() as f64 * pair_mid_y;
+        let pair_min_y = config.height - config.safe_area[3];
+        let x = config.width
+            - (pair_space_x * (f_n - 1) as f64 + (pair_space_x - pair_rect_size) / 2.0);
+        let y = (pair_min_y - pair_rect_size) - value.unwrap_or((0.0, 0.0)).0 as f64 * pair_min_y;
         let rect = Rect::size(pair_rect_size, pair_rect_size)
             .offset_left_and_right(-x, x)
             .offset_top_and_bottom(-y, y);
 
-        Pair {
-            value,
-            f_n,
-            rect,
-        }
+        Pair { value, f_n, rect }
     }
 
     pub fn spawn(world: &mut World, config: &Config, f_n: usize) -> Entity {
         world.spawn((Self::new(f_n, config, None),))
     }
-
-    pub fn update_from_values(&mut self, values: &[(usize, f32)], config: &Config) {
-        if let Some((_, value)) = values.iter().find(|(f, _)| f == &self.f_n) {
-          self.set_value(*value, config)
-        }
-    }
-
-    pub fn set_value(&mut self, value: f32, config: &Config)  {
-      let next = Self::new(self.f_n, config, Some(value));
-      *self = Self{
-        ..next
-      }
-    }
 }
 
 #[derive(Bundle)]
+pub struct FFTChartEntry {
+    pub pt_max: (Point2<f64>, Point2<f64>),
+    pub amp_max: (f32, f32),
+    pub freq: f32,
+}
+
+impl FFTChartEntry {
+    fn spawn(
+        world: &mut World,
+        i: usize,
+        config: &Config,
+        total: usize,
+        freq: f32,
+        value: f32,
+    ) -> Entity {
+        let x = config.width - (config.width / total as f64) * i as f64;
+        let pt = Self::value_point(x, config, value);
+        world.spawn((Self {
+            pt_max: (pt, pt),
+            amp_max: (value, value),
+            freq,
+        },))
+    }
+
+    fn v_max(config: &Config) -> f64 {
+        config.height - config.safe_area[1] - config.safe_area[3]
+    }
+
+    fn value_point(x: f64, config: &Config, value: f32) -> Point2<f64> {
+        let v_max = Self::v_max(config);
+        Point2 {
+            x,
+            y: config.height - (config.safe_area[3] + v_max * value as f64),
+        }
+    }
+    
+    fn point_amp(y: f64, config: &Config) -> f32 {
+        let v_max = Self::v_max(config);
+        (1.0 - ((y - config.safe_area[1]) / v_max)) as f32
+    }
+
+    fn apply_data(&mut self, freq: f32, value: f32, config: &Config) {
+        self.freq = freq;
+        self.amp_max.0 = value;
+        self.amp_max.1 = self.amp_max.1.max(value);
+
+        let x = self.pt_max.0.x;
+        self.pt_max.0 = Self::value_point(x, config, self.amp_max.0);
+        self.pt_max.1 = Self::value_point(x, config, self.amp_max.1);
+    }
+}
+
+#[derive(Clone)]
 pub struct Chart {
     pub pairs: Vec<Entity>,
-    pub fft_values: Vec<(f32, f32)>,
+    pub fft_values: Vec<Entity>,
     pub line: Line,
+    pub scale: f64,
 }
 
 impl Chart {
-    pub fn spawn(world: &mut World, config: &Config) -> Entity {
+    pub fn new(world: &mut World, config: &Config) -> Self {
         let mut pairs = vec![];
         for i in 1..=config.n_buttons {
             pairs.push(Pair::spawn(world, config, i));
         }
-        let mid_y = config.height / 2.0;
-        let line = Line::new(0.0, config.width, mid_y, mid_y);
-        world.spawn((Chart {
+        let min_y = config.height - config.safe_area[3];
+        let line = Line::new(0.0, config.width, min_y, min_y);
+        Chart {
             pairs,
             fft_values: Default::default(),
-            line
-        },))
+            line,
+            scale: 1.0,
+        }
     }
 
-    pub fn set_fft_data(&mut self, data: Vec<(f32, f32)>) {
-        self.fft_values = data;
+    pub fn delete(self, world: &mut World) {
+        for e in self.pairs {
+            world.despawn(e).expect("delete pair");
+        }
+
+        for e in self.fft_values {
+            world.despawn(e).expect("delete fft");
+        }
+    }
+
+    pub fn set_fft_data(&mut self, world: &mut World, data: Vec<(f32, f32)>, config: &Config) {
+        let total = data.len();
+        for (i, (freq, value)) in data.clone().into_iter().enumerate() {
+            if let Some(e) = self.fft_values.get(i) {
+                let mut entry = world.get::<&mut FFTChartEntry>(*e).expect("entry");
+                entry.apply_data(freq, value, config);
+            } else {
+                self.fft_values
+                    .push(FFTChartEntry::spawn(world, i, config, total, freq, value))
+            }
+        }
+    }
+
+    pub fn update_pairs_from_values(
+        &self,
+        world: &mut World,
+        values: &[(usize, f32, f32)],
+        config: &Config,
+    ) {
+        let range_width = MAX_F - MIN_F;
+        for (f_n, value_amp, value_freq) in values {
+            let x = ((*value_freq - MIN_F) / range_width) as f64 * config.width;
+            let pt = FFTChartEntry::value_point(x, config, *value_amp);
+            if let Some((_, pair)) = world
+                .query_mut::<&mut Pair>()
+                .into_iter()
+                .find(|(_, p)| p.f_n == *f_n)
+            {
+                pair.rect.move_x(pt.x);
+                pair.rect.move_y(pt.y);
+            } else {
+                log::warn!("no pair for fn {f_n}");
+            }
+        }
+    }
+
+    pub fn update_value_from_pos(
+        &self,
+        world: &mut World,
+        f_n: usize,
+        (x, y): (&f64, &f64),
+        config: &Config,
+    ) {
+        let range_width = MAX_F - MIN_F;
+        let value_freq = (x / config.width) as f32 * range_width + MIN_F; 
+        let value_amp = FFTChartEntry::point_amp(*y, config);
+        let mut pair = world.get::<&mut Pair>(self.pairs[f_n  - 1]).expect("pair for fn");
+        pair.value = Some((value_freq, value_amp));
     }
 }

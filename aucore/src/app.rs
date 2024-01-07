@@ -1,6 +1,7 @@
 use app_core::{
     instrument::{Config, Node},
     play::PlayOperation,
+    tuner::{MAX_F, MIN_F},
 };
 use crux_core::render::Render;
 pub use crux_core::App;
@@ -16,7 +17,7 @@ use crate::system::SAMPLE_RATE;
 use super::resolve::Resolve;
 use super::system::System;
 
-const ANALYZE_SAMPLES_COUNT: usize = 2048;
+const ANALYZE_SAMPLES_COUNT: usize = 1024;
 
 #[derive(Default)]
 pub struct Model {
@@ -76,7 +77,7 @@ impl App for RedSirenAU {
                         let spectrum_hann_window = samples_fft_to_spectrum(
                             &hann_window,
                             SAMPLE_RATE as u32,
-                            FrequencyLimit::All,
+                            FrequencyLimit::Range(MIN_F, MAX_F),
                             Some(&divide_by_N_sqrt),
                         )
                         .unwrap();

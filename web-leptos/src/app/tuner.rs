@@ -3,11 +3,9 @@ use leptos_meta::Title;
 use mint::Point2;
 
 pub use super::instrument::ButtonComponent;
-use app_core::{geometry::Line, tuner};
-// pub use string::StringComponent;
-// pub use track::TrackComponent;
+use app_core::{geometry::Line, tuner, Event};
 
-use super::menu::MenuComponent;
+use super::red_card::RedCardComponent;
 
 #[component]
 pub fn TunerLine(
@@ -46,7 +44,7 @@ pub fn TunerComponent(
     ev: SignalSetter<tuner::TunerEV>,
 ) -> impl IntoView {
     let layout_line = Signal::derive(move || vm().line);
-
+    let ev_ctx = use_context::<WriteSignal<Event>>().expect("root ev context");
     let pairs = move || {
         vm().pairs.into_iter().map(move |pair| {
             let f_n = pair.f_n;
@@ -57,6 +55,7 @@ pub fn TunerComponent(
     let fft = Signal::derive(move || vm().fft);
     let fft_max = Signal::derive(move || vm().fft_max);
     let menu_position = Signal::derive(move || vm().menu_position);
+    let btn_class = "w-full rounded-2xl bg-red dark:bg-black text-black dark:text-red text-xl hover:text-gray dark:hover:text-cinnabar";
 
     view! {
       <div class="h-full w-full bg-red dark:bg-black instrument">
@@ -84,7 +83,13 @@ pub fn TunerComponent(
             }
         }).collect_view()}
         </svg>
-        <MenuComponent position={menu_position} />
+        <RedCardComponent position={menu_position} style={move || "padding: .12rem".to_string()}>
+          <button class=btn_class 
+            disabled={move || vm().needs_tuning} 
+            on:click=move|_| ev_ctx.set(Event::Menu(app_core::Activity::Play))>
+            {"Done"}
+          </button>
+        </RedCardComponent>
       </div>
     }
 }

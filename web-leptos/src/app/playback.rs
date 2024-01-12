@@ -1,9 +1,10 @@
-use std::{borrow::BorrowMut, cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
-use app_core::play;
-use futures::channel::mpsc::{unbounded, UnboundedReceiver};
-use js_sys::Uint8Array;
+use app_core::{play, Event};
+use js_sys::{Promise, Uint8Array};
+use leptos::{WriteSignal, SignalSet};
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::JsFuture;
 
 #[derive(Clone)]
 pub struct Playback(
@@ -16,36 +17,35 @@ impl Playback {
         Self(
             Rc::new(RefCell::new(PlaybackBridgeJs::new())),
             Rc::new(RefCell::new(Closure::wrap(Box::new(move |_: JsValue| {
-                unimplemented!("no resolve")
+                unimplemented!("no capture callback registered")
             })
                 as Box<dyn FnMut(JsValue)>))),
         )
     }
 
-    pub async fn request(
-        &mut self,
-        op: play::PlayOperation,
-    ) -> UnboundedReceiver<play::PlayOperationOutput> {
+    pub async fn request(&mut self, op: play::PlayOperation) -> play::PlayOperationOutput {
         log::trace!("playback request {op:?}");
 
-        let (sx, rx) = unbounded::<play::PlayOperationOutput>();
-
-        let old = self
-            .1
-            .borrow_mut()
-            .replace(Closure::wrap(Box::new(move |d: JsValue| {
-                let data = Self::from_forwarded_effect(d);
-                sx.unbounded_send(data).expect("send data");
-            }) as Box<dyn FnMut(JsValue)>));
-
-        drop(old);
-
-
         let data = Self::js_value_forwarded_event(op);
-        
-        self.0.borrow().request(&data, self.1.borrow().as_ref().unchecked_ref());
 
-        rx
+        let promise = self.0.borrow().request(&data);
+
+        JsFuture::from(promise)
+            .await
+            .map(|op| Self::play_op_from_forwarded_effect(op))
+            .expect("bridging error")
+    }
+
+    pub fn on_capture(&self, set_ev: WriteSignal<Event>) {
+        let cb = Closure::wrap(Box::new(move |d: JsValue| {
+            let capture = Self::capture_from_forwarded_effect(d);
+            set_ev.set(Event::Capture(capture));
+        }) as Box<dyn FnMut(JsValue)>);
+        *self.1.borrow_mut() = cb;
+
+        self.0
+            .borrow()
+            .set_on_capture(self.1.borrow().as_ref().unchecked_ref())
     }
 
     fn js_value_forwarded_event(event: play::PlayOperation) -> JsValue {
@@ -54,12 +54,22 @@ impl Playback {
         data.into()
     }
 
-    fn from_forwarded_effect(result: JsValue) -> play::PlayOperationOutput {
+    fn play_op_from_forwarded_effect(result: JsValue) -> play::PlayOperationOutput {
         let data = Uint8Array::from(result);
         let mut dst = (0..data.length()).map(|_| 0 as u8).collect::<Vec<_>>();
         data.copy_to(dst.as_mut_slice());
-        let result = bincode::deserialize::<play::PlayOperationOutput>(dst.as_slice())
-            .expect("effect deserialization err");
+        let result = bincode::deserialize::<play::PlayOperationOutput>(dst.as_slice()).expect("effect deserialization err");
+
+        log::trace!("playback result {result:?}");
+
+        result
+    }
+    
+    fn capture_from_forwarded_effect(result: JsValue) -> play::CaptureOutput {
+        let data = Uint8Array::from(result);
+        let mut dst = (0..data.length()).map(|_| 0 as u8).collect::<Vec<_>>();
+        data.copy_to(dst.as_mut_slice());
+        let result = bincode::deserialize::<play::CaptureOutput>(dst.as_slice()).expect("effect deserialization err");
 
         log::trace!("playback result {result:?}");
 
@@ -78,5 +88,8 @@ extern "C" {
     pub fn new() -> PlaybackBridgeJs;
 
     #[wasm_bindgen(method, js_class = "PlaybackBridge")]
-    pub fn request(this: &PlaybackBridgeJs, req: &JsValue, sender: &::js_sys::Function);
+    pub fn request(this: &PlaybackBridgeJs, req: &JsValue) -> Promise;
+
+    #[wasm_bindgen(method, structural, setter, js_class = "PlaybackBridge")]
+    pub fn set_on_capture(this: &PlaybackBridgeJs, val: &js_sys::Function);
 }

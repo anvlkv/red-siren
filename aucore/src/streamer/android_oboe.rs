@@ -35,7 +35,7 @@ impl AudioInputCallback for CoreStreamer {
             .lock()
             .expect("lock resolve");
 
-            rs.unbounded_send(PlayOperationOutput::Success(false))
+            rs.unbounded_send(PlayOperationOutput::Failure)
             .expect("send error");
     }
 
@@ -77,7 +77,7 @@ impl AudioOutputCallback for CoreStreamer {
             .lock()
             .expect("resolve lock");
 
-        rs.unbounded_send(PlayOperationOutput::Success(false))
+        rs.unbounded_send(PlayOperationOutput::Failure)
             .expect("send error")
     }
 

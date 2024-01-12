@@ -1,7 +1,6 @@
+use app_core::play::PlayOperationOutput;
 use crux_core::capability::CapabilityContext;
 use crux_macros::Capability;
-
-use app_core::play::PlayOperationOutput;
 
 #[derive(Capability)]
 pub struct Resolve<Ev> {
@@ -16,51 +15,17 @@ where
         Self { context }
     }
 
-    pub fn resolve_capture_fft(&self, captured: Vec<(f32, f32)>) {
-        let ctx = self.context.clone();
-
-        self.context.spawn(async move {
-            _ = ctx
-                .notify_shell(PlayOperationOutput::CapturedFFT(captured))
-                .await;
-        })
-    }
-
-    pub fn resolve_permission(&self, result: bool) {
-        let ctx = self.context.clone();
-
-        self.context.spawn(async move {
-            _ = ctx
-                .notify_shell(PlayOperationOutput::Permission(result))
-                .await;
-        })
-    }
-
     pub fn resolve_success(&self, success: bool) {
         let ctx = self.context.clone();
 
         self.context.spawn(async move {
             _ = ctx
-                .notify_shell(PlayOperationOutput::Success(success))
+                .notify_shell(if success {
+                    PlayOperationOutput::Success
+                } else {
+                    PlayOperationOutput::Failure
+                })
                 .await;
-        })
-    }
-
-    pub fn resolve_devices(&self, devices: Vec<String>) {
-        let ctx = self.context.clone();
-
-        self.context.spawn(async move {
-            _ = ctx
-                .notify_shell(PlayOperationOutput::Devices(devices))
-                .await;
-        })
-    }
-
-    pub fn resolve_none(&self) {
-        let ctx = self.context.clone();
-
-        self.context.spawn(async move {
-            _ = ctx.notify_shell(PlayOperationOutput::None).await;
         })
     }
 }

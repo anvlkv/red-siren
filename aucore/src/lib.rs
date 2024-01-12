@@ -5,6 +5,7 @@ pub use app::*;
 
 pub mod app;
 mod resolve;
+mod capture;
 pub mod system;
 
 

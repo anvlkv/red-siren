@@ -159,6 +159,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "url",
+ "uuid",
 ]
 
 [[package]]
@@ -4296,6 +4297,7 @@ dependencies = [
  "leptos_router",
  "log",
  "mint",
+ "serde",
  "simple_logger",
  "thiserror",
  "tokio",

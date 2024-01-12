@@ -1,6 +1,5 @@
 use crux_core::capability::{CapabilityContext, Operation};
 use crux_macros::Capability;
-use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
 use super::instrument::{Config, Node};
@@ -22,11 +21,8 @@ impl Eq for PlayOperation {}
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum PlayOperationOutput {
-    CapturedFFT(Vec<(f32, f32)>),
-    Devices(Vec<String>),
-    Success(bool),
-    Permission(bool),
-    None,
+    Success,
+    Failure
 }
 
 impl Eq for PlayOperationOutput {}
@@ -35,6 +31,17 @@ impl Operation for PlayOperation {
 }
 
 impl Operation for PlayOperationOutput {
+    type Output = ();
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+pub enum CaptureOutput {
+    CaptureFFT(Vec<(f32, f32)>),
+}
+
+impl Eq for CaptureOutput {}
+
+impl Operation for CaptureOutput {
     type Output = ();
 }
 
@@ -64,11 +71,7 @@ where
             let done = ctx
                 .request_from_shell(PlayOperation::Config(config, nodes))
                 .await;
-            if let PlayOperationOutput::Success(done) = done {
-                ctx.update_app(f(done));
-            } else {
-                log::warn!("play unexpected variant: {done:?}");
-            }
+            ctx.update_app(f(done == PlayOperationOutput::Success));
         })
     }
 
@@ -81,19 +84,20 @@ where
 
         self.context.spawn(async move {
             let playing = ctx.request_from_shell(PlayOperation::Resume).await;
-            if let PlayOperationOutput::Success(playing) = playing {
-                ctx.update_app(f(playing));
-            } else {
-                log::warn!("play unexpected variant: {playing:?}");
-            }
+            ctx.update_app(f(playing == PlayOperationOutput::Success));
         })
     }
 
-    pub fn pause(&self) {
+    pub fn pause<F>(&self, f: F)
+    where
+        Ev: 'static,
+        F: Fn(bool) -> Ev + Send + 'static,
+    {
         let ctx = self.context.clone();
 
         self.context.spawn(async move {
-            ctx.notify_shell(PlayOperation::Suspend).await;
+            let paused = ctx.request_from_shell(PlayOperation::Suspend).await;
+            ctx.update_app(f(paused == PlayOperationOutput::Success));
         })
     }
 
@@ -106,11 +110,7 @@ where
 
         self.context.spawn(async move {
             let done = ctx.request_from_shell(PlayOperation::InstallAU).await;
-            if let PlayOperationOutput::Success(done) = done {
-                ctx.update_app(f(done));
-            } else {
-                log::warn!("install unexpected variant: {done:?}");
-            }
+            ctx.update_app(f(done == PlayOperationOutput::Success));
         })
     }
 
@@ -122,49 +122,30 @@ where
         let ctx = self.context.clone();
 
         self.context.spawn(async move {
-            let done = ctx.request_from_shell(PlayOperation::Permissions).await;
-            if let PlayOperationOutput::Permission(done) = done {
-                ctx.update_app(f(done));
-            } else {
-                log::warn!("permissions unexpected variant: {done:?}");
-            }
+            let granted = ctx.request_from_shell(PlayOperation::Permissions).await;
+            ctx.update_app(f(granted == PlayOperationOutput::Success));
         })
     }
     pub fn capture_fft<F>(&self, notify: F)
-    where
-        Ev: 'static,
-        F: Fn(Vec<(f32, f32)>) -> Ev + Send + 'static,
-    {
-        let ctx = self.context.clone();
-        self.context.spawn({
-            async move {
-                let mut stream = ctx.stream_from_shell(PlayOperation::Capture(true));
-                while let Some(response) = stream.next().await {
-                    if let PlayOperationOutput::CapturedFFT(data) = response {
-                        ctx.update_app(notify(data));
-                    } else {
-                        break;
-                    }
-                }
-
-                log::info!("capture exited");
-            }
-        });
-    }
-
-    pub fn stop_capture_fft<F>(&self, f: F)
     where
         Ev: 'static,
         F: Fn(bool) -> Ev + Send + 'static,
     {
         let ctx = self.context.clone();
         self.context.spawn(async move {
+            let capturing = ctx.request_from_shell(PlayOperation::Capture(true)).await;
+            ctx.update_app(notify(capturing == PlayOperationOutput::Success));
+        });
+    }
+
+    pub fn stop_capture_fft<F>(&self, notify: F)
+    where
+        Ev: 'static,
+        F: Fn(bool) -> Ev + Send + 'static, {
+        let ctx = self.context.clone();
+        self.context.spawn(async move {
             let stopped = ctx.request_from_shell(PlayOperation::Capture(false)).await;
-            if let PlayOperationOutput::Success(stopped) = stopped {
-                ctx.update_app(f(stopped));
-            } else {
-                log::warn!("pause unexpected variant: {stopped:?}");
-            }
+            ctx.update_app(notify(stopped == PlayOperationOutput::Success));
         })
     }
 }

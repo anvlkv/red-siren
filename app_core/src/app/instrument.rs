@@ -1,4 +1,4 @@
-use std::sync::{Mutex, Arc};
+use std::sync::{Arc, Mutex};
 
 use crux_core::render::Render;
 use crux_core::App;
@@ -22,7 +22,6 @@ pub mod string;
 #[derive(Default)]
 pub struct Instrument;
 
-
 #[derive(Default)]
 pub struct Model {
     pub config: Config,
@@ -35,6 +34,7 @@ pub struct Model {
     pub playing: bool,
     pub layout: Option<Layout>,
     pub setup_complete: bool,
+    pub configured: bool,
 }
 
 impl Model {
@@ -149,6 +149,7 @@ impl App for Instrument {
                 }
             }
             InstrumentEV::PlayOpConfigure(success) => {
+                model.configured = success;
                 if !success {
                     self.update(InstrumentEV::Playback(PlaybackEV::Error), model, caps)
                 } else {
@@ -174,10 +175,17 @@ impl App for Instrument {
                     model.playing = playing;
                     if !model.setup_complete {
                         caps.play.permissions(InstrumentEV::PlayOpPermission)
+                    } else if !model.configured {
+                        let nodes = self.get_nodes(model);
+                        caps.play.configure(
+                            &model.config,
+                            nodes.as_slice(),
+                            InstrumentEV::PlayOpConfigure,
+                        );
                     } else if playing {
                         caps.play.play(InstrumentEV::PlayOpPlay)
                     } else {
-                        caps.play.pause()
+                        caps.play.pause(InstrumentEV::PlayOpPlay)
                     }
                     caps.render.render();
                 }

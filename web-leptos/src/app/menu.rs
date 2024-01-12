@@ -1,5 +1,6 @@
 use leptos::*;
 
+use super::red_card::RedCardComponent;
 use app_core::instrument::layout::MenuPosition;
 use app_core::{Activity, Event};
 
@@ -51,36 +52,6 @@ pub fn MenuComponent(
         });
     }
 
-    let menu_style = move || {
-        let pos = position();
-        let rect = pos.rect();
-        let style = style();
-        format!(
-            r#"
-            width: {}px; 
-            height: {}px; 
-            top: {}px; 
-            left: {}px;
-            {style}
-            "#,
-            rect.width(),
-            rect.height(),
-            rect.top_left().y,
-            rect.top_left().x,
-        )
-    };
-
-    let menu_class = move || {
-        let corner = match position() {
-            MenuPosition::TopLeft(_) => "top-left",
-            MenuPosition::TopRight(_) => "top-right",
-            MenuPosition::BottomLeft(_) => "bottom-left",
-            MenuPosition::Center(_) => "center",
-        };
-
-        format!("absolute after:bg-black dark:after:bg-red after:rounded-3xl after:shadow-lg bg-black dark:bg-red text-red dark:text-black rounded-3xl shadow-lg menu menu-{corner} ")
-    };
-
     let play_pause = move || if playing() { "Stop" } else { "Play" };
     let btn_class = "w-full rounded-2xl bg-red dark:bg-black text-black dark:text-red text-4xl hover:text-gray dark:hover:text-cinnabar";
 
@@ -95,7 +66,7 @@ pub fn MenuComponent(
     };
 
     view! {
-      <div class={menu_class} style={menu_style}>
+      <RedCardComponent style=style position=position>
         <h1 class="text-4xl my-auto text-center">{"Red Siren"}</h1>
         <button class=btn_class on:click=move|_| menu_ev(Activity::Play)>
             {play_pause}
@@ -110,6 +81,6 @@ pub fn MenuComponent(
         <button class=btn_class on:click=move|_| menu_ev(Activity::About)>
             {"About"}
         </button>
-      </div>
+      </RedCardComponent>
     }
 }

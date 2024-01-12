@@ -1,10 +1,8 @@
 import { au_process_event, au_view } from "aucore/aucore";
-import {
-  BincodeDeserializer,
-  BincodeSerializer,
-} from "typegen/bincode/mod";
+import { BincodeDeserializer, BincodeSerializer } from "typegen/bincode/mod";
 import type { Effect, PlayOperation } from "typegen/types/au_types";
 import {
+  EffectVariantCapture,
   EffectVariantRender,
   EffectVariantResolve,
   Request,
@@ -13,6 +11,7 @@ import {
 
 type RenderCB = (vm: ViewModel) => void;
 type ResolveCB = (output: Uint8Array) => void;
+type CaptureCB = (output: Uint8Array) => void;
 
 export function to_bin(event: PlayOperation) {
   const serializer = new BincodeSerializer();
@@ -24,7 +23,8 @@ export function to_bin(event: PlayOperation) {
 export function update(
   event: PlayOperation,
   callback: RenderCB,
-  resolve: ResolveCB
+  resolve: ResolveCB,
+  capture: CaptureCB
 ) {
   const serializer = new BincodeSerializer();
   event.serialize(serializer);
@@ -33,20 +33,21 @@ export function update(
 
   const requests = deserializeRequests(effects);
   for (const { uuid, effect } of requests) {
-    processEffect(uuid, effect, callback, resolve);
+    processEffect(uuid, effect, callback, resolve, capture);
   }
 }
 
 export function update_plain(
   data: Uint8Array,
   callback: RenderCB,
-  resolve: ResolveCB
+  resolve: ResolveCB,
+  capture: CaptureCB
 ) {
   const effects = au_process_event(data);
 
   const requests = deserializeRequests(effects);
   for (const { uuid, effect } of requests) {
-    processEffect(uuid, effect, callback, resolve);
+    processEffect(uuid, effect, callback, resolve, capture);
   }
 }
 
@@ -54,7 +55,8 @@ function processEffect(
   uuid: number[],
   effect: Effect,
   callback: RenderCB,
-  resolve: ResolveCB
+  resolve: ResolveCB,
+  capture: CaptureCB
 ) {
   switch (effect.constructor) {
     case EffectVariantRender: {
@@ -67,6 +69,14 @@ function processEffect(
       value.serialize(serializer);
       const data = serializer.getBytes();
       resolve(data);
+      break;
+    }
+    case EffectVariantCapture: {
+      const value = (effect as EffectVariantCapture).value;
+      const serializer = new BincodeSerializer();
+      value.serialize(serializer);
+      const data = serializer.getBytes();
+      capture(data);
       break;
     }
     default:

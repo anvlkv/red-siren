@@ -84,6 +84,7 @@ pub enum Event {
     },
     ReflectActivity(Activity),
     Menu(Activity),
+    Capture(play::CaptureOutput),
 }
 
 impl Eq for Event {}
@@ -253,7 +254,7 @@ impl App for RedSiren {
                             &caps.into(),
                         );
                         model.instrument.setup_complete =
-                            model.tuner.state == tuner::State::SetupComplete;
+                            model.tuner.state >= tuner::State::SetupComplete;
                         self.intro.update(
                             intro::IntroEV::Menu(act),
                             &mut model.intro,
@@ -302,6 +303,12 @@ impl App for RedSiren {
             Event::TunerEvent(event) => {
                 self.tuner.update(event, &mut model.tuner, &caps.into());
             }
+            Event::Capture(ev) => match ev {
+                play::CaptureOutput::CaptureFFT(d) => {
+                    self.tuner
+                        .update(tuner::TunerEV::FftData(d), &mut model.tuner, &caps.into())
+                }
+            },
             Event::IntroEvent(event) => self.intro.update(event, &mut model.intro, &caps.into()),
         }
     }

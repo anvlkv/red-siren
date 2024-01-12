@@ -12,7 +12,7 @@ use spectrum_analyzer::{
     samples_fft_to_spectrum, scaling::divide_by_N_sqrt, windows::hann_window, FrequencyLimit,
 };
 
-use crate::system::SAMPLE_RATE;
+use crate::{system::SAMPLE_RATE, capture::Capture};
 
 use super::resolve::Resolve;
 use super::system::System;
@@ -42,6 +42,7 @@ pub struct RedSirenAU;
 pub struct RedSirenAUCapabilities {
     pub render: Render<PlayOperation>,
     pub resolve: Resolve<PlayOperation>,
+    pub capture: Capture<PlayOperation>
 }
 
 impl App for RedSirenAU {
@@ -51,8 +52,6 @@ impl App for RedSirenAU {
     type Capabilities = RedSirenAUCapabilities;
 
     fn update(&self, msg: PlayOperation, model: &mut Model, caps: &RedSirenAUCapabilities) {
-        // log::trace!("au msg: {msg:?}");
-
         match msg {
             PlayOperation::Config(config, nodes) => {
                 model.config = config;
@@ -82,12 +81,13 @@ impl App for RedSirenAU {
                         )
                         .unwrap();
 
-                        caps.resolve.resolve_capture_fft(Vec::from_iter(
+                        caps.capture.capture_fft(Vec::from_iter(
                             spectrum_hann_window
                                 .data()
                                 .iter()
                                 .map(|(freq, value)| (freq.val(), value.val())),
                         ));
+                        
                     }
                 } else if let Some(sys) = model.system.as_mut() {
                     let frame_size = input.first().map_or(0, |ch| ch.len());
@@ -125,11 +125,7 @@ impl App for RedSirenAU {
             }
             PlayOperation::Capture(capturing) => {
                 model.capturing = capturing;
-                if !capturing {
-                    caps.resolve.resolve_success(true);
-                } else {
-                    caps.render.render();
-                }
+                caps.resolve.resolve_success(true);
             }
             op => {
                 log::debug!("op: {op:?} reached hard bottom");

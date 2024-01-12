@@ -153,6 +153,9 @@ impl AUCoreBridge {
                             Effect::Resolve(op) => resolve_sender
                                 .unbounded_send(op.operation)
                                 .expect("send resolve"),
+                            Effect::Capture(d) => {
+                                todo!()
+                            }
                         }
                     }
                 }
@@ -186,24 +189,24 @@ impl AUCoreBridge {
                 PlayOperation::InstallAU => match core.init() {
                     Ok(_) => {
                         log::info!("init au");
-                        s_id.unbounded_send(PlayOperationOutput::Success(true))
+                        s_id.unbounded_send(PlayOperationOutput::Success)
                             .expect("receiver is gone");
                     }
                     Err(e) => {
                         log::error!("resume error {e:?}");
-                        s_id.unbounded_send(PlayOperationOutput::Success(false))
+                        s_id.unbounded_send(PlayOperationOutput::Failure)
                             .expect("receiver is gone");
                     }
                 },
                 PlayOperation::Resume => match core.start() {
                     Ok(_) => {
                         log::info!("playing");
-                        s_id.unbounded_send(PlayOperationOutput::Success(true))
+                        s_id.unbounded_send(PlayOperationOutput::Success)
                             .expect("receiver is gone");
                     }
                     Err(e) => {
                         log::error!("resume error {e:?}");
-                        s_id.unbounded_send(PlayOperationOutput::Success(false))
+                        s_id.unbounded_send(PlayOperationOutput::Failure)
                             .expect("receiver is gone");
                     }
                 },

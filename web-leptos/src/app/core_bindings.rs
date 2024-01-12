@@ -105,23 +105,19 @@ pub fn process_effect(
                 let core = core.clone();
                 let mut playback = playback.clone();
                 spawn_local(async move {
-                    let mut rx = playback.request(req.operation.clone()).await;
+                    let response = playback.request(req.operation.clone()).await;
 
-                    while let Some(response) = rx.next().await {
-                        log::trace!("process next response: {response:?}");
-                        for effect in core.resolve(&mut req, response) {
-                            process_effect(
-                                &core,
-                                effect,
-                                render,
-                                playback.clone(),
-                                navigate,
-                                animate_cb,
-                            );
-                        }
+                    log::trace!("process response: {response:?}");
+                    for effect in core.resolve(&mut req, response) {
+                        process_effect(
+                            &core,
+                            effect,
+                            render,
+                            playback.clone(),
+                            navigate,
+                            animate_cb,
+                        );
                     }
-
-                    log::debug!("{:?} exited", req.operation);
                 })
             }
         }

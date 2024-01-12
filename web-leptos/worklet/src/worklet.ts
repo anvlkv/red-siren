@@ -29,6 +29,13 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
     });
   };
 
+  onCapture = (output: Uint8Array) => {
+    this.port.postMessage({
+      type: "red-siren-capture",
+      output,
+    });
+  };
+
   onMessage(msg: MessageEvent) {
     try {
       switch (msg.data.type) {
@@ -44,7 +51,7 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
         case "red-siren-ev": {
           const ev = msg.data.ev as Uint8Array;
           console.info("event");
-          update_plain(ev, this.onRender, this.onResolve);
+          update_plain(ev, this.onRender, this.onResolve, this.onCapture);
           break;
         }
         default:
@@ -73,7 +80,8 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
     update(
       new PlayOperationVariantInput([inputs] as unknown as number[][]),
       this.onRender,
-      this.onResolve
+      this.onResolve,
+      this.onCapture
     );
 
     if (this.vm?.length) {
@@ -88,9 +96,8 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
           }
         }
       }
-    }
-    else {
-      console.log("playing no vm")
+    } else {
+      console.log("playing no vm");
     }
 
     return true;

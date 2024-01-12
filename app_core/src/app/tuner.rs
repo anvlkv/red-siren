@@ -23,13 +23,14 @@ pub const MAX_F: f32 = 12_000.0;
 #[derive(Default)]
 pub struct Tuner;
 
-#[derive(Default, Clone, PartialEq, Eq)]
+#[derive(Default, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Copy)]
 pub enum State {
     #[default]
     None,
     SetupInProgress,
     SetupComplete,
     Capturing,
+    Done,
 }
 
 #[derive(Default, Clone)]
@@ -131,12 +132,13 @@ impl App for Tuner {
                 caps.render.render();
             }
             TunerEV::Activate(start) => {
-                if model.state == State::SetupComplete {
+                if model.state >= State::SetupComplete {
                     if start {
                         caps.play.play(TunerEV::PlayOpSuccess);
                         model.state = State::Capturing;
                     } else {
                         caps.play.stop_capture_fft(TunerEV::PlayOpSuccess);
+                        caps.play.pause(TunerEV::PlayOpSuccess);
                         model.state = State::SetupComplete;
 
                         let pairs = self.get_pairs(model);
@@ -186,12 +188,15 @@ impl App for Tuner {
             TunerEV::PlayOpSuccess(success) => {
                 if !success {
                     log::error!("tuner play op failed");
-                    caps.navigate.to(crate::Activity::Intro)
+                    caps.navigate.to(crate::Activity::Intro);
+                    model.state = State::None;
                 } else if model.state == State::Capturing {
-                    caps.play.capture_fft(TunerEV::FftData);
-                } else {
-                    caps.play.pause();
-                    log::info!("play operation completed with success");
+                    caps.play.capture_fft(TunerEV::PlayOpSuccess);
+                } else if model.state == State::Capturing{
+                    caps.play.pause(TunerEV::PlayOpSuccess);
+                }
+                else {
+                    log::info!("play op success, state: {:?}", model.state)
                 }
             }
             TunerEV::SetTuning(value) => {

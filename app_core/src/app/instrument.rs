@@ -11,7 +11,7 @@ pub use layout::{Layout, LayoutRoot};
 use node::spawn_all_nodes;
 pub use node::Node;
 
-use crate::{play::Play, Navigate};
+use crate::{play::Play, tuner::TuningValue, Navigate};
 
 pub mod config;
 pub mod keyboard;
@@ -35,6 +35,7 @@ pub struct Model {
     pub layout: Option<Layout>,
     pub setup_complete: bool,
     pub configured: bool,
+    pub tuning: Vec<TuningValue>,
 }
 
 impl Model {
@@ -122,6 +123,7 @@ impl App for Instrument {
                     caps.play.configure(
                         &model.config,
                         nodes.as_slice(),
+                        &model.tuning.as_slice(),
                         InstrumentEV::PlayOpConfigure,
                     );
                 }
@@ -144,6 +146,7 @@ impl App for Instrument {
                     caps.play.configure(
                         &model.config,
                         nodes.as_slice(),
+                        &model.tuning.as_slice(),
                         InstrumentEV::PlayOpConfigure,
                     );
                 }
@@ -169,19 +172,21 @@ impl App for Instrument {
                 if !success {
                     self.update(InstrumentEV::Playback(PlaybackEV::Error), model, caps)
                 }
+                else if !model.configured && model.playing {
+                    let nodes = self.get_nodes(model);
+                    caps.play.configure(
+                        &model.config,
+                        nodes.as_slice(),
+                        &model.tuning.as_slice(),
+                        InstrumentEV::PlayOpConfigure,
+                    );
+                }
             }
             InstrumentEV::Playback(playback_ev) => match playback_ev {
                 PlaybackEV::Play(playing) => {
                     model.playing = playing;
                     if !model.setup_complete {
                         caps.play.permissions(InstrumentEV::PlayOpPermission)
-                    } else if !model.configured {
-                        let nodes = self.get_nodes(model);
-                        caps.play.configure(
-                            &model.config,
-                            nodes.as_slice(),
-                            InstrumentEV::PlayOpConfigure,
-                        );
                     } else if playing {
                         caps.play.play(InstrumentEV::PlayOpPlay)
                     } else {

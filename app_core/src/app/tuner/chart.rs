@@ -6,7 +6,7 @@ use hecs::{Bundle, Entity, World};
 use mint::Point2;
 use serde::{Deserialize, Serialize};
 
-use super::{MAX_F, MIN_F};
+use super::{MAX_F, MIN_F, TuningValue};
 
 #[derive(Bundle, Clone, Copy, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Pair {
@@ -80,7 +80,7 @@ impl FFTChartEntry {
             y: config.height - (config.safe_area[3] + v_max * value as f64),
         }
     }
-    
+
     fn point_amp(y: f64, config: &Config) -> f32 {
         let v_max = Self::v_max(config);
         (1.0 - ((y - config.safe_area[1]) / v_max)) as f32
@@ -111,6 +111,7 @@ impl Chart {
         for i in 1..=config.n_buttons {
             pairs.push(Pair::spawn(world, config, i));
         }
+        pairs.reverse();
         let min_y = config.height - config.safe_area[3];
         let line = Line::new(0.0, config.width, min_y, min_y);
         Chart {
@@ -147,12 +148,12 @@ impl Chart {
     pub fn update_pairs_from_values(
         &self,
         world: &mut World,
-        values: &[(usize, f32, f32)],
+        values: &[TuningValue],
         config: &Config,
     ) {
         let range_width = MAX_F - MIN_F;
-        for (f_n, value_amp, value_freq) in values {
-            let x = ((*value_freq - MIN_F) / range_width) as f64 * config.width;
+        for (f_n, value_freq, value_amp) in values {
+            let x = config.width - ((*value_freq - MIN_F) / range_width) as f64 * config.width;
             let pt = FFTChartEntry::value_point(x, config, *value_amp);
             if let Some((_, pair)) = world
                 .query_mut::<&mut Pair>()
@@ -161,6 +162,8 @@ impl Chart {
             {
                 pair.rect.move_x(pt.x);
                 pair.rect.move_y(pt.y);
+                pair.value = Some((*value_freq, *value_amp));
+                log::info!("set pair {f_n} to {pt:?}");
             } else {
                 log::warn!("no pair for fn {f_n}");
             }
@@ -175,9 +178,11 @@ impl Chart {
         config: &Config,
     ) {
         let range_width = MAX_F - MIN_F;
-        let value_freq = (x / config.width) as f32 * range_width + MIN_F; 
+        let value_freq = MAX_F - (x / config.width) as f32 * range_width + MIN_F;
         let value_amp = FFTChartEntry::point_amp(*y, config);
-        let mut pair = world.get::<&mut Pair>(self.pairs[f_n  - 1]).expect("pair for fn");
+        let mut pair = world
+            .get::<&mut Pair>(self.pairs[f_n - 1])
+            .expect("pair for fn");
         pair.value = Some((value_freq, value_amp));
     }
 }

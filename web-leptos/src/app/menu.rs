@@ -67,20 +67,26 @@ pub fn MenuComponent(
 
     view! {
       <RedCardComponent style=style position=position>
-        <h1 class="text-4xl my-auto text-center">{"Red Siren"}</h1>
+        <Show when={move|| expanded}> 
+            <h1 class="text-4xl my-auto text-center">{"Red Siren"}</h1>
+        </Show>
         <button class=btn_class on:click=move|_| menu_ev(Activity::Play)>
             {play_pause}
         </button>
-        {notice}
+        <Show when={move|| expanded}> 
+            {notice} 
+        </Show>
         <button class=btn_class on:click=move|_| menu_ev(Activity::Tune)>
             {"Tune"}
         </button>
-        <button class=btn_class on:click=move|_| menu_ev(Activity::Listen)>
-            {"Listen"}
-        </button>
-        <button class=btn_class on:click=move|_| menu_ev(Activity::About)>
-            {"About"}
-        </button>
+        <Show when={move|| expanded}>
+            <button class=btn_class on:click=move|_| menu_ev(Activity::Listen)>
+                {"Listen"}
+            </button>
+            <button class=btn_class on:click=move|_| menu_ev(Activity::About)>
+                {"About"}
+            </button>
+        </Show>
       </RedCardComponent>
     }
 }

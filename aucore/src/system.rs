@@ -1,4 +1,7 @@
-use app_core::instrument::{Config, Node};
+use app_core::{
+    instrument::{Config, Node},
+    tuner::TuningValue,
+};
 use fundsp::hacker32::*;
 
 pub const SAMPLE_RATE: f64 = 44100.0;
@@ -16,7 +19,7 @@ pub struct System {
 }
 
 impl System {
-    pub fn new(nodes_data: &[Node], config: &Config) -> Self {
+    pub fn new(nodes_data: &[Node], config: &Config, tuning: &[TuningValue]) -> Self {
         let sample_rate = SAMPLE_RATE;
         let channels = Ord::min(config.groups, CHANNELS);
         let mut net = Net32::new(1, channels);
@@ -47,13 +50,23 @@ impl System {
 
         input_subnet.connect_input(0, input_pipe_id, 0);
 
-        for (i, node_data) in nodes_data.iter().enumerate() {
-            // todo: use tuner input
-            let bp_f = shared(node_data.freq.0);
-            // todo: use hid input
-            let bp_q = shared(0.75);
+        for (i, (node_data, tuning)) in nodes_data.iter().zip(tuning).enumerate() {
+            assert_eq!(tuning.0, node_data.f_n, "pair f_n");
 
-            let bp_n = (pass() | var(&bp_f) | var(&bp_q))
+            let bp_f = shared(tuning.1);
+
+            log::debug!(
+                "f_n: {}, sensitize to: {}, freq: {}",
+                node_data.f_n,
+                tuning.1,
+                node_data.freq.0
+            );
+
+            // todo: use hid input
+            let bp_q = shared(0.25);
+
+            let bp_n = mul(100.0 * tuning.2)
+                >> (pass() | var(&bp_f) | var(&bp_q))
                 >> bandpass()
                 >> pluck(node_data.freq.0, 0.75, 0.25);
             b_centres.push(bp_f);

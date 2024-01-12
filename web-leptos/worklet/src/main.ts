@@ -99,22 +99,27 @@ async function create_ctx() {
           config.whitespace,
           BigInt(config.groups),
           BigInt(config.buttons_group),
-          BigInt(config.buttons_group *  config.groups),
+          BigInt(config.buttons_group * config.groups),
           config.button_size,
           config.button_track_margin,
           config.safe_area,
           config.f0
         ),
-        Array.from({ length: config.groups }).flatMap(
-          (_, i) => Array.from({length: config.buttons_group}).map((_, j) => {
-              const n = (i + 1) * (j + 1);
-              return new Node(
-                [[n * config.f0 * 2], [(n + 1) * config.f0 * 2]],
-                BigInt(i + 1),
-                i % 2 ? -1 : 1,
-              );
-            })
-        )
+        Array.from({ length: config.groups }).flatMap((_, i) =>
+          Array.from({ length: config.buttons_group }).map((_, j) => {
+            const n = (i + 1) * (j + 1);
+            return new Node(
+              [[n * config.f0 * 2], [(n + 1) * config.f0 * 2]],
+              BigInt(i + 1),
+              i % 2 ? -1 : 1
+            );
+          })
+        ),
+        Array.from({ length: config.n_buttons }).map((_, i) => [
+          BigInt(i + 1),
+          (i + 1) * config.f0,
+          1.0,
+        ])
       )
     ),
   });
@@ -183,7 +188,7 @@ playing.onChange(async (playing) => {
             config.whitespace,
             BigInt(config.groups),
             BigInt(config.buttons_group),
-            BigInt(config.buttons_group *  config.groups),
+            BigInt(config.buttons_group * config.groups),
             config.button_size,
             config.button_track_margin,
             config.safe_area,
@@ -197,7 +202,12 @@ playing.onChange(async (playing) => {
                 0
               );
             }
-          )
+          ),
+          Array.from({ length: config.n_buttons }).map((_, i) => [
+            BigInt(i + 1),
+            (i + 1) * config.f0,
+            1.0,
+          ])
         )
       ),
     });

@@ -59,10 +59,13 @@ main {
   grid-row-gap: 1.5rem;
 
   button {
-    @media not (prefers-reduced-motion) {
-      transition-property: color, background-color, box-shadow, border-color;
-      transition-duration: 350ms;
-      transition-timing-function: ease-in;
+    &:not(:disabled) {
+      cursor: pointer;
+      @media not (prefers-reduced-motion) {
+        transition-property: color, background-color, box-shadow, border-color;
+        transition-duration: 350ms;
+        transition-timing-function: ease-in;
+      }
     }
   }
 

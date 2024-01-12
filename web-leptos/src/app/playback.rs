@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use app_core::{play, Event};
 use js_sys::{Promise, Uint8Array};
-use leptos::{WriteSignal, SignalSet};
+use leptos::{WriteSignal, SignalSet, request_animation_frame};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
@@ -39,7 +39,9 @@ impl Playback {
     pub fn on_capture(&self, set_ev: WriteSignal<Event>) {
         let cb = Closure::wrap(Box::new(move |d: JsValue| {
             let capture = Self::capture_from_forwarded_effect(d);
-            set_ev.set(Event::Capture(capture));
+            request_animation_frame(move|| {
+                set_ev.set(Event::Capture(capture));
+            })
         }) as Box<dyn FnMut(JsValue)>);
         *self.1.borrow_mut() = cb;
 

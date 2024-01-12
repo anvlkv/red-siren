@@ -11,7 +11,11 @@ use hecs::World;
 use mint::Point2;
 use serde::{Deserialize, Serialize};
 
-use crate::{geometry::{Line, Rect}, instrument::{self, layout::MenuPosition}, Navigate, Play};
+use crate::{
+    geometry::{Line, Rect},
+    instrument::{self, layout::MenuPosition},
+    Navigate, Play,
+};
 
 use self::chart::{Chart, FFTChartEntry, Pair};
 
@@ -19,6 +23,8 @@ mod chart;
 
 pub const MIN_F: f32 = 100.0;
 pub const MAX_F: f32 = 12_000.0;
+
+pub type TuningValue = (usize, f32, f32);
 
 #[derive(Default)]
 pub struct Tuner;
@@ -39,7 +45,7 @@ pub struct Model {
     pub chart: Option<Chart>,
     pub persisted: bool,
     pub config: instrument::Config,
-    pub tuning: Option<Vec<(usize, f32, f32)>>,
+    pub tuning: Option<Vec<TuningValue>>,
     pub state: State,
     pub pressed_buttons: HashSet<usize>,
     pub menu_position: MenuPosition,
@@ -70,7 +76,6 @@ impl Eq for TunerVM {}
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum TunerEV {
     CheckHasTuning,
-    SetTuning(Option<Vec<(usize, f32, f32)>>),
     TuningKV(KeyValueOutput),
     SetFreqAmpXYPos(usize, f64, f64),
     ButtonPress(usize, bool),
@@ -78,7 +83,10 @@ pub enum TunerEV {
     SetConfig(instrument::Config),
     Activate(bool),
     FftData(Vec<(f32, f32)>),
-    PlayOpSuccess(bool),
+    PlayOpStartProcessing(bool),
+    PlayOpStartCapturing(bool),
+    PlayOpStopProcessing(bool),
+    PlayOpStopCapturing(bool),
     PlayOpPermission(bool),
     PlayOpInstall(bool),
 }
@@ -119,38 +127,39 @@ impl App for Tuner {
                     }
                     model.config = config;
                     model.chart = Some(Chart::new(&mut world, &model.config));
-
-                    model.menu_position = MenuPosition::TopLeft(
-                        Rect::size(128.0, 82.0)
-                            .offset_left(-model.config.safe_area[0])
-                            .offset_top(-model.config.safe_area[1]),
-                    );
                 }
 
-                self.update(TunerEV::SetTuning(model.tuning.clone()), model, caps);
+                self.update_pairs_from_values(model);
+
+                model.menu_position = MenuPosition::TopLeft(
+                    Rect::size(128.0, 82.0)
+                        .offset_left(-model.config.safe_area[0])
+                        .offset_top(-model.config.safe_area[1]),
+                );
 
                 caps.render.render();
             }
             TunerEV::Activate(start) => {
                 if model.state >= State::SetupComplete {
                     if start {
-                        caps.play.play(TunerEV::PlayOpSuccess);
-                        model.state = State::Capturing;
+                        caps.play.play(TunerEV::PlayOpStartProcessing);
                     } else {
-                        caps.play.stop_capture_fft(TunerEV::PlayOpSuccess);
-                        caps.play.pause(TunerEV::PlayOpSuccess);
-                        model.state = State::SetupComplete;
-
                         let pairs = self.get_pairs(model);
                         let values = pairs
                             .iter()
-                            .map(|p| (p.f_n, p.value.unwrap_or((0.0, 0.0))))
-                            .collect::<Vec<_>>();
+                            .map(|p| {
+                                let val = p.value.unwrap_or((0.0, 0.0));
+                                (p.f_n, val.0, val.1)
+                            })
+                            .collect::<Vec<TuningValue>>();
+                        model.tuning = Some(values.clone());
+                        caps.play.stop_capture_fft(TunerEV::PlayOpStopCapturing);
                         caps.key_value.write(
                             "tuning",
                             bincode::serialize(&values).expect("serialize tuning"),
                             TunerEV::TuningKV,
-                        )
+                        );
+                        log::info!("tuning complete and stored");
                     }
                 } else if model.state != State::SetupInProgress {
                     caps.play.permissions(TunerEV::PlayOpPermission);
@@ -178,40 +187,53 @@ impl App for Tuner {
             }
             TunerEV::PlayOpInstall(success) => {
                 if !success {
+                    log::error!("tuner play op failed");
+                    caps.navigate.to(crate::Activity::Intro);
                     model.state = State::None;
-                    self.update(TunerEV::PlayOpSuccess(false), model, caps);
                 } else {
                     model.state = State::SetupComplete;
                     self.update(TunerEV::Activate(true), model, caps);
                 }
             }
-            TunerEV::PlayOpSuccess(success) => {
+            TunerEV::PlayOpStartProcessing(success) => {
                 if !success {
                     log::error!("tuner play op failed");
                     caps.navigate.to(crate::Activity::Intro);
                     model.state = State::None;
-                } else if model.state == State::Capturing {
-                    caps.play.capture_fft(TunerEV::PlayOpSuccess);
-                } else if model.state == State::Capturing{
-                    caps.play.pause(TunerEV::PlayOpSuccess);
                 }
                 else {
-                    log::info!("play op success, state: {:?}", model.state)
+                    caps.play.capture_fft(TunerEV::PlayOpStartCapturing)
                 }
             }
-            TunerEV::SetTuning(value) => {
-                {
-                    model.persisted = value.is_some();
-                    if let Some(values) = value.as_ref() {
-                        if let Some(chart) = model.chart.as_ref() {
-                            let mut world = model.world.lock().expect("world lock");
-                            chart.update_pairs_from_values(&mut world, values, &model.config)
-                        }
-                    }
-                    model.tuning = value;
+            TunerEV::PlayOpStartCapturing(success) => {
+                if !success {
+                    log::error!("tuner play op failed");
+                    caps.navigate.to(crate::Activity::Intro);
+                    model.state = State::None;
                 }
-
-                caps.render.render();
+                else {
+                    model.state = State::Capturing;
+                }
+            }
+            TunerEV::PlayOpStopProcessing(success) => {
+                if !success {
+                    log::error!("tuner play op failed");
+                    caps.navigate.to(crate::Activity::Intro);
+                    model.state = State::None;
+                }
+                else {
+                    log::info!("done capturing");
+                }
+            }
+            TunerEV::PlayOpStopCapturing(success) => {
+                if !success {
+                    log::error!("tuner play op failed");
+                    caps.navigate.to(crate::Activity::Intro);
+                    model.state = State::None;
+                }
+                else {
+                    caps.play.pause(TunerEV::PlayOpStopProcessing)
+                }
             }
             TunerEV::ButtonPress(f_n, pressed) => {
                 if pressed {
@@ -274,20 +296,11 @@ impl App for Tuner {
             }
             TunerEV::TuningKV(kv) => match kv {
                 KeyValueOutput::Read(value) => {
-                    if let Some(v) = value {
-                        match bincode::deserialize::<Vec<(usize, f32, f32)>>(v.as_slice()) {
-                            Ok(v) => {
-                                self.update(TunerEV::SetTuning(Some(v)), model, caps);
-                            }
-                            Err(e) => {
-                                log::error!("{e:?}");
-                                self.update(TunerEV::SetTuning(None), model, caps);
-                            }
-                        }
-                    } else {
-                        log::info!("no tuner data");
-                        self.update(TunerEV::SetTuning(None), model, caps);
-                    };
+                    model.persisted = value.is_some();
+                    model.tuning = value
+                        .map(|d| bincode::deserialize::<Vec<TuningValue>>(d.as_slice()).ok())
+                        .flatten();
+                    self.update_pairs_from_values(model);
                 }
                 KeyValueOutput::Write(success) => model.persisted = success,
             },
@@ -309,6 +322,16 @@ impl App for Tuner {
 }
 
 impl Tuner {
+    fn update_pairs_from_values(&self, model: &mut Model) {
+        if let Some((chart, values)) = model.chart.as_mut().zip(model.tuning.as_ref()) {
+            let mut world = model.world.lock().expect("world lock");
+            chart.update_pairs_from_values(&mut world, values, &model.config);
+            log::info!("tuning data applied");
+        } else {
+            log::warn!("no chart or tuning values");
+        }
+    }
+
     fn get_pairs(&self, model: &Model) -> Vec<Pair> {
         let world = model.world.lock().expect("world lock");
         model

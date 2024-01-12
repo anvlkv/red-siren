@@ -253,14 +253,25 @@ impl App for RedSiren {
                             &mut model.tuner,
                             &caps.into(),
                         );
-                        model.instrument.setup_complete =
-                            model.tuner.state >= tuner::State::SetupComplete;
-                        self.intro.update(
-                            intro::IntroEV::Menu(act),
-                            &mut model.intro,
-                            &caps.into(),
-                        );
-                        self.update(Event::ReflectActivity(Activity::Intro), model, caps);
+                        if let Some(tuning) = model.tuner.tuning.clone() {
+                            model.instrument.setup_complete =
+                                model.tuner.state >= tuner::State::SetupComplete;
+                            model.instrument.tuning = tuning;
+                            model.instrument.configured = false;
+                            self.intro.update(
+                                intro::IntroEV::Menu(act),
+                                &mut model.intro,
+                                &caps.into(),
+                            );
+                            self.update(Event::ReflectActivity(Activity::Intro), model, caps);
+                        } else {
+                            log::warn!("leaving tuner without complete tuning");
+                            self.tuner.update(
+                                tuner::TunerEV::Activate(true),
+                                &mut model.tuner,
+                                &caps.into(),
+                            );
+                        }
                     }
                     _ => todo!("transition not implemented"),
                 }

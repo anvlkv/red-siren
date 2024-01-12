@@ -2,6 +2,8 @@ use crux_core::capability::{CapabilityContext, Operation};
 use crux_macros::Capability;
 use serde::{Deserialize, Serialize};
 
+use crate::tuner::TuningValue;
+
 use super::instrument::{Config, Node};
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
@@ -13,7 +15,7 @@ pub enum PlayOperation {
     Capture(bool),
     QueryInputDevices,
     QueryOutputDevices,
-    Config(Config, Vec<Node>),
+    Config(Config, Vec<Node>, Vec<TuningValue>),
     Input(Vec<Vec<f32>>),
 }
 
@@ -58,7 +60,7 @@ where
         Self { context }
     }
 
-    pub fn configure<F>(&self, config: &Config, nodes: &[Node], f: F)
+    pub fn configure<F>(&self, config: &Config, nodes: &[Node], tuning: &[TuningValue], f: F)
     where
         Ev: 'static,
         F: Fn(bool) -> Ev + Send + 'static,
@@ -66,10 +68,11 @@ where
         let ctx = self.context.clone();
         let config = config.clone();
         let nodes = Vec::from(nodes);
+        let tuning = Vec::from(tuning);
 
         self.context.spawn(async move {
             let done = ctx
-                .request_from_shell(PlayOperation::Config(config, nodes))
+                .request_from_shell(PlayOperation::Config(config, nodes, tuning))
                 .await;
             ctx.update_app(f(done == PlayOperationOutput::Success));
         })

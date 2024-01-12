@@ -1,7 +1,7 @@
 use app_core::{
     instrument::{Config, Node},
     play::PlayOperation,
-    tuner::{MAX_F, MIN_F},
+    tuner::{TuningValue, MAX_F, MIN_F},
 };
 use crux_core::render::Render;
 pub use crux_core::App;
@@ -12,18 +12,19 @@ use spectrum_analyzer::{
     samples_fft_to_spectrum, scaling::divide_by_N_sqrt, windows::hann_window, FrequencyLimit,
 };
 
-use crate::{system::SAMPLE_RATE, capture::Capture};
+use crate::{capture::Capture, system::SAMPLE_RATE};
 
 use super::resolve::Resolve;
 use super::system::System;
 
-const ANALYZE_SAMPLES_COUNT: usize = 1024;
+const ANALYZE_SAMPLES_COUNT: usize = 4096;
 
 #[derive(Default)]
 pub struct Model {
     system: Option<System>,
     config: Config,
     nodes: Vec<Node>,
+    tuning: Vec<TuningValue>,
     audio_data: Vec<Vec<f32>>,
     analyze_samples: Vec<f32>,
     frame_size: usize,
@@ -42,7 +43,7 @@ pub struct RedSirenAU;
 pub struct RedSirenAUCapabilities {
     pub render: Render<PlayOperation>,
     pub resolve: Resolve<PlayOperation>,
-    pub capture: Capture<PlayOperation>
+    pub capture: Capture<PlayOperation>,
 }
 
 impl App for RedSirenAU {
@@ -52,13 +53,17 @@ impl App for RedSirenAU {
     type Capabilities = RedSirenAUCapabilities;
 
     fn update(&self, msg: PlayOperation, model: &mut Model, caps: &RedSirenAUCapabilities) {
+        log::trace!("au msg {msg:?}");
         match msg {
-            PlayOperation::Config(config, nodes) => {
+            PlayOperation::Config(config, nodes, tuning) => {
                 model.config = config;
                 model.nodes = nodes;
-                _ = model
-                    .system
-                    .insert(System::new(model.nodes.as_slice(), &model.config));
+                model.tuning = tuning;
+                _ = model.system.insert(System::new(
+                    model.nodes.as_slice(),
+                    &model.config,
+                    model.tuning.as_slice(),
+                ));
 
                 caps.render.render();
                 caps.resolve.resolve_success(true);
@@ -87,7 +92,6 @@ impl App for RedSirenAU {
                                 .iter()
                                 .map(|(freq, value)| (freq.val(), value.val())),
                         ));
-                        
                     }
                 } else if let Some(sys) = model.system.as_mut() {
                     let frame_size = input.first().map_or(0, |ch| ch.len());

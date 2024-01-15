@@ -39,6 +39,7 @@ impl Operation for PlayOperationOutput {
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum CaptureOutput {
     CaptureFFT(Vec<(f32, f32)>),
+    CaptureData(Vec<f32>)
 }
 
 impl Eq for CaptureOutput {}

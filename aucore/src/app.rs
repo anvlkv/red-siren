@@ -123,6 +123,17 @@ impl App for RedSirenAU {
                         .process(model.frame_size, input.as_slice(), output.as_mut_slice());
 
                     caps.render.render();
+
+
+                    let mut data = Vec::new();
+                    while let Some (snp) = sys.snp.get() {
+                        for i in 0..snp.size() {
+                            data.push(snp.at(i))
+                        }
+                    }
+                    if data.len() > 0 {
+                        caps.capture.capture_data(data);
+                    }
                 } else {
                     log::warn!("skipping new data, no system yet, nor capturing");
                 }

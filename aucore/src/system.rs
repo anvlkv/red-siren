@@ -5,7 +5,9 @@ use app_core::{
 use fundsp::hacker32::*;
 
 pub const SAMPLE_RATE: f64 = 44100.0;
+const SNOOP_SIZE: usize = 1024;
 const CHANNELS: usize = 2;
+const MUL: f32 = 10.0;
 
 pub struct System {
     pub net_be: BigBlockAdapter32,
@@ -16,6 +18,7 @@ pub struct System {
     pub b_centres: Vec<Shared<f32>>,
     pub b_qs: Vec<Shared<f32>>,
     pub n_fs: Vec<Shared<f32>>,
+    pub snp: Snoop<f32>,
 }
 
 impl System {
@@ -63,11 +66,15 @@ impl System {
             );
 
             // todo: use hid input
-            let bp_q = shared(0.25);
+            let bp_q = shared(1.0 / size as f32);
+            let ch_mul = 1.0 + MUL - MUL * tuning.2;
 
-            let bp_n = mul(100.0 * tuning.2)
+            log::info!("amp channel input by {ch_mul}");
+
+            let bp_n = mul(ch_mul)
                 >> (pass() | var(&bp_f) | var(&bp_q))
                 >> bandpass()
+                >> clip()
                 >> pluck(node_data.freq.0, 0.75, 0.25);
             b_centres.push(bp_f);
             b_qs.push(bp_q);
@@ -78,7 +85,7 @@ impl System {
             input_subnet.connect_output(bp_id, 0, i);
 
             let n_f = shared(node_data.freq.0);
-            let mut node = (var(&n_f) | clip()) >> (sine() * follow(0.25));
+            let mut node = (var(&n_f) | pass()) >> (sine() * follow(0.25));
             n_fs.push(n_f);
 
             log::debug!("created node: {}", node.display());
@@ -90,13 +97,15 @@ impl System {
             nodes.push(node_id);
         }
 
+        let (snp, an_snp) = snoop(SNOOP_SIZE);
+
         let output_pipe_id = match channels {
             1 => {
                 let (r_f, d_f) = nodes_data
                     .last()
-                    .map(|n| (n.freq.1, n.freq.1 - n.freq.0))
+                    .map(|n| (n.freq.1 * 5.0, n.freq.1 - n.freq.0))
                     .unwrap();
-                let r = resonator_hz(r_f, d_f);
+                let r = resonator_hz(r_f, d_f) >> an_snp >> mul(10.0) >> pinkpass();
 
                 match nodes_data.len() {
                     2 => output_subnet.push(Box::new(join::<U2>() >> r)),
@@ -110,15 +119,19 @@ impl System {
                     .iter()
                     .filter(|n| n.pan < 0)
                     .last()
-                    .map(|n| (n.freq.1, n.freq.1 - n.freq.0))
+                    .map(|n| (n.freq.1 * 2.0, n.freq.1 - n.freq.0))
                     .unwrap();
                 let (rr_f, rd_f) = nodes_data
                     .iter()
                     .filter(|n| n.pan > 0)
                     .last()
-                    .map(|n| (n.freq.1, n.freq.1 - n.freq.0))
+                    .map(|n| (n.freq.1 * 4.0, n.freq.1 - n.freq.0))
                     .unwrap();
-                let r = resonator_hz(lr_f, ld_f) | resonator_hz(rr_f, rd_f);
+                let r = (resonator_hz(lr_f, ld_f) | resonator_hz(rr_f, rd_f))
+                    >> (split::<U2>() | split::<U2>())
+                    >> (pass() | join::<U2>() | pass())
+                    >> (pass() * 10.0 | an_snp | pass() * 10.0)
+                    >> (pinkpass() | sink() | pinkpass());
 
                 match nodes_data.len() {
                     4 => output_subnet.push(Box::new((join::<U2>() | join::<U2>()) >> r)),
@@ -191,6 +204,7 @@ impl System {
             b_qs,
             n_fs,
             nodes,
+            snp,
         }
     }
 }

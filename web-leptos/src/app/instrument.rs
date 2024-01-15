@@ -21,6 +21,7 @@ pub fn InstrumentComponent(
 ) -> impl IntoView {
     let inbound_layout_line = Signal::derive(move || vm().layout.inbound);
     let outbound_layout_line = Signal::derive(move || vm().layout.outbound);
+    let outbound_data = Signal::derive(move || vm().data_out);
 
     let playing = Signal::derive(move || vm().playing);
 
@@ -31,7 +32,7 @@ pub fn InstrumentComponent(
         <Title text="Red Siren - Play"/>
         <svg fill="none" class="stroke-black dark:stroke-red" viewBox={view_box} xmlns="http://www.w3.org/2000/svg">
           <StringComponent layout_line={inbound_layout_line} />
-          <StringComponent layout_line={outbound_layout_line} />
+          <StringComponent layout_line={outbound_layout_line} data={outbound_data}/>
         </svg>
         <svg class="fill-red dark:fill-black stroke-black dark:stroke-red" viewBox={view_box} xmlns="http://www.w3.org/2000/svg">
           {move || vm().layout.tracks.into_iter().zip(vm().nodes).map(|(rect, _node)|
@@ -40,14 +41,15 @@ pub fn InstrumentComponent(
             }
           ).collect_view()}
         </svg>
-        <svg class="fill-black dark:fill-red" viewBox={view_box} xmlns="http://www.w3.org/2000/svg">
+        <div class="w-full h-full relative">
           {move || vm().layout.buttons.into_iter().zip(vm().nodes).map(|(rect, node)|
             view!{
               <ButtonComponent layout_rect={Signal::derive(move || rect)}/>
             }
           ).collect_view()}
-        </svg>
+        </div>
         <MenuComponent position={menu_position} playing=playing />
       </div>
     }
 }
+

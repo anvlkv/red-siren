@@ -2,3 +2,4 @@ Dockerfile
 target/
 iOS/
 Android/
+rust-toolchain.toml

@@ -77,6 +77,7 @@ export class PlaybackBridge {
         case PlayOperationVariantResume: {
           try {
             await this.ctx.resume();
+            this.redSirenNode?.clearBuffer();
             console.log("resumed");
             new PlayOperationOutputVariantSuccess().serialize(ser);
           } catch (e) {

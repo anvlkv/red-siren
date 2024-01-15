@@ -1,4 +1,4 @@
-use leptos::*;
+use leptos::{ev::PointerEvent, *};
 use leptos_meta::Title;
 use mint::Point2;
 
@@ -45,17 +45,40 @@ pub fn TunerComponent(
 ) -> impl IntoView {
     let layout_line = Signal::derive(move || vm().line);
     let ev_ctx = use_context::<WriteSignal<Event>>().expect("root ev context");
-    let pairs = move || {
-        vm().pairs.into_iter().map(move |pair| {
-            let f_n = pair.f_n;
-            (f_n, Signal::derive(move || pair.rect))
-        })
-    };
+    let pairs = Signal::derive(move || {
+        vm().pairs
+            .into_iter()
+            .map(move |pair| {
+                let f_n = pair.f_n;
+                (f_n, Signal::derive(move || pair.rect))
+            })
+            .collect::<Vec<_>>()
+    });
 
     let fft = Signal::derive(move || vm().fft);
     let fft_max = Signal::derive(move || vm().fft_max);
     let menu_position = Signal::derive(move || vm().menu_position);
     let btn_class = "w-full rounded-2xl bg-red dark:bg-black text-black dark:text-red text-xl hover:text-gray dark:hover:text-cinnabar";
+
+    let activate = Callback::new(move |e: PointerEvent| {
+        log::debug!("down {e:?}");
+        e.prevent_default();
+        let c = (e.client_x() as f64, e.client_y() as f64);
+        ev.set(tuner::TunerEV::ActivationXY(c, e.pointer_id()))
+    });
+
+    let deactivate = Callback::new(move |e: PointerEvent| {
+        log::debug!("up {e:?}");
+        e.prevent_default();
+        ev.set(tuner::TunerEV::DeactivationXY(e.pointer_id()))
+    });
+
+    let active_move = Callback::new(move |e: PointerEvent| {
+        log::debug!("move {e:?}");
+        e.prevent_default();
+        let c = (e.client_x() as f64, e.client_y() as f64);
+        ev.set(tuner::TunerEV::MovementXY(c, e.pointer_id()))
+    });
 
     view! {
       <div class="h-full w-full bg-red dark:bg-black instrument">
@@ -64,28 +87,19 @@ pub fn TunerComponent(
           <TunerLine layout_line=layout_line fft=fft/>
           <TunerLine layout_line=layout_line fft=fft_max/>
         </svg>
-        <svg class="fill-black dark:fill-red" viewBox={view_box} xmlns="http://www.w3.org/2000/svg">
-          {move || pairs().map(|child| {
-            let f_n = child.0;
-            view!{
-              <ButtonComponent layout_rect={child.1}
-                activation={
-                  Callback::new(move |val: bool| {
-                    ev.set(tuner::TunerEV::ButtonPress(f_n, val))
-                  })
-                }
-                movement_xy ={
-                  Callback::new(move |(x, y): (i32, i32)| {
-                    ev.set(tuner::TunerEV::SetFreqAmpXYPos(f_n, x as f64, y as f64))
-                  })
-                }
-              />
-            }
-        }).collect_view()}
-        </svg>
+        <div class="w-full h-full relative"
+          on:pointerdown=activate
+          on:pointerup=deactivate
+          on:pointermove=active_move>
+          {
+            move || pairs().into_iter().map(|(f_n, rect)| view!{
+              <ButtonComponent layout_rect={rect} f_n=f_n/>
+            }).collect_view()
+          }
+        </div>
         <RedCardComponent position={menu_position} style={move || "padding: .12rem".to_string()}>
-          <button class=btn_class 
-            disabled={move || vm().needs_tuning} 
+          <button class=btn_class
+            disabled={move || vm().needs_tuning}
             on:click=move|_| ev_ctx.set(Event::Menu(app_core::Activity::Play))>
             {"Done"}
           </button>

@@ -4,13 +4,13 @@ import { initSync, au_log_init } from "aucore/aucore";
 import {
   ViewModel,
   PlayOperationVariantInput,
-  PlayOperationOutput,
 } from "typegen/types/au_types";
 import { update, update_plain } from "./core";
 
 export class RedSirenWorklet extends AudioWorkletProcessor {
-  private vm: ViewModel["value"] | null = null;
+  private vm: ViewModel["value"][] = [];
   private initOutput?: any;
+  private fillBuffer = true;
 
   constructor() {
     super();
@@ -19,7 +19,7 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
   }
 
   onRender = (vm: ViewModel) => {
-    this.vm = vm.value;
+    this.vm.push(vm.value);
   };
 
   onResolve = (output: Uint8Array) => {
@@ -54,6 +54,11 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
           update_plain(ev, this.onRender, this.onResolve, this.onCapture);
           break;
         }
+        case "clear-buffer" : {
+          this.vm = [];
+          this.fillBuffer = true;
+          break;
+        }
         default:
           console.warn("unknown msg", msg);
           super.port.onmessage && super.port.onmessage(msg);
@@ -84,20 +89,23 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
       this.onCapture
     );
 
-    if (this.vm?.length) {
+    if (this.vm.length >= 42) {
+      this.fillBuffer = false;
+    }
+
+    if (this.vm.length && !this.fillBuffer) {
+      const buffer = this.vm.splice(0, 1)[0];
       for (let output of outputs) {
         for (let ch = 0; ch < output.length; ch++) {
           for (let s = 0; s < output[ch].length; s++) {
-            if (this.vm[ch] !== undefined) {
-              output[ch][s] = this.vm[ch][s];
+            if (buffer[ch] !== undefined) {
+              output[ch][s] = buffer[ch][s];
             } else {
-              output[ch][s] = this.vm[0][s];
+              output[ch][s] = buffer[0][s];
             }
           }
         }
       }
-    } else {
-      console.log("playing no vm");
     }
 
     return true;

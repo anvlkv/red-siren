@@ -7,8 +7,8 @@ fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=../aucore");
 
     {
-        use aucore::RedSirenAU;
         use app_core::instrument::{Config, Node};
+        use aucore::RedSirenAU;
 
         let mut gen = TypeGen::new();
         gen.register_type::<Config>()?;
@@ -32,6 +32,7 @@ fn main() -> anyhow::Result<()> {
             geometry::{Line, Rect},
             instrument::{layout::MenuPosition, Config, InstrumentEV, Layout, Node, PlaybackEV},
             intro::IntroEV,
+            play::CaptureOutput,
             tuner::TunerEV,
             Activity, RedSiren,
         };
@@ -41,6 +42,12 @@ fn main() -> anyhow::Result<()> {
         gen.register_type::<IntroEV>()?;
         gen.register_type::<TunerEV>()?;
         gen.register_type::<PlaybackEV>()?;
+        gen.register_type_with_samples(vec![
+            CaptureOutput::CaptureFFT(vec![(0.0, 0.0)]),
+            CaptureOutput::CaptureData(vec![0.0]),
+            CaptureOutput::CaptureFFT((0..1024).map(|i| (i as f32, (i * 2) as f32 / 1.0)).collect()),
+            CaptureOutput::CaptureData((0..1024).map(|i| i as f32 / 1.0 ).collect()),
+        ])?;
 
         gen.register_type::<Activity>()?;
         gen.register_type::<MenuPosition>()?;
@@ -56,10 +63,7 @@ fn main() -> anyhow::Result<()> {
 
         gen.swift("CoreTypes", output_root.join("swift"))?;
 
-        gen.java(
-            "com.anvlkv.redsiren.core.typegen",
-            output_root.join("java"),
-        )?;
+        gen.java("com.anvlkv.redsiren.core.typegen", output_root.join("java"))?;
 
         gen.typescript("typegen", output_root.join("typescript"))?;
     }

@@ -145,7 +145,7 @@ impl App for RedSiren {
     type Capabilities = RedSirenCapabilities;
 
     fn update(&self, msg: Event, model: &mut Model, caps: &RedSirenCapabilities) {
-        log::trace!("app msg: {:?}", msg);
+        // log::trace!("app msg: {:?}", msg);
 
         match msg {
             Event::Start => {
@@ -163,8 +163,12 @@ impl App for RedSiren {
 
                 log::debug!("reflect {act:?}");
 
-                if act == Activity::Play && !self.tuner.is_tuned(&model.tuner) {
-                    self.update(Event::Menu(Activity::Tune), model, caps);
+                if act == Activity::Play {
+                    if !self.tuner.is_tuned(&model.tuner) {
+                        self.update(Event::Menu(Activity::Tune), model, caps);
+                    } else if let Some(d) = model.tuner.tuning.as_ref() {
+                        model.instrument.tuning = d.clone();
+                    }
                 } else if act == Activity::Tune {
                     self.tuner.update(
                         tuner::TunerEV::Activate(true),
@@ -318,6 +322,13 @@ impl App for RedSiren {
                 play::CaptureOutput::CaptureFFT(d) => {
                     self.tuner
                         .update(tuner::TunerEV::FftData(d), &mut model.tuner, &caps.into())
+                }
+                play::CaptureOutput::CaptureData(d) => {
+                    self.instrument.update(
+                        instrument::InstrumentEV::SnoopData(d),
+                        &mut model.instrument,
+                        &caps.into(),
+                    );
                 }
             },
             Event::IntroEvent(event) => self.intro.update(event, &mut model.intro, &caps.into()),

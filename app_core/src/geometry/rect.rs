@@ -150,4 +150,11 @@ impl Rect {
         self.rect.x.y -= d;
         self.rect.y.y -= d;
     }
+
+    pub fn contains(&self, pt: Point2<f64>) -> bool {
+        self.top_left().x < pt.x
+            && self.top_left().y < pt.y
+            && self.bottom_right().x > pt.x
+            && self.bottom_right().y > pt.y
+    }
 }

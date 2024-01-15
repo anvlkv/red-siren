@@ -18,9 +18,17 @@ where
 
     pub fn capture_fft(&self, captured: Vec<(f32, f32)>) {
         let ctx = self.context.clone();
-
+        log::debug!("capture_fft");
         self.context.spawn(async move {
             ctx.notify_shell(CaptureOutput::CaptureFFT(captured)).await;
+        })
+    }
+    
+    pub fn capture_data(&self, captured: Vec<f32>) {
+        let ctx = self.context.clone();
+        log::debug!("capture_data");
+        self.context.spawn(async move {
+            ctx.notify_shell(CaptureOutput::CaptureData(captured)).await;
         })
     }
 }

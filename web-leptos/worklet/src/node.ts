@@ -76,4 +76,10 @@ export class RedSirenNode extends AudioWorkletNode {
       ev,
     });
   }
+  
+  public clearBuffer() {
+    this.port.postMessage({
+      type: "clear-buffer",
+    });
+  }
 }

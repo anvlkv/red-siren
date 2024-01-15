@@ -62,7 +62,7 @@ impl Playback {
         data.copy_to(dst.as_mut_slice());
         let result = bincode::deserialize::<play::PlayOperationOutput>(dst.as_slice()).expect("effect deserialization err");
 
-        log::trace!("playback result {result:?}");
+        // log::trace!("playback result {result:?}");
 
         result
     }
@@ -73,7 +73,7 @@ impl Playback {
         data.copy_to(dst.as_mut_slice());
         let result = bincode::deserialize::<play::CaptureOutput>(dst.as_slice()).expect("effect deserialization err");
 
-        log::trace!("playback result {result:?}");
+        // log::trace!("playback result {result:?}");
 
         result
     }

@@ -1,61 +1,33 @@
 use app_core::geometry::Rect;
-use leptos::{ev::PointerEvent, *};
+use leptos::*;
+
 
 #[component]
 pub fn ButtonComponent(
     #[prop(into)] layout_rect: Signal<Rect>,
-    #[prop(optional)] movement_xy: Option<Callback<(i32, i32)>>,
-    #[prop(optional)] movement_x: Option<Callback<i32>>,
-    #[prop(optional)] movement_y: Option<Callback<i32>>,
-    #[prop(optional)] activation: Option<Callback<bool>>,
+    #[prop(into, optional)] f_n: Option<usize>,
 ) -> impl IntoView {
-    let r = move || layout_rect().width() / 2.0;
-    let cx = move || layout_rect().center().x;
-    let cy = move || layout_rect().center().y;
-
-    let activate = Callback::new(move |e: PointerEvent| {
-        log::debug!("down {e:?}");
-        e.prevent_default();
-        if let Some(cb) = activation {
-            cb(true);
-        }
-    });
-
-    let deactivate = Callback::new(move |e: PointerEvent| {
-        log::debug!("up {e:?}");
-        e.prevent_default();
-        if let Some(cb) = activation {
-            cb(false);
-        }
-    });
-
-    let active_move = Callback::new(move |e: PointerEvent| {
-        log::debug!("move {e:?}");
-        e.prevent_default();
-
-        let mx = e.movement_x();
-        let my = e.movement_y();
-
-        match (mx.abs() > my.abs(), movement_xy, movement_x, movement_y) {
-            (_, Some(mxy_cb), None, None) => mxy_cb((e.client_x(), e.client_y())),
-            (_, Some(_), Some(_), _) | (_, Some(_), _, Some(_)) => panic!("conflicting callbacks"),
-            (_, _, Some(mx_cb), None) | (true, _, Some(mx_cb), _) => mx_cb(e.client_x()),
-            (_, _, None, Some(my_cb)) | (false, _, _, Some(my_cb)) => my_cb(e.client_y()),
-            _ => {
-                log::warn!("no callback")
-            }
-        }
-    });
+    let style = move || format!(r#"
+    width: {}px; 
+    height: {}px; 
+    top: {}px;
+    left: {}px;
+    border-radius: {}px;
+    "#, 
+        layout_rect().width(),
+        layout_rect().height(),
+        layout_rect().top_left().y,
+        layout_rect().top_left().x,
+        layout_rect().width()/2.0,
+    );
 
     view! {
-        <circle class="instrument-button"
-            r=r
-            cx=cx
-            cy=cy
-            on:pointerdown=activate
-            on:pointermove=active_move
-            on:pointerup=deactivate
-            on:pointerleave=deactivate
-        />
+        <button class="instrument-button absolute bg-black dark:bg-red text-red dark:text-black"
+            style=style
+        >
+            <Show when=move || f_n.is_some()>
+                {f_n}
+            </Show>
+        </button>
     }
 }

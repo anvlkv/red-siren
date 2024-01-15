@@ -1,7 +1,4 @@
-use std::{
-    collections::HashSet,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use crux_core::render::Render;
 use crux_core::App;
@@ -47,7 +44,6 @@ pub struct Model {
     pub config: instrument::Config,
     pub tuning: Option<Vec<TuningValue>>,
     pub state: State,
-    pub pressed_buttons: HashSet<usize>,
     pub menu_position: MenuPosition,
 }
 
@@ -77,9 +73,9 @@ impl Eq for TunerVM {}
 pub enum TunerEV {
     CheckHasTuning,
     TuningKV(KeyValueOutput),
-    SetFreqAmpXYPos(usize, f64, f64),
-    ButtonPress(usize, bool),
-    ButtonReleaseAll,
+    MovementXY((f64, f64), i32),
+    ActivationXY((f64, f64), i32),
+    DeactivationXY(i32),
     SetConfig(instrument::Config),
     Activate(bool),
     FftData(Vec<(f32, f32)>),
@@ -113,7 +109,7 @@ impl App for Tuner {
     type Capabilities = TunerCapabilities;
 
     fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) {
-        log::trace!("tuner ev: {event:?}");
+        // log::trace!("tuner ev: {event:?}");
 
         match event {
             TunerEV::CheckHasTuning => {
@@ -200,8 +196,7 @@ impl App for Tuner {
                     log::error!("tuner play op failed");
                     caps.navigate.to(crate::Activity::Intro);
                     model.state = State::None;
-                }
-                else {
+                } else {
                     caps.play.capture_fft(TunerEV::PlayOpStartCapturing)
                 }
             }
@@ -210,8 +205,7 @@ impl App for Tuner {
                     log::error!("tuner play op failed");
                     caps.navigate.to(crate::Activity::Intro);
                     model.state = State::None;
-                }
-                else {
+                } else {
                     model.state = State::Capturing;
                 }
             }
@@ -220,8 +214,7 @@ impl App for Tuner {
                     log::error!("tuner play op failed");
                     caps.navigate.to(crate::Activity::Intro);
                     model.state = State::None;
-                }
-                else {
+                } else {
                     log::info!("done capturing");
                 }
             }
@@ -230,69 +223,80 @@ impl App for Tuner {
                     log::error!("tuner play op failed");
                     caps.navigate.to(crate::Activity::Intro);
                     model.state = State::None;
-                }
-                else {
+                } else {
                     caps.play.pause(TunerEV::PlayOpStopProcessing)
                 }
             }
-            TunerEV::ButtonPress(f_n, pressed) => {
-                if pressed {
-                    _ = model.pressed_buttons.insert(f_n);
-                } else {
-                    _ = model.pressed_buttons.remove(&f_n);
-                }
+            TunerEV::ActivationXY((x, y), id) => {
+                {
+                    let world = model.world.lock().expect("world lock");
 
-                caps.render.render();
-            }
-            TunerEV::ButtonReleaseAll => {
-                model.pressed_buttons.clear();
-                caps.render.render();
-            }
-            TunerEV::SetFreqAmpXYPos(f_n, value_x, value_y) => {
-                if model.pressed_buttons.contains(&f_n) {
-                    let mut world = model.world.lock().expect("world lock");
-                    let chart = model.chart.as_mut().expect("chart");
-                    if value_y < (model.config.height - model.config.safe_area[3])
-                        && value_y > model.config.safe_area[1]
+                    if let Some(mut pair) = model
+                        .chart
+                        .as_ref()
+                        .map(|ch| {
+                            ch.pairs
+                                .iter()
+                                .map(|e| world.get::<&mut Pair>(*e).expect("Pair for entity"))
+                                .find(|p| p.rect.contains(Point2 { x, y }))
+                        })
+                        .flatten()
                     {
-                        if f_n == 0
-                            || world.query::<&Pair>().into_iter().all(|(_, p)| {
-                                if p.f_n == f_n + 1 {
-                                    (p.rect.center().x + model.config.button_size / 2.0) < value_x
-                                } else if p.f_n == f_n - 1 {
-                                    (p.rect.center().x - model.config.button_size / 2.0) > value_x
-                                } else {
-                                    true
-                                }
-                            })
-                        {
-                            let (x, y, f_n) = {
-                                let query = world.query_mut::<&mut Pair>();
-                                let (_, pair) = query
-                                    .into_iter()
-                                    .find(|(_, p)| p.f_n == f_n)
-                                    .expect("pair for f_n");
-                                pair.rect.move_x(value_x);
-                                (value_x, pair.rect.center().y, pair.f_n)
-                            };
-
-                            chart.update_value_from_pos(&mut world, f_n, (&x, &y), &model.config)
-                        }
-
-                        let (x, y, f_n) = {
-                            let query = world.query_mut::<&mut Pair>();
-                            let (_, pair) = query
-                                .into_iter()
-                                .find(|(_, p)| p.f_n == f_n)
-                                .expect("pair for f_n");
-                            pair.rect.move_y(value_y);
-                            (pair.rect.center().x, value_y, pair.f_n)
-                        };
-                        chart.update_value_from_pos(&mut world, f_n, (&x, &y), &model.config)
-                    }
-
-                    caps.render.render();
+                        pair.finger = Some(id);
+                    };
                 }
+                caps.render.render();
+            }
+            TunerEV::DeactivationXY(id) => {
+                {
+                    let world = model.world.lock().expect("world lock");
+
+                    if let Some(mut pair) = model
+                        .chart
+                        .as_ref()
+                        .map(|ch| {
+                            ch.pairs
+                                .iter()
+                                .map(|e| world.get::<&mut Pair>(*e).expect("Pair for entity"))
+                                .find(|p| p.finger == Some(id))
+                        })
+                        .flatten()
+                    {
+                        pair.finger = None;
+                    };
+                }
+                caps.render.render();
+            }
+            TunerEV::MovementXY((x, y), id) => {
+                {
+                    let mut world = model.world.lock().expect("world lock");
+                    let f_n = model
+                        .chart
+                        .as_ref()
+                        .map(|ch| {
+                            ch.pairs
+                                .iter()
+                                .map(|e| world.get::<&Pair>(*e).expect("Pair for entity"))
+                                .find_map(|p| {
+                                    if p.finger == Some(id) {
+                                        Some(p.f_n)
+                                    } else {
+                                        None
+                                    }
+                                })
+                        })
+                        .flatten();
+
+                    if let Some(f_n) = f_n {
+                        model.chart.as_ref().unwrap().update_value_from_pos(
+                            &mut world,
+                            f_n,
+                            (&x, &y),
+                            &model.config,
+                        );
+                    };
+                }
+                caps.render.render();
             }
             TunerEV::TuningKV(kv) => match kv {
                 KeyValueOutput::Read(value) => {

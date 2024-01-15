@@ -65,10 +65,6 @@ pub fn AboutContent(#[prop(into)] position: Signal<MenuPosition>) -> impl IntoVi
                 <dd>{"The musical instrument."}</dd>
         </dl>
 
-        <p>{r#"
-            
-        "#}</p>
-
         <button class=btn_class on:click=move|_| exit_ev(())>
             {"Clear"}
         </button>

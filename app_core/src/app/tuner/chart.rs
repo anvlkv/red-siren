@@ -6,13 +6,23 @@ use hecs::{Bundle, Entity, World};
 use mint::Point2;
 use serde::{Deserialize, Serialize};
 
-use super::{MAX_F, MIN_F, TuningValue};
+use super::{TuningValue, MAX_F, MIN_F};
+
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+pub enum TriggerState {
+    #[default]
+    None,
+    Ghost,
+    Active,
+}
 
 #[derive(Bundle, Clone, Copy, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Pair {
     pub value: Option<(f32, f32)>,
     pub f_n: usize,
     pub rect: Rect,
+    pub finger: Option<i32>,
+    pub triggered: TriggerState,
 }
 
 impl Eq for Pair {}
@@ -36,7 +46,13 @@ impl Pair {
             .offset_left_and_right(-x, x)
             .offset_top_and_bottom(-y, y);
 
-        Pair { value, f_n, rect }
+        Pair {
+            value,
+            f_n,
+            rect,
+            finger: None,
+            triggered: TriggerState::default(),
+        }
     }
 
     pub fn spawn(world: &mut World, config: &Config, f_n: usize) -> Entity {
@@ -180,9 +196,38 @@ impl Chart {
         let range_width = MAX_F - MIN_F;
         let value_freq = MAX_F - (x / config.width) as f32 * range_width + MIN_F;
         let value_amp = FFTChartEntry::point_amp(*y, config);
-        let mut pair = world
-            .get::<&mut Pair>(self.pairs[f_n - 1])
+        let l_rect = if f_n > 1 {
+            world
+                .query::<&Pair>()
+                .into_iter()
+                .find(|(_, p)| p.f_n == f_n - 1)
+                .map(|(_, p)| p.rect.clone())
+        } else {
+            None
+        };
+
+        let h_rect = world
+            .query::<&Pair>()
+            .into_iter()
+            .find(|(_, p)| p.f_n == f_n + 1)
+            .map(|(_, p)| p.rect.clone());
+
+        let (_, pair) = world
+            .query_mut::<&mut Pair>()
+            .into_iter()
+            .find(|(_, p)| p.f_n == f_n)
             .expect("pair for fn");
-        pair.value = Some((value_freq, value_amp));
+
+        if h_rect
+            .map(|p| (p.center().x + config.button_size) < *x)
+            .unwrap_or(true)
+            && l_rect
+                .map(|p| (p.center().x - config.button_size) > *x)
+                .unwrap_or(true)
+        {
+            pair.value = Some((value_freq, value_amp));
+            pair.rect.move_x(*x);
+            pair.rect.move_y(*y);
+        }
     }
 }

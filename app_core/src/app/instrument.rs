@@ -4,6 +4,7 @@ use crux_core::render::Render;
 use crux_core::App;
 use crux_macros::Effect;
 use hecs::{Entity, World};
+use mint::Point2;
 use serde::{Deserialize, Serialize};
 
 pub use config::Config;
@@ -12,6 +13,8 @@ use node::spawn_all_nodes;
 pub use node::Node;
 
 use crate::{play::Play, tuner::TuningValue, Navigate};
+
+use self::string::OutboundString;
 
 pub mod config;
 pub mod keyboard;
@@ -36,6 +39,7 @@ pub struct Model {
     pub setup_complete: bool,
     pub configured: bool,
     pub tuning: Vec<TuningValue>,
+    pub snooped: Vec<f32>,
 }
 
 impl Model {
@@ -54,6 +58,7 @@ pub struct InstrumentVM {
     pub nodes: Vec<Node>,
     pub playing: bool,
     pub layout: Layout,
+    pub data_out: Vec<Point2<f64>>,
 }
 
 impl Eq for InstrumentVM {}
@@ -66,7 +71,7 @@ pub enum PlaybackEV {
 
 impl Eq for PlaybackEV {}
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum InstrumentEV {
     None,
     CreateWithConfig(Config),
@@ -76,7 +81,10 @@ pub enum InstrumentEV {
     PlayOpConfigure(bool),
     PlayOpPlay(bool),
     PlayOpPause(bool),
+    SnoopData(Vec<f32>),
 }
+
+impl Eq for InstrumentEV {}
 
 #[cfg_attr(feature = "typegen", derive(crux_macros::Export))]
 #[derive(Effect)]
@@ -171,8 +179,7 @@ impl App for Instrument {
             InstrumentEV::PlayOpPlay(success) => {
                 if !success {
                     self.update(InstrumentEV::Playback(PlaybackEV::Error), model, caps)
-                }
-                else if !model.configured && model.playing {
+                } else if !model.configured && model.playing {
                     let nodes = self.get_nodes(model);
                     caps.play.configure(
                         &model.config,
@@ -185,6 +192,7 @@ impl App for Instrument {
             InstrumentEV::Playback(playback_ev) => match playback_ev {
                 PlaybackEV::Play(playing) => {
                     model.playing = playing;
+                    model.snooped = vec![];
                     if !model.setup_complete {
                         caps.play.permissions(InstrumentEV::PlayOpPermission)
                     } else if playing {
@@ -200,6 +208,20 @@ impl App for Instrument {
                     caps.render.render();
                 }
             },
+            InstrumentEV::SnoopData(d) => {
+                model.snooped = d;
+
+                let world = model.world.lock().expect("lock world");
+                let mut outbound = model
+                    .outbound
+                    .as_ref()
+                    .map(|e| world.get::<&mut OutboundString>(*e).ok())
+                    .flatten()
+                    .expect("get string");
+
+                outbound.update_data(model.snooped.clone(), &model.config);
+                caps.render.render();
+            }
             InstrumentEV::None => {}
         }
     }
@@ -210,6 +232,7 @@ impl App for Instrument {
             playing: model.playing,
             config: model.config.clone(),
             layout: model.layout.clone().unwrap_or_default(),
+            data_out: self.get_data_out(model),
         }
     }
 }
@@ -222,5 +245,20 @@ impl Instrument {
             .iter()
             .map(|e| *world.get::<&Node>(*e).expect("node for entity"))
             .collect()
+    }
+
+    fn get_data_out(&self, model: &Model) -> Vec<Point2<f64>> {
+        let world = model.world.lock().expect("world lock");
+        model
+            .outbound
+            .as_ref()
+            .map(|e| {
+                world
+                    .get::<&OutboundString>(*e)
+                    .expect("string for entity")
+                    .data
+                    .clone()
+            })
+            .unwrap_or_default()
     }
 }

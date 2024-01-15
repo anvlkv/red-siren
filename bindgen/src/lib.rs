@@ -35,7 +35,7 @@ pub fn view() -> Vec<u8> {
 }
 
 pub fn log_init() {
-    let lvl = log::LevelFilter::Trace;
+    let lvl = log::LevelFilter::Warn;
     
     app_core::log_init(lvl);
     aucore::log_init(lvl);

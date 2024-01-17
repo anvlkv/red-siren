@@ -31,4 +31,12 @@ where
             ctx.notify_shell(CaptureOutput::CaptureData(captured)).await;
         })
     }
+    
+    pub fn capture_nodes_data(&self, captured: Vec<(usize, Vec<f32>)>) {
+        let ctx = self.context.clone();
+        log::debug!("capture_data");
+        self.context.spawn(async move {
+            ctx.notify_shell(CaptureOutput::CaptureNodesData(captured)).await;
+        })
+    }
 }

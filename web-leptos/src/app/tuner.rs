@@ -50,7 +50,7 @@ pub fn TunerComponent(
             .into_iter()
             .map(move |pair| {
                 let f_n = pair.f_n;
-                (f_n, Signal::derive(move || pair.rect))
+                (f_n, Signal::derive(move || pair))
             })
             .collect::<Vec<_>>()
     });
@@ -92,9 +92,23 @@ pub fn TunerComponent(
           on:pointerup=deactivate
           on:pointermove=active_move>
           {
-            move || pairs().into_iter().map(|(f_n, rect)| view!{
-              <ButtonComponent layout_rect={rect} f_n=f_n/>
-            }).collect_view()
+            move || pairs().into_iter().map(|(f_n, pair )| {
+            view!{
+              <ButtonComponent layout_rect={Signal::derive(move || pair().rect)} activation={Signal::derive(move || match pair().triggered {
+                tuner::TriggerState::None => 0.5,
+                tuner::TriggerState::Ghost => -0.5,
+                tuner::TriggerState::Active => -1.0,
+              })}>
+                <p>
+                  {move || format!("f{}", pair().f_n)}
+                </p>
+                <Show when=move || pair().value.is_some()>
+                  <p>
+                    {move || format!("{}hz, {:01.3}", pair().value.unwrap().0 as usize, pair().value.unwrap().1)}
+                  </p>
+                </Show>
+              </ButtonComponent>
+            }}).collect_view()
           }
         </div>
         <RedCardComponent position={menu_position} style={move || "padding: .12rem".to_string()}>

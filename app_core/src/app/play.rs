@@ -17,6 +17,7 @@ pub enum PlayOperation {
     QueryOutputDevices,
     Config(Config, Vec<Node>, Vec<TuningValue>),
     Input(Vec<Vec<f32>>),
+    SendSnoops
 }
 
 impl Eq for PlayOperation {}
@@ -39,7 +40,8 @@ impl Operation for PlayOperationOutput {
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum CaptureOutput {
     CaptureFFT(Vec<(f32, f32)>),
-    CaptureData(Vec<f32>)
+    CaptureData(Vec<f32>),
+    CaptureNodesData(Vec<(usize, Vec<f32>)>)
 }
 
 impl Eq for CaptureOutput {}
@@ -115,6 +117,15 @@ where
         self.context.spawn(async move {
             let done = ctx.request_from_shell(PlayOperation::InstallAU).await;
             ctx.update_app(f(done == PlayOperationOutput::Success));
+        })
+    }
+    
+    pub fn query_snoops(&self)
+    {
+        let ctx = self.context.clone();
+
+        self.context.spawn(async move {
+            ctx.notify_shell(PlayOperation::SendSnoops).await;
         })
     }
 

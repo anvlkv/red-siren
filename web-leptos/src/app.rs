@@ -107,7 +107,7 @@ fn RedSirenCore() -> impl IntoView {
 
     create_effect(move|_| {
         let pb = playback();
-        pb.on_capture(set_event.clone());
+        pb.on_capture(set_event);
     });
 
     let navigate = leptos_router::use_navigate();

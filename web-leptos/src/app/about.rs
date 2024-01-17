@@ -48,7 +48,7 @@ pub fn AboutContent(#[prop(into)] position: Signal<MenuPosition>) -> impl IntoVi
     view! {
       <div class={about_class} style={about_style}>
         <Title text="Red Siren - About"/>
-        <h2 class="text-4xl my-auto text-center italic">{"About the Red Siren"}</h2>
+        <h2 class="text-4xl my-auto text-center italic">{"About the Red Siren β"}</h2>
         <p class="text-center">{"Red Siren is a noise chime."}</p>
         <dl>
             <dt>{"Red"}</dt>

@@ -54,4 +54,8 @@ impl Line {
     pub fn height(&self) -> f64 {
         self.line.y.y - self.line.x.y
     }
+
+    pub fn len(&self) -> f64 {
+        self.width().max(self.height())
+    }
 }

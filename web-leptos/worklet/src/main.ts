@@ -111,7 +111,8 @@ async function create_ctx() {
             return new Node(
               [[n * config.f0 * 2], [(n + 1) * config.f0 * 2]],
               BigInt(i + 1),
-              i % 2 ? -1 : 1
+              i % 2 ? -1 : 1,
+              0
             );
           })
         ),
@@ -199,6 +200,7 @@ playing.onChange(async (playing) => {
               return new Node(
                 [[i * config.f0 * 2], [(i + 1) * config.f0 * 2]],
                 BigInt(i + 1),
+                0,
                 0
               );
             }

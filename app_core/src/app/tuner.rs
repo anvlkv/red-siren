@@ -14,12 +14,12 @@ use crate::{
     Navigate, Play,
 };
 
-use self::chart::{Chart, FFTChartEntry, Pair};
 
 mod chart;
+pub use self::chart::{Chart, FFTChartEntry, Pair, TriggerState};
 
-pub const MIN_F: f32 = 100.0;
-pub const MAX_F: f32 = 12_000.0;
+pub const MIN_F: f32 = 0.06;
+pub const MAX_F: f32 = 6_000.0;
 
 pub type TuningValue = (usize, f32, f32);
 
@@ -113,7 +113,7 @@ impl App for Tuner {
 
         match event {
             TunerEV::CheckHasTuning => {
-                caps.key_value.read("tuning", TunerEV::TuningKV);
+                // caps.key_value.read("tuning", TunerEV::TuningKV);
             }
             TunerEV::SetConfig(config) => {
                 {
@@ -150,11 +150,11 @@ impl App for Tuner {
                             .collect::<Vec<TuningValue>>();
                         model.tuning = Some(values.clone());
                         caps.play.stop_capture_fft(TunerEV::PlayOpStopCapturing);
-                        caps.key_value.write(
-                            "tuning",
-                            bincode::serialize(&values).expect("serialize tuning"),
-                            TunerEV::TuningKV,
-                        );
+                        // caps.key_value.write(
+                        //     "tuning",
+                        //     bincode::serialize(&values).expect("serialize tuning"),
+                        //     TunerEV::TuningKV,
+                        // );
                         log::info!("tuning complete and stored");
                     }
                 } else if model.state != State::SetupInProgress {
@@ -345,6 +345,10 @@ impl Tuner {
                 ch.pairs
                     .iter()
                     .map(|e| *world.get::<&Pair>(*e).expect("Pair for entity"))
+                    .map(|p| {
+                        log::debug!("vm pair: {:?}", p.triggered);
+                        p
+                    })
                     .collect()
             })
             .unwrap_or_default()

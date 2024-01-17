@@ -1,8 +1,9 @@
 use leptos::*;
 use leptos_meta::Title;
 
-pub use button::ButtonComponent;
 use app_core::instrument;
+pub use button::ButtonComponent;
+use leptos_use::{use_raf_fn_with_options, utils::Pausable, UseRafFnOptions};
 pub use string::StringComponent;
 pub use track::TrackComponent;
 
@@ -25,7 +26,61 @@ pub fn InstrumentComponent(
 
     let playing = Signal::derive(move || vm().playing);
 
+    let (ts, set_ts) = create_signal(0.0);
+    let Pausable {
+        resume,
+        pause,
+        is_active,
+    } = use_raf_fn_with_options(
+        move |args| {
+          set_ts(args.timestamp);
+        },
+        UseRafFnOptions::default().immediate(false),
+    );
+
+    create_effect(move |prev| {
+      let now = ts();
+      if prev.map_or(true, |p| now - p >= 42.0 ) {
+        ev(instrument::InstrumentEV::RequestSnoops);
+        
+        now
+      }
+      else {
+        prev.unwrap_or(0.0)
+      }
+    });
+
+
+
+    create_effect(move |_| {
+        if playing() {
+            resume()
+        } else if is_active() {
+            pause()
+        }
+    });
+
     let menu_position = Signal::derive(move || vm().layout.menu_position);
+
+    let buttons = move || {
+        vm().layout
+            .buttons
+            .into_iter()
+            .zip(vm().nodes)
+            .map(|(rect, node)| {
+                view! {
+                  <ButtonComponent
+                    layout_rect={Signal::derive(move || rect)}
+                    activation={Signal::derive(move || node.triggered)}
+                  >
+                    <p>
+                      {move || format!("f{}",node.f_n)}
+                    </p>
+                  </ButtonComponent>
+                }
+            })
+            .collect_view()
+    };
 
     view! {
       <div class="h-full w-full bg-red dark:bg-black instrument">
@@ -42,14 +97,9 @@ pub fn InstrumentComponent(
           ).collect_view()}
         </svg>
         <div class="w-full h-full relative">
-          {move || vm().layout.buttons.into_iter().zip(vm().nodes).map(|(rect, node)|
-            view!{
-              <ButtonComponent layout_rect={Signal::derive(move || rect)}/>
-            }
-          ).collect_view()}
+          {buttons}
         </div>
         <MenuComponent position={menu_position} playing=playing />
       </div>
     }
 }
-

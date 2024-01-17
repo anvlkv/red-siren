@@ -26,7 +26,7 @@ pub fn au_view() -> Vec<u8> {
 
 #[wasm_bindgen]
 pub fn au_log_init() {
-    let lvl = log::LevelFilter::Info;
+    let lvl = log::LevelFilter::Warn;
 
     _ = console_log::init_with_level(lvl.to_level().unwrap());
         console_error_panic_hook::set_once();

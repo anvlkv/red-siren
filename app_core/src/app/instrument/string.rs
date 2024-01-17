@@ -33,28 +33,29 @@ impl OutboundString {
     }
 
     pub fn update_data(&mut self, data: Vec<f32>, config: &Config) {
-        let l_step = config.length / data.len() as f64;
+        let l_step = self.line.len() / data.len() as f64;
         let b_step = config.breadth / 2.25;
         let b_base = if config.portrait {
             self.line.p0().x
         } else {
             self.line.p0().y
         };
-
-        self.data = data.into_iter().enumerate().map(|(i, val)| {
-            let val = val * 512.0;
-            if config.portrait {
-                Point2 {
-                    x: b_base + b_step * val as f64,
-                    y: i as f64 * l_step,
+        log::debug!("l_step {l_step}; total: {}; width: {}", l_step * data.len() as f64, config.width);
+        
+        self.data = data
+        .into_iter()
+        .enumerate()
+        .map(|(i, val)| {
+                let val = val / 128.0;
+                let l = i as f64 * l_step;
+                let b = b_base + b_step * val as f64;
+                if config.portrait {
+                    Point2 { x: b, y: l }
+                } else {
+                    Point2 { x: l, y: b }
                 }
-            } else {
-                Point2 {
-                    y: b_base + b_step * val as f64,
-                    x: i as f64 * l_step,
-                }
-            }
-        }).collect();
+            })
+            .collect();
     }
 }
 

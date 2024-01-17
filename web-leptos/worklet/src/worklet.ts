@@ -7,10 +7,14 @@ import {
 } from "typegen/types/au_types";
 import { update, update_plain } from "./core";
 
+const PREFILL_SIZE = 120;
+
 export class RedSirenWorklet extends AudioWorkletProcessor {
   private vm: ViewModel["value"][] = [];
   private initOutput?: any;
   private fillBuffer = true;
+  private evs: Uint8Array[] = []
+  private evs_p?: Promise<void>;
 
   constructor() {
     super();
@@ -51,7 +55,7 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
         case "red-siren-ev": {
           const ev = msg.data.ev as Uint8Array;
           console.info("event");
-          update_plain(ev, this.onRender, this.onResolve, this.onCapture);
+          this.evs.push(msg.data.ev);
           break;
         }
         case "clear-buffer" : {
@@ -89,12 +93,16 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
       this.onCapture
     );
 
-    if (this.vm.length >= 42) {
+    if (this.vm.length >= PREFILL_SIZE) {
       this.fillBuffer = false;
+    }
+    else if (!this.fillBuffer && this.vm.length <= 1) {
+      console.warn("buffer drained")
     }
 
     if (this.vm.length && !this.fillBuffer) {
       const buffer = this.vm.splice(0, 1)[0];
+
       for (let output of outputs) {
         for (let ch = 0; ch < output.length; ch++) {
           for (let s = 0; s < output[ch].length; s++) {
@@ -107,6 +115,17 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
         }
       }
     }
+    
+    const evs = [...this.evs]
+    this.evs = [];
+    this.evs_p = new Promise<void>((resolve) => {
+      evs.forEach(ev => {
+        update_plain(ev, this.onRender, this.onResolve, this.onCapture);
+      });
+      resolve()
+    }).then(() => {});
+
+    
 
     return true;
   }

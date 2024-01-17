@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    cmp::Ordering,
+    sync::{Arc, Mutex},
+};
 
 use crux_core::render::Render;
 use crux_core::App;
@@ -14,7 +17,7 @@ pub use node::Node;
 
 use crate::{play::Play, tuner::TuningValue, Navigate};
 
-use self::string::OutboundString;
+use self::{keyboard::Button, string::OutboundString};
 
 pub mod config;
 pub mod keyboard;
@@ -82,6 +85,8 @@ pub enum InstrumentEV {
     PlayOpPlay(bool),
     PlayOpPause(bool),
     SnoopData(Vec<f32>),
+    NodeSnoopData(Vec<(usize, Vec<f32>)>),
+    RequestSnoops,
 }
 
 impl Eq for InstrumentEV {}
@@ -108,32 +113,38 @@ impl App for Instrument {
         match event {
             InstrumentEV::CreateWithConfig(config) => {
                 model.config = config.clone();
-                let mut world = model.world.lock().expect("world lock");
+                {
+                    let mut world = model.world.lock().expect("world lock");
 
-                let inbound = string::InboundString::spawn(&mut world, &config);
-                let outbound = string::OutboundString::spawn(&mut world, &config);
-                let keyboard = keyboard::Keyboard::spawn(&mut world, &config);
+                    let inbound = string::InboundString::spawn(&mut world, &config);
+                    let outbound = string::OutboundString::spawn(&mut world, &config);
+                    let keyboard = keyboard::Keyboard::spawn(&mut world, &config);
 
-                let root = layout::LayoutRoot::spawn(&mut world, inbound, outbound, keyboard);
+                    let root = layout::LayoutRoot::spawn(&mut world, inbound, outbound, keyboard);
 
-                let layout = Layout::new(&world, &root, &config).expect("Layout failed");
-                _ = model.layout.insert(layout);
+                    let layout = Layout::new(&world, &root, &config).expect("Layout failed");
+                    _ = model.layout.insert(layout);
 
-                _ = model.root.insert(root);
-                _ = model.inbound.insert(inbound);
-                _ = model.outbound.insert(outbound);
-                _ = model.keyboard.insert(keyboard);
+                    _ = model.root.insert(root);
+                    _ = model.inbound.insert(inbound);
+                    _ = model.outbound.insert(outbound);
+                    _ = model.keyboard.insert(keyboard);
 
-                model.nodes = spawn_all_nodes(&mut world);
+                    model.nodes = spawn_all_nodes(&mut world);
+                }
 
-                if model.setup_complete {
-                    let nodes = self.get_nodes(model);
-                    caps.play.configure(
-                        &model.config,
-                        nodes.as_slice(),
-                        &model.tuning.as_slice(),
-                        InstrumentEV::PlayOpConfigure,
-                    );
+                if model.playing {
+                    if model.nodes.len() > model.tuning.len() {
+                        caps.navigate.to(crate::Activity::Tune)
+                    } else {
+                        let nodes = self.get_nodes(model);
+                        caps.play.configure(
+                            &model.config,
+                            nodes.as_slice(),
+                            &model.tuning.as_slice(),
+                            InstrumentEV::PlayOpConfigure,
+                        );
+                    }
                 }
 
                 caps.render.render();
@@ -145,6 +156,7 @@ impl App for Instrument {
                     caps.navigate.to(crate::Activity::Intro)
                 }
             }
+            InstrumentEV::RequestSnoops => caps.play.query_snoops(),
             InstrumentEV::PlayOpInstall(success) => {
                 if !success {
                     self.update(InstrumentEV::Playback(PlaybackEV::Error), model, caps)
@@ -220,6 +232,30 @@ impl App for Instrument {
                     .expect("get string");
 
                 outbound.update_data(model.snooped.clone(), &model.config);
+                caps.render.render();
+            }
+            InstrumentEV::NodeSnoopData(d) => {
+                let mut world = model.world.lock().expect("lock world");
+                for (f_n, d) in d {
+                    let d_max: f32 = *d
+                        .iter()
+                        .max_by(|v, v1| {
+                            if v.abs() > v1.abs() {
+                                Ordering::Greater
+                            } else if v.abs() < v1.abs() {
+                                Ordering::Less
+                            } else {
+                                Ordering::Equal
+                            }
+                        })
+                        .unwrap_or(&0.0);
+                    let (_, node) = world
+                        .query_mut::<&mut Node>()
+                        .into_iter()
+                        .find(|(_, node)| node.f_n == f_n)
+                        .expect("node for f_n");
+                    node.triggered = d_max.sin();
+                }
                 caps.render.render();
             }
             InstrumentEV::None => {}

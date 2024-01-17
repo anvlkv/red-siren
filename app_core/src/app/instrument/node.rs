@@ -9,6 +9,7 @@ pub struct Node {
     pub freq: (f32, f32),
     pub f_n: usize,
     pub pan: i8,
+    pub triggered: f32,
 }
 
 impl Eq for Node {}
@@ -16,7 +17,7 @@ impl Eq for Node {}
 impl Node {
     pub fn spawn(world: &mut World, freq: (f32, f32), f_n: usize, pan: i8) -> Entity {
         log::debug!("node pan: {pan}");
-        world.spawn((Self { freq, f_n, pan },))
+        world.spawn((Self { freq, f_n, pan, triggered: 0.0 },))
     }
 }
 

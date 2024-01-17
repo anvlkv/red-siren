@@ -1,5 +1,5 @@
 use super::config::Config;
-use crate::geometry::Rect;
+use crate::{geometry::Rect, tuner::TriggerState};
 use hecs::{Bundle, Entity, World};
 
 #[derive(Bundle)]
@@ -61,6 +61,7 @@ pub struct Button {
     pub group_button: (usize, usize),
     pub f_n: usize,
     pub freq: f32,
+    pub finger: Option<i32>
 }
 
 impl Button {
@@ -104,6 +105,7 @@ impl Button {
             group_button: (group, button),
             f_n,
             freq,
+            finger: None
         },))
     }
 }

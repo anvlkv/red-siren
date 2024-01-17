@@ -4,7 +4,7 @@ use leptos_use::use_media_query;
 
 use app_core::app::intro;
 
-use super::instrument::{ButtonComponent, StringComponent, TrackComponent};
+use super::instrument::{StringComponent, TrackComponent};
 use super::menu::MenuComponent;
 
 #[component]
@@ -88,11 +88,17 @@ pub fn IntroComponent(
           </svg>
           <svg class="sun fill-black dark:fill-red" viewBox={view_box} xmlns="http://www.w3.org/2000/svg">
             <g transform={sun_transform}>
-              {move || vm().layout.buttons.into_iter().map(|rect|
+              {move || vm().layout.buttons.into_iter().map(|rect|{
+                let r = move || rect.width() / 2.0;
+                let cx = move || rect.center().x;
+                let cy = move || rect.center().y;
                 view!{
-                  <ButtonComponent layout_rect={Signal::derive(move || rect)}/>
+                  <circle
+                    r=r
+                    cx=cx
+                    cy=cy />
                 }
-              ).collect_view()}
+              }).collect_view()}
             </g>
           </svg>
         </div>

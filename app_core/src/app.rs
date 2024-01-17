@@ -170,9 +170,20 @@ impl App for RedSiren {
                         model.instrument.tuning = d.clone();
                     }
                 } else if act == Activity::Tune {
+                    model.tuner.state = if model.instrument.setup_complete {
+                        tuner::State::SetupComplete
+                    } else {
+                        tuner::State::None
+                    };
                     self.tuner.update(
                         tuner::TunerEV::Activate(true),
                         &mut model.tuner,
+                        &caps.into(),
+                    );
+                } else if act == Activity::Intro && model.activity != act {
+                    self.intro.update(
+                        intro::IntroEV::Menu(act),
+                        &mut model.intro,
                         &caps.into(),
                     );
                 }
@@ -330,6 +341,14 @@ impl App for RedSiren {
                         &caps.into(),
                     );
                 }
+                play::CaptureOutput::CaptureNodesData(d) => {
+                    self.instrument.update(
+                        instrument::InstrumentEV::NodeSnoopData(d),
+                        &mut model.instrument,
+                        &caps.into(),
+                    );
+                }
+
             },
             Event::IntroEvent(event) => self.intro.update(event, &mut model.intro, &caps.into()),
         }

@@ -13,7 +13,7 @@ cfg_if! { if #[cfg(feature = "hydrate")] {
     #[wasm_bindgen]
     pub fn hydrate() {
         #[cfg(feature = "browser")]
-        app_core::log_init(log::LevelFilter::Trace);
+        app_core::log_init(log::LevelFilter::Warn);
 
         leptos::mount_to_body(RootComponent);
     }

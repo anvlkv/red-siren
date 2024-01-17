@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{TuningValue, MAX_F, MIN_F};
 
-#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug, Default, PartialOrd, Ord)]
 pub enum TriggerState {
     #[default]
     None,
@@ -155,9 +155,38 @@ impl Chart {
                 let mut entry = world.get::<&mut FFTChartEntry>(*e).expect("entry");
                 entry.apply_data(freq, value, config);
             } else {
-                self.fft_values
-                    .push(FFTChartEntry::spawn(world, i, config, total, freq, value))
-            }
+                let e = FFTChartEntry::spawn(world, i, config, total, freq, value);
+                self.fft_values.push(e);
+            };
+        }
+
+        for p in self.pairs.iter() {
+            let mut pair = world.get::<&mut Pair>(*p).expect("pair");
+
+            pair.triggered = self
+                .fft_values
+                .iter()
+                .map(|e| world.get::<&FFTChartEntry>(*e).ok())
+                .flatten()
+                .map(|entry| {
+                    if pair.rect.contains(entry.pt_max.0) {
+                        TriggerState::Active
+                    } else if pair.rect.contains(entry.pt_max.1) {
+                        TriggerState::Ghost
+                    } else {
+                        TriggerState::None
+                    }
+                })
+                .fold(
+                    TriggerState::None,
+                    |acc, val| {
+                        if acc > val {
+                            acc
+                        } else {
+                            val
+                        }
+                    },
+                );
         }
     }
 
@@ -224,6 +253,10 @@ impl Chart {
             && l_rect
                 .map(|p| (p.center().x - config.button_size) > *x)
                 .unwrap_or(true)
+            && *y < config.height - config.safe_area[3]
+            && *y > config.safe_area[1]
+            && *x > config.safe_area[0]
+            && *x < config.width - config.safe_area[2]
         {
             pair.value = Some((value_freq, value_amp));
             pair.rect.move_x(*x);

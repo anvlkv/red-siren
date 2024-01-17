@@ -69,6 +69,7 @@ export class PlaybackBridge {
           return ser.getBytes();
         }
         default: {
+          console.error("unprepared for:", op.constructor);
           throw new Error("init before requesting capabilities");
         }
       }

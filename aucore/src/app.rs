@@ -9,7 +9,10 @@ use crux_macros::Effect;
 use fundsp::hacker32::*;
 use serde::{Deserialize, Serialize};
 use spectrum_analyzer::{
-    samples_fft_to_spectrum, scaling::divide_by_N_sqrt, windows::hann_window, FrequencyLimit,
+    samples_fft_to_spectrum,
+    scaling::divide_by_N_sqrt,
+    windows::hann_window,
+    FrequencyLimit,
 };
 
 use crate::{capture::Capture, system::SAMPLE_RATE};
@@ -123,19 +126,35 @@ impl App for RedSirenAU {
                         .process(model.frame_size, input.as_slice(), output.as_mut_slice());
 
                     caps.render.render();
-
-
-                    let mut data = Vec::new();
-                    while let Some (snp) = sys.snp.get() {
+                } else {
+                    log::warn!("skipping new data, no system yet, nor capturing");
+                }
+            }
+            PlayOperation::SendSnoops => {
+                if let Some(sys) = model.system.as_mut() {
+                    if let Some(snp) = sys.out_snp.get() {
+                        let mut data = Vec::new();
                         for i in 0..snp.size() {
                             data.push(snp.at(i))
                         }
-                    }
-                    if data.len() > 0 {
                         caps.capture.capture_data(data);
                     }
-                } else {
-                    log::warn!("skipping new data, no system yet, nor capturing");
+
+                    let mut datasets = vec![];
+                    for (snp, f_n) in sys
+                        .node_snp
+                        .iter_mut()
+                        .filter_map(|(s, f_n)| s.get().zip(Some(f_n)))
+                    {
+                        let mut data = Vec::new();
+                        for i in 0..snp.size() {
+                            data.push(snp.at(i))
+                        }
+                        datasets.push((*f_n, data));
+                    }
+                    if !datasets.is_empty() {
+                        caps.capture.capture_nodes_data(datasets);
+                    }
                 }
             }
             PlayOperation::Capture(capturing) => {

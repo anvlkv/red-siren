@@ -33,7 +33,7 @@ fn main() -> anyhow::Result<()> {
             instrument::{layout::MenuPosition, Config, InstrumentEV, Layout, Node, PlaybackEV},
             intro::IntroEV,
             play::CaptureOutput,
-            tuner::TunerEV,
+            tuner::{TriggerState, TunerEV},
             Activity, RedSiren,
         };
 
@@ -42,11 +42,17 @@ fn main() -> anyhow::Result<()> {
         gen.register_type::<IntroEV>()?;
         gen.register_type::<TunerEV>()?;
         gen.register_type::<PlaybackEV>()?;
+        gen.register_type::<TriggerState>()?;
         gen.register_type_with_samples(vec![
             CaptureOutput::CaptureFFT(vec![(0.0, 0.0)]),
             CaptureOutput::CaptureData(vec![0.0]),
-            CaptureOutput::CaptureFFT((0..1024).map(|i| (i as f32, (i * 2) as f32 / 1.0)).collect()),
-            CaptureOutput::CaptureData((0..1024).map(|i| i as f32 / 1.0 ).collect()),
+            CaptureOutput::CaptureFFT((0..64).map(|i| (i as f32, (i * 2) as f32 / 1.0)).collect()),
+            CaptureOutput::CaptureData((0..64).map(|i| i as f32 / 1.0).collect()),
+            CaptureOutput::CaptureNodesData(
+                (1..=5)
+                    .map(|f| (f, (0..64).map(|i| i as f32 / 1.0).collect::<Vec<_>>()))
+                    .collect::<Vec<_>>(),
+            ),
         ])?;
 
         gen.register_type::<Activity>()?;

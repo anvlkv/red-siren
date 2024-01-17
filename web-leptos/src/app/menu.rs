@@ -68,7 +68,7 @@ pub fn MenuComponent(
     view! {
       <RedCardComponent style=style position=position>
         <Show when={move|| expanded}> 
-            <h1 class="text-4xl my-auto text-center">{"Red Siren"}</h1>
+            <h1 class="text-4xl my-auto text-center">{"Red Siren β"}</h1>
         </Show>
         <button class=btn_class on:click=move|_| menu_ev(Activity::Play)>
             {play_pause}

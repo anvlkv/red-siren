@@ -15,7 +15,6 @@
     }
   },
   "scripts": {
-    "dev": "pnpm types:build && pnpm wasm:build && pnpm vite",
     "build": "pnpm types:build && pnpm wasm:build && pnpm tsc && pnpm vite build",
     "build:dev": "pnpm types:build && pnpm wasm:build:dev && pnpm tsc && pnpm vite build",
     "preview": "pnpm types:build && pnpm wasm:build && pnpm vite preview",

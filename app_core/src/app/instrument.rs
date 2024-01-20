@@ -17,7 +17,7 @@ pub use node::Node;
 
 use crate::{play::Play, tuner::TuningValue, Navigate};
 
-use self::{keyboard::Button, string::OutboundString};
+use self::string::OutboundString;
 
 pub mod config;
 pub mod keyboard;

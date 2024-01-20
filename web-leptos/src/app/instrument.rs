@@ -42,10 +42,10 @@ pub fn InstrumentComponent(
       let now = ts();
       if prev.map_or(true, |p| now - p >= 42.0 ) {
         ev(instrument::InstrumentEV::RequestSnoops);
-        
         now
       }
       else {
+        log::warn!("skip ts: {prev:?}");
         prev.unwrap_or(0.0)
       }
     });

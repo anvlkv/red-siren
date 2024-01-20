@@ -41,7 +41,7 @@ Requires [wasm-pack](https://github.com/rustwasm/wasm-pack).
 
 ```
 cd web-leptos/worklet
-pnpm run dev
+pnpm run build
 ```
 
 ### iOS

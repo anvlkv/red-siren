@@ -145,7 +145,7 @@ impl App for RedSiren {
     type Capabilities = RedSirenCapabilities;
 
     fn update(&self, msg: Event, model: &mut Model, caps: &RedSirenCapabilities) {
-        // log::trace!("app msg: {:?}", msg);
+        log::trace!("app msg: {:?}", msg);
 
         match msg {
             Event::Start => {

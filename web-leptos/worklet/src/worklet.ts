@@ -115,6 +115,9 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
         }
       }
     }
+    else if (this.fillBuffer) {
+      console.log("Filling  buffer", this.vm.length)
+    }
     
     const evs = [...this.evs]
     this.evs = [];
@@ -124,8 +127,6 @@ export class RedSirenWorklet extends AudioWorkletProcessor {
       });
       resolve()
     }).then(() => {});
-
-    
 
     return true;
   }

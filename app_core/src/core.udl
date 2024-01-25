@@ -1,4 +1,4 @@
-namespace ffirs {
+namespace core {
   bytes process_event([ByRef] bytes msg);
   bytes handle_response([ByRef] bytes uuid, [ByRef] bytes res);
   bytes view();

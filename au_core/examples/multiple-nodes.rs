@@ -1,6 +1,6 @@
 use std::{
     collections::HashSet,
-    sync::mpsc::{channel, sync_channel, Receiver},
+    sync::mpsc::{sync_channel, Receiver},
 };
 
 use au_core::{Node, Unit, UnitEV, MAX_F, MIN_F};
@@ -12,6 +12,7 @@ use logging_timer::timer;
 struct State {
     unit: Unit,
     input: bool,
+    f0: f32,
     nodes: Vec<(Entity, Entity)>,
     pressed: HashSet<Entity>,
     world: World,
@@ -46,16 +47,19 @@ fn main() {
     run(unit).unwrap();
 }
 
-fn make_nodes(world: &mut World, count: usize) -> (Vec<(Entity, Entity)>, Vec<Node>) {
+fn make_nodes(world: &mut World, count: usize, f0: f32) -> (Vec<(Entity, Entity)>, Vec<Node>) {
     let (nodes, config) = (1..=count).fold((vec![], vec![]), |mut acc, i: usize| {
         let b = world.spawn((Control { f: i },));
         let node = Node::new(b);
-        node.f_emit.0.set_value(i as f32 * 110.0 * 2.0);
-        node.f_emit.1.set_value(i as f32 * 110.0 * 2.75);
-        node.f_sense.0 .0.set_value(i as f32 * 110.0 * 2.0);
-        node.f_sense.0 .1.set_value((i + 1) as f32 * 110.0 * 2.75);
-        node.f_sense.1 .0.set_value(0.1);
-        node.f_sense.1 .1.set_value(0.95);
+        node.f_emit.0.set_value(i as f32 * f0 * 2.0);
+        node.f_emit.1.set_value(i as f32 * f0 * 2.75);
+        node.f_sense.0 .0.set_value(i as f32 * f0 * 1.5 * 2.0);
+        node.f_sense
+            .0
+             .1
+            .set_value((i + 1) as f32 * f0 * 1.5 * 2.75);
+        node.f_sense.1 .0.set_value(0.1 * (i + 2) as f32);
+        node.f_sense.1 .1.set_value(0.95 - 0.01 * (i + 2) as f32);
         node.pan.set_value(if i % 2 == 0 { -0.75 } else { 0.75 });
         let n = world.spawn((node.clone(),));
         acc.0.push((n, b));
@@ -68,8 +72,8 @@ fn make_nodes(world: &mut World, count: usize) -> (Vec<(Entity, Entity)>, Vec<No
 
 fn run(mut unit: Unit) -> Result<(), anyhow::Error> {
     let mut world = World::new();
-
-    let (nodes, config) = make_nodes(&mut world, 4);
+    let f0 = 85.0;
+    let (nodes, config) = make_nodes(&mut world, 4, f0);
 
     let (fft_sender, fft_receiver) = sync_channel(32);
     let (snoop_sender, snoop_receiver) = sync_channel(64);
@@ -85,11 +89,12 @@ fn run(mut unit: Unit) -> Result<(), anyhow::Error> {
         nodes,
         fft_receiver,
         snoop_receiver,
+        f0,
         last_fft: vec![],
         last_snoops: vec![],
         pressed: HashSet::new(),
     };
-    let viewport = ViewportBuilder::default().with_min_inner_size(vec2(360.0, 860.0));
+    let viewport = ViewportBuilder::default().with_min_inner_size(vec2(360.0, 780.0));
 
     let options = eframe::NativeOptions {
         viewport,
@@ -114,115 +119,143 @@ impl eframe::App for State {
             ui.heading("Multiple nodes example");
             ui.separator();
             ui.end_row();
-
-            ui.label("Input");
-            ui.horizontal(|ui| {
-                let input2 = ui.selectable_value(&mut self.input, true, "Use mic");
-                let input1 = ui.selectable_value(&mut self.input, false, "Use keyboard");
-                if input1.changed() || input2.changed() {
-                    if self.input {
-                        self.unit.update(UnitEV::ListenToInput)
-                    } else {
-                        self.unit.update(UnitEV::IgnoreInput)
-                    }
-                }
-            });
-
-            ui.label("Nodes");
-            ui.horizontal(|ui| {
-                let mut count = self.nodes.len();
-                let input = ui.add(egui::Slider::new(&mut count, 1..=10));
-                if input.changed() {
-                    for (n, b) in self.nodes.drain(0..) {
-                        self.world.despawn(n).expect("despawn node");
-                        self.world.despawn(b).expect("despawn control");
-                    }
-
-                    let (nodes, config) = make_nodes(&mut self.world, count);
-
-                    self.unit.update(UnitEV::Configure(config));
-                    self.nodes.extend(nodes);
-                }
-            });
-
-            for (i, node) in self
-                .nodes
-                .iter()
-                .map(|(e, _)| self.world.get::<&Node>(*e).ok())
-                .flatten()
-                .enumerate()
-            {
-                ui.label(format!("Node config {}", i + 1).as_str());
-
-                ui.horizontal(|ui| {
-                    ui.vertical(|ui| {
-                        ui.vertical(|ui| {
-                            ui.label("Node emit.0");
-                            let mut emit = node.f_emit.0.value();
-                            let input =
-                                ui.add(egui::Slider::new(&mut emit, 1.0..=22_000.0).suffix("hz"));
-                            if input.changed() {
-                                node.f_emit.0.set(emit);
+            egui::ScrollArea::vertical()
+            .max_height(600.0)
+                .scroll_bar_visibility(scroll_area::ScrollBarVisibility::AlwaysVisible)
+                .show(ui, |ui| {
+                    ui.label("Input");
+                    ui.horizontal(|ui| {
+                        let input2 = ui.selectable_value(&mut self.input, true, "Use mic");
+                        let input1 = ui.selectable_value(&mut self.input, false, "Use keyboard");
+                        if input1.changed() || input2.changed() {
+                            if self.input {
+                                self.unit.update(UnitEV::ListenToInput)
+                            } else {
+                                self.unit.update(UnitEV::IgnoreInput)
                             }
-                        });
-                        ui.vertical(|ui| {
-                            ui.label("Node emit.1");
-                            let mut emit = node.f_emit.1.value();
-                            let input =
-                                ui.add(egui::Slider::new(&mut emit, 1.0..=22_000.0).suffix("hz"));
-                            if input.changed() {
-                                node.f_emit.1.set(emit);
-                            }
-                        });
-                    });
-                    ui.vertical(|ui| {
-                        ui.vertical(|ui| {
-                            ui.label("Node sense.0.0");
-                            let mut emit = node.f_sense.0 .0.value();
-                            let input =
-                                ui.add(egui::Slider::new(&mut emit, MIN_F..=MAX_F).suffix("hz"));
-                            if input.changed() {
-                                node.f_sense.0 .0.set(emit);
-                            }
-                        });
-                        ui.vertical(|ui| {
-                            ui.label("Node sense.0.1");
-                            let mut emit = node.f_sense.0 .1.value();
-                            let input =
-                                ui.add(egui::Slider::new(&mut emit, MIN_F..=MAX_F).suffix("hz"));
-                            if input.changed() {
-                                node.f_sense.0 .1.set(emit);
-                            }
-                        });
-                    });
-                    ui.vertical(|ui| {
-                        ui.vertical(|ui| {
-                            ui.label("Node sense.1.0");
-                            let mut emit = node.f_sense.1 .0.value();
-                            let input = ui.add(egui::Slider::new(&mut emit, 0.0..=1.0));
-                            if input.changed() {
-                                node.f_sense.1 .0.set(emit);
-                            }
-                        });
-                        ui.vertical(|ui| {
-                            ui.label("Node sense.1.0");
-                            let mut emit = node.f_sense.1 .1.value();
-                            let input = ui.add(egui::Slider::new(&mut emit, 0.0..=1.0));
-                            if input.changed() {
-                                node.f_sense.1 .1.set(emit);
-                            }
-                        });
-                    });
-                    ui.vertical(|ui| {
-                        ui.label("Node pan");
-                        let mut emit = node.pan.value();
-                        let input = ui.add(egui::Slider::new(&mut emit, -1.0..=1.0).suffix("pan"));
-                        if input.changed() {
-                            node.pan.set(emit);
                         }
                     });
+
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            let mut count = self.nodes.len();
+                            ui.label("Nodes count");
+                            let input = ui.add(egui::Slider::new(&mut count, 1..=10));
+                            if input.changed() {
+                                for (n, b) in self.nodes.drain(0..) {
+                                    self.world.despawn(n).expect("despawn node");
+                                    self.world.despawn(b).expect("despawn control");
+                                }
+
+                                let (nodes, config) = make_nodes(&mut self.world, count, self.f0);
+
+                                self.unit.update(UnitEV::Configure(config));
+                                self.nodes.extend(nodes);
+                            }
+                        });
+                        ui.vertical(|ui| {
+                            ui.label("f0");
+                            let count = self.nodes.len();
+                            let input =
+                                ui.add(egui::Slider::new(&mut self.f0, 6.0..=1_000.0).suffix("hz"));
+                            if input.changed() {
+                                for (n, b) in self.nodes.drain(0..) {
+                                    self.world.despawn(n).expect("despawn node");
+                                    self.world.despawn(b).expect("despawn control");
+                                }
+
+                                let (nodes, config) = make_nodes(&mut self.world, count, self.f0);
+
+                                self.unit.update(UnitEV::Configure(config));
+                                self.nodes.extend(nodes);
+                            }
+                        });
+                    });
+
+                    for (i, node) in self
+                        .nodes
+                        .iter()
+                        .map(|(e, _)| self.world.get::<&Node>(*e).ok())
+                        .flatten()
+                        .enumerate()
+                    {
+                        ui.label(format!("Node config {}", i + 1).as_str());
+
+                        ui.horizontal(|ui| {
+                            ui.vertical(|ui| {
+                                ui.vertical(|ui| {
+                                    ui.label("Node emit.0");
+                                    let mut emit = node.f_emit.0.value();
+                                    let input = ui.add(
+                                        egui::Slider::new(&mut emit, 1.0..=22_000.0).suffix("hz"),
+                                    );
+                                    if input.changed() {
+                                        node.f_emit.0.set(emit);
+                                    }
+                                });
+                                ui.vertical(|ui| {
+                                    ui.label("Node emit.1");
+                                    let mut emit = node.f_emit.1.value();
+                                    let input = ui.add(
+                                        egui::Slider::new(&mut emit, 1.0..=22_000.0).suffix("hz"),
+                                    );
+                                    if input.changed() {
+                                        node.f_emit.1.set(emit);
+                                    }
+                                });
+                            });
+                            ui.vertical(|ui| {
+                                ui.vertical(|ui| {
+                                    ui.label("Node sense.0.0");
+                                    let mut emit = node.f_sense.0 .0.value();
+                                    let input = ui.add(
+                                        egui::Slider::new(&mut emit, MIN_F..=MAX_F).suffix("hz"),
+                                    );
+                                    if input.changed() {
+                                        node.f_sense.0 .0.set(emit);
+                                    }
+                                });
+                                ui.vertical(|ui| {
+                                    ui.label("Node sense.0.1");
+                                    let mut emit = node.f_sense.0 .1.value();
+                                    let input = ui.add(
+                                        egui::Slider::new(&mut emit, MIN_F..=MAX_F).suffix("hz"),
+                                    );
+                                    if input.changed() {
+                                        node.f_sense.0 .1.set(emit);
+                                    }
+                                });
+                            });
+                            ui.vertical(|ui| {
+                                ui.vertical(|ui| {
+                                    ui.label("Node sense.1.0");
+                                    let mut emit = node.f_sense.1 .0.value();
+                                    let input = ui.add(egui::Slider::new(&mut emit, 0.0..=1.0));
+                                    if input.changed() {
+                                        node.f_sense.1 .0.set(emit);
+                                    }
+                                });
+                                ui.vertical(|ui| {
+                                    ui.label("Node sense.1.0");
+                                    let mut emit = node.f_sense.1 .1.value();
+                                    let input = ui.add(egui::Slider::new(&mut emit, 0.0..=1.0));
+                                    if input.changed() {
+                                        node.f_sense.1 .1.set(emit);
+                                    }
+                                });
+                            });
+                            ui.vertical(|ui| {
+                                ui.label("Node pan");
+                                let mut emit = node.pan.value();
+                                let input =
+                                    ui.add(egui::Slider::new(&mut emit, -1.0..=1.0).suffix("pan"));
+                                if input.changed() {
+                                    node.pan.set(emit);
+                                }
+                            });
+                        });
+                    }
                 });
-            }
 
             // Draw oscilloscope.
             egui::containers::Frame::canvas(ui.style()).show(ui, |ui| {
@@ -300,14 +333,14 @@ impl eframe::App for State {
                 let desired_size = ui.available_width() * vec2(1.0, 0.25);
                 let (_id, rect) = ui.allocate_space(desired_size);
                 let to_screen = emath::RectTransform::from_to(
-                    Rect::from_x_y_ranges(0.0..=points as f32, 0.0..=10.0),
+                    Rect::from_x_y_ranges(0.0..=points as f32, -10.0..=10.0),
                     rect,
                 );
 
                 let pts: Vec<Pos2> = fft
                     .iter()
                     .enumerate()
-                    .map(|(i, (_, y))| to_screen * pos2((points - i) as f32, *y * -1.0))
+                    .map(|(i, (_, y))| to_screen * pos2((points - i) as f32, softsign(*y - 10.0)))
                     .collect();
 
                 let line = epaint::Shape::line(pts, Stroke::new(thickness, color));

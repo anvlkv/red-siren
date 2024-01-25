@@ -1,4 +1,4 @@
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{sync_channel, Receiver};
 
 use au_core::{Node, Unit, UnitEV, MAX_F, MIN_F};
 use eframe::egui::{self, *};
@@ -33,8 +33,8 @@ fn run(mut unit: Unit) -> Result<(), anyhow::Error> {
     };
 
     
-    let (fft_sender, fft_receiver) = channel();
-    let (snoop_sender, snoop_receiver) = channel();
+    let (fft_sender, fft_receiver) = sync_channel(64);
+    let (snoop_sender, snoop_receiver) = sync_channel(64);
     
     unit.run(fft_sender, snoop_sender)?;
     

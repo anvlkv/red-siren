@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     sync::{
-        mpsc::{Sender, SyncSender, TrySendError},
+        mpsc::{SyncSender, TrySendError},
         Arc, Mutex,
     },
 };
@@ -20,7 +20,14 @@ use spectrum_analyzer::{
     samples_fft_to_spectrum, scaling::divide_by_N_sqrt, windows::hann_window, FrequencyLimit,
 };
 
+thread_local! {
+    static IN_STREAM: Arc<Mutex<Option<Stream>>> = Default::default();
+    static OUT_STREAM: Arc<Mutex<Option<Stream>>> = Default::default();
+    static POOL: ThreadPool = ThreadPool::new().expect("create pool");
+}
+
 const RENDER_BURSTS: usize = 5;
+
 pub struct Unit {
     fft_res: usize,
     sample_rate: u32,
@@ -28,10 +35,13 @@ pub struct Unit {
     system: Arc<Mutex<System>>,
     snoops: Arc<Mutex<Vec<(Snoop<f32>, Entity)>>>,
     nodes: Arc<Mutex<HashMap<Entity, Node>>>,
-    pool: ThreadPool,
-    in_stream: Option<Stream>,
-    out_stream: Option<Stream>,
     input_analyzer_enabled: Arc<Mutex<bool>>,
+}
+
+impl Default for Unit {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub enum UnitEV {
@@ -70,8 +80,6 @@ impl Unit {
         let snoops = sys.snoops.clone();
         let system = Arc::new(Mutex::new(sys));
 
-        let pool = ThreadPool::new().expect("create pool");
-
         Self {
             fft_res,
             system,
@@ -79,9 +87,6 @@ impl Unit {
             snoops,
             sample_rate,
             buffer_size,
-            pool,
-            in_stream: None,
-            out_stream: None,
             input_analyzer_enabled: Arc::new(Mutex::new(true)),
         }
     }
@@ -132,22 +137,36 @@ impl Unit {
                 }
             }
             UnitEV::Suspend => {
-                if let Some(in_stream) = self.in_stream.as_ref() {
-                    in_stream.pause().expect("pause input")
-                }
-
-                if let Some(out_stream) = self.out_stream.as_ref() {
-                    out_stream.pause().expect("pause output")
-                }
+                IN_STREAM.with(|mtx| {
+                    if let Ok(mtx) = mtx.lock() {
+                        if let Some(stream) = mtx.as_ref() {
+                            stream.pause().expect("pause input")
+                        }
+                    }
+                });
+                OUT_STREAM.with(|mtx| {
+                    if let Ok(mtx) = mtx.lock() {
+                        if let Some(stream) = mtx.as_ref() {
+                            stream.pause().expect("pause output")
+                        }
+                    }
+                });
             }
             UnitEV::Resume => {
-                if let Some(in_stream) = self.in_stream.as_ref() {
-                    in_stream.play().expect("play input")
-                }
-
-                if let Some(out_stream) = self.out_stream.as_ref() {
-                    out_stream.play().expect("play output")
-                }
+                IN_STREAM.with(|mtx| {
+                    if let Ok(mtx) = mtx.lock() {
+                        if let Some(stream) = mtx.as_ref() {
+                            stream.play().expect("play input")
+                        }
+                    }
+                });
+                OUT_STREAM.with(|mtx| {
+                    if let Ok(mtx) = mtx.lock() {
+                        if let Some(stream) = mtx.as_ref() {
+                            stream.play().expect("play output")
+                        }
+                    }
+                });
             }
         }
     }
@@ -192,67 +211,69 @@ impl Unit {
         let fft_res = self.fft_res;
         let buffer_size = self.buffer_size;
         let sample_rate = self.sample_rate;
-        self.pool.spawn_ok(async move {
-            loop {
-                let _tmr = logging_timer::timer!("TICK");
-                let overflow = produce.is_full();
-
-                if !overflow {
-                    for _ in 0..Ord::min(buffer_size as usize, produce.free_len()) {
-                        produce.push(render_be.get_stereo()).expect("send render");
-                    }
-                }
-
-                if consume_analyze.len() >= fft_res {
-                    if let Ok(nodes) = process_nodes.lock() {
-                        let samples = consume_analyze.pop_iter().take(fft_res).collect::<Vec<_>>();
-                        let fft_data = process_input_data(samples.as_slice(), &nodes, sample_rate);
-                        match fft_sender.try_send(fft_data) {
-                            Ok(_) => {}
-                            Err(TrySendError::Full(_)) => {
-                                log::warn!("skipping fft data")
-                            }
-                            Err(_) => {
-                                log::error!("fft receiver gone");
-                                break;
-                            }
+        POOL.with(move |pool| {
+            pool.spawn_ok(async move {
+                loop {
+                    let _tmr = logging_timer::timer!("TICK");
+                    let overflow = produce.is_full();
+    
+                    if !overflow {
+                        for _ in 0..Ord::min(buffer_size as usize, produce.free_len()) {
+                            produce.push(render_be.get_stereo()).expect("send render");
                         }
                     }
-                }
-
-                if let Ok(mut snoops) = process_snoops.try_lock() {
-                    let snps = snoops
-                        .iter_mut()
-                        .map(|(s, e)| (e, s.get()))
-                        .collect::<Vec<_>>();
-
-                    if snps.iter().any(|(_, s)| s.is_some()) {
-                        let data = snps
-                            .into_iter()
-                            .map(|(e, snp)| {
-                                let mut data = vec![];
-                                if let Some(buf) = snp {
-                                    for i in 0..Ord::min(SNOOP_SIZE, buf.size()) {
-                                        data.push(buf.at(i))
-                                    }
+    
+                    if consume_analyze.len() >= fft_res {
+                        if let Ok(nodes) = process_nodes.lock() {
+                            let samples = consume_analyze.pop_iter().take(fft_res).collect::<Vec<_>>();
+                            let fft_data = process_input_data(samples.as_slice(), &nodes, sample_rate);
+                            match fft_sender.try_send(fft_data) {
+                                Ok(_) => {}
+                                Err(TrySendError::Full(_)) => {
+                                    log::warn!("skipping fft data")
                                 }
-                                (*e, data)
-                            })
-                            .collect();
-
-                        match snoops_sender.try_send(data) {
-                            Ok(_) => {},
-                            Err(TrySendError::Full(_)) => {
-                                log::warn!("skipping snoops data");
-                            },
-                            Err(_) => {
-                                log::error!("snoops receiver gone");
-                                break;
+                                Err(_) => {
+                                    log::error!("fft receiver gone");
+                                    break;
+                                }
+                            }
+                        }
+                    }
+    
+                    if let Ok(mut snoops) = process_snoops.try_lock() {
+                        let snps = snoops
+                            .iter_mut()
+                            .map(|(s, e)| (e, s.get()))
+                            .collect::<Vec<_>>();
+    
+                        if snps.iter().any(|(_, s)| s.is_some()) {
+                            let data = snps
+                                .into_iter()
+                                .map(|(e, snp)| {
+                                    let mut data = vec![];
+                                    if let Some(buf) = snp {
+                                        for i in 0..Ord::min(SNOOP_SIZE, buf.size()) {
+                                            data.push(buf.at(i))
+                                        }
+                                    }
+                                    (*e, data)
+                                })
+                                .collect();
+    
+                            match snoops_sender.try_send(data) {
+                                Ok(_) => {}
+                                Err(TrySendError::Full(_)) => {
+                                    log::warn!("skipping snoops data");
+                                }
+                                Err(_) => {
+                                    log::error!("snoops receiver gone");
+                                    break;
+                                }
                             }
                         }
                     }
                 }
-            }
+            });
         });
 
         let process_input_analyzer_enabled = self.input_analyzer_enabled.clone();
@@ -323,10 +344,21 @@ impl Unit {
             })
             .flatten();
 
-        self.in_stream = in_stream;
-        self.out_stream = out_stream;
-
-        Ok(())
+        if let Some(in_stream) = in_stream {
+            IN_STREAM.with(move |mtx| {
+                let mut stream = mtx.lock().expect("lock in stream");
+                _ = stream.insert(in_stream);
+            });
+        }
+        if let Some(out_stream) = out_stream {
+            OUT_STREAM.with(move |mtx| {
+                let mut stream = mtx.lock().expect("lock out stream");
+                _ = stream.insert(out_stream);
+            });
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Could not create output"))
+        }
     }
 }
 

@@ -4,7 +4,7 @@ use std::{
 };
 
 fn main() {
-    uniffi::generate_scaffolding("./src/ffirs.udl").unwrap();
+    uniffi::generate_scaffolding("./src/core.udl").unwrap();
 
     if env::var("CARGO_CFG_TARGET_OS").unwrap() == "android" {
         android();

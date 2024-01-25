@@ -1,58 +1,37 @@
+use std::{
+    error::Error,
+    sync::{mpsc::sync_channel, Arc, Mutex},
+};
+
+use au_core::{Unit, UnitEV};
 use crux_core::capability::{CapabilityContext, Operation};
 use crux_macros::Capability;
+use hecs::Entity;
 use serde::{Deserialize, Serialize};
 
-use crate::tuner::TuningValue;
+// static UNIT_INSTANCE: Lazy<> = Lazy::new(|| Default::default());
 
-use super::instrument::{Config, Node};
-
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum PlayOperation {
     Permissions,
     InstallAU,
-    Suspend,
-    Resume,
-    Capture(bool),
-    QueryInputDevices,
-    QueryOutputDevices,
-    Config(Config, Vec<Node>, Vec<TuningValue>),
-    Input(Vec<Vec<f32>>),
-    SendSnoops
 }
 
-impl Eq for PlayOperation {}
-
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum PlayOperationOutput {
     Success,
-    Failure
+    Failure,
+    PermanentFailure,
 }
 
-impl Eq for PlayOperationOutput {}
 impl Operation for PlayOperation {
     type Output = PlayOperationOutput;
-}
-
-impl Operation for PlayOperationOutput {
-    type Output = ();
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
-pub enum CaptureOutput {
-    CaptureFFT(Vec<(f32, f32)>),
-    CaptureData(Vec<f32>),
-    CaptureNodesData(Vec<(usize, Vec<f32>)>)
-}
-
-impl Eq for CaptureOutput {}
-
-impl Operation for CaptureOutput {
-    type Output = ();
 }
 
 #[derive(Capability)]
 pub struct Play<Ev> {
     context: CapabilityContext<PlayOperation, Ev>,
+    unit: Arc<Mutex<Option<Unit>>>,
 }
 
 impl<Ev> Play<Ev>
@@ -60,107 +39,82 @@ where
     Ev: 'static,
 {
     pub fn new(context: CapabilityContext<PlayOperation, Ev>) -> Self {
-        Self { context }
+        Self {
+            context,
+            unit: Default::default(),
+        }
     }
 
-    pub fn configure<F>(&self, config: &Config, nodes: &[Node], tuning: &[TuningValue], f: F)
+    pub fn install<F>(&self, notify: F)
     where
-        Ev: 'static,
-        F: Fn(bool) -> Ev + Send + 'static,
+        F: Fn(PlayOperationOutput) -> Ev + Send + 'static,
     {
         let ctx = self.context.clone();
-        let config = config.clone();
-        let nodes = Vec::from(nodes);
-        let tuning = Vec::from(tuning);
+        let mtx = self.unit.clone();
 
         self.context.spawn(async move {
-            let done = ctx
-                .request_from_shell(PlayOperation::Config(config, nodes, tuning))
-                .await;
-            ctx.update_app(f(done == PlayOperationOutput::Success));
-        })
-    }
+            let unit = Unit::new();
 
-    pub fn play<F>(&self, f: F)
-    where
-        Ev: 'static,
-        F: Fn(bool) -> Ev + Send + 'static,
-    {
-        let ctx = self.context.clone();
-
-        self.context.spawn(async move {
-            let playing = ctx.request_from_shell(PlayOperation::Resume).await;
-            ctx.update_app(f(playing == PlayOperationOutput::Success));
-        })
-    }
-
-    pub fn pause<F>(&self, f: F)
-    where
-        Ev: 'static,
-        F: Fn(bool) -> Ev + Send + 'static,
-    {
-        let ctx = self.context.clone();
-
-        self.context.spawn(async move {
-            let paused = ctx.request_from_shell(PlayOperation::Suspend).await;
-            ctx.update_app(f(paused == PlayOperationOutput::Success));
-        })
-    }
-
-    pub fn install_au<F>(&self, f: F)
-    where
-        Ev: 'static,
-        F: Fn(bool) -> Ev + Send + 'static,
-    {
-        let ctx = self.context.clone();
-
-        self.context.spawn(async move {
-            let done = ctx.request_from_shell(PlayOperation::InstallAU).await;
-            ctx.update_app(f(done == PlayOperationOutput::Success));
-        })
-    }
-    
-    pub fn query_snoops(&self)
-    {
-        let ctx = self.context.clone();
-
-        self.context.spawn(async move {
-            ctx.notify_shell(PlayOperation::SendSnoops).await;
-        })
-    }
-
-    pub fn permissions<F>(&self, f: F)
-    where
-        Ev: 'static,
-        F: Fn(bool) -> Ev + Send + 'static,
-    {
-        let ctx = self.context.clone();
-
-        self.context.spawn(async move {
-            let granted = ctx.request_from_shell(PlayOperation::Permissions).await;
-            ctx.update_app(f(granted == PlayOperationOutput::Success));
-        })
-    }
-    pub fn capture_fft<F>(&self, notify: F)
-    where
-        Ev: 'static,
-        F: Fn(bool) -> Ev + Send + 'static,
-    {
-        let ctx = self.context.clone();
-        self.context.spawn(async move {
-            let capturing = ctx.request_from_shell(PlayOperation::Capture(true)).await;
-            ctx.update_app(notify(capturing == PlayOperationOutput::Success));
+            let mut u_mtx = mtx.lock().expect("lock unit");
+            _ = u_mtx.insert(unit);
+            ctx.update_app(notify(PlayOperationOutput::Success));
         });
     }
 
-    pub fn stop_capture_fft<F>(&self, notify: F)
+    pub fn run_unit<F, FF, FS>(&self, notify: F, fft_ev: FF, snoop_ev: FS)
     where
-        Ev: 'static,
-        F: Fn(bool) -> Ev + Send + 'static, {
+        F: Fn(PlayOperationOutput) -> Ev + Send + 'static,
+        FF: Fn(Vec<(f32, f32)>) -> Ev + Send + 'static,
+        FS: Fn(Vec<(Entity, Vec<f32>)>) -> Ev + Send + 'static,
+    {
+        let ctx = self.context.clone();
+        let mtx = self.unit.clone();
+
+        let (fft_sender, fft_receiver) = sync_channel(32);
+        let (snoop_sender, snoop_receiver) = sync_channel(64);
+
+        self.context.spawn(async move {
+            match mtx.lock() {
+                Ok(mut unit) => {
+                    if let Some(unit) = unit.as_mut() {
+                        match unit.run(fft_sender, snoop_sender) {
+                            Ok(_) => {
+                                ctx.update_app(notify(PlayOperationOutput::Success));
+                            }
+                            Err(e) => {
+                                log::error!("unit run error: {:?}", e);
+                                ctx.update_app(notify(PlayOperationOutput::PermanentFailure));
+                            }
+                        }
+                    } else {
+                        log::error!("no unit");
+                        ctx.update_app(notify(PlayOperationOutput::Failure));
+                    }
+                }
+                Err(r) => {
+                    log::error!("mutex poison");
+                    mtx.clear_poison();
+                    ctx.update_app(notify(PlayOperationOutput::Failure));
+                }
+            }
+        });
+
         let ctx = self.context.clone();
         self.context.spawn(async move {
-            let stopped = ctx.request_from_shell(PlayOperation::Capture(false)).await;
-            ctx.update_app(notify(stopped == PlayOperationOutput::Success));
-        })
+            let mut it = fft_receiver.into_iter();
+            while let Some(d) = it.next() {
+                ctx.update_app(fft_ev(d));
+            }
+        });
+
+        let ctx = self.context.clone();
+        self.context.spawn(async move {
+            let mut it = snoop_receiver.into_iter();
+            while let Some(d) = it.next() {
+                ctx.update_app(snoop_ev(d));
+            }
+        });
     }
+
+    
 }

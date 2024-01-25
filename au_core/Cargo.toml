@@ -20,6 +20,7 @@ log = { workspace = true }
 anyhow = "1.0.79"
 logging_timer = "1.1.0"
 ringbuf = "0.3.3"
+lazy_static = { workspace = true }
 
 [dev-dependencies]
 eframe = "0.25.0"

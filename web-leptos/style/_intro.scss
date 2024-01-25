@@ -1,0 +1,81 @@
+
+.intro-splash {
+  width: 100%;
+  height: 100%;
+  svg {
+    height: 100%;
+    width: auto;
+    position: absolute;
+    top: 0;
+    left: 0;
+    &.waves {
+      stroke: $gray;
+      filter: blur(.5px);
+    }
+    &.flute {
+      stroke: $black;
+      fill: $red;
+    }
+    &.flute-shadow {
+      stroke: $red;
+    }
+    &.sun {
+      fill: $black
+    }
+    &.stone {
+      fill: $red;
+      stroke: $black;
+    }
+    &.siren {
+      fill: $black;
+    }
+    &.siren-arm {
+      fill: $black;
+      stroke: $red;
+    }
+    &.siren-front {
+      fill: $black;
+    }
+    @media (prefers-color-scheme: dark) {
+      &.waves {
+        stroke: $cinnabar;
+      }
+      &.flute {
+        stroke: $red;
+        fill: $black;
+      }
+      &.flute-shadow {
+        stroke: $black;
+      }
+      &.sun {
+        fill: $red;
+      }
+      &.stone {
+        fill: $black;
+        stroke: $red;
+      }
+      &.siren {
+        fill: $red;
+      }
+      &.siren-arm {
+        fill: $red;
+        stroke: $red;
+      }
+      &.siren-front {
+        fill: $red;
+      }
+    }
+    &.siren,
+    &.siren-front,
+    &.flute,
+    &.stone,
+    &.flute-shadow,
+    &.siren-arm {
+      right: 0;
+      bottom: 0;
+      left: auto;
+      top: auto;
+    }
+  }
+}
+

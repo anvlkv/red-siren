@@ -1,5 +1,5 @@
 [workspace]
-members = ["app_core", "typegen", "web-leptos", "aucore", "bindgen"]
+members = ["app_core", "au_core", "typegen", "web-leptos"]
 resolver = "1"
 
 [workspace.package]

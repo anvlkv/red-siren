@@ -272,7 +272,7 @@ impl Unit {
         POOL.with(move |pool| {
             pool.spawn_ok(async move {
                 loop {
-                    if Err(e) = process_fn() {
+                    if let Err(e) = process_fn() {
                         log::error!("processing error: {e:?}");
                         break;
                     }

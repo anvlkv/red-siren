@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{Node, System, MAX_F, MIN_F, SNOOP_SIZE};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Stream, SupportedBufferSize,
@@ -211,66 +211,70 @@ impl Unit {
         let fft_res = self.fft_res;
         let buffer_size = self.buffer_size;
         let sample_rate = self.sample_rate;
+
+        let mut process_fn = move || -> Result<()> {
+            let _tmr = logging_timer::timer!("TICK");
+            let overflow = produce.is_full();
+
+            if !overflow {
+                for _ in 0..Ord::min(buffer_size as usize, produce.free_len()) {
+                    produce.push(render_be.get_stereo()).expect("send render");
+                }
+            }
+
+            if consume_analyze.len() >= fft_res {
+                if let Ok(nodes) = process_nodes.lock() {
+                    let samples = consume_analyze.pop_iter().take(fft_res).collect::<Vec<_>>();
+                    let fft_data = process_input_data(samples.as_slice(), &nodes, sample_rate);
+                    match fft_sender.try_send(fft_data) {
+                        Ok(_) => {}
+                        Err(TrySendError::Full(_)) => {
+                            log::warn!("skipping fft data")
+                        }
+                        Err(_) => return Err(anyhow!("fft receiver gone")),
+                    }
+                }
+            }
+
+            if let Ok(mut snoops) = process_snoops.try_lock() {
+                let snps = snoops
+                    .iter_mut()
+                    .map(|(s, e)| (e, s.get()))
+                    .collect::<Vec<_>>();
+
+                if snps.iter().any(|(_, s)| s.is_some()) {
+                    let data = snps
+                        .into_iter()
+                        .map(|(e, snp)| {
+                            let mut data = vec![];
+                            if let Some(buf) = snp {
+                                for i in 0..Ord::min(SNOOP_SIZE, buf.size()) {
+                                    data.push(buf.at(i))
+                                }
+                            }
+                            (*e, data)
+                        })
+                        .collect();
+
+                    match snoops_sender.try_send(data) {
+                        Ok(_) => {}
+                        Err(TrySendError::Full(_)) => {
+                            log::warn!("skipping snoops data");
+                        }
+                        Err(_) => return Err(anyhow!("snoops receiver gone")),
+                    }
+                }
+            }
+
+            Ok(())
+        };
+
         POOL.with(move |pool| {
             pool.spawn_ok(async move {
                 loop {
-                    let _tmr = logging_timer::timer!("TICK");
-                    let overflow = produce.is_full();
-    
-                    if !overflow {
-                        for _ in 0..Ord::min(buffer_size as usize, produce.free_len()) {
-                            produce.push(render_be.get_stereo()).expect("send render");
-                        }
-                    }
-    
-                    if consume_analyze.len() >= fft_res {
-                        if let Ok(nodes) = process_nodes.lock() {
-                            let samples = consume_analyze.pop_iter().take(fft_res).collect::<Vec<_>>();
-                            let fft_data = process_input_data(samples.as_slice(), &nodes, sample_rate);
-                            match fft_sender.try_send(fft_data) {
-                                Ok(_) => {}
-                                Err(TrySendError::Full(_)) => {
-                                    log::warn!("skipping fft data")
-                                }
-                                Err(_) => {
-                                    log::error!("fft receiver gone");
-                                    break;
-                                }
-                            }
-                        }
-                    }
-    
-                    if let Ok(mut snoops) = process_snoops.try_lock() {
-                        let snps = snoops
-                            .iter_mut()
-                            .map(|(s, e)| (e, s.get()))
-                            .collect::<Vec<_>>();
-    
-                        if snps.iter().any(|(_, s)| s.is_some()) {
-                            let data = snps
-                                .into_iter()
-                                .map(|(e, snp)| {
-                                    let mut data = vec![];
-                                    if let Some(buf) = snp {
-                                        for i in 0..Ord::min(SNOOP_SIZE, buf.size()) {
-                                            data.push(buf.at(i))
-                                        }
-                                    }
-                                    (*e, data)
-                                })
-                                .collect();
-    
-                            match snoops_sender.try_send(data) {
-                                Ok(_) => {}
-                                Err(TrySendError::Full(_)) => {
-                                    log::warn!("skipping snoops data");
-                                }
-                                Err(_) => {
-                                    log::error!("snoops receiver gone");
-                                    break;
-                                }
-                            }
-                        }
+                    if Err(e) = process_fn() {
+                        log::error!("processing error: {e:?}");
+                        break;
                     }
                 }
             });

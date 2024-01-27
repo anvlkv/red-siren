@@ -292,11 +292,11 @@ impl Unit {
                             .expect("lock process_input_analyzer_enabled");
                         if *is_enabled {
                             for frame in data.chunks(config.channels as usize) {
-                                input_be.tick(frame, output_frame.as_mut_slice());
+                                input_be.tick(&[frame[0]], output_frame.as_mut_slice());
                                 match produce_analyze.push(output_frame[0]) {
                                     Ok(_) => {}
                                     Err(_) => {
-                                        // log::warn!("analyze buffer full");
+                                        log::trace!("analyze buffer full");
                                         break;
                                     }
                                 };

@@ -94,7 +94,7 @@ fn run(mut unit: Unit) -> Result<(), anyhow::Error> {
         last_snoops: vec![],
         pressed: HashSet::new(),
     };
-    let viewport = ViewportBuilder::default().with_min_inner_size(vec2(360.0, 780.0));
+    let viewport = ViewportBuilder::default().with_min_inner_size(vec2(360.0, 680.0));
 
     let options = eframe::NativeOptions {
         viewport,
@@ -120,7 +120,7 @@ impl eframe::App for State {
             ui.separator();
             ui.end_row();
             egui::ScrollArea::vertical()
-            .max_height(600.0)
+            .max_height(400.0)
                 .scroll_bar_visibility(scroll_area::ScrollBarVisibility::AlwaysVisible)
                 .show(ui, |ui| {
                     ui.label("Input");
@@ -230,7 +230,7 @@ impl eframe::App for State {
                                 ui.vertical(|ui| {
                                     ui.label("Node sense.1.0");
                                     let mut emit = node.f_sense.1 .0.value();
-                                    let input = ui.add(egui::Slider::new(&mut emit, 0.0..=1.0));
+                                    let input = ui.add(egui::Slider::new(&mut emit, 0.01..=100.0));
                                     if input.changed() {
                                         node.f_sense.1 .0.set(emit);
                                     }
@@ -238,7 +238,7 @@ impl eframe::App for State {
                                 ui.vertical(|ui| {
                                     ui.label("Node sense.1.0");
                                     let mut emit = node.f_sense.1 .1.value();
-                                    let input = ui.add(egui::Slider::new(&mut emit, 0.0..=1.0));
+                                    let input = ui.add(egui::Slider::new(&mut emit, 0.01..=100.0));
                                     if input.changed() {
                                         node.f_sense.1 .1.set(emit);
                                     }

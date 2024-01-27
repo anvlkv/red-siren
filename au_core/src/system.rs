@@ -36,8 +36,8 @@ impl System {
         output_net.set_sample_rate(sample_rate as f64);
         output_net.allocate();
 
-        let mut input_net = Net32::new(2, 1);
-        let input_bus_id = input_net.push(Box::new(join::<U2>()));
+        let mut input_net = Net32::new(1, 1);
+        let input_bus_id = input_net.push(Box::new(pass()));
         input_net.pipe_input(input_bus_id);
         input_net.pipe_output(input_bus_id);
         input_net.set_sample_rate(sample_rate as f64);
@@ -111,7 +111,7 @@ impl System {
             let p_q = var(&node_data.f_sense.1 .1);
             let f_mul = var(&node_data.f_sense.0 .1) - var(&node_data.f_sense.0 .0);
 
-            join::<U2>() >> (pass() | p_hz | p_q) >> peak() >> pass() * f_mul
+            (pass() | p_hz | p_q) >> peak() >> pass() * f_mul
         };
 
         let (output_node, input_node): (Box<dyn AudioUnit32>, Box<dyn AudioUnit32>) =

@@ -41,7 +41,7 @@ const KEYS: [Key; 10] = [
 ];
 
 fn main() {
-    simple_logger::init_with_level(log::Level::Error).expect("couldn't initialize logging");
+    simple_logger::init_with_level(log::Level::Debug).expect("couldn't initialize logging");
 
     let unit = Unit::new();
     run(unit).unwrap();
@@ -94,7 +94,7 @@ fn run(mut unit: Unit) -> Result<(), anyhow::Error> {
         last_snoops: vec![],
         pressed: HashSet::new(),
     };
-    let viewport = ViewportBuilder::default().with_min_inner_size(vec2(360.0, 680.0));
+    let viewport = ViewportBuilder::default().with_min_inner_size(vec2(880.0, 600.0));
 
     let options = eframe::NativeOptions {
         viewport,
@@ -120,7 +120,7 @@ impl eframe::App for State {
             ui.separator();
             ui.end_row();
             egui::ScrollArea::vertical()
-            .max_height(400.0)
+                .max_height(600.0 * 0.75)
                 .scroll_bar_visibility(scroll_area::ScrollBarVisibility::AlwaysVisible)
                 .show(ui, |ui| {
                     ui.label("Input");
@@ -258,93 +258,105 @@ impl eframe::App for State {
                 });
 
             // Draw oscilloscope.
-            egui::containers::Frame::canvas(ui.style()).show(ui, |ui| {
-                ui.ctx().request_repaint();
 
-                let snoops = self
-                    .snoop_receiver
-                    .try_recv()
-                    .unwrap_or(self.last_snoops.clone());
+            ui.horizontal(|ui| {
+                let desired_size = (ui.available_width() / 2.0) * vec2(1.0, 0.25);
 
-                self.last_snoops = snoops.clone();
+                ui.vertical(|ui| {
+                    ui.label("Output");
+                    egui::containers::Frame::canvas(ui.style()).show(ui, |ui| {
+                        ui.ctx().request_repaint();
 
-                let thickness: f32 = 1.0;
-                let desired_size = ui.available_width() * vec2(1.0, 0.25);
-                let (_id, rect) = ui.allocate_space(desired_size);
-                let spots_c = self.nodes.len();
-                let to_screen_spots = emath::RectTransform::from_to(
-                    Rect::from_x_y_ranges(0.0..=spots_c as f32, 0.0..=1.0),
-                    rect,
-                );
-                for (i, (e, data)) in snoops.iter().enumerate() {
-                    let node = self
-                        .nodes
-                        .iter()
-                        .find(|(_, b)| b == e)
-                        .map(|(n, _)| self.world.get::<&Node>(*n).unwrap());
+                        let snoops = self
+                            .snoop_receiver
+                            .try_recv()
+                            .unwrap_or(self.last_snoops.clone());
 
-                    let points = data.len();
-                    let color = Color32::from_rgb(
-                        (10 * i).try_into().unwrap(),
-                        if node.is_some() { 200 } else { 50 },
-                        node.as_ref()
-                            .map_or(50, |n| (125.0 + n.pan.value() * 125.0) as u8),
-                    );
-                    let to_screen = emath::RectTransform::from_to(
-                        Rect::from_x_y_ranges(0.0..=points as f32, -1.0..=1.0),
-                        rect,
-                    );
-                    let pts: Vec<Pos2> = data
-                        .iter()
-                        .enumerate()
-                        .map(|(i, y)| {
-                            to_screen * pos2((points - i) as f32, softsign(y * 10.0) as f32)
-                        })
-                        .collect();
-                    let line = epaint::Shape::line(pts, Stroke::new(thickness, color));
-                    ui.painter().add(line);
+                        self.last_snoops = snoops.clone();
 
-                    if let Some(node) = node {
-                        let pos = to_screen_spots * pos2((spots_c - i) as f32 - 0.5, softsign(2.5));
-                        let spot = if node.control.value() > 0.0 {
-                            epaint::Shape::circle_filled(pos, 5.0, color)
-                        } else {
-                            epaint::Shape::circle_stroke(pos, 5.0, Stroke::new(1.0, color))
-                        };
+                        let thickness: f32 = 1.0;
+                        let (_id, rect) = ui.allocate_space(desired_size);
+                        let spots_c = self.nodes.len();
+                        let to_screen_spots = emath::RectTransform::from_to(
+                            Rect::from_x_y_ranges(0.0..=spots_c as f32, 0.0..=1.0),
+                            rect,
+                        );
+                        for (i, (e, data)) in snoops.iter().enumerate() {
+                            let node = self
+                                .nodes
+                                .iter()
+                                .find(|(_, b)| b == e)
+                                .map(|(n, _)| self.world.get::<&Node>(*n).unwrap());
 
-                        ui.painter().add(spot);
-                    }
-                }
-            });
+                            let points = data.len();
+                            let color = Color32::from_rgb(
+                                (10 * i).try_into().unwrap(),
+                                if node.is_some() { 200 } else { 50 },
+                                node.as_ref()
+                                    .map_or(50, |n| (125.0 + n.pan.value() * 125.0) as u8),
+                            );
+                            let to_screen = emath::RectTransform::from_to(
+                                Rect::from_x_y_ranges(0.0..=points as f32, -1.0..=1.0),
+                                rect,
+                            );
+                            let pts: Vec<Pos2> = data
+                                .iter()
+                                .enumerate()
+                                .map(|(i, y)| {
+                                    to_screen * pos2((points - i) as f32, softsign(y * 10.0) as f32)
+                                })
+                                .collect();
+                            let line = epaint::Shape::line(pts, Stroke::new(thickness, color));
+                            ui.painter().add(line);
 
-            ui.label("Input spectrum");
-            egui::containers::Frame::canvas(ui.style()).show(ui, |ui| {
-                ui.ctx().request_repaint();
-                let fft = self
-                    .fft_receiver
-                    .try_recv()
-                    .unwrap_or(self.last_fft.clone());
+                            if let Some(node) = node {
+                                let pos = to_screen_spots
+                                    * pos2((spots_c - i) as f32 - 0.5, softsign(2.5));
+                                let spot = if node.control.value() > 0.0 {
+                                    epaint::Shape::circle_filled(pos, 5.0, color)
+                                } else {
+                                    epaint::Shape::circle_stroke(pos, 5.0, Stroke::new(1.0, color))
+                                };
 
-                self.last_fft = fft.clone();
+                                ui.painter().add(spot);
+                            }
+                        }
+                    });
+                });
 
-                let points = fft.len();
-                let color = Color32::from_rgb(250, 200, 120);
-                let thickness: f32 = 1.0;
-                let desired_size = ui.available_width() * vec2(1.0, 0.25);
-                let (_id, rect) = ui.allocate_space(desired_size);
-                let to_screen = emath::RectTransform::from_to(
-                    Rect::from_x_y_ranges(0.0..=points as f32, -10.0..=10.0),
-                    rect,
-                );
+                ui.vertical(|ui| {
+                    ui.label("Input spectrum");
+                    egui::containers::Frame::canvas(ui.style()).show(ui, |ui| {
+                        ui.ctx().request_repaint();
+                        let fft = self
+                            .fft_receiver
+                            .try_recv()
+                            .unwrap_or(self.last_fft.clone());
 
-                let pts: Vec<Pos2> = fft
-                    .iter()
-                    .enumerate()
-                    .map(|(i, (_, y))| to_screen * pos2((points - i) as f32, softsign(*y - 10.0)))
-                    .collect();
+                        self.last_fft = fft.clone();
 
-                let line = epaint::Shape::line(pts, Stroke::new(thickness, color));
-                ui.painter().add(line);
+                        let points = fft.len();
+                        let color = Color32::from_rgb(250, 200, 120);
+                        let thickness: f32 = 1.0;
+
+                        let (_id, rect) = ui.allocate_space(desired_size);
+                        let to_screen = emath::RectTransform::from_to(
+                            Rect::from_x_y_ranges(0.0..=points as f32, -10.0..=10.0),
+                            rect,
+                        );
+
+                        let pts: Vec<Pos2> = fft
+                            .iter()
+                            .enumerate()
+                            .map(|(i, (_, y))| {
+                                to_screen * pos2((points - i) as f32, softsign(*y - 10.0))
+                            })
+                            .collect();
+
+                        let line = epaint::Shape::line(pts, Stroke::new(thickness, color));
+                        ui.painter().add(line);
+                    });
+                })
             });
 
             if !self.input {

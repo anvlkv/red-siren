@@ -41,7 +41,7 @@ const KEYS: [Key; 10] = [
 ];
 
 fn main() {
-    simple_logger::init_with_level(log::Level::Debug).expect("couldn't initialize logging");
+    simple_logger::init_with_level(log::Level::Error).expect("couldn't initialize logging");
 
     let unit = Unit::new();
     run(unit).unwrap();

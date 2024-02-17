@@ -1,4 +1,4 @@
-pub use crux_core::{Core, Request, bridge::Bridge};
+pub use crux_core::{bridge::Bridge, Core, Request};
 pub use crux_http as http;
 pub use crux_kv as key_value;
 use lazy_static::lazy_static;
@@ -27,33 +27,31 @@ pub fn view() -> Vec<u8> {
 pub fn log_init() {
     let lvl = log::LevelFilter::Trace;
 
-    #[cfg(target_os = "android")]
-    {
+    cfg_if::cfg_if! { if #[cfg(feature="browser")] {
+        let lvl = lvl.to_level().unwrap();
+
+        _ = console_log::init_with_level(lvl);
+        console_error_panic_hook::set_once();
+    } else if #[cfg(target_os = "android")] {
         android_logger::init_once(
             android_logger::Config::default()
                 .with_max_level(lvl)
                 .with_tag("red_siren::core"),
         );
     }
-
-    #[cfg(any(target_os = "ios", target_os = "macos"))]
-    {
-        oslog::OsLogger::new("com.anvlkv.RedSiren.Shared")
+    else if #[cfg(target_os = "ios")] {
+        oslog::OsLogger::new("com.anvlkv.RedSiren.Core")
             .level_filter(lvl)
             .init()
             .unwrap();
     }
+    else {
+        let lvl = lvl.to_level().unwrap();
 
-    #[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
-     {
-         let lvl = lvl.to_level().unwrap();
- 
-         _ = console_log::init_with_level(lvl);
-         console_error_panic_hook::set_once();
-     }
+        simple_logger::init_with_level(lvl).expect("couldn't initialize logging");
+    }}
 
     log::info!("init logging")
 }
-
 
 uniffi::include_scaffolding!("core");

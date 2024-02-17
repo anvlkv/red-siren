@@ -40,16 +40,13 @@ pub enum Event {
     Visual(VisualEV),
     Resize(f64, f64),
     SafeAreaResize(f64, f64, f64, f64),
-    PlayOpInstall(PlayOperationOutput),
+    PlayOpInstall(bool),
     PlayOpRun(PlayOperationOutput),
     PlayOpFftData(Vec<(f32, f32)>),
     PlayOpSnoopData(Vec<(Entity, Vec<f32>)>),
 }
 
 impl Eq for Event {}
-
-use au_core::{Unit, UnitEV};
-use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
 pub struct RedSiren {
@@ -86,31 +83,34 @@ impl App for RedSiren {
         match msg {
             Event::InitialNavigation(activity) => {
                 model.activity = activity;
+                caps.play.install(Event::PlayOpInstall);
                 self.visual
                     .update(VisualEV::AnimateEntrance, model, &caps.into());
                 caps.render.render();
-                caps.play.install(Event::PlayOpInstall);
             }
-            Event::PlayOpInstall(success) => match success {
-                PlayOperationOutput::Success => caps.play.run_unit(
-                    Event::PlayOpRun,
-                    Event::PlayOpFftData,
-                    Event::PlayOpSnoopData,
-                ),
-                PlayOperationOutput::Failure => {
-                    caps.play.install(Event::PlayOpInstall);
-                    log::error!("failed to instal audio unit, retrying");
+            Event::PlayOpInstall(success) => {
+                if success {
+                    caps.play.run_unit(
+                        Event::PlayOpRun,
+                        Event::PlayOpFftData,
+                        Event::PlayOpSnoopData,
+                    )
                 }
-                PlayOperationOutput::PermanentFailure => {
-                    log::error!("permanently failed to instal audio unit");
-                }
+                // PlayOperationOutput::Success => ,
+                // PlayOperationOutput::Failure => {
+                //     caps.play.install(Event::PlayOpInstall);
+                //     log::error!("failed to instal audio unit, retrying");
+                // }
+                // PlayOperationOutput::PermanentFailure => {
+                //     log::error!("permanently failed to instal audio unit");
+                // }
             },
             Event::PlayOpRun(success) => match success {
                 PlayOperationOutput::Success => {
                     log::info!("running");
                 }
                 PlayOperationOutput::Failure => {
-                    // caps.play.install(Event::PlayOpInstall);
+                    caps.play.install(Event::PlayOpInstall);
                     log::error!("failed to instal audio unit, retrying");
                 }
                 PlayOperationOutput::PermanentFailure => {

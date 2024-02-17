@@ -2,7 +2,6 @@ use hecs::{World, Entity};
 use std::sync::{Arc, Mutex};
 use euclid::default::{Box2D, SideOffsets2D};
 use keyframe::AnimationSequence;
-use au_core::{Unit, UnitEV};
 
 use super::objects::Objects;
 
@@ -20,5 +19,5 @@ pub struct Model {
   pub buttons: Vec<Entity>,
   pub strings: Vec<Entity>,
   pub tracks: Vec<Entity>,
-  pub nodes: Vec<Entity>
+  pub nodes: Vec<Entity>,
 }

@@ -21,8 +21,8 @@ pub struct System {
 }
 
 pub const MOMENT: f32 = 1.0 / 75.0;
-pub const MIN_F: f32 = 0.06;
-pub const MAX_F: f32 = 6_000.0;
+pub const MIN_F: f32 = 60.0;
+pub const MAX_F: f32 = 18_000.0;
 pub const SNOOP_SIZE: usize = 1024;
 
 impl System {

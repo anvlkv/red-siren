@@ -78,9 +78,13 @@ fn run(mut unit: Unit) -> Result<(), anyhow::Error> {
     let (fft_sender, fft_receiver) = sync_channel(32);
     let (snoop_sender, snoop_receiver) = sync_channel(64);
 
-    unit.run(fft_sender, snoop_sender)?;
-
-    unit.update(UnitEV::Configure(config));
+    let r_unit = unit.clone();
+    // std::thread::
+    // async move {
+    //     r_unit.run(fft_sender, snoop_sender).await.unwrap();
+    
+    //     r_unit.update(UnitEV::Configure(config));
+    // }
 
     let state = State {
         unit,

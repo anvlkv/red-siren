@@ -12,11 +12,13 @@ mod area;
 mod core_bindings;
 mod intro;
 mod object;
+mod audio;
 
 use crate::error_template::{AppError, ErrorTemplate};
 use area::Area;
 use intro::Intro;
 use object::Object;
+use audio::Audio;
 
 #[component]
 pub fn RootComponent() -> impl IntoView {

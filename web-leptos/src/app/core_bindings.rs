@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use leptos::*;
 
-use app_core::{AnimateOperation, AnimateOperationOutput};
+use app_core::{AnimateOperation, AnimateOperationOutput, PlayOperationOutput};
 use app_core::{
     Activity, Effect, Event, RedSiren, RedSirenCapabilities, ViewModel,
 };
@@ -42,7 +42,7 @@ pub fn process_effect(
         Effect::Render(_) => {
             render.update(|view| *view = core.view());
         }
-        Effect::Play(req) => {
+        Effect::Play(mut req) => {
             // match req.operation {
             //     app_core::PlayOperation::Permissions => {
 
@@ -50,6 +50,8 @@ pub fn process_effect(
             //     app_core::PlayOperation::InstallAU => todo!(),
             // }
             log::info!("play op: {:?}", req.operation);
+
+            core.resolve(&mut req, PlayOperationOutput::Success);
         }
         
         // Effect::KeyValue(mut req) => {

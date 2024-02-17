@@ -14,18 +14,18 @@ name = "bindgen"
 
 [features]
 typegen = ["crux_core/typegen"]
+browser = ["console_log", "console_error_panic_hook", "au_core/browser"]
 
-[target.'cfg(any(target_os = "ios", target_os="macos"))'.dependencies]
+[target.'cfg(target_os = "ios")'.dependencies]
 oslog = "0.2.0"
-coreaudio-rs = "0.11.3"
+[[au_core]]
+default-features = true
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.13.1"
-oboe = { version = "0.5.0", features = ["shared-link"] }
+[[au_core]]
+default-features = true
 
-[target.'cfg(any(target_arch = "wasm32", target_arch = "wasm64"))'.dependencies]
-console_error_panic_hook = "0.1.7"
-console_log = "1.0.0"
 
 [dependencies]
 anyhow = "1.0.71"
@@ -56,9 +56,12 @@ spectrum-analyzer = "1.5.0"
 fundsp = { version = "0.16.0", default-features = false }
 uniffi = { workspace = true }
 euclid = { vesrion = "0.22.9", features = ["mint", "serde", "std"] }
-ecolor = { version = "0.25.0", features = ["color-hex", "serde"] }
-au_core = { path = "../au_core" }
+ecolor = { version = "0.26.2", features = ["color-hex", "serde"] }
+au_core = { path = "../au_core", default-features = false }
 once_cell = "1.19.0"
+simple_logger = "4.1.0"
+console_error_panic_hook = { version = "0.1.7", optional = true }
+console_log = { version = "1.0.0", optional = true }
 
 
 [dev-dependencies]

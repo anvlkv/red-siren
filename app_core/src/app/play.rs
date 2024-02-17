@@ -1,23 +1,20 @@
-use std::{
-    error::Error,
-    sync::{mpsc::sync_channel, Arc, Mutex},
-};
+use std::sync::{mpsc::sync_channel, Arc};
 
 use au_core::{Unit, UnitEV};
 use crux_core::capability::{CapabilityContext, Operation};
 use crux_macros::Capability;
+use futures::lock::Mutex;
 use hecs::Entity;
 use serde::{Deserialize, Serialize};
-
-// static UNIT_INSTANCE: Lazy<> = Lazy::new(|| Default::default());
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum PlayOperation {
     Permissions,
     InstallAU,
+
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Copy)]
 pub enum PlayOperationOutput {
     Success,
     Failure,
@@ -47,17 +44,17 @@ where
 
     pub fn install<F>(&self, notify: F)
     where
-        F: Fn(PlayOperationOutput) -> Ev + Send + 'static,
+        F: Fn(bool) -> Ev + Send + 'static,
     {
         let ctx = self.context.clone();
         let mtx = self.unit.clone();
-
         self.context.spawn(async move {
+            let _ = ctx.request_from_shell(PlayOperation::InstallAU).await;
             let unit = Unit::new();
-
-            let mut u_mtx = mtx.lock().expect("lock unit");
+            let mut u_mtx = mtx.lock().await;
             _ = u_mtx.insert(unit);
-            ctx.update_app(notify(PlayOperationOutput::Success));
+            ctx.update_app(notify(true));
+            log::info!("created play unit");
         });
     }
 
@@ -67,6 +64,7 @@ where
         FF: Fn(Vec<(f32, f32)>) -> Ev + Send + 'static,
         FS: Fn(Vec<(Entity, Vec<f32>)>) -> Ev + Send + 'static,
     {
+        log::info!("try run unit");
         let ctx = self.context.clone();
         let mtx = self.unit.clone();
 
@@ -74,28 +72,20 @@ where
         let (snoop_sender, snoop_receiver) = sync_channel(64);
 
         self.context.spawn(async move {
-            match mtx.lock() {
-                Ok(mut unit) => {
-                    if let Some(unit) = unit.as_mut() {
-                        match unit.run(fft_sender, snoop_sender) {
-                            Ok(_) => {
-                                ctx.update_app(notify(PlayOperationOutput::Success));
-                            }
-                            Err(e) => {
-                                log::error!("unit run error: {:?}", e);
-                                ctx.update_app(notify(PlayOperationOutput::PermanentFailure));
-                            }
-                        }
-                    } else {
-                        log::error!("no unit");
+            let mut unit = mtx.lock().await;
+            if let Some(unit) = unit.as_mut() {
+                match unit.run(fft_sender, snoop_sender) {
+                    Ok(_) => {
+                        ctx.update_app(notify(PlayOperationOutput::Success));
+                    }
+                    Err(e) => {
+                        log::error!("unit run error: {:?}", e);
                         ctx.update_app(notify(PlayOperationOutput::Failure));
                     }
                 }
-                Err(r) => {
-                    log::error!("mutex poison");
-                    mtx.clear_poison();
-                    ctx.update_app(notify(PlayOperationOutput::Failure));
-                }
+            } else {
+                log::error!("no unit");
+                ctx.update_app(notify(PlayOperationOutput::PermanentFailure));
             }
         });
 
@@ -115,6 +105,4 @@ where
             }
         });
     }
-
-    
 }

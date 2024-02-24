@@ -14,6 +14,12 @@ thread_local! {
 }
 
 #[wasm_bindgen]
+pub fn init_once() {
+    _ = console_log::init_with_level(log::Level::Debug);
+    console_error_panic_hook::set_once();
+}
+
+#[wasm_bindgen]
 pub fn instantiate_unit() {
     CALLBACK.with(|callback| {
         let mut unit = Unit::new();
@@ -29,6 +35,8 @@ pub fn process_samples(samples: &[f32]) -> Vec<f32> {
 
         let [ch1, ch2] = callback(samples);
 
+        log::info!("callback tick");
+
         interleave(ch1, ch2).collect()
     })
 }
@@ -37,8 +45,7 @@ pub fn process_samples(samples: &[f32]) -> Vec<f32> {
 pub fn get_fft_data() -> Vec<u8> {
     let result = match AU_UNIT.try_lock() {
         Ok(unit) => {
-            let unit = unit.as_ref().expect("unit instance");
-            unit.next_fft_reading()
+            unit.as_ref().map(|unit| unit.next_fft_reading()).flatten()
         }
         _ => None,
     };
@@ -50,8 +57,7 @@ pub fn get_fft_data() -> Vec<u8> {
 pub fn get_snoops_data() -> Vec<u8> {
     let result = match AU_UNIT.try_lock() {
         Ok(unit) => {
-            let unit = unit.as_ref().expect("unit instance");
-            unit.next_snoops_reading()
+            unit.as_ref().map(|unit| unit.next_snoops_reading()).flatten()
         }
         _ => None,
     };

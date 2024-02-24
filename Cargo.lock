@@ -691,6 +691,8 @@ dependencies = [
  "anyhow",
  "bincode",
  "cfg-if",
+ "console_error_panic_hook",
+ "console_log",
  "cpal",
  "dasp_sample",
  "eframe",

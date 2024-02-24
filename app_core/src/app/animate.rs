@@ -1,3 +1,5 @@
+use std::sync::mpsc::{Receiver, TryRecvError};
+
 use crux_core::capability::{CapabilityContext, Operation};
 use crux_macros::Capability;
 use futures::StreamExt;
@@ -59,11 +61,43 @@ where
         });
     }
 
+    pub fn animate_reception<F, T>(&self, notify: F, receiver: Receiver<T>)
+    where
+        F: Fn(T) -> Ev + Send + 'static,
+        T: Send + 'static,
+    {
+        log::debug!("starting animate reception");
+
+        let context = self.context.clone();
+
+        self.context.spawn({
+            async move {
+                let mut stream = context.stream_from_shell(AnimateOperation::Start);
+
+                while let Some(response) = stream.next().await {
+                    if let AnimateOperationOutput::Timestamp(_) = response {
+                        match receiver.try_recv() {
+                            Ok(d) => context.update_app(notify(d)),
+                            Err(TryRecvError::Empty) => {}
+                            Err(TryRecvError::Disconnected) => {
+                                break;
+                            }
+                        }
+                    } else {
+                        break;
+                    }
+                }
+
+                log::info!("animate reception exited");
+            }
+        });
+    }
+
     pub fn stop(&self) {
         log::debug!("stopping animation");
 
         let context = self.context.clone();
-        
+
         self.context.spawn({
             async move {
                 _ = context.notify_shell(AnimateOperation::Stop).await;

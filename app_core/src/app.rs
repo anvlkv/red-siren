@@ -1,3 +1,6 @@
+use std::sync::{mpsc::sync_channel, Arc, Mutex};
+
+use au_core::Unit;
 pub use crux_core::App;
 use crux_core::{render::Render, Capability};
 use crux_kv::KeyValue;
@@ -6,14 +9,11 @@ use hecs::{Entity, World};
 use serde::{Deserialize, Serialize};
 
 mod objects;
-mod play;
-// mod node;
 mod animate;
 mod model;
 mod visual;
 
 pub use animate::*;
-pub use play::*;
 pub use visual::{VisualEV, VisualVM};
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
@@ -40,8 +40,8 @@ pub enum Event {
     Visual(VisualEV),
     Resize(f64, f64),
     SafeAreaResize(f64, f64, f64, f64),
-    PlayOpInstall(bool),
-    PlayOpRun(PlayOperationOutput),
+    // PlayOpInstall(bool),
+    // PlayOpRun(PlayOperationOutput),
     PlayOpFftData(Vec<(f32, f32)>),
     PlayOpSnoopData(Vec<(Entity, Vec<f32>)>),
 }
@@ -51,6 +51,7 @@ impl Eq for Event {}
 #[derive(Default)]
 pub struct RedSiren {
     visual: visual::Visual,
+    audio_unit: Arc<Mutex<Option<Unit>>>,
 }
 
 #[cfg_attr(feature = "typegen", derive(crux_macros::Export))]
@@ -59,7 +60,6 @@ pub struct RedSiren {
 pub struct RedSirenCapabilities {
     pub render: Render<Event>,
     pub animate: Animate<Event>,
-    pub play: Play<Event>,
 }
 
 impl From<&RedSirenCapabilities> for visual::VisualCapabilities {
@@ -83,40 +83,53 @@ impl App for RedSiren {
         match msg {
             Event::InitialNavigation(activity) => {
                 model.activity = activity;
-                caps.play.install(Event::PlayOpInstall);
                 self.visual
                     .update(VisualEV::AnimateEntrance, model, &caps.into());
                 caps.render.render();
+                let mut unit = Unit::new();
+
+
+                let (fft_sender, fft_receiver) = sync_channel::<Vec<(f32, f32)>>(4);
+                let (snoops_sender, snoops_receiver) = sync_channel::<Vec<(Entity, Vec<f32>)>>(8);
+                unit.run(fft_sender, snoops_sender).expect("run unit");
+
+                caps.animate.animate_reception(Event::PlayOpSnoopData, snoops_receiver);
+                caps.animate.animate_reception(Event::PlayOpFftData, fft_receiver);
+
+                _ = self.audio_unit.lock().unwrap().insert(unit);
+
+                // unit.run(fft_sender, snoops_sender);
+
             }
-            Event::PlayOpInstall(success) => {
-                if success {
-                    caps.play.run_unit(
-                        Event::PlayOpRun,
-                        Event::PlayOpFftData,
-                        Event::PlayOpSnoopData,
-                    )
-                }
-                // PlayOperationOutput::Success => ,
-                // PlayOperationOutput::Failure => {
-                //     caps.play.install(Event::PlayOpInstall);
-                //     log::error!("failed to instal audio unit, retrying");
-                // }
-                // PlayOperationOutput::PermanentFailure => {
-                //     log::error!("permanently failed to instal audio unit");
-                // }
-            },
-            Event::PlayOpRun(success) => match success {
-                PlayOperationOutput::Success => {
-                    log::info!("running");
-                }
-                PlayOperationOutput::Failure => {
-                    caps.play.install(Event::PlayOpInstall);
-                    log::error!("failed to instal audio unit, retrying");
-                }
-                PlayOperationOutput::PermanentFailure => {
-                    log::error!("permanently failed to instal audio unit");
-                }
-            },
+            // Event::PlayOpInstall(success) => {
+            //     if success {
+            //         caps.play.run_unit(
+            //             Event::PlayOpRun,
+            //             Event::PlayOpFftData,
+            //             Event::PlayOpSnoopData,
+            //         )
+            //     }
+            //     // PlayOperationOutput::Success => ,
+            //     // PlayOperationOutput::Failure => {
+            //     //     caps.play.install(Event::PlayOpInstall);
+            //     //     log::error!("failed to instal audio unit, retrying");
+            //     // }
+            //     // PlayOperationOutput::PermanentFailure => {
+            //     //     log::error!("permanently failed to instal audio unit");
+            //     // }
+            // },
+            // Event::PlayOpRun(success) => match success {
+            //     PlayOperationOutput::Success => {
+            //         log::info!("running");
+            //     }
+            //     PlayOperationOutput::Failure => {
+            //         caps.play.install(Event::PlayOpInstall);
+            //         log::error!("failed to instal audio unit, retrying");
+            //     }
+            //     PlayOperationOutput::PermanentFailure => {
+            //         log::error!("permanently failed to instal audio unit");
+            //     }
+            // },
             Event::PlayOpFftData(d) => log::info!("fft data"),
             Event::PlayOpSnoopData(d) => log::info!("snoop data"),
             Event::Navigation(activity) => {

@@ -43,7 +43,7 @@ impl App for Visual {
     fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) {
         match event {
             VisualEV::AnimateEntrance => {
-                model.intro_opacity = Some(keyframes![(0.0, 1.0, EaseOut), (0.25, 0.0)]);
+                model.intro_opacity = Some(keyframes![(0.0, 1.0, EaseOut), (0.1, 0.0)]);
                 caps.animate
                     .start(VisualEV::AnimateEntranceTS, "intro animation".to_string())
             }

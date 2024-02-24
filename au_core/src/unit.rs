@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{Node, System, MAX_F, MIN_F};
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Result, Error};
 use fundsp::hacker32::*;
 use hecs::Entity;
 use ringbuf::{HeapConsumer, HeapProducer, HeapRb};
@@ -285,12 +285,13 @@ impl Unit {
         fft_sender: SyncSender<Vec<(f32, f32)>>,
         snoops_sender: SyncSender<Vec<(Entity, Vec<f32>)>>,
     ) -> Result<()> {
-        use js_sys::{Reflect, Uint8Array};
+        use js_sys::{Reflect, Uint8Array, Object, Promise, Function};
         use wasm_bindgen::{closure::Closure, JsCast, JsValue};
         use wasm_bindgen_futures::JsFuture;
         use web_sys::*;
 
         let ctx = AudioContext::new().map_err(map_js_err)?;
+        let window = window().unwrap();
 
         log::info!("create node");
         let node = match AudioWorkletNode::new(&ctx, "red-siren-processor") {
@@ -298,7 +299,7 @@ impl Unit {
             Err(_) => {
                 let worklet = ctx.audio_worklet().map_err(map_js_err)?;
                 let loading = worklet
-                    .add_module("/worklet/worklet.es.js")
+                    .add_module("/worklet/au_core.js")
                     .map_err(map_js_err)?;
                 log::info!("load module");
 
@@ -308,33 +309,42 @@ impl Unit {
             }
         };
 
-        let dst = ctx.destination();
-        node.connect_with_audio_node(&dst).map_err(map_js_err)?;
-
-        log::info!("connect dst");
-
-        let window = window().unwrap();
-        let navigator = window.navigator();
-        let md = navigator.media_devices().map_err(map_js_err)?;
-        let mut constraints = MediaStreamConstraints::new();
-        constraints.audio(&true.into());
-        let query_device = md
-            .get_user_media_with_constraints(&constraints)
-            .map_err(map_js_err)?;
-
-        log::info!("query src");
-
-        let stream = JsFuture::from(query_device).await.map_err(map_js_err)?;
-        let stream = MediaStream::from(stream);
-        let src_options = MediaStreamAudioSourceOptions::new(&stream);
-        let src = MediaStreamAudioSourceNode::new(&ctx, &src_options).map_err(map_js_err)?;
-
-        src.connect_with_audio_node(&node).map_err(map_js_err)?;
-
-        log::info!("connect src");
-
+        let response = JsFuture::from(window.fetch_with_str("/worklet/wasm/au_core_bg.wasm")).await.map_err(map_js_err)?;;
+        let response = Response::from(response);
+        let promise = response.array_buffer().map_err(map_js_err)?;
+        let wasm_bytes = JsFuture::from(promise).await.map_err(map_js_err)?;
         let port = node.port().map_err(map_js_err)?;
 
+        let mut send_bytes = |resolve: Function, _: Function| {
+            let listener = Closure::wrap(Box::new(move |ev: JsValue| {
+                let ev = MessageEvent::from(ev);
+                let data = ev.data();
+                let ev_type = Reflect::get(&data, &"type".into())
+                    .expect("ev type")
+                    .as_string()
+                    .expect("ev type");
+                log::info!("event: {ev_type}");
+
+                if ev_type.as_str() == "wasm_ready" {
+                    resolve.call0(&JsValue::NULL);
+                }
+            }) as Box<dyn FnMut(JsValue)> );
+
+            port.set_onmessage(Some(listener.as_ref().unchecked_ref()));
+
+            let message = Object::new();
+            Reflect::set(&message, &"type".into(), &"wasm".into()).unwrap();
+            Reflect::set(&message, &"value".into(), &wasm_bytes).unwrap();
+
+            port.post_message(&message).unwrap();
+
+            std::mem::forget(listener);
+        };
+
+        let ready_promise = Promise::new(&mut send_bytes);
+        JsFuture::from(ready_promise).await.map_err(map_js_err)?;
+
+        let port = node.port().map_err(map_js_err)?;
         let on_message = Closure::wrap(Box::new(move |ev: JsValue| {
             let ev = MessageEvent::from(ev);
             let data = ev.data();
@@ -372,7 +382,34 @@ impl Unit {
                 }
             }
         }) as Box<dyn FnMut(JsValue)>);
+
         port.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
+        
+
+        let dst = ctx.destination();
+        node.connect_with_audio_node(&dst).map_err(map_js_err)?;
+
+        log::info!("connect dst");
+
+        
+        let navigator = window.navigator();
+        let md = navigator.media_devices().map_err(map_js_err)?;
+        let mut constraints = MediaStreamConstraints::new();
+        constraints.audio(&true.into());
+        let query_device = md
+            .get_user_media_with_constraints(&constraints)
+            .map_err(map_js_err)?;
+
+        log::info!("query src");
+
+        let stream = JsFuture::from(query_device).await.map_err(map_js_err)?;
+        let stream = MediaStream::from(stream);
+        let src_options = MediaStreamAudioSourceOptions::new(&stream);
+        let src = MediaStreamAudioSourceNode::new(&ctx, &src_options).map_err(map_js_err)?;
+
+        src.connect_with_audio_node(&node).map_err(map_js_err)?;
+
+        log::info!("connect src");
 
         ON_MESSAGE.with(move |mtx| {
             let mut mtx = mtx.lock().unwrap();
@@ -457,7 +494,7 @@ impl Unit {
                     Err(TrySendError::Full(_)) => {
                         log::warn!("skipping fft data")
                     }
-                    Err(_) => return Err(anyhow::anyhow!("fft receiver gone")),
+                    Err(_) => return Err(anyhow!("fft receiver gone")),
                 }
             }
         }
@@ -546,7 +583,7 @@ impl Unit {
                         Err(TrySendError::Full(_)) => {
                             log::warn!("skipping snoops data");
                         }
-                        Err(_) => return Err(anyhow::anyhow!("snoops receiver gone")),
+                        Err(_) => return Err(anyhow!("snoops receiver gone")),
                     }
                 }
             }
@@ -692,13 +729,13 @@ impl Unit {
             });
             Ok(())
         } else {
-            Err(anyhow::anyhow!("Could not create output"))
+            Err(anyhow!("Could not create output"))
         }
     }
 }
 
 #[cfg(feature = "browser")]
-fn map_js_err(err: wasm_bindgen::JsValue) -> anyhow::Error {
+fn map_js_err(err: wasm_bindgen::JsValue) -> Error {
     let description = format!("{:?}", err);
     anyhow!("js err: {description}")
 }

@@ -1,14 +1,21 @@
 import { defineConfig } from "vite";
+import { viteStaticCopy } from 'vite-plugin-static-copy'
 import path from "path";
-import wasm from "vite-plugin-wasm";
-import topLevelAwait from "vite-plugin-top-level-await";
 
 export default defineConfig({
-  plugins: [wasm(), topLevelAwait()],
+  plugins: [
+    viteStaticCopy({
+      targets: [
+        {
+          src: 'pkg/au_core_bg.wasm',
+          dest: 'wasm'
+        }
+      ]
+    })
+  ],
   build: {
     lib: {
       entry: path.resolve(__dirname, "src/worklet.ts"),
-      fileName: (format, entry) => `${entry}.${format}.js`,
       name: "au-core",
       formats: ["es"]
     },

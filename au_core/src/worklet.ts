@@ -1,14 +1,28 @@
+import 'fastestsmallesttextencoderdecoder/EncoderDecoderTogether.min.js'; 
+
 import * as worklet from "../pkg";
+
 
 class RedSirenProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    worklet.instantiate_unit();
     this.port.onmessage = this.onMessage.bind(this);
+    try {
+      worklet.instantiate_unit();
+    }
+    catch (e){
+      console.debug("instantiate on wasm_ready", e);
+    }
   }
 
   onMessage = (msg: MessageEvent) => {
     switch (msg.data.type) {
+      case "wasm": 
+        worklet.initSync(msg.data.value);
+        worklet.init_once();
+        worklet.instantiate_unit();
+        this.port.postMessage({"type": "wasm_ready"})
+        break;
       case "update":
         worklet.unit_update(msg.data.value);
         break;

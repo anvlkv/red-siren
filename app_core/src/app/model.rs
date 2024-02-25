@@ -12,6 +12,7 @@ pub struct Model {
   pub view_box: Box2D<f64>,
   pub safe_box: Box2D<f64>,
   pub safe_area: SideOffsets2D<f64>,
+  pub density: f64,
   pub reduced_motion: bool,
   pub intro_opacity: Option<AnimationSequence<f64>>,
   pub view_objects_animation: Option<AnimationSequence<Objects>>,

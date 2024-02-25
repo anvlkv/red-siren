@@ -18,9 +18,12 @@ pub struct VisualVM {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum VisualEV {
+    Resize(f64, f64),
+    SafeAreaResize(f64, f64, f64, f64),
     AnimateEntrance,
     AnimateEntranceTS(f64),
     SetReducedMotion(bool),
+    SetDensity(f64),
 }
 
 #[derive(Default)]
@@ -79,6 +82,18 @@ impl App for Visual {
                 model.reduced_motion = reduce;
                 caps.render.render();
             }
+            VisualEV::SetDensity(density) => {
+                model.density = density;
+                caps.render.render();
+            }
+            VisualEV::Resize(width, height) => {
+                self.resize(width, height, model);
+                caps.render.render();
+            }
+            VisualEV::SafeAreaResize(left, top, right, bottom) => {
+                self.safe_area(left, top, right, bottom, model);
+                caps.render.render();
+            }
         }
     }
 
@@ -92,13 +107,19 @@ impl App for Visual {
 }
 
 impl Visual {
-    pub fn safe_area(&self, left: f64, top: f64, right: f64, bottom: f64, model: &mut super::model::Model) {
+    pub fn safe_area(
+        &self,
+        left: f64,
+        top: f64,
+        right: f64,
+        bottom: f64,
+        model: &mut super::model::Model,
+    ) {
         model.safe_area = SideOffsets2D::new(top, right, bottom, left);
         self.resize(model.view_box.width(), model.view_box.height(), model);
     }
     pub fn resize(&self, width: f64, height: f64, model: &mut super::model::Model) {
         model.view_box = Box2D::new(Point2D::default(), Point2D::new(width, height));
         model.safe_box = model.view_box.inner_box(model.safe_area);
-        
     }
 }

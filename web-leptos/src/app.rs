@@ -12,13 +12,11 @@ mod area;
 mod core_bindings;
 mod intro;
 mod object;
-mod audio;
 
-use crate::error_template::{AppError, ErrorTemplate};
+use crate::{error_template::{AppError, ErrorTemplate}, util::use_dpi};
 use area::Area;
 use intro::Intro;
 use object::Object;
-use audio::Audio;
 
 #[component]
 pub fn RootComponent() -> impl IntoView {
@@ -173,15 +171,24 @@ fn RedSirenCore() -> impl IntoView {
 
     create_effect(move |_| {
         let (width, height) = size.get();
-        set_event(Some(app_core::Event::Resize(width as f64, height as f64)));
+        set_event(Some(app_core::Event::Visual(app_core::VisualEV::Resize(width as f64, height as f64))));
     });
 
     create_effect(move |_| {
-        set_event(Some(app_core::Event::SafeAreaResize(50.0, 50.0, 50.0, 50.0)));
+        set_event(Some(app_core::Event::Visual(app_core::VisualEV::SafeAreaResize(50.0, 50.0, 50.0, 50.0))));
     });
 
+    let dpi = use_dpi(vec![120, 160, 240, 320, 480, 640]);
+    create_effect(move |_| {
+        set_event(Some(app_core::Event::Visual(app_core::VisualEV::SetDensity(dpi() as f64))));
+    });
+
+    let on_click = move |_| {
+        set_event(Some(app_core::Event::StartAudioUnit));
+    };
+
     view! {
-        <div class="red-siren-core-view">
+        <div class="red-siren-core-view" on:click={on_click}>
             <Intro opacity=Signal::derive(move|| view().visual.intro_opacity)/>
             <Area>
                 <Object/>

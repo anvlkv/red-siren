@@ -8,9 +8,9 @@ use crux_macros::Effect;
 use hecs::{Entity, World};
 use serde::{Deserialize, Serialize};
 
-mod objects;
 mod animate;
 mod model;
+mod objects;
 mod visual;
 
 pub use animate::*;
@@ -38,12 +38,12 @@ pub enum Event {
     InitialNavigation(Activity),
     Navigation(Activity),
     Visual(VisualEV),
-    Resize(f64, f64),
-    SafeAreaResize(f64, f64, f64, f64),
+
     // PlayOpInstall(bool),
     // PlayOpRun(PlayOperationOutput),
     PlayOpFftData(Vec<(f32, f32)>),
     PlayOpSnoopData(Vec<(Entity, Vec<f32>)>),
+    StartAudioUnit,
 }
 
 impl Eq for Event {}
@@ -86,20 +86,21 @@ impl App for RedSiren {
                 self.visual
                     .update(VisualEV::AnimateEntrance, model, &caps.into());
                 caps.render.render();
-                let mut unit = Unit::new();
-
+                let unit = Unit::new();
+                _ = self.audio_unit.lock().unwrap().insert(unit);
+            }
+            Event::StartAudioUnit => {
+                let mut unit = self.audio_unit.lock().unwrap();
+                let unit = unit.as_mut().unwrap();
 
                 let (fft_sender, fft_receiver) = sync_channel::<Vec<(f32, f32)>>(4);
                 let (snoops_sender, snoops_receiver) = sync_channel::<Vec<(Entity, Vec<f32>)>>(8);
                 unit.run(fft_sender, snoops_sender).expect("run unit");
 
-                caps.animate.animate_reception(Event::PlayOpSnoopData, snoops_receiver);
-                caps.animate.animate_reception(Event::PlayOpFftData, fft_receiver);
-
-                _ = self.audio_unit.lock().unwrap().insert(unit);
-
-                // unit.run(fft_sender, snoops_sender);
-
+                caps.animate
+                    .animate_reception(Event::PlayOpSnoopData, snoops_receiver);
+                caps.animate
+                    .animate_reception(Event::PlayOpFftData, fft_receiver);
             }
             // Event::PlayOpInstall(success) => {
             //     if success {
@@ -134,14 +135,6 @@ impl App for RedSiren {
             Event::PlayOpSnoopData(d) => log::info!("snoop data"),
             Event::Navigation(activity) => {
                 model.activity = activity;
-                caps.render.render();
-            }
-            Event::Resize(width, height) => {
-                self.visual.resize(width, height, model);
-                caps.render.render();
-            }
-            Event::SafeAreaResize(left, top, right, bottom) => {
-                self.visual.safe_area(left, top, right, bottom, model);
                 caps.render.render();
             }
             Event::Visual(ev) => self.visual.update(ev, model, &caps.into()),

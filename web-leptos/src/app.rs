@@ -129,6 +129,7 @@ fn RedSirenCore() -> impl IntoView {
 
         if last != Some(ts) {
             if let Some(sender) = animate_send().as_mut() {
+                log::debug!("ts: {ts}");
                 sender.try_send(ts).expect("send ts");
             }
         }

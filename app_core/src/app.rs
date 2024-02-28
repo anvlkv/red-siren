@@ -9,12 +9,16 @@ use hecs::{Entity, World};
 use serde::{Deserialize, Serialize};
 
 mod animate;
+mod config;
+mod layout;
 mod model;
 mod objects;
 mod visual;
 
 pub use animate::*;
 pub use visual::{VisualEV, VisualVM};
+
+use crate::app::{config::Config, layout::Layout};
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Activity {
@@ -137,7 +141,34 @@ impl App for RedSiren {
                 model.activity = activity;
                 caps.render.render();
             }
-            Event::Visual(ev) => self.visual.update(ev, model, &caps.into()),
+            Event::Visual(ev) => match ev {
+                VisualEV::Resize(_, _)
+                | VisualEV::SafeAreaResize(_, _, _, _)
+                | VisualEV::SetDensity(_) => {
+                    self.visual.update(ev, model, &caps.into());
+                    model.configs = Config::configs_for_screen(
+                        model.view_box.width(),
+                        model.view_box.height(),
+                        model.density,
+                        [
+                            model.safe_area.left,
+                            model.safe_area.top,
+                            model.safe_area.right,
+                            model.safe_area.bottom,
+                        ],
+                    );
+                    if model.current_config >= model.configs.len() {
+                        model.current_config = 0;
+                    }
+
+                    let mut world = model.world.lock().unwrap();
+                    model.layout =
+                        Layout::layout(&model.configs[model.current_config], &mut world).unwrap();
+                }
+                _ => {
+                    self.visual.update(ev, model, &caps.into());
+                }
+            },
         }
     }
 

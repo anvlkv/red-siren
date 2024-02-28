@@ -12,13 +12,14 @@ pub struct Node {
     pub pan: Shared<f32>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Builder)]
 pub struct NodeData {
+    #[builder(default = "hecs::Entity::DANGLING")]
+    pub button: Entity,
     pub f_base: f32,
     pub f_emit: (f32, f32),
     pub f_sense: ((f32, f32), (f32, f32)),
     pub control: f32,
-    pub button: Entity,
     pub pan: f32,
 }
 

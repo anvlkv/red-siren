@@ -46,7 +46,8 @@ impl App for Visual {
     fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) {
         match event {
             VisualEV::AnimateEntrance => {
-                model.intro_opacity = Some(keyframes![(0.0, 1.0, EaseOut), (0.1, 0.0)]);
+                model.intro_opacity = Some(keyframes![(0.0, 1.0, EaseOut), (1.0, 0.0)]);
+                // model.view_objects_animation = 
                 caps.animate
                     .start(VisualEV::AnimateEntranceTS, "intro animation".to_string())
             }
@@ -83,7 +84,7 @@ impl App for Visual {
                 caps.render.render();
             }
             VisualEV::SetDensity(density) => {
-                model.density = density;
+                self.set_density(density, model);
                 caps.render.render();
             }
             VisualEV::Resize(width, height) => {
@@ -118,8 +119,14 @@ impl Visual {
         model.safe_area = SideOffsets2D::new(top, right, bottom, left);
         self.resize(model.view_box.width(), model.view_box.height(), model);
     }
+
+    pub fn set_density(&self, density: f64, model: &mut super::model::Model) {
+        model.density = density;
+        self.resize(model.view_box.width(), model.view_box.height(), model);
+    }
     pub fn resize(&self, width: f64, height: f64, model: &mut super::model::Model) {
         model.view_box = Box2D::new(Point2D::default(), Point2D::new(width, height));
         model.safe_box = model.view_box.inner_box(model.safe_area);
+        // todo: handle density difference
     }
 }

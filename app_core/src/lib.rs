@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate derive_builder;
+
 pub use crux_core::{bridge::Bridge, Core, Request};
 pub use crux_http as http;
 pub use crux_kv as key_value;

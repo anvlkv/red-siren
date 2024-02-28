@@ -3,8 +3,9 @@ use euclid::default::{Box2D, Point2D, Size2D};
 use hecs::{Bundle, Entity};
 use keyframe::CanTween;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Default)]
 pub struct Objects(pub Vec<(Entity, Object)>);
 
 impl CanTween for Objects {
@@ -27,8 +28,10 @@ impl CanTween for Objects {
     }
 }
 
-#[derive(Bundle, Clone, Serialize, Deserialize)]
+#[derive(Bundle, Clone, Serialize, Deserialize, Builder)]
 pub struct Object {
+    #[builder(default = "uuid::Uuid::new_v4()")]
+    pub id: Uuid,
     pub shape: Shapes,
     pub fill: Option<Rgba>,
     pub stroke: Option<Stroke>,
@@ -38,6 +41,8 @@ pub struct Object {
 
 impl CanTween for Object {
     fn ease(from: Self, to: Self, time: impl keyframe::num_traits::Float) -> Self {
+        let id = from.id;
+        assert_eq!(id, to.id, "same object id");
         let shape = CanTween::ease(from.shape, to.shape, time);
         let fill = ease_color_option(from.fill, to.fill, time);
         let stroke = if from.stroke.is_none() && to.stroke.is_none() {
@@ -56,6 +61,7 @@ impl CanTween for Object {
         let a11y_label = to.a11y_label;
         let view_label = to.view_label;
         Self {
+            id,
             shape,
             fill,
             stroke,
@@ -118,6 +124,50 @@ pub enum Shapes {
     Path(Vec<Point2D<f64>>),
     Circle(Box2D<f64>),
     RoundedRect(Box2D<f64>, Size2D<f64>),
+}
+
+impl Shapes {
+    pub fn containing_rect(&self) -> Box2D<f64> {
+        match self {
+            Self::Path(points) => {
+                let x_min = points
+                    .iter()
+                    .min_by(|p1, p2| {
+                        PartialOrd::partial_cmp(&p1.x, &p2.x).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|p| p.x)
+                    .unwrap_or_default();
+
+                let x_max = points
+                    .iter()
+                    .max_by(|p1, p2| {
+                        PartialOrd::partial_cmp(&p1.x, &p2.x).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|p| p.x)
+                    .unwrap_or_default();
+
+                let y_min = points
+                    .iter()
+                    .min_by(|p1, p2| {
+                        PartialOrd::partial_cmp(&p1.y, &p2.y).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|p| p.y)
+                    .unwrap_or_default();
+
+                let y_max = points
+                    .iter()
+                    .min_by(|p1, p2| {
+                        PartialOrd::partial_cmp(&p1.y, &p2.y).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|p| p.y)
+                    .unwrap_or_default();
+
+                Box2D::new(Point2D::new(x_min, y_min), Point2D::new(x_max, y_max))
+            }
+            Self::Circle(rect) => rect.clone(),
+            Self::RoundedRect(rect, _) => rect.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]

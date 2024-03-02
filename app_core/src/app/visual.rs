@@ -1,4 +1,6 @@
-use super::Animate;
+use crate::Paint;
+
+use super::{objects::Object, Animate};
 use crux_core::render::Render;
 pub use crux_core::App;
 use crux_macros::Effect;
@@ -14,6 +16,7 @@ pub struct VisualVM {
     pub width: f64,
     pub height: f64,
     pub intro_opacity: f64,
+    pub objects: Vec<(Object, Paint)>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -23,7 +26,9 @@ pub enum VisualEV {
     AnimateEntrance,
     AnimateEntranceTS(f64),
     SetReducedMotion(bool),
+    SetDarkMode(bool),
     SetDensity(f64),
+    LayoutUpdate,
 }
 
 #[derive(Default)]
@@ -47,9 +52,14 @@ impl App for Visual {
         match event {
             VisualEV::AnimateEntrance => {
                 model.intro_opacity = Some(keyframes![(0.0, 1.0, EaseOut), (1.0, 0.0)]);
-                // model.view_objects_animation = 
+                // model.view_objects_animation =
                 caps.animate
                     .start(VisualEV::AnimateEntranceTS, "intro animation".to_string())
+            }
+            VisualEV::LayoutUpdate => {
+                model.view_objects_animation = Some(keyframes![(model.objects.clone(), 0.0)]);
+
+                caps.render.render();
             }
             VisualEV::AnimateEntranceTS(ts) => {
                 let (start, now) = model.running_animation.get_or_insert((ts, ts));
@@ -83,6 +93,10 @@ impl App for Visual {
                 model.reduced_motion = reduce;
                 caps.render.render();
             }
+            VisualEV::SetDarkMode(dark) => {
+                model.dark_schema = dark;
+                caps.render.render();
+            }
             VisualEV::SetDensity(density) => {
                 self.set_density(density, model);
                 caps.render.render();
@@ -103,6 +117,11 @@ impl App for Visual {
             width: model.view_box.width(),
             height: model.view_box.height(),
             intro_opacity: model.intro_opacity.as_ref().map(|s| s.now()).unwrap_or(1.0),
+            objects: model
+                .view_objects_animation
+                .as_ref()
+                .map(|s| s.now().painted_objects())
+                .unwrap_or(model.objects.painted_objects()),
         }
     }
 }
@@ -125,6 +144,8 @@ impl Visual {
         self.resize(model.view_box.width(), model.view_box.height(), model);
     }
     pub fn resize(&self, width: f64, height: f64, model: &mut super::model::Model) {
+        log::debug!("resize boxes");
+
         model.view_box = Box2D::new(Point2D::default(), Point2D::new(width, height));
         model.safe_box = model.view_box.inner_box(model.safe_area);
         // todo: handle density difference

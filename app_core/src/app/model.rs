@@ -12,6 +12,7 @@ pub struct Model {
     pub configs: Vec<Config>,
     pub current_config: usize,
     pub layout: Layout,
+    pub objects: Objects,
     // visual
     pub view_box: Box2D<f64>,
     pub safe_box: Box2D<f64>,

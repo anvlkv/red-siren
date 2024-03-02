@@ -5,13 +5,8 @@ use hecs::{Entity, World};
 
 use super::{
     config::Config,
-    objects::{Object, ObjectBuilder, Objects, Shapes, Stroke},
+    objects::{Object, ObjectBuilder, Shapes},
 };
-
-const RED: Rgba = Rgba::from_rgb(227_f32, 0_f32, 34_f32);
-const BLACK: Rgba = Rgba::from_rgb(53_f32, 56_f32, 57_f32);
-const GRAY: Rgba = Rgba::from_rgb(54_f32, 69_f32, 79_f32);
-const CINNABAR: Rgba = Rgba::from_rgb(228_f32, 77_f32, 46_f32);
 
 #[derive(Default)]
 pub struct Layout {
@@ -19,24 +14,19 @@ pub struct Layout {
     pub strings: Vec<Entity>,
     pub tracks: Vec<Entity>,
     pub nodes: Vec<Entity>,
-    pub objects: Objects,
 }
 
 impl Layout {
     pub fn layout(config: &Config, world: &mut World) -> Result<Self> {
-        world.clear();
-
         let mut strings = vec![];
         let mut tracks = vec![];
         let mut buttons = vec![];
         let mut nodes = vec![];
-        let mut objects = vec![];
 
         for i in [true, false] {
             let string_obj = Self::make_layout_string(config, i)?;
-            let string = world.spawn((string_obj.clone(),));
+            let string = world.spawn((string_obj,));
             strings.push(string);
-            objects.push((string, string_obj));
         }
 
         // buttons config
@@ -55,14 +45,16 @@ impl Layout {
         let track_length = config.breadth * 2.0 + button_track_margin + config.button_size;
 
         for gx in 0..config.groups {
+            let left_hand = (gx + 1) % 2 == 0;
+
             for bx in 0..config.buttons_group {
-                let left_hand = (gx + 1) % 2 == 0;
                 let idx = gx * config.buttons_group + bx;
                 let button_obj =
                     Self::make_layout_button(config, idx, button_space_main, side, side_breadth)?;
 
-                let button = world.spawn((button_obj.clone(),));
-
+                let button_rect = button_obj.shape.containing_rect();
+                
+                let button = world.spawn((button_obj,));
                 buttons.push(button);
 
                 let pan = if stereo {
@@ -77,24 +69,21 @@ impl Layout {
 
                 let node_obj = Self::make_node(config, idx, button, pan)?;
 
-                let node = world.spawn((node_obj.clone(),));
+                let node = world.spawn((node_obj,));
 
                 nodes.push(node);
 
                 let track_obj = Self::make_layout_track(
                     config,
-                    button_obj.shape.containing_rect(),
+                    button_rect,
                     track_length,
                     button_track_margin,
                     left_hand,
                 )?;
 
-                let track = world.spawn((track_obj.clone(),));
+                let track = world.spawn((track_obj,));
 
                 tracks.push(track);
-
-                objects.push((track, track_obj));
-                objects.push((button, button_obj));
             }
         }
 
@@ -103,7 +92,6 @@ impl Layout {
             strings,
             tracks,
             nodes,
-            objects: Objects(objects),
         })
     }
 
@@ -139,7 +127,6 @@ impl Layout {
 
         let object = ObjectBuilder::default()
             .shape(Shapes::Circle(rect))
-            .fill(Some(RED))
             .build()?;
 
         Ok(object)
@@ -176,13 +163,12 @@ impl Layout {
 
         let rect = button_rect.outer_box(offsets);
         let rounding = Size2D::new(
-            config.button_size + button_track_margin,
-            config.button_size + button_track_margin,
+            (config.button_size + button_track_margin * 2.0) / 2.0,
+            (config.button_size + button_track_margin * 2.0) / 2.0,
         );
 
         let track_obj = ObjectBuilder::default()
             .shape(Shapes::RoundedRect(rect, rounding))
-            .fill(Some(BLACK))
             .build()?;
         Ok(track_obj)
     }
@@ -220,10 +206,6 @@ impl Layout {
 
         let string_obj = ObjectBuilder::default()
             .shape(Shapes::Path(points))
-            .stroke(Some(Stroke {
-                color: RED,
-                width: 1.25,
-            }))
             .build()?;
 
         Ok(string_obj)

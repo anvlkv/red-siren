@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
-
-use hecs::{Bundle, Entity, World};
+use hecs::Bundle;
 use serde::{Deserialize, Serialize};
 
 const MIN_BUTTON_SIZE_IN: f64 = 0.75;
@@ -9,8 +8,8 @@ const MAX_BUTTON_SIZE_B_RATIO: f64 = 0.6;
 const BUTTON_TRACK_MARGIN_RATIO: f64 = 0.2;
 const BUTTON_SPACE_RATIO: f64 = 2.0;
 const F_BASE: f64 = 110.0;
-const F_MAX: f64 = 5500.0;
-
+const F_MAX: f64 = 16500.0;
+const MIN_BUTTONS: usize = 3;
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Bundle)]
 pub struct Config {
@@ -52,29 +51,6 @@ impl Config {
         let max_button_size = (safe_breadth * MAX_BUTTON_SIZE_B_RATIO).round() as usize;
         let min_button_size = f64::sqrt(dpi * MIN_BUTTON_SIZE_IN).round() as usize;
 
-        let (min_groups, min_buttons) = {
-            let max_buttons = ((length - max_button_size as f64 * BUTTON_SPACE_RATIO)
-                / max_button_size as f64)
-                .round() as usize;
-            let slots = max_buttons.div_euclid(2);
-            vec![
-                (slots.div_euclid(5), 5),
-                (slots.div_euclid(3), 3),
-                (slots.div_euclid(2), 2),
-            ]
-            .into_iter()
-            .fold((1, 1), |acc, (groups, buttons_group)| {
-                if groups * buttons_group > acc.0 * acc.1
-                    || groups * buttons_group == acc.0 * acc.1 && buttons_group > acc.1
-                {
-                    (groups, buttons_group)
-                } else {
-                    acc
-                }
-            })
-        };
-
-        let min_count = min_groups * min_buttons;
 
         let f_c = (F_BASE / f64::sqrt((length * safe_breadth) / dpi)) as f32;
 
@@ -94,6 +70,7 @@ impl Config {
             let space = size as f64 * BUTTON_SPACE_RATIO * 2.0;
             let active_length = (safe_length - space).round();
             let slots = num_integer::gcd(space.round() as usize + size, active_length as usize);
+
             for (groups, buttons_group) in [
                 (slots.div_euclid(5), 5),
                 (slots.div_euclid(3), 3),
@@ -102,7 +79,7 @@ impl Config {
                 let count = groups * buttons_group;
                 let used_space = space * count as f64;
                 let f_max = f0 as f64 * 2.0 * (groups * buttons_group) as f64;
-                if count >= min_count && used_space < safe_length && f_max <= F_MAX {
+                if count >= MIN_BUTTONS && used_space < safe_length && f_max <= F_MAX {
                     let whitespace = (safe_length - active_length) / 2.0;
 
                     candidates.push(Self {
@@ -124,10 +101,10 @@ impl Config {
             }
         }
 
-        Self::rate_sorted(candidates)
+        Self::rate_unique_sorted(candidates)
     }
 
-    fn rate_sorted(candidates: Vec<Self>) -> Vec<Self> {
+    fn rate_unique_sorted(candidates: Vec<Self>) -> Vec<Self> {
         let (d_size, d_groups, d_buttons_group, d_active_length, d_count) = candidates.iter().fold(
             (
                 (0_f64, 0_f64),

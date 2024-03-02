@@ -13,9 +13,12 @@ mod config;
 mod layout;
 mod model;
 mod objects;
+mod paint;
 mod visual;
 
 pub use animate::*;
+pub use objects::*;
+pub use paint::*;
 pub use visual::{VisualEV, VisualVM};
 
 use crate::app::{config::Config, layout::Layout};
@@ -146,24 +149,38 @@ impl App for RedSiren {
                 | VisualEV::SafeAreaResize(_, _, _, _)
                 | VisualEV::SetDensity(_) => {
                     self.visual.update(ev, model, &caps.into());
-                    model.configs = Config::configs_for_screen(
-                        model.view_box.width(),
-                        model.view_box.height(),
-                        model.density,
-                        [
-                            model.safe_area.left,
-                            model.safe_area.top,
-                            model.safe_area.right,
-                            model.safe_area.bottom,
-                        ],
-                    );
-                    if model.current_config >= model.configs.len() {
-                        model.current_config = 0;
-                    }
+                    if model.density > 0_f64 {
+                        model.configs = Config::configs_for_screen(
+                            model.view_box.width(),
+                            model.view_box.height(),
+                            model.density,
+                            [
+                                model.safe_area.left,
+                                model.safe_area.top,
+                                model.safe_area.right,
+                                model.safe_area.bottom,
+                            ],
+                        );
+                        log::debug!("add configs: {}", model.configs.len());
+                        if model.current_config >= model.configs.len() {
+                            model.current_config = 0;
+                        }
 
-                    let mut world = model.world.lock().unwrap();
-                    model.layout =
-                        Layout::layout(&model.configs[model.current_config], &mut world).unwrap();
+                        {
+                            let mut world = model.world.lock().unwrap();
+                            world.clear();
+
+                            model.layout =
+                                Layout::layout(&model.configs[model.current_config], &mut world)
+                                    .unwrap();
+
+                            model.objects =
+                                Objects::new(&mut world, &model.layout, model.dark_schema)
+                        }
+
+                        self.visual
+                            .update(VisualEV::LayoutUpdate, model, &caps.into());
+                    }
                 }
                 _ => {
                     self.visual.update(ev, model, &caps.into());

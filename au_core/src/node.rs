@@ -19,6 +19,7 @@ pub struct NodeData {
     pub f_base: f32,
     pub f_emit: (f32, f32),
     pub f_sense: ((f32, f32), (f32, f32)),
+    #[builder(default = "0_f32")]
     pub control: f32,
     pub pan: f32,
 }

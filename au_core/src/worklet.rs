@@ -1,5 +1,5 @@
 use hecs::Entity;
-use itertools::{interleave, Itertools};
+use itertools::interleave;
 use std::sync::{Arc, Mutex};
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -44,9 +44,7 @@ pub fn process_samples(samples: &[f32]) -> Vec<f32> {
 #[wasm_bindgen]
 pub fn get_fft_data() -> Vec<u8> {
     let result = match AU_UNIT.try_lock() {
-        Ok(unit) => {
-            unit.as_ref().map(|unit| unit.next_fft_reading()).flatten()
-        }
+        Ok(unit) => unit.as_ref().map(|unit| unit.next_fft_reading()).flatten(),
         _ => None,
     };
 
@@ -56,9 +54,10 @@ pub fn get_fft_data() -> Vec<u8> {
 #[wasm_bindgen]
 pub fn get_snoops_data() -> Vec<u8> {
     let result = match AU_UNIT.try_lock() {
-        Ok(unit) => {
-            unit.as_ref().map(|unit| unit.next_snoops_reading()).flatten()
-        }
+        Ok(unit) => unit
+            .as_ref()
+            .map(|unit| unit.next_snoops_reading())
+            .flatten(),
         _ => None,
     };
 

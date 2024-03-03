@@ -3,6 +3,7 @@ use std::sync::mpsc::{sync_channel, Receiver};
 use au_core::{Node, Unit, UnitEV, MAX_F, MIN_F};
 use eframe::egui::{self, *};
 use fundsp::hacker32::*;
+use futures::channel::mpsc::unbounded;
 use hecs::Entity;
 
 struct State {
@@ -17,8 +18,9 @@ struct State {
 
 fn main() {
     simple_logger::init_with_level(log::Level::Info).expect("couldn't initialize logging");
+    let (resolve_sender, _) = unbounded();
 
-    let unit = Unit::new();
+    let unit = Unit::new(resolve_sender);
     run(unit).unwrap();
 }
 
@@ -32,14 +34,12 @@ fn run(mut unit: Unit) -> Result<(), anyhow::Error> {
         pan: shared(0.0),
     };
 
-    
     let (fft_sender, fft_receiver) = sync_channel(64);
     let (snoop_sender, snoop_receiver) = sync_channel(64);
-    
+
     unit.run(fft_sender, snoop_sender)?;
-    
+
     unit.update(UnitEV::Configure(vec![node.clone()]));
-    
 
     let state = State {
         unit,

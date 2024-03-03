@@ -1,5 +1,4 @@
 use anyhow::Result;
-use ecolor::Rgba;
 use euclid::default::{Box2D, Point2D, SideOffsets2D, Size2D};
 use hecs::{Entity, World};
 
@@ -13,7 +12,6 @@ pub struct Layout {
     pub buttons: Vec<Entity>,
     pub strings: Vec<Entity>,
     pub tracks: Vec<Entity>,
-    pub nodes: Vec<Entity>,
 }
 
 impl Layout {
@@ -21,7 +19,6 @@ impl Layout {
         let mut strings = vec![];
         let mut tracks = vec![];
         let mut buttons = vec![];
-        let mut nodes = vec![];
 
         for i in [true, false] {
             let string_obj = Self::make_layout_string(config, i)?;
@@ -36,9 +33,6 @@ impl Layout {
             / 2.0;
         let side = config.breadth + button_space_side;
         let side_breadth = side + config.button_size;
-
-        // node config
-        let stereo = config.groups >= 2;
 
         // track config
         let button_track_margin = config.button_size * config.button_track_margin;
@@ -56,22 +50,6 @@ impl Layout {
                 
                 let button = world.spawn((button_obj,));
                 buttons.push(button);
-
-                let pan = if stereo {
-                    if left_hand {
-                        -0.95
-                    } else {
-                        0.95
-                    }
-                } else {
-                    0_f32
-                };
-
-                let node_obj = Self::make_node(config, idx, button, pan)?;
-
-                let node = world.spawn((node_obj,));
-
-                nodes.push(node);
 
                 let track_obj = Self::make_layout_track(
                     config,
@@ -91,7 +69,6 @@ impl Layout {
             buttons,
             strings,
             tracks,
-            nodes,
         })
     }
 
@@ -171,22 +148,6 @@ impl Layout {
             .shape(Shapes::RoundedRect(rect, rounding))
             .build()?;
         Ok(track_obj)
-    }
-
-    fn make_node(config: &Config, idx: usize, button: Entity, pan: f32) -> Result<au_core::Node> {
-        let f_n = config.n_buttons - idx;
-        let freq = config.f0 * (f_n * 2) as f32 - config.f0;
-        let max_freq = freq + config.f0;
-
-        let node_data = au_core::NodeDataBuilder::default()
-            .button(button)
-            .f_base(freq)
-            .f_emit((freq, max_freq))
-            .f_sense(((freq, max_freq), (0.0, 1.0)))
-            .pan(pan)
-            .build()?;
-
-        Ok(node_data.into())
     }
 
     fn make_layout_string(config: &Config, inbound: bool) -> Result<Object> {

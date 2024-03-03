@@ -42,17 +42,19 @@ pub fn process_effect(
         Effect::Render(_) => {
             render.update(|view| *view = core.view());
         }
-        // Effect::Play(mut req) => {
-        //     // match req.operation {
-        //     //     app_core::PlayOperation::Permissions => {
-
-        //     //     },
-        //     //     app_core::PlayOperation::InstallAU => todo!(),
-        //     // }
+        Effect::Play(mut req) => {
+        match req.operation {
+            app_core::PlayOperation::Permissions => {
+                log::info!("permissions");
+            },
+            app_core::PlayOperation::RunUnit => {
+                log::info!("run unit");
+            },
+        }
         //     log::info!("play op: {:?}", req.operation);
 
         //     core.resolve(&mut req, PlayOperationOutput::Success);
-        // }
+        }
         
         // Effect::KeyValue(mut req) => {
         //     #[cfg(feature = "browser")]

@@ -1,27 +1,30 @@
 use std::sync::{mpsc::sync_channel, Arc, Mutex};
 
-use au_core::Unit;
+use au_core::{Unit, UnitResolve};
 pub use crux_core::App;
 use crux_core::{render::Render, Capability};
-use crux_kv::KeyValue;
 use crux_macros::Effect;
-use hecs::{Entity, World};
+use futures::channel::mpsc::unbounded;
+use hecs::Entity;
 use serde::{Deserialize, Serialize};
 
 mod animate;
 mod config;
+mod instrument;
 mod layout;
 mod model;
 mod objects;
 mod paint;
+mod play;
 mod visual;
 
 pub use animate::*;
 pub use objects::*;
 pub use paint::*;
-pub use visual::{VisualEV, VisualVM};
+pub use play::*;
+pub use visual::*;
 
-use crate::app::{config::Config, layout::Layout};
+use crate::app::{config::Config, instrument::Instrument, layout::Layout};
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Activity {
@@ -47,7 +50,7 @@ pub enum Event {
     Visual(VisualEV),
 
     // PlayOpInstall(bool),
-    // PlayOpRun(PlayOperationOutput),
+    PlayOpResolve(UnitResolve),
     PlayOpFftData(Vec<(f32, f32)>),
     PlayOpSnoopData(Vec<(Entity, Vec<f32>)>),
     StartAudioUnit,
@@ -67,6 +70,7 @@ pub struct RedSiren {
 pub struct RedSirenCapabilities {
     pub render: Render<Event>,
     pub animate: Animate<Event>,
+    pub play: Play<Event>,
 }
 
 impl From<&RedSirenCapabilities> for visual::VisualCapabilities {
@@ -93,8 +97,10 @@ impl App for RedSiren {
                 self.visual
                     .update(VisualEV::AnimateEntrance, model, &caps.into());
                 caps.render.render();
-                let unit = Unit::new();
+                let (unit_resolve_sender, unit_resolve_receiver) = unbounded();
+                let unit = Unit::new(unit_resolve_sender);
                 _ = self.audio_unit.lock().unwrap().insert(unit);
+                caps.play.with_receiver(unit_resolve_receiver);
             }
             Event::StartAudioUnit => {
                 let mut unit = self.audio_unit.lock().unwrap();
@@ -102,6 +108,9 @@ impl App for RedSiren {
 
                 let (fft_sender, fft_receiver) = sync_channel::<Vec<(f32, f32)>>(4);
                 let (snoops_sender, snoops_receiver) = sync_channel::<Vec<(Entity, Vec<f32>)>>(8);
+
+                caps.play.run_unit(Event::PlayOpResolve);
+
                 unit.run(fft_sender, snoops_sender).expect("run unit");
 
                 caps.animate
@@ -109,6 +118,25 @@ impl App for RedSiren {
                 caps.animate
                     .animate_reception(Event::PlayOpFftData, fft_receiver);
             }
+            Event::PlayOpResolve(unit_resolve) => match unit_resolve {
+                UnitResolve::RunUnit(true) => {
+                    let mut unit = self.audio_unit.lock().unwrap();
+                    let unit = unit.as_mut().unwrap();
+                    let world = model.world.lock().unwrap();
+                    unit.update(au_core::UnitEV::Configure(
+                        model.instrument.get_nodes(&world),
+                    ));
+                }
+                UnitResolve::RunUnit(false) => {
+                    log::error!("run unit error");
+                }
+                UnitResolve::UpdateEV(true) => {
+                    log::info!("updated unit");
+                }
+                UnitResolve::UpdateEV(false) => {
+                    log::error!("update unit error");
+                }
+            },
             // Event::PlayOpInstall(success) => {
             //     if success {
             //         caps.play.run_unit(
@@ -166,13 +194,16 @@ impl App for RedSiren {
                             model.current_config = 0;
                         }
 
+                        let config = model.configs.get(model.current_config).unwrap();
+
                         {
                             let mut world = model.world.lock().unwrap();
                             world.clear();
 
-                            model.layout =
-                                Layout::layout(&model.configs[model.current_config], &mut world)
-                                    .unwrap();
+                            model.layout = Layout::layout(config, &mut world).unwrap();
+
+                            model.instrument =
+                                Instrument::new(config, &mut world, &model.layout).unwrap();
 
                             model.objects =
                                 Objects::new(&mut world, &model.layout, model.dark_schema)

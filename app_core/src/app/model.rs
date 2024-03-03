@@ -1,9 +1,9 @@
 use euclid::default::{Box2D, SideOffsets2D};
-use hecs::{Entity, World};
+use hecs::World;
 use keyframe::AnimationSequence;
 use std::sync::{Arc, Mutex};
 
-use super::{config::Config, layout::Layout, objects::Objects};
+use super::{config::Config, layout::Layout, objects::Objects, instrument::Instrument};
 
 #[derive(Default)]
 pub struct Model {
@@ -12,6 +12,7 @@ pub struct Model {
     pub configs: Vec<Config>,
     pub current_config: usize,
     pub layout: Layout,
+    pub instrument: Instrument,
     pub objects: Objects,
     // visual
     pub view_box: Box2D<f64>,

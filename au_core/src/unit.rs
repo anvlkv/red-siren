@@ -1,3 +1,4 @@
+#[allow(unused)]
 use std::{
     collections::HashMap,
     sync::{
@@ -7,9 +8,12 @@ use std::{
 };
 
 use crate::{Node, System, MAX_F, MIN_F};
-use anyhow::{anyhow, Result, Error};
+use anyhow::{anyhow, Error, Result};
 use fundsp::hacker32::*;
+#[allow(unused)]
+use futures::channel::mpsc::UnboundedSender;
 use hecs::Entity;
+#[allow(unused)]
 use ringbuf::{HeapConsumer, HeapProducer, HeapRb};
 use serde::{Deserialize, Serialize};
 use spectrum_analyzer::{
@@ -35,6 +39,7 @@ cfg_if::cfg_if! { if #[cfg(feature="browser")] {
     }
 }
 
+#[allow(dead_code)]
 const RENDER_BURSTS: usize = 5;
 pub const FFT_RES: usize = 1024;
 
@@ -45,15 +50,17 @@ pub struct Unit {
     pub fft_res: usize,
     pub buffer_size: u32,
     pub system: Arc<Mutex<System>>,
+    #[cfg(not(feature = "worklet"))]
+    resolve_sender: UnboundedSender<UnitResolve>,
     input_analyzer_enabled: Arc<Mutex<bool>>,
     #[cfg(feature = "worklet")]
     receivers: Arc<Mutex<Option<(Receiver<Vec<(f32, f32)>>, Receiver<Vec<(Entity, Vec<f32>)>>)>>>,
 }
 
-impl Default for Unit {
-    fn default() -> Self {
-        Self::new()
-    }
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
+pub enum UnitResolve {
+    RunUnit(bool),
+    UpdateEV(bool),
 }
 
 #[derive(Deserialize, Serialize)]
@@ -71,7 +78,9 @@ pub enum UnitEV {
 
 #[allow(unused)]
 impl Unit {
-    pub fn new() -> Self {
+    pub fn new(
+        #[cfg(not(feature = "worklet"))] resolve_sender: UnboundedSender<UnitResolve>,
+    ) -> Self {
         cfg_if::cfg_if! {if #[cfg(feature = "browser")] {
             let (sample_rate, buffer_size) = (44100, 128);
         } else {
@@ -104,6 +113,8 @@ impl Unit {
             sample_rate,
             buffer_size,
             input_analyzer_enabled: Arc::new(Mutex::new(true)),
+            #[cfg(not(feature = "worklet"))]
+            resolve_sender,
             #[cfg(feature = "worklet")]
             receivers: Default::default(),
         }
@@ -134,11 +145,13 @@ impl Unit {
                     ev => {
                         use js_sys::{Object, Reflect, Uint8Array};
                         NODE.with(|mtx| {
+                            log::debug!("lock node mtx");
                             let mut mtx = mtx.lock().unwrap();
                             let node = mtx.as_mut().unwrap();
 
                             let port = node.port().unwrap();
 
+                            log::debug!("send ev");
                             let value = bincode::serialize(&ev).unwrap();
                             let arr = Uint8Array::from(value.as_slice());
                             let msg = Object::new();
@@ -238,6 +251,11 @@ impl Unit {
                 }
             }
         }
+
+        #[cfg(not(feature = "worklet"))]
+        self.resolve_sender
+            .unbounded_send(UnitResolve::UpdateEV(true))
+            .unwrap();
     }
 
     pub fn backends(&self) -> (NetBackend32, NetBackend32) {
@@ -266,14 +284,29 @@ impl Unit {
                 *callback = self.make_callback(input_be, render_be);
             } else {
                 let unit = self.clone();
+                let resolve = self.resolve_sender.clone();
                 log::info!("run ctx");
                 wasm_bindgen_futures::spawn_local(async move {
-                    unit.run_audio_ctx(fft_sender, snoops_sender).await.unwrap();
+                    match unit.run_audio_ctx(fft_sender, snoops_sender).await {
+                        Ok(_) => {
+                            resolve.unbounded_send(UnitResolve::RunUnit(true)).unwrap();
+                        }
+                        Err(e) => {
+                            log::error!("run unit error: {e:?}");
+                            resolve.unbounded_send(UnitResolve::RunUnit(false)).unwrap();
+                        }
+                    }
                 });
             }}
         } else {
             log::info!("run cpal");
-            self.run_cpal_streams(input_be, render_be, fft_sender, snoops_sender)?;
+            match self.run_cpal_streams(input_be, render_be, fft_sender, snoops_sender) {
+                Ok(_) => self.resolve_sender.unbounded_send(UnitResolve::RunUnit(true))?,
+                Err(e) = > {
+                    log::error!("run unit error: {e:?}");
+                    self.resolve_sender.unbounded_send(UnitResolve::RunUnit(false))?;
+                }
+            }
         }};
 
         Ok(())
@@ -285,7 +318,7 @@ impl Unit {
         fft_sender: SyncSender<Vec<(f32, f32)>>,
         snoops_sender: SyncSender<Vec<(Entity, Vec<f32>)>>,
     ) -> Result<()> {
-        use js_sys::{Reflect, Uint8Array, Object, Promise, Function};
+        use js_sys::{Function, Object, Promise, Reflect, Uint8Array};
         use wasm_bindgen::{closure::Closure, JsCast, JsValue};
         use wasm_bindgen_futures::JsFuture;
         use web_sys::*;
@@ -309,7 +342,9 @@ impl Unit {
             }
         };
 
-        let response = JsFuture::from(window.fetch_with_str("/worklet/wasm/au_core_bg.wasm")).await.map_err(map_js_err)?;;
+        let response = JsFuture::from(window.fetch_with_str("/worklet/wasm/au_core_bg.wasm"))
+            .await
+            .map_err(map_js_err)?;
         let response = Response::from(response);
         let promise = response.array_buffer().map_err(map_js_err)?;
         let wasm_bytes = JsFuture::from(promise).await.map_err(map_js_err)?;
@@ -328,7 +363,7 @@ impl Unit {
                 if ev_type.as_str() == "wasm_ready" {
                     resolve.call0(&JsValue::NULL);
                 }
-            }) as Box<dyn FnMut(JsValue)> );
+            }) as Box<dyn FnMut(JsValue)>);
 
             port.set_onmessage(Some(listener.as_ref().unchecked_ref()));
 
@@ -384,14 +419,12 @@ impl Unit {
         }) as Box<dyn FnMut(JsValue)>);
 
         port.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
-        
 
         let dst = ctx.destination();
         node.connect_with_audio_node(&dst).map_err(map_js_err)?;
 
         log::info!("connect dst");
 
-        
         let navigator = window.navigator();
         let md = navigator.media_devices().map_err(map_js_err)?;
         let mut constraints = MediaStreamConstraints::new();
@@ -735,6 +768,7 @@ impl Unit {
 }
 
 #[cfg(feature = "browser")]
+#[allow(dead_code)]
 fn map_js_err(err: wasm_bindgen::JsValue) -> Error {
     let description = format!("{:?}", err);
     anyhow!("js err: {description}")

@@ -6,6 +6,7 @@ use std::{
 use au_core::{Node, Unit, UnitEV, MAX_F, MIN_F};
 use eframe::egui::{self, *};
 use fundsp::hacker32::*;
+use futures::channel::mpsc::unbounded;
 use hecs::{Bundle, Entity, World};
 use logging_timer::timer;
 
@@ -42,8 +43,9 @@ const KEYS: [Key; 10] = [
 
 fn main() {
     simple_logger::init_with_level(log::Level::Error).expect("couldn't initialize logging");
+    let (resolve_sender, _) = unbounded();
 
-    let unit = Unit::new();
+    let unit = Unit::new(resolve_sender);
     run(unit).unwrap();
 }
 
@@ -79,7 +81,7 @@ fn run(mut unit: Unit) -> Result<(), anyhow::Error> {
     let (snoop_sender, snoop_receiver) = sync_channel(64);
 
     unit.run(fft_sender, snoop_sender).unwrap();
-    
+
     unit.update(UnitEV::Configure(config));
 
     let state = State {

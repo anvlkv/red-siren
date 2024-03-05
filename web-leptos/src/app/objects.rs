@@ -1,3 +1,5 @@
+use std::hash::{DefaultHasher, Hash, Hasher};
+
 use leptos::*;
 
 use super::CoreContext;
@@ -9,7 +11,11 @@ pub fn Objects() -> impl IntoView {
     let objects = move || vm().visual.objects;
 
     view! {
-      <For each=objects key={|o| o.0.id} let:child>
+      <For each=objects key={|o| {
+            let mut s = DefaultHasher::new();
+            o.hash(&mut s);
+            s.finish()
+        }} let:child>
         <Object obj=child.0 paint=child.1/>
       </For>
     }
@@ -18,13 +24,15 @@ pub fn Objects() -> impl IntoView {
 #[component]
 pub fn Object(obj: app_core::Object, paint: app_core::Paint) -> impl IntoView {
     let obj_view = match obj.shape {
-        app_core::Shapes::Path(points) => {
-            let d: String = points
+        app_core::Shapes::Path { path, .. } => {
+            let p_first = path.first().cloned().unwrap_or_default();
+            let d = path
                 .iter()
-                .map(|p| format!("L {}, {}", p.x, p.y))
-                .collect();
-            let p0 = points.first().cloned().unwrap_or_default();
-            let d = format!("M {}, {} {}", p0.x, p0.y, d);
+                .fold(format!("M {}, {}", p_first.x, p_first.y), |acc, p| {
+                    format!("{acc} L {}, {}", p.x, p.y)
+                });
+
+            log::debug!("path of {} points", path.len());
 
             view! {
                 <path d={d}/>
@@ -54,7 +62,9 @@ pub fn Object(obj: app_core::Object, paint: app_core::Paint) -> impl IntoView {
 
     let fill = paint
         .fill
-        .map(|c| format!("rgba({},{},{},{})", c.r(), c.g(), c.b(), c.a()));
+        .map(|c| format!("rgba({},{},{},{})", c.r(), c.g(), c.b(), c.a()))
+        .unwrap_or("none".to_string());
+
     let stroke = paint.stroke.as_ref().map(|s| {
         format!(
             "rgba({},{},{},{})",
@@ -64,6 +74,7 @@ pub fn Object(obj: app_core::Object, paint: app_core::Paint) -> impl IntoView {
             s.color.a()
         )
     });
+    
     let stroke_width = paint.stroke.map(|s| s.width);
 
     view! {

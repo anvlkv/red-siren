@@ -1,10 +1,7 @@
 #[allow(unused)]
 use std::{
     collections::HashMap,
-    sync::{
-        mpsc::{sync_channel, Receiver, SyncSender, TrySendError},
-        Arc, Mutex,
-    },
+    sync::{Arc, Mutex},
 };
 
 use crate::{Node, System, MAX_F, MIN_F};
@@ -14,7 +11,7 @@ use fundsp::hacker32::*;
 use futures::channel::mpsc::UnboundedSender;
 use hecs::Entity;
 #[allow(unused)]
-use ringbuf::{HeapConsumer, HeapProducer, HeapRb};
+use ringbuf::{HeapConsumer, HeapProducer, HeapRb, StaticConsumer, StaticProducer, StaticRb};
 use serde::{Deserialize, Serialize};
 use spectrum_analyzer::{
     samples_fft_to_spectrum, scaling::divide_by_N_sqrt, windows::hann_window, FrequencyLimit,
@@ -43,6 +40,9 @@ cfg_if::cfg_if! { if #[cfg(feature="browser")] {
 const RENDER_BURSTS: usize = 5;
 pub const FFT_RES: usize = 1024;
 
+pub const FFT_BUF_SIZE: usize = 4;
+pub const SNOOPS_BUF_SIZE: usize = 8;
+
 #[derive(Clone)]
 pub struct Unit {
     pub nodes: Arc<Mutex<HashMap<Entity, Node>>>,
@@ -54,7 +54,14 @@ pub struct Unit {
     resolve_sender: UnboundedSender<UnitResolve>,
     input_analyzer_enabled: Arc<Mutex<bool>>,
     #[cfg(feature = "worklet")]
-    receivers: Arc<Mutex<Option<(Receiver<Vec<(f32, f32)>>, Receiver<Vec<(Entity, Vec<f32>)>>)>>>,
+    consumers: Arc<
+        Mutex<
+            Option<(
+                StaticConsumer<Vec<(f32, f32)>, FFT_BUF_SIZE>,
+                StaticConsumer<Vec<(Entity, Vec<f32>)>, SNOOPS_BUF_SIZE>,
+            )>,
+        >,
+    >,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
@@ -116,7 +123,7 @@ impl Unit {
             #[cfg(not(feature = "worklet"))]
             resolve_sender,
             #[cfg(feature = "worklet")]
-            receivers: Default::default(),
+            consumers: Default::default(),
         }
     }
 
@@ -145,13 +152,11 @@ impl Unit {
                     ev => {
                         use js_sys::{Object, Reflect, Uint8Array};
                         NODE.with(|mtx| {
-                            log::debug!("lock node mtx");
                             let mut mtx = mtx.lock().unwrap();
                             let node = mtx.as_mut().unwrap();
 
                             let port = node.port().unwrap();
 
-                            log::debug!("send ev");
                             let value = bincode::serialize(&ev).unwrap();
                             let arr = Uint8Array::from(value.as_slice());
                             let msg = Object::new();
@@ -265,8 +270,16 @@ impl Unit {
 
     pub fn run(
         &mut self,
-        #[cfg(not(feature = "worklet"))] fft_sender: SyncSender<Vec<(f32, f32)>>,
-        #[cfg(not(feature = "worklet"))] snoops_sender: SyncSender<Vec<(Entity, Vec<f32>)>>,
+        #[cfg(not(feature = "worklet"))] fft_prod: StaticProducer<
+            'static,
+            Vec<(f32, f32)>,
+            FFT_BUF_SIZE,
+        >,
+        #[cfg(not(feature = "worklet"))] snoops_prod: StaticProducer<
+            'static,
+            Vec<(Entity, Vec<f32>)>,
+            SNOOPS_BUF_SIZE,
+        >,
         #[cfg(feature = "worklet")] callback: &Mutex<Box<dyn FnMut(&[f32]) -> [[f32; 128]; 2]>>,
     ) -> Result<()> {
         let (input_be, render_be) = {
@@ -279,15 +292,13 @@ impl Unit {
 
         cfg_if::cfg_if! { if #[cfg(feature = "browser")] {
             cfg_if::cfg_if! { if #[cfg(feature = "worklet")] {
-                log::info!("set callback");
                 let mut callback = callback.lock().unwrap();
                 *callback = self.make_callback(input_be, render_be);
             } else {
                 let unit = self.clone();
                 let resolve = self.resolve_sender.clone();
-                log::info!("run ctx");
                 wasm_bindgen_futures::spawn_local(async move {
-                    match unit.run_audio_ctx(fft_sender, snoops_sender).await {
+                    match unit.run_audio_ctx(fft_prod, snoops_prod).await {
                         Ok(_) => {
                             resolve.unbounded_send(UnitResolve::RunUnit(true)).unwrap();
                         }
@@ -300,7 +311,7 @@ impl Unit {
             }}
         } else {
             log::info!("run cpal");
-            match self.run_cpal_streams(input_be, render_be, fft_sender, snoops_sender) {
+            match self.run_cpal_streams(input_be, render_be, fft_prod, snoops_prod) {
                 Ok(_) => self.resolve_sender.unbounded_send(UnitResolve::RunUnit(true))?,
                 Err(e) = > {
                     log::error!("run unit error: {e:?}");
@@ -315,8 +326,8 @@ impl Unit {
     #[cfg(all(feature = "browser", not(feature = "worklet")))]
     async fn run_audio_ctx(
         &self,
-        fft_sender: SyncSender<Vec<(f32, f32)>>,
-        snoops_sender: SyncSender<Vec<(Entity, Vec<f32>)>>,
+        mut fft_prod: StaticProducer<'static, Vec<(f32, f32)>, FFT_BUF_SIZE>,
+        mut snoops_prod: StaticProducer<'static, Vec<(Entity, Vec<f32>)>, SNOOPS_BUF_SIZE>,
     ) -> Result<()> {
         use js_sys::{Function, Object, Promise, Reflect, Uint8Array};
         use wasm_bindgen::{closure::Closure, JsCast, JsValue};
@@ -326,7 +337,6 @@ impl Unit {
         let ctx = AudioContext::new().map_err(map_js_err)?;
         let window = window().unwrap();
 
-        log::info!("create node");
         let node = match AudioWorkletNode::new(&ctx, "red-siren-processor") {
             Ok(node) => node,
             Err(_) => {
@@ -358,7 +368,6 @@ impl Unit {
                     .expect("ev type")
                     .as_string()
                     .expect("ev type");
-                log::info!("event: {ev_type}");
 
                 if ev_type.as_str() == "wasm_ready" {
                     resolve.call0(&JsValue::NULL);
@@ -391,25 +400,28 @@ impl Unit {
                 .ok()
                 .map(|v| Uint8Array::from(v));
 
+            log::trace!("unit received ev: {}", ev_type.as_str());
+
             match (ev_type.as_str(), value) {
                 ("snoops_data", Some(arr)) => {
-                    if let Some(fft_data) =
-                        bincode::deserialize::<Option<Vec<(Entity, Vec<f32>)>>>(&arr.to_vec())
-                            .expect("deserialize")
-                    {
-                        if let Err(_) = snoops_sender.send(fft_data) {
-                            log::warn!("snoops sender full");
-                        }
+                    let snoops_data =
+                        bincode::deserialize::<Vec<(Entity, Vec<f32>)>>(&arr.to_vec())
+                            .expect("deserialize");
+
+                    if let Err(_) = snoops_prod.push(snoops_data) {
+                        log::warn!("snoops sender full");
+                    } else {
+                        log::trace!("send snoops");
                     }
                 }
                 ("fft_data", Some(arr)) => {
-                    if let Some(fft_data) =
-                        bincode::deserialize::<Option<Vec<(f32, f32)>>>(&arr.to_vec())
-                            .expect("deserialize")
-                    {
-                        if let Err(_) = fft_sender.send(fft_data) {
-                            log::warn!("fft sender full");
-                        }
+                    let fft_data = bincode::deserialize::<Vec<(f32, f32)>>(&arr.to_vec())
+                        .expect("deserialize");
+
+                    if let Err(_) = fft_prod.push(fft_data) {
+                        log::warn!("fft sender full");
+                    } else {
+                        log::trace!("send fft");
                     }
                 }
                 _ => {
@@ -423,8 +435,6 @@ impl Unit {
         let dst = ctx.destination();
         node.connect_with_audio_node(&dst).map_err(map_js_err)?;
 
-        log::info!("connect dst");
-
         let navigator = window.navigator();
         let md = navigator.media_devices().map_err(map_js_err)?;
         let mut constraints = MediaStreamConstraints::new();
@@ -433,8 +443,6 @@ impl Unit {
             .get_user_media_with_constraints(&constraints)
             .map_err(map_js_err)?;
 
-        log::info!("query src");
-
         let stream = JsFuture::from(query_device).await.map_err(map_js_err)?;
         let stream = MediaStream::from(stream);
         let src_options = MediaStreamAudioSourceOptions::new(&stream);
@@ -442,14 +450,10 @@ impl Unit {
 
         src.connect_with_audio_node(&node).map_err(map_js_err)?;
 
-        log::info!("connect src");
-
         ON_MESSAGE.with(move |mtx| {
             let mut mtx = mtx.lock().unwrap();
             *mtx = on_message;
         });
-
-        log::info!("set msg");
 
         NODE.with(move |mtx| {
             let mut mtx = mtx.lock().unwrap();
@@ -461,7 +465,7 @@ impl Unit {
             _ = mtx.insert(ctx);
         });
 
-        log::info!("stored");
+        log::info!("running audio");
 
         Ok(())
     }
@@ -478,25 +482,24 @@ impl Unit {
         let an_rb = HeapRb::<f32>::new(self.fft_res as usize * RENDER_BURSTS);
         let (mut produce_analyze, mut consume_analyze) = an_rb.split();
         let (mut produce_render, mut consume_render) = rn_rb.split();
-        let (fft_sender, fft_receiver) = sync_channel(4);
-        let (snoops_sender, snoop_receiver) = sync_channel(8);
+        let (fft_prod, fft_cons) = channel();
+        let (snoops_prod, snoop_cons) = channel();
 
         _ = self
-            .receivers
+            .consumers
             .lock()
             .unwrap()
-            .insert((fft_receiver, snoop_receiver));
+            .insert((fft_cons, snoop_cons));
 
         let mut exchange_buffer = [[0_f32; 128]; 2];
         Box::new(move |data: &[f32]| {
             unit.store_input(data, &mut produce_analyze, &mut input_be)
                 .unwrap();
-            unit.process_input(&mut consume_analyze, &fft_sender)
-                .unwrap();
+            unit.process_input(&mut consume_analyze, &fft_prod).unwrap();
 
             unit.produce_output(&mut produce_render, &mut render_be)
                 .unwrap();
-            unit.send_snoops_reading(&snoops_sender).unwrap();
+            unit.send_snoops_reading(&snoops_prod).unwrap();
 
             let (ch1, ch2): (Vec<f32>, Vec<f32>) = consume_render
                 .pop_iter()
@@ -513,7 +516,7 @@ impl Unit {
     fn process_input(
         &self,
         consume_analyze: &mut HeapConsumer<f32>,
-        fft_sender: &SyncSender<Vec<(f32, f32)>>,
+        fft_prod: &mut StaticProducer<Vec<(f32, f32)>, FFT_BUF_SIZE>,
     ) -> Result<()> {
         if consume_analyze.len() >= self.fft_res {
             if let Ok(nodes) = self.nodes.lock() {
@@ -522,12 +525,11 @@ impl Unit {
                     .take(self.fft_res)
                     .collect::<Vec<_>>();
                 let fft_data = process_input_data(samples.as_slice(), &nodes, self.sample_rate);
-                match fft_sender.try_send(fft_data) {
+                match fft_prod.push(fft_data) {
                     Ok(_) => {}
-                    Err(TrySendError::Full(_)) => {
-                        log::warn!("skipping fft data")
+                    Err(_) => {
+                        log::warn!("fft prod full")
                     }
-                    Err(_) => return Err(anyhow!("fft receiver gone")),
                 }
             }
         }
@@ -574,21 +576,21 @@ impl Unit {
 
     #[cfg(feature = "worklet")]
     pub fn next_fft_reading(&self) -> Option<Vec<(f32, f32)>> {
-        let mut recv = self.receivers.lock().unwrap();
+        let mut recv = self.consumers.lock().unwrap();
         let (recv, _) = recv.as_mut().unwrap();
         recv.try_recv().ok()
     }
 
     #[cfg(feature = "worklet")]
     pub fn next_snoops_reading(&self) -> Option<Vec<(Entity, Vec<f32>)>> {
-        let mut recv = self.receivers.lock().unwrap();
+        let mut recv = self.consumers.lock().unwrap();
         let (_, recv) = recv.as_mut().unwrap();
         recv.try_recv().ok()
     }
 
     fn send_snoops_reading(
         &self,
-        snoops_sender: &SyncSender<Vec<(Entity, Vec<f32>)>>,
+        snoops_prod: &mut StaticProducer<Vec<(Entity, Vec<f32>)>, SNOOPS_BUF_SIZE>,
     ) -> Result<()> {
         if let Ok(system) = self.system.try_lock() {
             if let Ok(mut snoops) = system.snoops.try_lock() {
@@ -611,12 +613,11 @@ impl Unit {
                         })
                         .collect();
 
-                    match snoops_sender.try_send(data) {
+                    match snoops_prod.push(data) {
                         Ok(_) => {}
-                        Err(TrySendError::Full(_)) => {
-                            log::warn!("skipping snoops data");
+                        Err(_) => {
+                            log::warn!("snoops prod full")
                         }
-                        Err(_) => return Err(anyhow!("snoops receiver gone")),
                     }
                 }
             }
@@ -630,8 +631,8 @@ impl Unit {
         &mut self,
         mut input_be: BigBlockAdapter32,
         mut render_be: BlockRateAdapter32,
-        fft_sender: SyncSender<Vec<(f32, f32)>>,
-        snoops_sender: SyncSender<Vec<(Entity, Vec<f32>)>>,
+        fft_prod: StaticProducer<Vec<(f32, f32)>>,
+        snoops_prod: StaticProducer<Vec<(Entity, Vec<f32>)>>,
     ) -> Result<()> {
         let host = cpal::default_host();
         let input = cpal::traits::HostTrait::default_input_device(&host);
@@ -664,9 +665,9 @@ impl Unit {
 
         let unit = self.clone();
         let mut process_fn = move || -> Result<()> {
-            unit.process_input(&mut consume_analyze, &fft_sender)?;
+            unit.process_input(&mut consume_analyze, &fft_prod)?;
             unit.produce_output(&mut produce_render, &mut render_be)?;
-            unit.send_snoops_reading(&snoops_sender)?;
+            unit.send_snoops_reading(&snoops_prod)?;
             Ok(())
         };
 

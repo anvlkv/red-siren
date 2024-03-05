@@ -9,6 +9,7 @@ mod red_siren_core;
 mod area;
 mod intro;
 mod objects;
+mod animation_clock;
 
 use crate::error_template::{AppError, ErrorTemplate};
 use red_siren_core::RedSirenCore;

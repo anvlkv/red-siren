@@ -1,10 +1,16 @@
-use std::sync::mpsc::{sync_channel, Receiver};
+use std::sync::mpsc::{channel, Receiver};
 
-use au_core::{Node, Unit, UnitEV, MAX_F, MIN_F};
+use au_core::{Node, Unit, UnitEV, FFT_BUF_SIZE, MAX_F, MIN_F, SNOOPS_BUF_SIZE};
 use eframe::egui::{self, *};
 use fundsp::hacker32::*;
 use futures::channel::mpsc::unbounded;
 use hecs::Entity;
+use ringbuf::{StaticConsumer, StaticRb};
+
+once_mut::once_mut! {
+    static mut FFT_RB: ringbuf::StaticRb::<Vec<(f32, f32)>, FFT_BUF_SIZE> = StaticRb::default();
+    static mut SNOOPS_RB: ringbuf::StaticRb::<Vec<(Entity, Vec<f32>)>, SNOOPS_BUF_SIZE> = StaticRb::default();
+}
 
 struct State {
     unit: Unit,
@@ -12,8 +18,8 @@ struct State {
     node: Node,
     last_fft: Vec<(f32, f32)>,
     last_snoops: Vec<(Entity, Vec<f32>)>,
-    fft_receiver: Receiver<Vec<(f32, f32)>>,
-    snoop_receiver: Receiver<Vec<(Entity, Vec<f32>)>>,
+    fft_cons: StaticConsumer<'static, Vec<(f32, f32)>, FFT_BUF_SIZE>,
+    snoops_cons: StaticConsumer<'static, Vec<(Entity, Vec<f32>)>, SNOOPS_BUF_SIZE>,
 }
 
 fn main() {
@@ -34,18 +40,18 @@ fn run(mut unit: Unit) -> Result<(), anyhow::Error> {
         pan: shared(0.0),
     };
 
-    let (fft_sender, fft_receiver) = sync_channel(64);
-    let (snoop_sender, snoop_receiver) = sync_channel(64);
+    let (fft_prod, fft_cons) = FFT_RB.take().unwrap().split_ref();
+    let (snoops_prod, snoops_cons) = SNOOPS_RB.take().unwrap().split_ref();
 
-    unit.run(fft_sender, snoop_sender)?;
+    unit.run(fft_prod, snoops_prod)?;
 
     unit.update(UnitEV::Configure(vec![node.clone()]));
 
     let state = State {
         unit,
         node,
-        fft_receiver,
-        snoop_receiver,
+        fft_cons,
+        snoops_cons,
         input: true,
         last_fft: vec![],
         last_snoops: vec![],
@@ -162,10 +168,7 @@ impl eframe::App for State {
             egui::containers::Frame::canvas(ui.style()).show(ui, |ui| {
                 ui.ctx().request_repaint();
 
-                let snoops = self
-                    .snoop_receiver
-                    .try_recv()
-                    .unwrap_or(self.last_snoops.clone());
+                let snoops = self.snoops_cons.pop().unwrap_or(self.last_snoops.clone());
 
                 self.last_snoops = snoops.clone();
 
@@ -195,10 +198,7 @@ impl eframe::App for State {
             ui.label("Input spectrum");
             egui::containers::Frame::canvas(ui.style()).show(ui, |ui| {
                 ui.ctx().request_repaint();
-                let fft = self
-                    .fft_receiver
-                    .try_recv()
-                    .unwrap_or(self.last_fft.clone());
+                let fft = self.fft_cons.pop().unwrap_or(self.last_fft.clone());
                 self.last_fft = fft.clone();
 
                 let points = fft.len();

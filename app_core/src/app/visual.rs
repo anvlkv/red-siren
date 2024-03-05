@@ -1,10 +1,11 @@
-use crate::Paint;
+use crate::{Objects, Paint};
 
-use super::{objects::Object, Animate};
+use super::{config::Config, objects::Object, Animate};
 use crux_core::render::Render;
 pub use crux_core::App;
 use crux_macros::Effect;
 use euclid::default::{Box2D, Point2D, SideOffsets2D};
+use hecs::Entity;
 use keyframe::{functions::EaseOut, keyframes, AnimationSequence};
 use serde::{Deserialize, Serialize};
 
@@ -29,6 +30,7 @@ pub enum VisualEV {
     SetDarkMode(bool),
     SetDensity(f64),
     LayoutUpdate,
+    SnoopsData(Vec<(Entity, Vec<f32>)>),
 }
 
 #[derive(Default)]
@@ -49,15 +51,17 @@ impl App for Visual {
     type Capabilities = VisualCapabilities;
 
     fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) {
+        log::trace!("visual ev: {event:?}");
+
         match event {
             VisualEV::AnimateEntrance => {
                 model.intro_opacity = Some(keyframes![(0.0, 1.0, EaseOut), (1.0, 0.0)]);
                 // model.view_objects_animation =
                 caps.animate
-                    .start(VisualEV::AnimateEntranceTS, "intro animation".to_string())
+                    .start(VisualEV::AnimateEntranceTS, "intro animation")
             }
             VisualEV::LayoutUpdate => {
-                model.view_objects_animation = Some(keyframes![(model.objects.clone(), 0.0)]);
+                // model.view_objects_animation = Some(keyframes![(model.objects.clone(), 0.0)]);
 
                 caps.render.render();
             }
@@ -89,13 +93,40 @@ impl App for Visual {
                     caps.animate.stop();
                 }
             }
+            VisualEV::SnoopsData(data) => {
+                let config = model.get_config().unwrap();
+                let world = model.world.lock().unwrap();
+
+                for (button, values) in data {
+                    let (string, secondary_string) =
+                        model.instrument.buttons_to_strings.get(&button).unwrap();
+
+                    if let Some(mut obj) = secondary_string
+                        .map(|string| world.get::<&mut Object>(string).ok())
+                        .flatten()
+                    {
+                        Self::draw_snoops_data_on_path(values.clone(), &mut obj, config);
+                    }
+
+                    let mut obj = world.get::<&mut Object>(*string).unwrap();
+                    Self::draw_snoops_data_on_path(values, &mut obj, config);
+                }
+
+                model.objects.update_from_world(&world).unwrap();
+
+                caps.render.render();
+            }
             VisualEV::SetReducedMotion(reduce) => {
                 model.reduced_motion = reduce;
                 caps.render.render();
             }
             VisualEV::SetDarkMode(dark) => {
                 model.dark_schema = dark;
-                caps.render.render();
+                {
+                    let mut world = model.world.lock().unwrap();
+                    model.objects.repaint(&mut world, dark).unwrap();
+                }
+                self.update(VisualEV::LayoutUpdate, model, caps);
             }
             VisualEV::SetDensity(density) => {
                 self.set_density(density, model);
@@ -127,6 +158,33 @@ impl App for Visual {
 }
 
 impl Visual {
+    fn draw_snoops_data_on_path(data: Vec<f32>, obj: &mut Object, config: &Config) {
+        let (path, p0) = match &mut obj.shape {
+            crate::Shapes::Path { path, p0, .. } => (path, p0),
+            _ => unimplemented!(),
+        };
+
+        let base = if config.portrait { p0.x } else { p0.y };
+        let range = config.safe_breadth / 4.15;
+        let step = if config.portrait { config.height } else { config.width } / (data.len() - 1) as f64;
+
+        *path = data
+            .iter()
+            .enumerate()
+            .map(|(i, value)| {
+                let main_length = step * i as f64;
+                let side_breadth = base + range * (*value as f64);
+                let (x, y) = if config.portrait {
+                    (side_breadth, main_length)
+                } else {
+                    (main_length, side_breadth)
+                };
+
+                Point2D::new(x, y)
+            })
+            .collect();
+    }
+
     pub fn safe_area(
         &self,
         left: f64,
@@ -144,8 +202,6 @@ impl Visual {
         self.resize(model.view_box.width(), model.view_box.height(), model);
     }
     pub fn resize(&self, width: f64, height: f64, model: &mut super::model::Model) {
-        log::debug!("resize boxes");
-
         model.view_box = Box2D::new(Point2D::default(), Point2D::new(width, height));
         model.safe_box = model.view_box.inner_box(model.safe_area);
         // todo: handle density difference

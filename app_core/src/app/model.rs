@@ -3,7 +3,7 @@ use hecs::World;
 use keyframe::AnimationSequence;
 use std::sync::{Arc, Mutex};
 
-use super::{config::Config, layout::Layout, objects::Objects, instrument::Instrument};
+use super::{config::Config, instrument::Instrument, layout::Layout, objects::Objects};
 
 #[derive(Default)]
 pub struct Model {
@@ -25,4 +25,10 @@ pub struct Model {
     pub intro_opacity: Option<AnimationSequence<f64>>,
     pub view_objects_animation: Option<AnimationSequence<Objects>>,
     pub running_animation: Option<(f64, f64)>,
+}
+
+impl Model {
+    pub fn get_config(&self) -> Option<&Config> {
+        self.configs.get(self.current_config)
+    }
 }

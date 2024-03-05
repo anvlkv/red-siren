@@ -3,6 +3,7 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 use crux_core::capability::{CapabilityContext, Operation};
 use crux_macros::Capability;
 use futures::StreamExt;
+use ringbuf::StaticConsumer;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -36,14 +37,15 @@ where
         Self { context }
     }
 
-    pub fn start<F>(&self, notify: F, label: String)
+    pub fn start<F>(&self, notify: F, label: &str)
     where
         F: Fn(f64) -> Ev + Send + 'static,
     {
-        log::debug!("starting animation");
+        log::info!("starting {label} animation");
 
         let context = self.context.clone();
 
+        let label = label.to_string();
         self.context.spawn({
             async move {
                 let mut stream = context.stream_from_shell(AnimateOperation::Start);
@@ -61,34 +63,41 @@ where
         });
     }
 
-    pub fn animate_reception<F, T>(&self, notify: F, receiver: Receiver<T>)
-    where
+    pub fn animate_reception<F, T, const N: usize>(
+        &self,
+        notify: F,
+        mut cons: StaticConsumer<'static, T, N>,
+        label: &str,
+    ) where
         F: Fn(T) -> Ev + Send + 'static,
         T: Send + 'static,
     {
-        log::debug!("starting animate reception");
+        log::info!("starting animate reception {label}");
 
         let context = self.context.clone();
 
+        let label = label.to_string();
         self.context.spawn({
             async move {
                 let mut stream = context.stream_from_shell(AnimateOperation::Start);
 
                 while let Some(response) = stream.next().await {
                     if let AnimateOperationOutput::Timestamp(_) = response {
-                        match receiver.try_recv() {
-                            Ok(d) => context.update_app(notify(d)),
-                            Err(TryRecvError::Empty) => {}
-                            Err(TryRecvError::Disconnected) => {
-                                break;
+                        match cons.pop() {
+                            Some(d) => {
+                                context.update_app(notify(d));
+                            }
+                            None => {
+                                log::debug!("no data in receiver for {label}");
                             }
                         }
                     } else {
+                        log::warn!("unexpected response for {label}: {response:?}");
                         break;
                     }
                 }
 
-                log::info!("animate reception exited");
+                log::info!("animate reception exited {label}");
             }
         });
     }

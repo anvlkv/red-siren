@@ -1,4 +1,7 @@
-use std::ops::Deref;
+use std::{
+    hash::{Hash, Hasher},
+    ops::Deref,
+};
 
 use crate::ObjectStyle;
 use anyhow::Result;
@@ -20,22 +23,42 @@ impl Objects {
         dark: bool,
         style: ObjectStyle,
     ) -> ((Entity, Entity), (Object, Paint)) {
-        let paint_obj = Paint::new(*e, dark, &style);
+        let paint_obj = Paint::new(*e, dark, style);
         let paint = world.spawn((paint_obj.clone(),));
         let obj = world.get::<&Object>(*e).unwrap();
 
         ((*e, paint), (obj.deref().clone(), paint_obj))
     }
 
+    pub fn repaint(&mut self, world: &mut World, dark: bool) -> Result<()> {
+        for ((_, e), _) in self.0.iter() {
+            world.get::<&mut Paint>(*e)?.repaint(dark);
+        }
+
+        self.update_from_world(&world)?;
+
+        Ok(())
+    }
+
     pub fn new(world: &mut World, layout: &Layout, dark: bool) -> Self {
         let mut inner = vec![];
 
-        inner.extend(
-            layout
-                .strings
-                .iter()
-                .map(|e| Self::make_paint(world, e, dark, ObjectStyle::StringLine)),
-        );
+        inner.extend(layout.left_strings.iter().enumerate().map(|(i, e)| {
+            Self::make_paint(
+                world,
+                e,
+                dark,
+                ObjectStyle::StringLine(1),
+            )
+        }));
+        inner.extend(layout.right_strings.iter().enumerate().map(|(i, e)| {
+            Self::make_paint(
+                world,
+                e,
+                dark,
+                ObjectStyle::StringLine(1),
+            )
+        }));
         inner.extend(
             layout
                 .tracks
@@ -96,7 +119,7 @@ impl CanTween for Objects {
     }
 }
 
-#[derive(Bundle, Clone, Serialize, Deserialize, Builder)]
+#[derive(Bundle, Clone, Serialize, Deserialize, Builder, Hash)]
 pub struct Object {
     #[builder(default = "uuid::Uuid::new_v4()")]
     pub id: Uuid,
@@ -132,7 +155,17 @@ pub struct Text {
     pub alignment: Alignment,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+impl Hash for Text {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        let bin = bincode::serialize(self).unwrap();
+        bin.hash(state)
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Hash)]
 pub enum Alignment {
     Leading,
     Trailing,
@@ -141,48 +174,30 @@ pub enum Alignment {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Shapes {
-    Path(Vec<Point2D<f64>>),
+    Path {
+        path: Vec<Point2D<f64>>,
+        p0: Point2D<f64>,
+        p1: Point2D<f64>,
+    },
     Circle(Box2D<f64>),
     RoundedRect(Box2D<f64>, Size2D<f64>),
+}
+
+impl Hash for Shapes {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        let bin = bincode::serialize(self).unwrap();
+        bin.hash(state)
+    }
 }
 
 impl Shapes {
     pub fn containing_rect(&self) -> Box2D<f64> {
         match self {
-            Self::Path(points) => {
-                let x_min = points
-                    .iter()
-                    .min_by(|p1, p2| {
-                        PartialOrd::partial_cmp(&p1.x, &p2.x).unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                    .map(|p| p.x)
-                    .unwrap_or_default();
-
-                let x_max = points
-                    .iter()
-                    .max_by(|p1, p2| {
-                        PartialOrd::partial_cmp(&p1.x, &p2.x).unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                    .map(|p| p.x)
-                    .unwrap_or_default();
-
-                let y_min = points
-                    .iter()
-                    .min_by(|p1, p2| {
-                        PartialOrd::partial_cmp(&p1.y, &p2.y).unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                    .map(|p| p.y)
-                    .unwrap_or_default();
-
-                let y_max = points
-                    .iter()
-                    .min_by(|p1, p2| {
-                        PartialOrd::partial_cmp(&p1.y, &p2.y).unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                    .map(|p| p.y)
-                    .unwrap_or_default();
-
-                Box2D::new(Point2D::new(x_min, y_min), Point2D::new(x_max, y_max))
+            Self::Path { p0, p1, .. } => {
+                Box2D::new(Point2D::new(p0.x, p0.y), Point2D::new(p1.x, p1.y))
             }
             Self::Circle(rect) => rect.clone(),
             Self::RoundedRect(rect, _) => rect.clone(),
@@ -193,20 +208,41 @@ impl Shapes {
 impl CanTween for Shapes {
     fn ease(from: Self, to: Self, time: impl keyframe::num_traits::Float) -> Self {
         match (from, to) {
-            (Shapes::Path(p1), Shapes::Path(p2)) => {
+            (
+                Shapes::Path {
+                    path: path_from,
+                    p0: p0_from,
+                    p1: p1_from,
+                },
+                Shapes::Path {
+                    path: path_to,
+                    p0: p0_to,
+                    p1: p1_to,
+                },
+            ) => {
                 let mut path = vec![];
-                let count = CanTween::ease(p1.len() as f32, p2.len() as f32, time).round() as usize;
+                let count = CanTween::ease(path_from.len() as f32, path_to.len() as f32, time)
+                    .round() as usize;
                 for i in 0..count {
-                    let from_x = p1.get(i).or_else(|| p1.last()).map(|p| p.x).unwrap_or(0.0);
-                    let from_y = p1.get(i).or_else(|| p1.last()).map(|p| p.y).unwrap_or(0.0);
-                    let to_x = p2.get(i).or_else(|| p2.last()).map(|p| p.x).unwrap_or(0.0);
-                    let to_y = p2.get(i).or_else(|| p2.last()).map(|p| p.y).unwrap_or(0.0);
+                    let from_x = path_from.get(i).map(|p| p.x).unwrap_or(p1_from.x);
+                    let from_y = path_from.get(i).map(|p| p.y).unwrap_or(p1_from.y);
+                    let to_x = path_to.get(i).map(|p| p.x).unwrap_or(p1_to.x);
+                    let to_y = path_to.get(i).map(|p| p.y).unwrap_or(p1_to.y);
                     path.push(Point2D::new(
                         CanTween::ease(from_x, to_x, time),
                         CanTween::ease(from_y, to_y, time),
                     ))
                 }
-                Shapes::Path(path)
+                let p0 = Point2D::new(
+                    CanTween::ease(p0_from.x, p0_to.x, time),
+                    CanTween::ease(p0_from.y, p0_to.y, time),
+                );
+                let p1 = Point2D::new(
+                    CanTween::ease(p1_from.x, p1_to.x, time),
+                    CanTween::ease(p1_from.y, p1_to.y, time),
+                );
+
+                Shapes::Path { path, p0, p1 }
             }
             (Shapes::Circle(b1), Shapes::Circle(b2)) => {
                 let max_x = CanTween::ease(b1.max.x, b2.max.x, time);

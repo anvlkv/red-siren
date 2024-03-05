@@ -1,3 +1,5 @@
+use std::hash::{Hasher, Hash};
+
 use ecolor::Rgba;
 use hecs::{Bundle, Entity};
 use keyframe::CanTween;
@@ -8,9 +10,9 @@ const BLACK: Rgba = Rgba::from_rgb(53_f32, 56_f32, 57_f32);
 const GRAY: Rgba = Rgba::from_rgb(54_f32, 69_f32, 79_f32);
 const CINNABAR: Rgba = Rgba::from_rgb(228_f32, 77_f32, 46_f32);
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug, Hash)]
 pub enum ObjectStyle {
-    StringLine,
+    StringLine(usize),
     ChartLine,
     InstrumentButton,
     InstrumentTrack,
@@ -40,38 +42,39 @@ impl ObjectStyle {
     }
 
     pub fn stroke(&self, dark: bool) -> Option<Stroke> {
+        let color = if dark { RED } else { BLACK };
         match self {
-            Self::StringLine | Self::ChartLine | Self::InstrumentTrack => Some(Stroke {
-                color: {
-                    if dark {
-                        RED
-                    } else {
-                        BLACK
-                    }
-                },
+            Self::StringLine(div) => Some(Stroke {
+                color: color.multiply(1.0 / *div as f32),
                 width: 1.0,
             }),
+            Self::ChartLine | Self::InstrumentTrack => Some(Stroke { color, width: 1.0 }),
             _ => None,
         }
     }
 }
 
-#[derive(Bundle, Clone, Serialize, Deserialize, Builder)]
+#[derive(Bundle, Clone, Serialize, Deserialize, Hash)]
 pub struct Paint {
     pub object: Entity,
-    #[builder(default = "None")]
     pub fill: Option<Rgba>,
-    #[builder(default = "None")]
     pub stroke: Option<Stroke>,
+    pub style: ObjectStyle,
 }
 
 impl Paint {
-    pub fn new(object: Entity, dark: bool, style: &ObjectStyle) -> Self {
+    pub fn new(object: Entity, dark: bool, style: ObjectStyle) -> Self {
         Self {
             object,
             fill: style.fill(dark),
             stroke: style.stroke(dark),
+            style,
         }
+    }
+
+    pub fn repaint(&mut self, dark: bool) {
+        self.fill = self.style.fill(dark);
+        self.stroke = self.style.stroke(dark);
     }
 }
 
@@ -92,13 +95,16 @@ impl CanTween for Paint {
             ))
         };
         assert_eq!(from.object, to.object);
+        assert_eq!(from.style, to.style);
 
         let object = from.object;
+        let style = from.style;
 
         Self {
             fill,
             stroke,
             object,
+            style,
         }
     }
 }
@@ -107,6 +113,16 @@ impl CanTween for Paint {
 pub struct Stroke {
     pub color: Rgba,
     pub width: f64,
+}
+
+impl Hash for Stroke {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        let bin = bincode::serialize(self).unwrap();
+        bin.hash(state)
+    }
 }
 
 impl Stroke {

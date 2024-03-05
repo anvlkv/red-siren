@@ -7,7 +7,7 @@ const MIN_BUTTON_SIZE_IN: f64 = 0.75;
 const MAX_BUTTON_SIZE_B_RATIO: f64 = 0.6;
 const BUTTON_TRACK_MARGIN_RATIO: f64 = 0.2;
 const BUTTON_SPACE_RATIO: f64 = 2.0;
-const F_BASE: f64 = 110.0;
+const F_BASE: f64 = 160.0;
 const F_MAX: f64 = 16500.0;
 const MIN_BUTTONS: usize = 3;
 
@@ -16,8 +16,8 @@ pub struct Config {
     pub portrait: bool,
     pub width: f64,
     pub height: f64,
-    pub breadth: f64,
-    pub length: f64,
+    pub safe_breadth: f64,
+    pub active_length: f64,
     pub whitespace: f64,
     pub groups: usize,
     pub buttons_group: usize,
@@ -50,7 +50,6 @@ impl Config {
 
         let max_button_size = (safe_breadth * MAX_BUTTON_SIZE_B_RATIO).round() as usize;
         let min_button_size = f64::sqrt(dpi * MIN_BUTTON_SIZE_IN).round() as usize;
-
 
         let f_c = (F_BASE / f64::sqrt((length * safe_breadth) / dpi)) as f32;
 
@@ -86,8 +85,8 @@ impl Config {
                         portrait,
                         width,
                         height,
-                        length: active_length,
-                        breadth: safe_breadth,
+                        active_length,
+                        safe_breadth,
                         button_size: size as f64,
                         groups,
                         buttons_group,
@@ -124,7 +123,10 @@ impl Config {
                     acc.2 .0.min(config.buttons_group),
                     acc.2 .1.max(config.buttons_group),
                 );
-                acc.3 = (acc.3 .0.min(config.length), acc.3 .1.max(config.length));
+                acc.3 = (
+                    acc.3 .0.min(config.active_length),
+                    acc.3 .1.max(config.active_length),
+                );
                 acc.4 = (acc.4 .0.min(count), acc.4 .1.max(count));
                 acc
             },
@@ -143,7 +145,7 @@ impl Config {
             let score = (config.button_size as f64 / d_size
                 + config.groups as f64 / d_groups as f64
                 + config.buttons_group as f64 / d_buttons_group as f64
-                + config.length as f64 / d_active_length)
+                + config.active_length as f64 / d_active_length)
                 * (1.0 + d_count as f64 / count);
 
             (score.round() as usize, config)

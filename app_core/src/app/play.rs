@@ -47,7 +47,7 @@ where
         let mut receiver = receiver.take().unwrap();
         self.context.spawn({
             async move {
-                context.notify_shell(PlayOperation::RunUnit);
+                context.notify_shell(PlayOperation::RunUnit).await;
                 while let Some(resolve) = receiver.next().await {
                     context.update_app(notify(resolve))
                 }

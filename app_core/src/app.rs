@@ -1,12 +1,19 @@
-use std::sync::{mpsc::sync_channel, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 
-use au_core::{Unit, UnitResolve};
+use au_core::{Unit, UnitEV, UnitResolve, FFT_BUF_SIZE, SNOOPS_BUF_SIZE};
 pub use crux_core::App;
 use crux_core::{render::Render, Capability};
 use crux_macros::Effect;
 use futures::channel::mpsc::unbounded;
 use hecs::Entity;
+use once_mut::once_mut;
+use ringbuf::StaticRb;
 use serde::{Deserialize, Serialize};
+
+once_mut! {
+    static mut FFT_RB: StaticRb::<Vec<(f32, f32)>, FFT_BUF_SIZE> = StaticRb::default();
+    static mut SNOOPS_RB: StaticRb::<Vec<(Entity, Vec<f32>)>, SNOOPS_BUF_SIZE> = StaticRb::default();
+}
 
 mod animate;
 mod config;
@@ -54,6 +61,7 @@ pub enum Event {
     PlayOpFftData(Vec<(f32, f32)>),
     PlayOpSnoopData(Vec<(Entity, Vec<f32>)>),
     StartAudioUnit,
+    Pause,
 }
 
 impl Eq for Event {}
@@ -106,17 +114,26 @@ impl App for RedSiren {
                 let mut unit = self.audio_unit.lock().unwrap();
                 let unit = unit.as_mut().unwrap();
 
-                let (fft_sender, fft_receiver) = sync_channel::<Vec<(f32, f32)>>(4);
-                let (snoops_sender, snoops_receiver) = sync_channel::<Vec<(Entity, Vec<f32>)>>(8);
+                let (fft_prod, fft_cons) = FFT_RB.take().unwrap().split_ref();
+                let (snoops_prod, snoops_cons) = SNOOPS_RB.take().unwrap().split_ref();
 
                 caps.play.run_unit(Event::PlayOpResolve);
 
-                unit.run(fft_sender, snoops_sender).expect("run unit");
+                unit.run(fft_prod, snoops_prod).expect("run unit");
 
                 caps.animate
-                    .animate_reception(Event::PlayOpSnoopData, snoops_receiver);
+                    .animate_reception(Event::PlayOpSnoopData, snoops_cons, "snoops");
                 caps.animate
-                    .animate_reception(Event::PlayOpFftData, fft_receiver);
+                    .animate_reception(Event::PlayOpFftData, fft_cons, "fft");
+
+                log::info!("started unit and animate reception");
+            }
+            Event::Pause => {
+                let mut unit = self.audio_unit.lock().unwrap();
+                let unit = unit.as_mut().unwrap();
+                unit.update(UnitEV::Suspend);
+
+                caps.render.render();
             }
             Event::PlayOpResolve(unit_resolve) => match unit_resolve {
                 UnitResolve::RunUnit(true) => {
@@ -137,37 +154,11 @@ impl App for RedSiren {
                     log::error!("update unit error");
                 }
             },
-            // Event::PlayOpInstall(success) => {
-            //     if success {
-            //         caps.play.run_unit(
-            //             Event::PlayOpRun,
-            //             Event::PlayOpFftData,
-            //             Event::PlayOpSnoopData,
-            //         )
-            //     }
-            //     // PlayOperationOutput::Success => ,
-            //     // PlayOperationOutput::Failure => {
-            //     //     caps.play.install(Event::PlayOpInstall);
-            //     //     log::error!("failed to instal audio unit, retrying");
-            //     // }
-            //     // PlayOperationOutput::PermanentFailure => {
-            //     //     log::error!("permanently failed to instal audio unit");
-            //     // }
-            // },
-            // Event::PlayOpRun(success) => match success {
-            //     PlayOperationOutput::Success => {
-            //         log::info!("running");
-            //     }
-            //     PlayOperationOutput::Failure => {
-            //         caps.play.install(Event::PlayOpInstall);
-            //         log::error!("failed to instal audio unit, retrying");
-            //     }
-            //     PlayOperationOutput::PermanentFailure => {
-            //         log::error!("permanently failed to instal audio unit");
-            //     }
-            // },
             Event::PlayOpFftData(d) => log::info!("fft data"),
-            Event::PlayOpSnoopData(d) => log::info!("snoop data"),
+            Event::PlayOpSnoopData(d) => {
+                self.visual
+                    .update(VisualEV::SnoopsData(d), model, &caps.into());
+            }
             Event::Navigation(activity) => {
                 model.activity = activity;
                 caps.render.render();
@@ -190,20 +181,19 @@ impl App for RedSiren {
                             ],
                         );
                         log::debug!("add configs: {}", model.configs.len());
+
                         if model.current_config >= model.configs.len() {
                             model.current_config = 0;
                         }
 
-                        let config = model.configs.get(model.current_config).unwrap();
-
-                        {
+                        if let Some(config) = model.get_config().cloned() {
                             let mut world = model.world.lock().unwrap();
                             world.clear();
 
-                            model.layout = Layout::layout(config, &mut world).unwrap();
+                            model.layout = Layout::layout(&config, &mut world).unwrap();
 
                             model.instrument =
-                                Instrument::new(config, &mut world, &model.layout).unwrap();
+                                Instrument::new(&config, &mut world, &model.layout).unwrap();
 
                             model.objects =
                                 Objects::new(&mut world, &model.layout, model.dark_schema)

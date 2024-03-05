@@ -1,14 +1,12 @@
 use futures::channel::mpsc::Sender;
 use leptos::*;
 use leptos_router::{use_location, Location};
-use leptos_use::{
-    use_event_listener, use_media_query, use_timestamp_with_controls_and_options, use_window,
-    UseTimestampOptions, UseTimestampReturn,
-};
+use leptos_use::{use_event_listener, use_media_query, use_window};
 
 use super::area::Area;
 use super::intro::Intro;
 use super::objects::Objects;
+use crate::app::animation_clock::AnimationClock;
 use crate::app::core_bindings;
 use crate::util::use_dpi;
 
@@ -21,6 +19,7 @@ pub struct CoreContext(
 #[component]
 pub fn RedSirenCore() -> impl IntoView {
     let core = core_bindings::new();
+    let clock = AnimationClock::new();
     let Location { pathname, .. } = use_location();
     let view_rw_signal = create_rw_signal(core.view());
     let render = view_rw_signal.write_only();
@@ -45,43 +44,17 @@ pub fn RedSirenCore() -> impl IntoView {
         activity
     });
 
-    let UseTimestampReturn {
-        timestamp,
-        pause,
-        resume,
-        ..
-    } = use_timestamp_with_controls_and_options(UseTimestampOptions::default().immediate(false));
-    let (animate_send, set_animate_send) = create_signal(None);
-    let animate_cb = Callback::new(move |sender: Option<Sender<f64>>| {
-        if let Some(sender) = sender {
-            set_animate_send(Some(sender));
-            resume();
-            log::debug!("timestamp animation resumed");
-        } else {
-            set_animate_send(None);
-            pause();
-            log::debug!("timestamp animation paused");
-        }
-    });
-
-    create_effect(move |last| {
-        let ts = timestamp.get();
-
-        if last != Some(ts) {
-            if let Some(sender) = animate_send().as_mut() {
-                sender.try_send(ts).expect("send ts");
-            }
-        }
-
-        ts
-    });
-
     let navigate = leptos_router::use_navigate();
     let navigate_cb = Callback::new(move |path| navigate(path, Default::default()));
 
+    let animate = Callback::new(move |sender: Option<Sender<f64>>| match sender {
+        Some(sender) => clock.add_sender(sender),
+        None => clock.clear(),
+    });
+
     create_effect(move |_| {
         if let Some(ev) = event.get() {
-            core_bindings::update(&core, ev, render, navigate_cb, animate_cb);
+            core_bindings::update(&core, ev, render, navigate_cb, animate);
         }
     });
 
@@ -138,12 +111,20 @@ pub fn RedSirenCore() -> impl IntoView {
     });
 
     // draft
+    let (playing, set_playing) = create_signal(false);
     let on_click = move |_| {
-        set_event(Some(app_core::Event::StartAudioUnit));
+        if playing() {
+            set_event(Some(app_core::Event::Pause));
+            set_playing(false);
+        }
+        else {
+            set_event(Some(app_core::Event::StartAudioUnit));
+            set_playing(true);
+        }
     };
 
     view! {
-        <div class="red-siren-core-view" on:click={on_click}>
+        <div class="red-siren-core-view" on:click=on_click>
             <Intro opacity=Signal::derive(move|| view().visual.intro_opacity)/>
             <Area>
                 <Objects/>

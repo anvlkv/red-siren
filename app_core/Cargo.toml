@@ -63,7 +63,8 @@ simple_logger = "4.1.0"
 console_error_panic_hook = { version = "0.1.7", optional = true }
 console_log = { version = "1.0.0", optional = true }
 derive_builder = "0.20.0"
-
+ringbuf = "0.3.3"
+once_mut = "0.1.1"
 
 [dev-dependencies]
 assert_let_bind = "0.1.1"

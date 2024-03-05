@@ -71,6 +71,7 @@ worklet = ["browser", "console_log", "console_error_panic_hook"]
 eframe = "0.26"
 dasp_sample = "0.11.0"
 simple_logger = "4.1.0"
+once_mut="0.1.1"
 
 [[example]]
 name = "node"

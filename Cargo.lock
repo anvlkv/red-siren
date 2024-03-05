@@ -313,7 +313,9 @@ dependencies = [
  "mint",
  "num-integer",
  "once_cell",
+ "once_mut",
  "oslog",
+ "ringbuf",
  "serde",
  "serde_json",
  "simple_logger",
@@ -707,6 +709,7 @@ dependencies = [
  "lazy_static",
  "log",
  "logging_timer",
+ "once_mut",
  "ringbuf",
  "serde",
  "simple_logger",
@@ -4196,6 +4199,12 @@ name = "once_cell"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
+
+[[package]]
+name = "once_mut"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6197db6007183c440678dd11dbffb781c469cb026b634f39ac120a8f6fcb653d"
 
 [[package]]
 name = "oneshot-uniffi"

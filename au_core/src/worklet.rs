@@ -15,7 +15,7 @@ thread_local! {
 
 #[wasm_bindgen]
 pub fn init_once() {
-    _ = console_log::init_with_level(log::Level::Debug);
+    _ = console_log::init_with_level(log::Level::Trace);
     console_error_panic_hook::set_once();
 }
 
@@ -42,26 +42,33 @@ pub fn process_samples(samples: &[f32]) -> Vec<f32> {
 }
 
 #[wasm_bindgen]
-pub fn get_fft_data() -> Vec<u8> {
-    let result = match AU_UNIT.try_lock() {
-        Ok(unit) => unit.as_ref().map(|unit| unit.next_fft_reading()).flatten(),
+pub fn get_fft_data() -> Option<Vec<u8>> {
+    match AU_UNIT.lock() {
+        Ok(unit) => unit
+            .as_ref()
+            .map(|unit| {
+                unit.next_fft_reading().map(|result| {
+                    bincode::serialize::<Vec<(f32, f32)>>(&result).expect("serialize")
+                })
+            })
+            .flatten(),
         _ => None,
-    };
-
-    bincode::serialize::<Option<Vec<(f32, f32)>>>(&result).expect("serialize")
+    }
 }
 
 #[wasm_bindgen]
-pub fn get_snoops_data() -> Vec<u8> {
-    let result = match AU_UNIT.try_lock() {
+pub fn get_snoops_data() -> Option<Vec<u8>> {
+    match AU_UNIT.lock() {
         Ok(unit) => unit
             .as_ref()
-            .map(|unit| unit.next_snoops_reading())
+            .map(|unit| {
+                unit.next_snoops_reading().map(|result| {
+                    bincode::serialize::<Vec<(Entity, Vec<f32>)>>(&result).expect("serialize")
+                })
+            })
             .flatten(),
         _ => None,
-    };
-
-    bincode::serialize::<Option<Vec<(Entity, Vec<f32>)>>>(&result).expect("serialize")
+    }
 }
 
 #[wasm_bindgen]

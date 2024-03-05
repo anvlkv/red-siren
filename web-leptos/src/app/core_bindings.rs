@@ -1,16 +1,12 @@
+use std::rc::Rc;
+
+use app_core::{Activity, Effect, Event, RedSiren, RedSirenCapabilities, ViewModel};
+use app_core::{AnimateOperation, AnimateOperationOutput};
 use futures::{
     channel::mpsc::{channel, Sender},
     StreamExt,
 };
-use std::rc::Rc;
-
 use leptos::*;
-
-use app_core::{AnimateOperation, AnimateOperationOutput};
-use app_core::{
-    Activity, Effect, Event, RedSiren, RedSirenCapabilities, ViewModel,
-};
-
 
 pub type Core = Rc<app_core::Core<Effect, RedSiren>>;
 
@@ -23,10 +19,10 @@ pub fn update(
     event: Event,
     render: WriteSignal<ViewModel>,
     navigate: Callback<&str>,
-    animate_cb: Callback<Option<Sender<f64>>>,
+    animate: Callback<Option<Sender<f64>>>,
 ) {
     for effect in core.process_event(event) {
-        process_effect(core, effect, render,  navigate, animate_cb);
+        process_effect(core, effect, render, navigate, animate);
     }
 }
 
@@ -36,26 +32,21 @@ pub fn process_effect(
     effect: Effect,
     render: WriteSignal<ViewModel>,
     navigate: Callback<&str>,
-    animate_cb: Callback<Option<Sender<f64>>>,
+    animate: Callback<Option<Sender<f64>>>,
 ) {
     match effect {
         Effect::Render(_) => {
             render.update(|view| *view = core.view());
         }
-        Effect::Play(mut req) => {
-        match req.operation {
+        Effect::Play(req) => match req.operation {
             app_core::PlayOperation::Permissions => {
                 log::info!("permissions");
-            },
+            }
             app_core::PlayOperation::RunUnit => {
                 log::info!("run unit");
-            },
-        }
-        //     log::info!("play op: {:?}", req.operation);
+            }
+        },
 
-        //     core.resolve(&mut req, PlayOperationOutput::Success);
-        }
-        
         // Effect::KeyValue(mut req) => {
         //     #[cfg(feature = "browser")]
         //     {
@@ -112,32 +103,20 @@ pub fn process_effect(
                     while let Some(ts) = rx.next().await {
                         for effect in core.resolve(&mut req, AnimateOperationOutput::Timestamp(ts))
                         {
-                            process_effect(
-                                &core,
-                                effect,
-                                render,
-                                navigate,
-                                animate_cb,
-                            );
+                            process_effect(&core, effect, render, navigate, animate);
                         }
                     }
 
                     for effect in core.resolve(&mut req, AnimateOperationOutput::Done) {
-                        process_effect(
-                            &core,
-                            effect,
-                            render,
-                            navigate,
-                            animate_cb,
-                        );
+                        process_effect(&core, effect, render, navigate, animate);
                     }
 
                     log::debug!("receive ts ended");
                 });
 
-                animate_cb(Some(sx));
+                animate(Some(sx));
             }
-            AnimateOperation::Stop => animate_cb(None),
+            AnimateOperation::Stop => animate(None),
         },
     };
 }

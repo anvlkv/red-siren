@@ -10,33 +10,32 @@ use super::{
 #[derive(Default)]
 pub struct Layout {
     pub buttons: Vec<Entity>,
-    pub strings: Vec<Entity>,
+    pub left_strings: Vec<Entity>,
+    pub right_strings: Vec<Entity>,
     pub tracks: Vec<Entity>,
 }
 
 impl Layout {
     pub fn layout(config: &Config, world: &mut World) -> Result<Self> {
-        let mut strings = vec![];
+        let mut left_strings = vec![];
+        let mut right_strings = vec![];
         let mut tracks = vec![];
         let mut buttons = vec![];
 
-        for i in [true, false] {
-            let string_obj = Self::make_layout_string(config, i)?;
-            let string = world.spawn((string_obj,));
-            strings.push(string);
-        }
+        // strings_config
+        let is_stereo = config.groups > 1;
 
         // buttons config
-        let button_space_side = (config.breadth - config.button_size) / 2.0;
-        let button_space_main = (config.length / (config.groups * config.buttons_group) as f64
+        let button_space_side = (config.safe_breadth - config.button_size) / 2.0;
+        let button_space_main = (config.active_length / (config.groups * config.buttons_group) as f64
             - config.button_size)
             / 2.0;
-        let side = config.breadth + button_space_side;
+        let side = config.safe_breadth + button_space_side;
         let side_breadth = side + config.button_size;
 
         // track config
         let button_track_margin = config.button_size * config.button_track_margin;
-        let track_length = config.breadth * 2.0 + button_track_margin + config.button_size;
+        let track_length = config.safe_breadth * 2.0 + button_track_margin + config.button_size;
 
         for gx in 0..config.groups {
             let left_hand = (gx + 1) % 2 == 0;
@@ -47,7 +46,7 @@ impl Layout {
                     Self::make_layout_button(config, idx, button_space_main, side, side_breadth)?;
 
                 let button_rect = button_obj.shape.containing_rect();
-                
+
                 let button = world.spawn((button_obj,));
                 buttons.push(button);
 
@@ -62,12 +61,33 @@ impl Layout {
                 let track = world.spawn((track_obj,));
 
                 tracks.push(track);
+
+                let string_obj = Self::make_layout_string(config, left_hand)?;
+                let string = world.spawn((string_obj,));
+
+                if left_hand {
+                    left_strings.push(string)
+                } else {
+                    right_strings.push(string)
+                }
+
+                if !is_stereo {
+                    let string_obj = Self::make_layout_string(config, !left_hand)?;
+                    let string = world.spawn((string_obj,));
+
+                    if !left_hand {
+                        left_strings.push(string)
+                    } else {
+                        right_strings.push(string)
+                    }
+                }
             }
         }
 
         Ok(Self {
             buttons,
-            strings,
+            left_strings,
+            right_strings,
             tracks,
         })
     }
@@ -150,23 +170,27 @@ impl Layout {
         Ok(track_obj)
     }
 
-    fn make_layout_string(config: &Config, inbound: bool) -> Result<Object> {
-        let c = if inbound { 1.0 } else { 2.0 };
+    fn make_layout_string(config: &Config, left_hand: bool) -> Result<Object> {
+        let c = if left_hand { 1.0 } else { 2.0 };
 
-        let points = if config.portrait {
-            let x = (config.width - config.breadth) / c;
+        let path = if config.portrait {
+            let x = (config.width - config.safe_breadth) / c;
             let y_end =
-                config.length + config.safe_area[3] + config.safe_area[1] + config.whitespace * 2.0;
+                config.active_length + config.safe_area[3] + config.safe_area[1] + config.whitespace * 2.0;
             vec![Point2D::new(x, 0_f64), Point2D::new(x, y_end)]
         } else {
-            let y = (config.height - config.breadth) / c;
+            let y = (config.height - config.safe_breadth) / c;
             let x_end =
-                config.length + config.safe_area[2] + config.safe_area[0] + config.whitespace * 2.0;
+                config.active_length + config.safe_area[2] + config.safe_area[0] + config.whitespace * 2.0;
             vec![Point2D::new(0_f64, y), Point2D::new(x_end, y)]
         };
 
         let string_obj = ObjectBuilder::default()
-            .shape(Shapes::Path(points))
+            .shape(Shapes::Path {
+                p0: path.first().cloned().unwrap(),
+                p1: path.last().cloned().unwrap(),
+                path,
+            })
             .build()?;
 
         Ok(string_obj)

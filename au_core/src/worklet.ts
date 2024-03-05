@@ -51,15 +51,25 @@ class RedSirenProcessor extends AudioWorkletProcessor {
         }
       }
 
-      this.port.postMessage({
-        type: "snoops_data",
-        value: worklet.get_snoops_data(),
-      });
+      const snoops_data = worklet.get_snoops_data();
+      if (snoops_data){
+        this.port.postMessage({
+          type: "snoops_data",
+          value: snoops_data,
+        });
+        
+        console.log("send snoops")
+      }
 
-      this.port.postMessage({
-        type: "fft_data",
-        value: worklet.get_fft_data(),
-      });
+      const fft_data = worklet.get_snoops_data();
+      if (fft_data) {
+        this.port.postMessage({
+          type: "fft_data",
+          value: fft_data,
+        });
+
+        console.log("send fft")
+      }
     }
 
     return true;

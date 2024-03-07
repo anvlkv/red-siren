@@ -27,6 +27,8 @@ impl AnimationClock {
 
     #[cfg(not(feature = "ssr"))]
     pub fn new() -> Rc<Self> {
+        use std::sync::TryLockError;
+
         use wasm_bindgen::{closure::Closure, JsCast};
         use web_sys::window;
 
@@ -62,21 +64,28 @@ impl AnimationClock {
             let schedule_fn = Arc::clone(&schedule_fn);
             let senders = Arc::clone(&senders);
 
-            move |ts: f64| {
-                let mut senders = senders.lock().unwrap();
-                match senders.iter_mut().try_for_each(|sender: &mut Sender<f64>| {
-                    sender.try_send(ts)
-                }) {
-                  Ok(_) => {
+            move |ts: f64| match senders.try_lock() {
+                Ok(mut senders) => match senders
+                    .iter_mut()
+                    .try_for_each(|sender: &mut Sender<f64>| sender.try_send(ts))
+                {
+                    Ok(_) => {
+                        let schedule = schedule_fn.lock().unwrap();
+                        schedule();
+                        log::trace!("animation tick");
+                    }
+                    Err(e) => {
+                        log::error!("send timer tick error: {e:?}");
+                    }
+                },
+                Err(TryLockError::WouldBlock) => {
                     let schedule = schedule_fn.lock().unwrap();
                     schedule();
-                    log::trace!("animation tick");
-                  }
-                  Err(e) => {
-                    log::error!("send timer tick error: {e:?}");
-                  }
+                    log::trace!("skip animation tick");
                 }
-
+                Err(TryLockError::Poisoned(e)) => {
+                    log::error!("senders poisoned: {e:?}");
+                }
             }
         };
 

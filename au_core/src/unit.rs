@@ -4,14 +4,18 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{Node, System, MAX_F, MIN_F};
-use anyhow::{anyhow, Error, Result};
+#[allow(unused)]
+use crate::{
+    fft_cons, fft_prod, snoops_cons, snoops_prod, FFTCons, FFTProd, Node, SnoopsCons, SnoopsProd,
+    System, MAX_F, MIN_F,
+};
+use anyhow::{anyhow, Result};
 use fundsp::hacker32::*;
 #[allow(unused)]
 use futures::channel::mpsc::UnboundedSender;
 use hecs::Entity;
 #[allow(unused)]
-use ringbuf::{HeapConsumer, HeapProducer, HeapRb, StaticConsumer, StaticProducer, StaticRb};
+use ringbuf::{HeapConsumer, HeapProducer, HeapRb};
 use serde::{Deserialize, Serialize};
 use spectrum_analyzer::{
     samples_fft_to_spectrum, scaling::divide_by_N_sqrt, windows::hann_window, FrequencyLimit,
@@ -40,8 +44,11 @@ cfg_if::cfg_if! { if #[cfg(feature="browser")] {
 const RENDER_BURSTS: usize = 5;
 pub const FFT_RES: usize = 1024;
 
-pub const FFT_BUF_SIZE: usize = 4;
-pub const SNOOPS_BUF_SIZE: usize = 8;
+pub const FFT_BUF_SIZE: usize = 2;
+pub const SNOOPS_BUF_SIZE: usize = 2;
+
+pub type FFTData = Vec<(f32, f32)>;
+pub type SnoopsData = Vec<(Entity, Vec<f32>)>;
 
 #[derive(Clone)]
 pub struct Unit {
@@ -50,24 +57,26 @@ pub struct Unit {
     pub fft_res: usize,
     pub buffer_size: u32,
     pub system: Arc<Mutex<System>>,
+    pub state: Arc<Mutex<UnitState>>,
     #[cfg(not(feature = "worklet"))]
     resolve_sender: UnboundedSender<UnitResolve>,
     input_analyzer_enabled: Arc<Mutex<bool>>,
     #[cfg(feature = "worklet")]
-    consumers: Arc<
-        Mutex<
-            Option<(
-                StaticConsumer<Vec<(f32, f32)>, FFT_BUF_SIZE>,
-                StaticConsumer<Vec<(Entity, Vec<f32>)>, SNOOPS_BUF_SIZE>,
-            )>,
-        >,
-    >,
+    consumers: Arc<Mutex<Option<(&'static mut FFTCons, &'static mut SnoopsCons)>>>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
 pub enum UnitResolve {
     RunUnit(bool),
     UpdateEV(bool),
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Copy, Default)]
+pub enum UnitState {
+    #[default]
+    None,
+    Playing,
+    Paused,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -112,8 +121,10 @@ impl Unit {
 
         let nodes = sys.nodes.clone();
         let system = Arc::new(Mutex::new(sys));
+        let state = Arc::new(Mutex::new(UnitState::None));
 
         Self {
+            state,
             fft_res,
             system,
             nodes,
@@ -133,21 +144,19 @@ impl Unit {
                 match ev {
                     UnitEV::Resume => {
                         CTX.with(|mtx| {
-                            if let Ok(mtx) = mtx.lock() {
-                                if let Some(ctx) = mtx.as_ref() {
-                                    _ = ctx.resume().expect("play ctx");
-                                }
-                            }
+                            let mtx = mtx.lock().unwrap();
+                            let ctx = mtx.as_ref().unwrap();
+                            _ = ctx.resume().expect("play ctx");
                         });
+                        self.state.lock().unwrap().clone_from(&UnitState::Playing);
                     }
                     UnitEV::Suspend => {
                         CTX.with(|mtx| {
-                            if let Ok(mtx) = mtx.lock() {
-                                if let Some(ctx) = mtx.as_ref() {
-                                    _ = ctx.suspend().expect("play ctx");
-                                }
-                            }
+                            let mtx = mtx.lock().unwrap();
+                            let ctx = mtx.as_ref().unwrap();
+                            _ = ctx.suspend().expect("play ctx");
                         });
+                        self.state.lock().unwrap().clone_from(&UnitState::Paused);
                     }
                     ev => {
                         use js_sys::{Object, Reflect, Uint8Array};
@@ -217,19 +226,16 @@ impl Unit {
                         cfg_if::cfg_if! {
                             if #[cfg(not(feature = "browser"))] {
                                 IN_STREAM.with(|mtx| {
-                                    if let Ok(mtx) = mtx.lock() {
-                                        if let Some(stream) = mtx.as_ref() {
-                                            cpal::traits::StreamTrait::pause(stream).expect("pause input");
-                                        }
-                                    }
+                                    let mtx = mtx.lock().unwrap();
+                                    let stream = mtx.as_ref().unwrap();
+                                    cpal::traits::StreamTrait::pause(stream).expect("pause input");
                                 });
                                 OUT_STREAM.with(|mtx| {
-                                    if let Ok(mtx) = mtx.lock() {
-                                        if let Some(stream) = mtx.as_ref() {
-                                            cpal::traits::StreamTrait::pause(stream).expect("pause output");
-                                        }
-                                    }
+                                    let mtx = mtx.lock().unwrap();
+                                    let stream = mtx.as_ref().unwrap();
+                                    cpal::traits::StreamTrait::pause(stream).expect("pause output");
                                 });
+                                self.state.lock().unwrap().clone_from(&UnitState::Paused);
                             }
                         }
                     }
@@ -237,19 +243,16 @@ impl Unit {
                         cfg_if::cfg_if! {
                             if #[cfg(not(feature = "browser"))] {
                                 IN_STREAM.with(|mtx| {
-                                    if let Ok(mtx) = mtx.lock() {
-                                        if let Some(stream) = mtx.as_ref() {
-                                            cpal::traits::StreamTrait::play(stream).expect("play input");
-                                        }
-                                    }
+                                    let mtx = mtx.lock().unwrap();
+                                    let stream = mtx.as_ref().unwrap();
+                                    cpal::traits::StreamTrait::play(stream).expect("play input");
                                 });
                                 OUT_STREAM.with(|mtx| {
-                                    if let Ok(mtx) = mtx.lock() {
-                                        if let Some(stream) = mtx.as_ref() {
-                                            cpal::traits::StreamTrait::play(stream).expect("play output");
-                                        }
-                                    }
+                                    let mtx = mtx.lock().unwrap();
+                                    let stream = mtx.as_ref().unwrap();
+                                    cpal::traits::StreamTrait::play(stream).expect("play output");
                                 });
+                                self.state.lock().unwrap().clone_from(&UnitState::Playing);
                             }
                         }
                     }
@@ -270,16 +273,6 @@ impl Unit {
 
     pub fn run(
         &mut self,
-        #[cfg(not(feature = "worklet"))] fft_prod: StaticProducer<
-            'static,
-            Vec<(f32, f32)>,
-            FFT_BUF_SIZE,
-        >,
-        #[cfg(not(feature = "worklet"))] snoops_prod: StaticProducer<
-            'static,
-            Vec<(Entity, Vec<f32>)>,
-            SNOOPS_BUF_SIZE,
-        >,
         #[cfg(feature = "worklet")] callback: &Mutex<Box<dyn FnMut(&[f32]) -> [[f32; 128]; 2]>>,
     ) -> Result<()> {
         let (input_be, render_be) = {
@@ -294,13 +287,16 @@ impl Unit {
             cfg_if::cfg_if! { if #[cfg(feature = "worklet")] {
                 let mut callback = callback.lock().unwrap();
                 *callback = self.make_callback(input_be, render_be);
+                self.state.lock().unwrap().clone_from(&UnitState::Playing);
             } else {
                 let unit = self.clone();
                 let resolve = self.resolve_sender.clone();
+                log::info!("run context");
                 wasm_bindgen_futures::spawn_local(async move {
-                    match unit.run_audio_ctx(fft_prod, snoops_prod).await {
+                    match unit.run_audio_ctx().await {
                         Ok(_) => {
                             resolve.unbounded_send(UnitResolve::RunUnit(true)).unwrap();
+                            unit.state.lock().unwrap().clone_from(&UnitState::Playing);
                         }
                         Err(e) => {
                             log::error!("run unit error: {e:?}");
@@ -311,9 +307,13 @@ impl Unit {
             }}
         } else {
             log::info!("run cpal");
-            match self.run_cpal_streams(input_be, render_be, fft_prod, snoops_prod) {
-                Ok(_) => self.resolve_sender.unbounded_send(UnitResolve::RunUnit(true))?,
-                Err(e) = > {
+            match self.run_cpal_streams(input_be, render_be) {
+                Ok(_) => {
+                    self.resolve_sender.unbounded_send(UnitResolve::RunUnit(true))?;
+
+                    self.state.lock().unwrap().clone_from(&UnitState::Playing);
+                },
+                Err(e) => {
                     log::error!("run unit error: {e:?}");
                     self.resolve_sender.unbounded_send(UnitResolve::RunUnit(false))?;
                 }
@@ -324,15 +324,13 @@ impl Unit {
     }
 
     #[cfg(all(feature = "browser", not(feature = "worklet")))]
-    async fn run_audio_ctx(
-        &self,
-        mut fft_prod: StaticProducer<'static, Vec<(f32, f32)>, FFT_BUF_SIZE>,
-        mut snoops_prod: StaticProducer<'static, Vec<(Entity, Vec<f32>)>, SNOOPS_BUF_SIZE>,
-    ) -> Result<()> {
+    async fn run_audio_ctx(&self) -> Result<()> {
         use js_sys::{Function, Object, Promise, Reflect, Uint8Array};
         use wasm_bindgen::{closure::Closure, JsCast, JsValue};
         use wasm_bindgen_futures::JsFuture;
         use web_sys::*;
+
+        use crate::{fft_prod, snoops_prod};
 
         let ctx = AudioContext::new().map_err(map_js_err)?;
         let window = window().unwrap();
@@ -371,6 +369,8 @@ impl Unit {
 
                 if ev_type.as_str() == "wasm_ready" {
                     resolve.call0(&JsValue::NULL);
+
+                    log::info!("wasm loaded");
                 }
             }) as Box<dyn FnMut(JsValue)>);
 
@@ -388,6 +388,8 @@ impl Unit {
         let ready_promise = Promise::new(&mut send_bytes);
         JsFuture::from(ready_promise).await.map_err(map_js_err)?;
 
+        log::info!("setup audio node and ctx");
+
         let port = node.port().map_err(map_js_err)?;
         let on_message = Closure::wrap(Box::new(move |ev: JsValue| {
             let ev = MessageEvent::from(ev);
@@ -402,11 +404,13 @@ impl Unit {
 
             log::trace!("unit received ev: {}", ev_type.as_str());
 
+            let fft_prod = fft_prod();
+            let snoops_prod = snoops_prod();
+
             match (ev_type.as_str(), value) {
                 ("snoops_data", Some(arr)) => {
                     let snoops_data =
-                        bincode::deserialize::<Vec<(Entity, Vec<f32>)>>(&arr.to_vec())
-                            .expect("deserialize");
+                        bincode::deserialize::<SnoopsData>(&arr.to_vec()).expect("deserialize");
 
                     if let Err(_) = snoops_prod.push(snoops_data) {
                         log::warn!("snoops sender full");
@@ -415,8 +419,8 @@ impl Unit {
                     }
                 }
                 ("fft_data", Some(arr)) => {
-                    let fft_data = bincode::deserialize::<Vec<(f32, f32)>>(&arr.to_vec())
-                        .expect("deserialize");
+                    let fft_data =
+                        bincode::deserialize::<FFTData>(&arr.to_vec()).expect("deserialize");
 
                     if let Err(_) = fft_prod.push(fft_data) {
                         log::warn!("fft sender full");
@@ -482,24 +486,29 @@ impl Unit {
         let an_rb = HeapRb::<f32>::new(self.fft_res as usize * RENDER_BURSTS);
         let (mut produce_analyze, mut consume_analyze) = an_rb.split();
         let (mut produce_render, mut consume_render) = rn_rb.split();
-        let (fft_prod, fft_cons) = channel();
-        let (snoops_prod, snoop_cons) = channel();
+        let fft_prod = fft_prod();
+        let fft_cons = fft_cons();
+        let snoops_prod = snoops_prod();
+        let snoops_cons = snoops_cons();
 
         _ = self
             .consumers
             .lock()
             .unwrap()
-            .insert((fft_cons, snoop_cons));
+            .insert((fft_cons, snoops_cons));
 
         let mut exchange_buffer = [[0_f32; 128]; 2];
+
+        log::info!("creating callback");
+
         Box::new(move |data: &[f32]| {
             unit.store_input(data, &mut produce_analyze, &mut input_be)
                 .unwrap();
-            unit.process_input(&mut consume_analyze, &fft_prod).unwrap();
+            unit.process_input(&mut consume_analyze, fft_prod).unwrap();
 
             unit.produce_output(&mut produce_render, &mut render_be)
                 .unwrap();
-            unit.send_snoops_reading(&snoops_prod).unwrap();
+            unit.send_snoops_reading(snoops_prod).unwrap();
 
             let (ch1, ch2): (Vec<f32>, Vec<f32>) = consume_render
                 .pop_iter()
@@ -516,7 +525,7 @@ impl Unit {
     fn process_input(
         &self,
         consume_analyze: &mut HeapConsumer<f32>,
-        fft_prod: &mut StaticProducer<Vec<(f32, f32)>, FFT_BUF_SIZE>,
+        fft_prod: &mut FFTProd,
     ) -> Result<()> {
         if consume_analyze.len() >= self.fft_res {
             if let Ok(nodes) = self.nodes.lock() {
@@ -575,23 +584,20 @@ impl Unit {
     }
 
     #[cfg(feature = "worklet")]
-    pub fn next_fft_reading(&self) -> Option<Vec<(f32, f32)>> {
+    pub fn next_fft_reading(&self) -> Option<FFTData> {
         let mut recv = self.consumers.lock().unwrap();
         let (recv, _) = recv.as_mut().unwrap();
-        recv.try_recv().ok()
+        recv.pop()
     }
 
     #[cfg(feature = "worklet")]
-    pub fn next_snoops_reading(&self) -> Option<Vec<(Entity, Vec<f32>)>> {
+    pub fn next_snoops_reading(&self) -> Option<SnoopsData> {
         let mut recv = self.consumers.lock().unwrap();
         let (_, recv) = recv.as_mut().unwrap();
-        recv.try_recv().ok()
+        recv.pop()
     }
 
-    fn send_snoops_reading(
-        &self,
-        snoops_prod: &mut StaticProducer<Vec<(Entity, Vec<f32>)>, SNOOPS_BUF_SIZE>,
-    ) -> Result<()> {
+    fn send_snoops_reading(&self, snoops_prod: &mut SnoopsProd) -> Result<()> {
         if let Ok(system) = self.system.try_lock() {
             if let Ok(mut snoops) = system.snoops.try_lock() {
                 let snoops = snoops
@@ -631,8 +637,6 @@ impl Unit {
         &mut self,
         mut input_be: BigBlockAdapter32,
         mut render_be: BlockRateAdapter32,
-        fft_prod: StaticProducer<Vec<(f32, f32)>>,
-        snoops_prod: StaticProducer<Vec<(Entity, Vec<f32>)>>,
     ) -> Result<()> {
         let host = cpal::default_host();
         let input = cpal::traits::HostTrait::default_input_device(&host);
@@ -663,11 +667,13 @@ impl Unit {
         let (mut produce_analyze, mut consume_analyze) = an_rb.split();
         let (mut produce_render, mut consume_render) = rn_rb.split();
 
+        let fft_prod = fft_prod();
+        let snoops_prod = snoops_prod();
         let unit = self.clone();
         let mut process_fn = move || -> Result<()> {
-            unit.process_input(&mut consume_analyze, &fft_prod)?;
+            unit.process_input(&mut consume_analyze, fft_prod)?;
             unit.produce_output(&mut produce_render, &mut render_be)?;
-            unit.send_snoops_reading(&snoops_prod)?;
+            unit.send_snoops_reading(snoops_prod)?;
             Ok(())
         };
 
@@ -770,7 +776,7 @@ impl Unit {
 
 #[cfg(feature = "browser")]
 #[allow(dead_code)]
-fn map_js_err(err: wasm_bindgen::JsValue) -> Error {
+fn map_js_err(err: wasm_bindgen::JsValue) -> anyhow::Error {
     let description = format!("{:?}", err);
     anyhow!("js err: {description}")
 }
@@ -779,7 +785,7 @@ pub fn process_input_data(
     samples: &[f32],
     nodes: &HashMap<Entity, Node>,
     sample_rate: u32,
-) -> Vec<(f32, f32)> {
+) -> FFTData {
     let hann_window = hann_window(samples);
 
     let spectrum_hann_window = samples_fft_to_spectrum(

@@ -17,7 +17,7 @@ use super::{layout::Layout, Paint};
 pub struct Objects(pub Vec<((Entity, Entity), (Object, Paint))>);
 
 impl Objects {
-    fn make_paint(
+    pub fn make_paint(
         world: &mut World,
         e: &Entity,
         dark: bool,
@@ -38,41 +38,6 @@ impl Objects {
         self.update_from_world(&world)?;
 
         Ok(())
-    }
-
-    pub fn new(world: &mut World, layout: &Layout, dark: bool) -> Self {
-        let mut inner = vec![];
-
-        inner.extend(layout.left_strings.iter().enumerate().map(|(i, e)| {
-            Self::make_paint(
-                world,
-                e,
-                dark,
-                ObjectStyle::StringLine(1),
-            )
-        }));
-        inner.extend(layout.right_strings.iter().enumerate().map(|(i, e)| {
-            Self::make_paint(
-                world,
-                e,
-                dark,
-                ObjectStyle::StringLine(1),
-            )
-        }));
-        inner.extend(
-            layout
-                .tracks
-                .iter()
-                .map(|e| Self::make_paint(world, e, dark, ObjectStyle::InstrumentTrack)),
-        );
-        inner.extend(
-            layout
-                .buttons
-                .iter()
-                .map(|e| Self::make_paint(world, e, dark, ObjectStyle::InstrumentButton)),
-        );
-
-        Self(inner)
     }
 
     pub fn painted_objects(&self) -> Vec<(Object, Paint)> {

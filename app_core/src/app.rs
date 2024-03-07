@@ -1,19 +1,17 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    borrow::Borrow,
+    sync::{Arc, Mutex},
+};
 
-use au_core::{Unit, UnitEV, UnitResolve, FFT_BUF_SIZE, SNOOPS_BUF_SIZE};
+pub use au_core::{FFTData, SnoopsData, UnitState};
+use au_core::{fft_cons, snoops_cons, FFTCons, SnoopsCons, Unit, UnitEV, UnitResolve};
 pub use crux_core::App;
 use crux_core::{render::Render, Capability};
 use crux_macros::Effect;
 use futures::channel::mpsc::unbounded;
-use hecs::Entity;
-use once_mut::once_mut;
-use ringbuf::StaticRb;
 use serde::{Deserialize, Serialize};
 
-once_mut! {
-    static mut FFT_RB: StaticRb::<Vec<(f32, f32)>, FFT_BUF_SIZE> = StaticRb::default();
-    static mut SNOOPS_RB: StaticRb::<Vec<(Entity, Vec<f32>)>, SNOOPS_BUF_SIZE> = StaticRb::default();
-}
+
 
 mod animate;
 mod config;
@@ -48,6 +46,7 @@ pub enum Activity {
 pub struct ViewModel {
     pub activity: Activity,
     pub visual: VisualVM,
+    pub unit_state: UnitState,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -55,13 +54,13 @@ pub enum Event {
     InitialNavigation(Activity),
     Navigation(Activity),
     Visual(VisualEV),
-
-    // PlayOpInstall(bool),
     PlayOpResolve(UnitResolve),
-    PlayOpFftData(Vec<(f32, f32)>),
-    PlayOpSnoopData(Vec<(Entity, Vec<f32>)>),
+    PlayOpFftData(FFTData),
+    PlayOpSnoopData(SnoopsData),
     StartAudioUnit,
     Pause,
+    Resume,
+    AnimationStopped(),
 }
 
 impl Eq for Event {}
@@ -114,24 +113,36 @@ impl App for RedSiren {
                 let mut unit = self.audio_unit.lock().unwrap();
                 let unit = unit.as_mut().unwrap();
 
-                let (fft_prod, fft_cons) = FFT_RB.take().unwrap().split_ref();
-                let (snoops_prod, snoops_cons) = SNOOPS_RB.take().unwrap().split_ref();
-
                 caps.play.run_unit(Event::PlayOpResolve);
 
-                unit.run(fft_prod, snoops_prod).expect("run unit");
+                unit.run().expect("run unit");
 
                 caps.animate
-                    .animate_reception(Event::PlayOpSnoopData, snoops_cons, "snoops");
+                    .animate_reception(Event::PlayOpSnoopData, snoops_cons(), "snoops");
                 caps.animate
-                    .animate_reception(Event::PlayOpFftData, fft_cons, "fft");
+                    .animate_reception(Event::PlayOpFftData, fft_cons(), "fft");
 
                 log::info!("started unit and animate reception");
             }
             Event::Pause => {
+                caps.animate.stop(Event::AnimationStopped);
+            }
+            Event::AnimationStopped() => {
                 let mut unit = self.audio_unit.lock().unwrap();
                 let unit = unit.as_mut().unwrap();
                 unit.update(UnitEV::Suspend);
+                self.visual
+                    .update(VisualEV::ClearSnoops, model, &caps.into());
+            }
+            Event::Resume => {
+                let mut unit = self.audio_unit.lock().unwrap();
+                let unit = unit.as_mut().unwrap();
+                unit.update(UnitEV::Resume);
+                
+                caps.animate
+                    .animate_reception(Event::PlayOpSnoopData, snoops_cons(), "snoops");
+                caps.animate
+                    .animate_reception(Event::PlayOpFftData, fft_cons(), "fft");
 
                 caps.render.render();
             }
@@ -190,13 +201,13 @@ impl App for RedSiren {
                             let mut world = model.world.lock().unwrap();
                             world.clear();
 
-                            model.layout = Layout::layout(&config, &mut world).unwrap();
+                            model.layout = Layout::new(&config, &mut world).unwrap();
 
                             model.instrument =
                                 Instrument::new(&config, &mut world, &model.layout).unwrap();
 
                             model.objects =
-                                Objects::new(&mut world, &model.layout, model.dark_schema)
+                                model.layout.into_objects(&mut world, model.dark_schema);
                         }
 
                         self.visual
@@ -211,9 +222,18 @@ impl App for RedSiren {
     }
 
     fn view(&self, model: &Self::Model) -> ViewModel {
+        let unit_state = self
+            .audio_unit
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|u| *u.state.lock().unwrap())
+            .unwrap_or_default();
+
         ViewModel {
             activity: model.activity,
             visual: self.visual.view(&model),
+            unit_state,
         }
     }
 }

@@ -1,11 +1,11 @@
-use crate::{Objects, Paint};
+use crate::Paint;
 
 use super::{config::Config, objects::Object, Animate};
+use au_core::SnoopsData;
 use crux_core::render::Render;
 pub use crux_core::App;
 use crux_macros::Effect;
 use euclid::default::{Box2D, Point2D, SideOffsets2D};
-use hecs::Entity;
 use keyframe::{functions::EaseOut, keyframes, AnimationSequence};
 use serde::{Deserialize, Serialize};
 
@@ -26,11 +26,13 @@ pub enum VisualEV {
     SafeAreaResize(f64, f64, f64, f64),
     AnimateEntrance,
     AnimateEntranceTS(f64),
+    AnimationEnded(),
     SetReducedMotion(bool),
     SetDarkMode(bool),
     SetDensity(f64),
     LayoutUpdate,
-    SnoopsData(Vec<(Entity, Vec<f32>)>),
+    SnoopsData(SnoopsData),
+    ClearSnoops,
 }
 
 #[derive(Default)]
@@ -90,8 +92,12 @@ impl App for Visual {
                 caps.render.render();
 
                 if seq.finished() {
-                    caps.animate.stop();
+                    caps.animate.stop(VisualEV::AnimationEnded);
                 }
+            }
+            VisualEV::AnimationEnded() => {
+                model.running_animation = None;
+                model.view_objects_animation = None;
             }
             VisualEV::SnoopsData(data) => {
                 let config = model.get_config().unwrap();
@@ -110,6 +116,26 @@ impl App for Visual {
 
                     let mut obj = world.get::<&mut Object>(*string).unwrap();
                     Self::draw_snoops_data_on_path(values, &mut obj, config);
+                }
+
+                model.objects.update_from_world(&world).unwrap();
+
+                caps.render.render();
+            }
+            VisualEV::ClearSnoops => {
+                let world = model.world.lock().unwrap();
+                let clear_mock = vec![0.0, 0.0];
+                let config = model.get_config().unwrap();
+
+                for mut obj in model
+                    .layout
+                    .left_strings
+                    .iter()
+                    .chain(model.layout.right_strings.iter())
+                    .map(|string| world.get::<&mut Object>(*string).ok())
+                    .flatten()
+                {
+                    Self::draw_snoops_data_on_path(clear_mock.clone(), &mut obj, config);
                 }
 
                 model.objects.update_from_world(&world).unwrap();
@@ -166,7 +192,11 @@ impl Visual {
 
         let base = if config.portrait { p0.x } else { p0.y };
         let range = config.safe_breadth / 4.15;
-        let step = if config.portrait { config.height } else { config.width } / (data.len() - 1) as f64;
+        let step = if config.portrait {
+            config.height
+        } else {
+            config.width
+        } / (data.len() - 1) as f64;
 
         *path = data
             .iter()

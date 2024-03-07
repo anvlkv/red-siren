@@ -2,6 +2,8 @@ use anyhow::Result;
 use euclid::default::{Box2D, Point2D, SideOffsets2D, Size2D};
 use hecs::{Entity, World};
 
+use crate::{ObjectStyle, Objects};
+
 use super::{
     config::Config,
     objects::{Object, ObjectBuilder, Shapes},
@@ -16,7 +18,7 @@ pub struct Layout {
 }
 
 impl Layout {
-    pub fn layout(config: &Config, world: &mut World) -> Result<Self> {
+    pub fn new(config: &Config, world: &mut World) -> Result<Self> {
         let mut left_strings = vec![];
         let mut right_strings = vec![];
         let mut tracks = vec![];
@@ -27,7 +29,8 @@ impl Layout {
 
         // buttons config
         let button_space_side = (config.safe_breadth - config.button_size) / 2.0;
-        let button_space_main = (config.active_length / (config.groups * config.buttons_group) as f64
+        let button_space_main = (config.active_length
+            / (config.groups * config.buttons_group) as f64
             - config.button_size)
             / 2.0;
         let side = config.safe_breadth + button_space_side;
@@ -90,6 +93,33 @@ impl Layout {
             right_strings,
             tracks,
         })
+    }
+
+    pub fn into_objects(&self, world: &mut World, dark: bool) -> Objects {
+        let mut inner = vec![];
+
+        inner.extend(
+            self.left_strings
+                .iter()
+                .map(|e| Objects::make_paint(world, e, dark, ObjectStyle::StringLine(1))),
+        );
+        inner.extend(
+            self.right_strings
+                .iter()
+                .map(|e| Objects::make_paint(world, e, dark, ObjectStyle::StringLine(1))),
+        );
+        inner.extend(
+            self.tracks
+                .iter()
+                .map(|e| Objects::make_paint(world, e, dark, ObjectStyle::InstrumentTrack)),
+        );
+        inner.extend(
+            self.buttons
+                .iter()
+                .map(|e| Objects::make_paint(world, e, dark, ObjectStyle::InstrumentButton)),
+        );
+
+        Objects(inner)
     }
 
     fn make_layout_button(
@@ -175,13 +205,17 @@ impl Layout {
 
         let path = if config.portrait {
             let x = (config.width - config.safe_breadth) / c;
-            let y_end =
-                config.active_length + config.safe_area[3] + config.safe_area[1] + config.whitespace * 2.0;
+            let y_end = config.active_length
+                + config.safe_area[3]
+                + config.safe_area[1]
+                + config.whitespace * 2.0;
             vec![Point2D::new(x, 0_f64), Point2D::new(x, y_end)]
         } else {
             let y = (config.height - config.safe_breadth) / c;
-            let x_end =
-                config.active_length + config.safe_area[2] + config.safe_area[0] + config.whitespace * 2.0;
+            let x_end = config.active_length
+                + config.safe_area[2]
+                + config.safe_area[0]
+                + config.whitespace * 2.0;
             vec![Point2D::new(0_f64, y), Point2D::new(x_end, y)]
         };
 

@@ -1,17 +1,15 @@
 use std::collections::HashSet;
 
-use au_core::{Node, Unit, UnitEV, FFT_BUF_SIZE, MAX_F, MIN_F, SNOOPS_BUF_SIZE};
+use au_core::{
+    fft_cons, snoops_cons, FFTCons, FFTData, Node, SnoopsCons, SnoopsData, Unit, UnitEV,
+    FFT_BUF_SIZE, MAX_F, MIN_F, SNOOPS_BUF_SIZE,
+};
 use eframe::egui::{self, *};
 use fundsp::hacker32::*;
 use futures::channel::mpsc::unbounded;
 use hecs::{Bundle, Entity, World};
 use logging_timer::timer;
-use ringbuf::{StaticConsumer, StaticRb};
 
-once_mut::once_mut! {
-    static mut FFT_RB: ringbuf::StaticRb::<Vec<(f32, f32)>, FFT_BUF_SIZE> = StaticRb::default();
-    static mut SNOOPS_RB: ringbuf::StaticRb::<Vec<(Entity, Vec<f32>)>, SNOOPS_BUF_SIZE> = StaticRb::default();
-}
 struct State {
     unit: Unit,
     input: bool,
@@ -19,10 +17,10 @@ struct State {
     nodes: Vec<(Entity, Entity)>,
     pressed: HashSet<Entity>,
     world: World,
-    last_fft: Vec<(f32, f32)>,
-    last_snoops: Vec<(Entity, Vec<f32>)>,
-    fft_cons: StaticConsumer<'static, Vec<(f32, f32)>, FFT_BUF_SIZE>,
-    snoops_cons: StaticConsumer<'static, Vec<(Entity, Vec<f32>)>, SNOOPS_BUF_SIZE>,
+    last_fft: FFTData,
+    last_snoops: SnoopsData,
+    fft_cons: &'static mut FFTCons,
+    snoops_cons: &'static mut SnoopsCons,
 }
 
 #[derive(Bundle, Clone)]
@@ -45,7 +43,8 @@ const KEYS: [Key; 10] = [
 
 fn main() {
     simple_logger::init_with_level(log::Level::Error).expect("couldn't initialize logging");
-    let (resolve_sender, _) = unbounded();
+    let (resolve_sender, resolve_receiver) = unbounded();
+    std::mem::forget(resolve_receiver);
 
     let unit = Unit::new(resolve_sender);
     run(unit).unwrap();
@@ -79,10 +78,7 @@ fn run(mut unit: Unit) -> Result<(), anyhow::Error> {
     let f0 = 85.0;
     let (nodes, config) = make_nodes(&mut world, 4, f0);
 
-    let (fft_prod, fft_cons) = FFT_RB.take().unwrap().split_ref();
-    let (snoops_prod, snoops_cons) = SNOOPS_RB.take().unwrap().split_ref();
-
-    unit.run(fft_prod, snoops_prod)?;
+    unit.run()?;
 
     unit.update(UnitEV::Configure(config));
 
@@ -91,8 +87,8 @@ fn run(mut unit: Unit) -> Result<(), anyhow::Error> {
         input: true,
         world,
         nodes,
-        fft_cons,
-        snoops_cons,
+        fft_cons: fft_cons(),
+        snoops_cons: snoops_cons(),
         f0,
         last_fft: vec![],
         last_snoops: vec![],

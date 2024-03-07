@@ -1,9 +1,8 @@
-use std::sync::mpsc::{Receiver, TryRecvError};
+use std::sync::Arc;
 
 use crux_core::capability::{CapabilityContext, Operation};
 use crux_macros::Capability;
 use futures::StreamExt;
-use ringbuf::StaticConsumer;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -66,7 +65,7 @@ where
     pub fn animate_reception<F, T, const N: usize>(
         &self,
         notify: F,
-        mut cons: StaticConsumer<'static, T, N>,
+        cons: &'static mut ringbuf::Consumer<T, Arc<ringbuf::StaticRb<T, N>>>,
         label: &str,
     ) where
         F: Fn(T) -> Ev + Send + 'static,
@@ -92,7 +91,6 @@ where
                             }
                         }
                     } else {
-                        log::warn!("unexpected response for {label}: {response:?}");
                         break;
                     }
                 }
@@ -102,14 +100,20 @@ where
         });
     }
 
-    pub fn stop(&self) {
+    pub fn stop<F>(&self, notify: F)
+    where
+        F: Fn() -> Ev + Send + 'static,
+    {
         log::debug!("stopping animation");
 
         let context = self.context.clone();
 
         self.context.spawn({
             async move {
-                _ = context.notify_shell(AnimateOperation::Stop).await;
+                _ = context.request_from_shell(AnimateOperation::Stop).await;
+                context.update_app(notify());
+
+                log::info!("animation stopped");
             }
         });
     }

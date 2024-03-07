@@ -116,7 +116,13 @@ pub fn process_effect(
 
                 animate(Some(sx));
             }
-            AnimateOperation::Stop => animate(None),
+            AnimateOperation::Stop => {
+                animate(None);
+
+                for effect in core.resolve(&mut req, AnimateOperationOutput::Done) {
+                    process_effect(&core, effect, render, navigate, animate);
+                }
+            },
         },
     };
 }

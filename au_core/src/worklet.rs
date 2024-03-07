@@ -1,9 +1,8 @@
-use hecs::Entity;
 use itertools::interleave;
 use std::sync::{Arc, Mutex};
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::{Unit, UnitEV};
+use crate::{FFTData, SnoopsData, Unit, UnitEV};
 
 lazy_static::lazy_static! {
   static ref AU_UNIT: Arc<Mutex<Option<Unit>>> = Default::default();
@@ -47,9 +46,8 @@ pub fn get_fft_data() -> Option<Vec<u8>> {
         Ok(unit) => unit
             .as_ref()
             .map(|unit| {
-                unit.next_fft_reading().map(|result| {
-                    bincode::serialize::<Vec<(f32, f32)>>(&result).expect("serialize")
-                })
+                unit.next_fft_reading()
+                    .map(|result| bincode::serialize::<FFTData>(&result).expect("serialize"))
             })
             .flatten(),
         _ => None,
@@ -62,9 +60,8 @@ pub fn get_snoops_data() -> Option<Vec<u8>> {
         Ok(unit) => unit
             .as_ref()
             .map(|unit| {
-                unit.next_snoops_reading().map(|result| {
-                    bincode::serialize::<Vec<(Entity, Vec<f32>)>>(&result).expect("serialize")
-                })
+                unit.next_snoops_reading()
+                    .map(|result| bincode::serialize::<SnoopsData>(&result).expect("serialize"))
             })
             .flatten(),
         _ => None,

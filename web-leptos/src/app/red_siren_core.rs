@@ -1,3 +1,4 @@
+use app_core::UnitState;
 use futures::channel::mpsc::Sender;
 use leptos::*;
 use leptos_router::{use_location, Location};
@@ -111,22 +112,17 @@ pub fn RedSirenCore() -> impl IntoView {
     });
 
     // draft
-    let (playing, set_playing) = create_signal(false);
-    let on_click = move |_| {
-        if playing() {
-            set_event(Some(app_core::Event::Pause));
-            set_playing(false);
-        }
-        else {
-            set_event(Some(app_core::Event::StartAudioUnit));
-            set_playing(true);
-        }
+    let on_click = move |_| match view().unit_state {
+        UnitState::None => set_event(Some(app_core::Event::StartAudioUnit)),
+        UnitState::Playing => set_event(Some(app_core::Event::Pause)),
+        UnitState::Paused => set_event(Some(app_core::Event::Resume)),
     };
 
     view! {
         <div class="red-siren-core-view" on:click=on_click>
             <Intro opacity=Signal::derive(move|| view().visual.intro_opacity)/>
             <Area>
+                <text y="50" x="50" fill="black">{move || format!("{:?}", view().unit_state)}</text>
                 <Objects/>
             </Area>
         </div>

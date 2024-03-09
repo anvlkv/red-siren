@@ -103,9 +103,9 @@ impl App for Visual {
                 let config = model.get_config().unwrap();
                 let world = model.world.lock();
 
-                for (button, values) in data {
+                for (values, button) in data.into_iter().zip(model.layout.buttons.iter()) {
                     let (string, secondary_string) =
-                        model.instrument.buttons_to_strings.get(&button).unwrap();
+                        model.instrument.buttons_to_strings.get(button).unwrap();
 
                     if let Some(mut obj) = secondary_string
                         .map(|string| world.get::<&mut Object>(string).ok())

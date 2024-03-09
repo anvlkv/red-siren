@@ -66,6 +66,7 @@ browser = [
   "wasm-bindgen-futures",
 ]
 worklet = ["browser", "console_log", "console_error_panic_hook"]
+typegen = []
 
 
 [dev-dependencies]

@@ -1,7 +1,7 @@
-use std::hash::{Hasher, Hash};
+use std::hash::{Hash, Hasher};
 
-use ecolor::Rgba;
-use hecs::{Bundle, Entity};
+pub use ecolor::Rgba;
+use hecs::Bundle;
 use keyframe::CanTween;
 use serde::{Deserialize, Serialize};
 
@@ -56,16 +56,14 @@ impl ObjectStyle {
 
 #[derive(Bundle, Clone, Serialize, Deserialize, Hash)]
 pub struct Paint {
-    pub object: Entity,
     pub fill: Option<Rgba>,
     pub stroke: Option<Stroke>,
     pub style: ObjectStyle,
 }
 
 impl Paint {
-    pub fn new(object: Entity, dark: bool, style: ObjectStyle) -> Self {
+    pub fn new(dark: bool, style: ObjectStyle) -> Self {
         Self {
-            object,
             fill: style.fill(dark),
             stroke: style.stroke(dark),
             style,
@@ -94,16 +92,13 @@ impl CanTween for Paint {
                 time,
             ))
         };
-        assert_eq!(from.object, to.object);
         assert_eq!(from.style, to.style);
 
-        let object = from.object;
         let style = from.style;
 
         Self {
             fill,
             stroke,
-            object,
             style,
         }
     }

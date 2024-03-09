@@ -5,11 +5,11 @@ use std::{
 
 use crate::ObjectStyle;
 use anyhow::Result;
-use euclid::default::{Box2D, Point2D, Size2D};
+pub use euclid::default::{Box2D, Point2D, Size2D};
 use hecs::{Bundle, ComponentError, Entity, World};
 use keyframe::CanTween;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+pub use uuid::Uuid;
 
 use super::Paint;
 
@@ -23,7 +23,7 @@ impl Objects {
         dark: bool,
         style: ObjectStyle,
     ) -> ((Entity, Entity), (Object, Paint)) {
-        let paint_obj = Paint::new(*e, dark, style);
+        let paint_obj = Paint::new(dark, style);
         let paint = world.spawn((paint_obj.clone(),));
         let obj = world.get::<&Object>(*e).unwrap();
 
@@ -84,10 +84,20 @@ impl CanTween for Objects {
     }
 }
 
+#[derive(Clone, Copy, Serialize, Deserialize, Hash, Debug, PartialEq, Eq)]
+pub struct ObjectId(u64, u64);
+
+impl Default for ObjectId {
+    fn default() -> Self {
+        let id = Uuid::new_v4().as_u64_pair();
+        Self(id.0, id.1)
+    }
+}
+
 #[derive(Bundle, Clone, Serialize, Deserialize, Builder, Hash)]
 pub struct Object {
-    #[builder(default = "uuid::Uuid::new_v4()")]
-    pub id: Uuid,
+    #[builder(default = "ObjectId::default()")]
+    pub id: ObjectId,
     pub shape: Shapes,
     #[builder(default = "None")]
     pub a11y_label: Option<String>,

@@ -30,7 +30,7 @@ cfg_if::cfg_if! { if #[cfg(feature="browser")] {
             }
         }
     }
-    else {
+    else if #[cfg(not(feature="typegen"))] {
         thread_local! {
             static IN_STREAM: Arc<Mutex<Option<cpal::Stream>>> = Default::default();
             static OUT_STREAM: Arc<Mutex<Option<cpal::Stream>>> = Default::default();
@@ -46,7 +46,7 @@ pub const FFT_BUF_SIZE: usize = 4;
 pub const SNOOPS_BUF_SIZE: usize = 8;
 
 pub type FFTData = Vec<(f32, f32)>;
-pub type SnoopsData = Vec<(Entity, Vec<f32>)>;
+pub type SnoopsData = Vec<Vec<f32>>;
 
 #[derive(Clone)]
 pub struct Unit {
@@ -95,7 +95,7 @@ impl Unit {
     pub fn new(
         #[cfg(not(feature = "worklet"))] resolve_sender: UnboundedSender<UnitResolve>,
     ) -> Self {
-        cfg_if::cfg_if! {if #[cfg(feature = "browser")] {
+        cfg_if::cfg_if! {if #[cfg(any(feature = "browser", feature="typegen"))] {
             let (sample_rate, buffer_size) = (44100, 128);
         } else {
             let (sample_rate, buffer_size) = cpal::traits::HostTrait::default_output_device(&cpal::default_host())
@@ -223,7 +223,7 @@ impl Unit {
                     }
                     UnitEV::Suspend => {
                         cfg_if::cfg_if! {
-                            if #[cfg(not(feature = "browser"))] {
+                            if #[cfg(not(any(feature = "browser", feature="typegen")))] {
                                 IN_STREAM.with(|mtx| {
                                     let mtx = mtx.lock();
                                     let stream = mtx.as_ref().unwrap();
@@ -241,7 +241,7 @@ impl Unit {
                     }
                     UnitEV::Resume => {
                         cfg_if::cfg_if! {
-                            if #[cfg(not(feature = "browser"))] {
+                            if #[cfg(not(any(feature = "browser", feature="typegen")))] {
                                 IN_STREAM.with(|mtx| {
                                     let mtx = mtx.lock();
                                     let stream = mtx.as_ref().unwrap();
@@ -306,7 +306,7 @@ impl Unit {
                     }
                 });
             }}
-        } else {
+        } else if #[cfg(not(feature="typegen"))] {
             log::info!("run cpal");
             match self.run_cpal_streams(input_be, render_be) {
                 Ok(_) => {
@@ -595,13 +595,13 @@ impl Unit {
         let mut snoops = system.snoops.lock();
         let mut produced = vec![];
 
-        for (snoop, entity) in snoops.iter_mut() {
+        for (snoop, _) in snoops.iter_mut() {
             if let Some(buf) = snoop.get() {
                 let mut data = vec![];
                 for i in 0..buf.size() {
                     data.push(buf.at(i));
                 }
-                produced.push((*entity, data));
+                produced.push(data);
             }
         }
 
@@ -617,7 +617,7 @@ impl Unit {
         Ok(())
     }
 
-    #[cfg(not(feature = "browser"))]
+    #[cfg(not(any(feature = "browser", feature = "typegen")))]
     fn run_cpal_streams(
         &mut self,
         mut input_be: BigBlockAdapter32,

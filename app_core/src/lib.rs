@@ -1,11 +1,12 @@
 #[macro_use]
 extern crate derive_builder;
 
+use lazy_static::lazy_static;
+
 pub use crux_core::{bridge::Bridge, Core, Request};
 pub use crux_http as http;
 pub use crux_kv as key_value;
-use lazy_static::lazy_static;
-
+pub use hecs::Entity;
 pub use app::*;
 
 pub mod app;

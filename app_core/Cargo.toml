@@ -13,7 +13,7 @@ name = "bindgen"
 
 
 [features]
-typegen = ["crux_core/typegen"]
+typegen = ["crux_core/typegen", "au_core/typegen"]
 browser = ["console_log", "console_error_panic_hook", "au_core/browser"]
 
 [target.'cfg(target_os = "ios")'.dependencies]
@@ -49,7 +49,7 @@ mint = { workspace = true, features = ["serde"] }
 num-integer = "0.1.45"
 hecs = { version = "0.10.3", features = ["serde", "macros"] }
 futures = "0.3.29"
-uuid = { version = "1.7.0", features = ["v4"] }
+uuid = { version = "1.7.0", features = ["v4", "serde"] }
 cfg-if = "1.0.0"
 logging_timer = "1.1.0"
 spectrum-analyzer = "1.5.0"

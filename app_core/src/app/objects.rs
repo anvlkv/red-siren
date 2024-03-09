@@ -11,7 +11,7 @@ use keyframe::CanTween;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{layout::Layout, Paint};
+use super::Paint;
 
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct Objects(pub Vec<((Entity, Entity), (Object, Paint))>);
@@ -35,7 +35,7 @@ impl Objects {
             world.get::<&mut Paint>(*e)?.repaint(dark);
         }
 
-        self.update_from_world(&world)?;
+        self.update_from_world(world)?;
 
         Ok(())
     }
@@ -164,8 +164,8 @@ impl Shapes {
             Self::Path { p0, p1, .. } => {
                 Box2D::new(Point2D::new(p0.x, p0.y), Point2D::new(p1.x, p1.y))
             }
-            Self::Circle(rect) => rect.clone(),
-            Self::RoundedRect(rect, _) => rect.clone(),
+            Self::Circle(rect) => *rect,
+            Self::RoundedRect(rect, _) => *rect,
         }
     }
 }

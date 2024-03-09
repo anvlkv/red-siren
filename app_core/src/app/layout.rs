@@ -95,7 +95,7 @@ impl Layout {
         })
     }
 
-    pub fn into_objects(&self, world: &mut World, dark: bool) -> Objects {
+    pub fn make_objects(&self, world: &mut World, dark: bool) -> Objects {
         let mut inner = vec![];
 
         inner.extend(

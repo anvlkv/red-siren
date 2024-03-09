@@ -99,6 +99,8 @@ pub fn process_effect(
             AnimateOperation::Start => {
                 let (sx, mut rx) = channel::<f64>(1);
                 let core = core.clone();
+                log::info!("web: req start animation");
+
                 spawn_local(async move {
                     while let Some(ts) = rx.next().await {
                         for effect in core.resolve(&mut req, AnimateOperationOutput::Timestamp(ts))
@@ -111,7 +113,7 @@ pub fn process_effect(
                         process_effect(&core, effect, render, navigate, animate);
                     }
 
-                    log::debug!("receive ts ended");
+                    log::info!("web: receive ts ended");
                 });
 
                 animate(Some(sx));

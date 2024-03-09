@@ -1,10 +1,11 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use au_core::UnitResolve;
 use crux_core::capability::{CapabilityContext, Operation};
 use crux_macros::Capability;
 use futures::{channel::mpsc::UnboundedReceiver, StreamExt};
 use serde::{Deserialize, Serialize};
+use parking_lot::Mutex;
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum PlayOperation {
@@ -34,7 +35,7 @@ where
     }
 
     pub fn with_receiver(&self, receiver: UnboundedReceiver<UnitResolve>) {
-        let mut recv_option = self.receiver.lock().unwrap();
+        let mut recv_option = self.receiver.lock();
         _ = recv_option.insert(receiver);
     }
 
@@ -43,7 +44,7 @@ where
         F: Fn(UnitResolve) -> Ev + Send + 'static,
     {
         let context = self.context.clone();
-        let mut receiver = self.receiver.lock().unwrap();
+        let mut receiver = self.receiver.lock();
         let mut receiver = receiver.take().unwrap();
         self.context.spawn({
             async move {

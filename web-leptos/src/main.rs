@@ -1,11 +1,14 @@
 #[cfg(feature = "ssr")]
+mod fileserv;
+
+#[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() {
     use axum::{routing::post, Router};
+    use fileserv::file_and_error_handler;
     use leptos::*;
     use leptos_axum::{generate_route_list, LeptosRoutes};
     use web_leptos::app::*;
-    use web_leptos::fileserv::file_and_error_handler;
 
     // Setting get_configuration(None) means we'll be using cargo-leptos's env values
     // For deployment these variables are:
@@ -24,11 +27,9 @@ async fn main() {
         .fallback(file_and_error_handler)
         .with_state(leptos_options);
 
-    // run our app with hyper
-    // `axum::Server` is a re-export of `hyper::Server`
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     log::info!("listening on http://{}", &addr);
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
+    axum::serve(listener, app.into_make_service())
         .await
         .unwrap();
 }

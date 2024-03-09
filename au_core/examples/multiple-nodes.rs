@@ -370,7 +370,7 @@ impl eframe::App for State {
                             }
                         }
                     } else if ctx.input(|c| c.key_down(*k)) {
-                        log::warn!("node is not created")
+                        log::debug!("node is not created")
                     }
                 }
             }

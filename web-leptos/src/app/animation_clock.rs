@@ -1,9 +1,8 @@
-use futures::channel::mpsc::Sender;
 #[allow(unused)]
-use std::{
-    rc::Rc,
-    sync::{Arc, Mutex},
-};
+use std::{rc::Rc, sync::Arc};
+
+use futures::channel::mpsc::Sender;
+use parking_lot::Mutex;
 
 cfg_if::cfg_if! {
   if #[cfg(feature="ssr")] {
@@ -25,10 +24,8 @@ impl AnimationClock {
         Rc::new(Self)
     }
 
-    #[cfg(not(feature = "ssr"))]
+    #[cfg(feature = "browser")]
     pub fn new() -> Rc<Self> {
-        use std::sync::TryLockError;
-
         use wasm_bindgen::{closure::Closure, JsCast};
         use web_sys::window;
 
@@ -44,11 +41,11 @@ impl AnimationClock {
             move || {
                 let win = window().unwrap();
                 let callback = Arc::clone(&callback);
-                let mut mtx = next_tick.lock().unwrap();
+                let mut mtx = next_tick.lock();
                 *mtx = win
                     .request_animation_frame(
                         Closure::once_into_js(move |ts: f64| {
-                            let cb = callback.lock().unwrap();
+                            let cb = callback.lock();
                             cb(ts);
                         })
                         .as_ref()
@@ -63,34 +60,33 @@ impl AnimationClock {
         let loop_fn = {
             let schedule_fn = Arc::clone(&schedule_fn);
             let senders = Arc::clone(&senders);
+            let next_tick = Arc::clone(&next_tick);
 
-            move |ts: f64| match senders.try_lock() {
-                Ok(mut senders) => match senders
+            move |ts: f64| {
+                _ = next_tick.lock().take();
+                let mut senders = senders.lock();
+                if senders.len() == 0 {
+                    return
+                }
+
+                match senders
                     .iter_mut()
                     .try_for_each(|sender: &mut Sender<f64>| sender.try_send(ts))
                 {
                     Ok(_) => {
-                        let schedule = schedule_fn.lock().unwrap();
+                        let schedule = schedule_fn.lock();
                         schedule();
                         log::trace!("animation tick");
                     }
                     Err(e) => {
                         log::error!("send timer tick error: {e:?}");
                     }
-                },
-                Err(TryLockError::WouldBlock) => {
-                    let schedule = schedule_fn.lock().unwrap();
-                    schedule();
-                    log::trace!("skip animation tick");
-                }
-                Err(TryLockError::Poisoned(e)) => {
-                    log::error!("senders poisoned: {e:?}");
                 }
             }
         };
 
         {
-            let mut cb_mtx = callback.lock().unwrap();
+            let mut cb_mtx = callback.lock();
             *cb_mtx = Box::new(loop_fn);
         }
 
@@ -104,33 +100,21 @@ impl AnimationClock {
 
     #[allow(unused)]
     pub fn add_sender(&self, sender: Sender<f64>) {
-        #[cfg(not(feature = "ssr"))]
+        log::info!("adding animation sender");
+        #[cfg(feature = "browser")]
         {
             {
-                let mut mtx = match self.senders.lock() {
-                    Ok(mtx) => mtx,
-                    Err(e) => {
-                        log::error!("senders poison: {e}");
-                        e.into_inner()
-                    }
-                };
+                let mut mtx = self.senders.lock();
 
                 mtx.push(sender);
 
                 log::info!("add animation sender");
             }
 
-            let should_schedule = match self.next_tick.lock() {
-                Ok(mtx) => mtx,
-                Err(e) => {
-                    log::error!("next tick poison: {e}");
-                    e.into_inner()
-                }
-            }
-            .is_none();
+            let should_schedule = self.next_tick.lock().is_none();
 
             if should_schedule {
-                let schedule = self.schedule_fn.lock().unwrap();
+                let schedule = self.schedule_fn.lock();
                 schedule();
 
                 log::info!("schedule animation");
@@ -139,29 +123,17 @@ impl AnimationClock {
     }
 
     pub fn clear(&self) {
-        #[cfg(not(feature = "ssr"))]
+        #[cfg(feature = "browser")]
         {
             {
-                let mut mtx = match self.senders.lock() {
-                    Ok(mtx) => mtx,
-                    Err(e) => {
-                        log::error!("senders poison: {e}");
-                        e.into_inner()
-                    }
-                };
+                let mut mtx = self.senders.lock();
 
                 mtx.clear();
 
                 log::info!("clear animations");
             }
 
-            let mut next = match self.next_tick.lock() {
-                Ok(mtx) => mtx,
-                Err(e) => {
-                    log::error!("next tick poison: {e}");
-                    e.into_inner()
-                }
-            };
+            let mut next = self.next_tick.lock();
 
             if let Some(next) = next.as_ref() {
                 use web_sys::window;

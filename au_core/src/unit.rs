@@ -1,24 +1,23 @@
 #[allow(unused)]
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
+use std::{collections::HashMap, sync::Arc};
+
+use anyhow::{anyhow, Result};
+use fundsp::hacker32::*;
+#[allow(unused)]
+use futures::channel::mpsc::UnboundedSender;
+use hecs::Entity;
+use parking_lot::Mutex;
+#[allow(unused)]
+use ringbuf::{HeapConsumer, HeapProducer, HeapRb};
+use serde::{Deserialize, Serialize};
+use spectrum_analyzer::{
+    samples_fft_to_spectrum, scaling::divide_by_N_sqrt, windows::hann_window, FrequencyLimit,
 };
 
 #[allow(unused)]
 use crate::{
     fft_cons, fft_prod, snoops_cons, snoops_prod, FFTCons, FFTProd, Node, SnoopsCons, SnoopsProd,
     System, MAX_F, MIN_F,
-};
-use anyhow::{anyhow, Result};
-use fundsp::hacker32::*;
-#[allow(unused)]
-use futures::channel::mpsc::UnboundedSender;
-use hecs::Entity;
-#[allow(unused)]
-use ringbuf::{HeapConsumer, HeapProducer, HeapRb};
-use serde::{Deserialize, Serialize};
-use spectrum_analyzer::{
-    samples_fft_to_spectrum, scaling::divide_by_N_sqrt, windows::hann_window, FrequencyLimit,
 };
 
 cfg_if::cfg_if! { if #[cfg(feature="browser")] {
@@ -40,12 +39,11 @@ cfg_if::cfg_if! { if #[cfg(feature="browser")] {
     }
 }
 
-#[allow(dead_code)]
-const RENDER_BURSTS: usize = 5;
+pub const RENDER_BURSTS: usize = 5;
 pub const FFT_RES: usize = 1024;
 
-pub const FFT_BUF_SIZE: usize = 2;
-pub const SNOOPS_BUF_SIZE: usize = 2;
+pub const FFT_BUF_SIZE: usize = 4;
+pub const SNOOPS_BUF_SIZE: usize = 8;
 
 pub type FFTData = Vec<(f32, f32)>;
 pub type SnoopsData = Vec<(Entity, Vec<f32>)>;
@@ -79,7 +77,7 @@ pub enum UnitState {
     Paused,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub enum UnitEV {
     ButtonPressed(Entity),
     ButtonReleased(Entity),
@@ -139,29 +137,32 @@ impl Unit {
     }
 
     pub fn update(&mut self, ev: UnitEV) {
+        log::trace!("unit msg: {ev:?}");
         cfg_if::cfg_if! {
             if #[cfg(all(feature = "browser", not(feature = "worklet")))] {
                 match ev {
                     UnitEV::Resume => {
                         CTX.with(|mtx| {
-                            let mtx = mtx.lock().unwrap();
+                            let mtx = mtx.lock();
                             let ctx = mtx.as_ref().unwrap();
                             _ = ctx.resume().expect("play ctx");
                         });
-                        self.state.lock().unwrap().clone_from(&UnitState::Playing);
+                        self.state.lock().clone_from(&UnitState::Playing);
+                        log::info!("web: Resumed");
                     }
                     UnitEV::Suspend => {
                         CTX.with(|mtx| {
-                            let mtx = mtx.lock().unwrap();
+                            let mtx = mtx.lock();
                             let ctx = mtx.as_ref().unwrap();
                             _ = ctx.suspend().expect("play ctx");
                         });
-                        self.state.lock().unwrap().clone_from(&UnitState::Paused);
+                        self.state.lock().clone_from(&UnitState::Paused);
+                        log::info!("web: Suspended");
                     }
                     ev => {
                         use js_sys::{Object, Reflect, Uint8Array};
                         NODE.with(|mtx| {
-                            let mut mtx = mtx.lock().unwrap();
+                            let mut mtx = mtx.lock();
                             let node = mtx.as_mut().unwrap();
 
                             let port = node.port().unwrap();
@@ -180,19 +181,19 @@ impl Unit {
             else {
                 match ev {
                     UnitEV::ButtonPressed(e) => {
-                        let sys = self.system.lock().expect("system lock");
+                        let sys = self.system.lock();
                         sys.press(e, true)
                     }
                     UnitEV::ButtonReleased(e) => {
-                        let sys = self.system.lock().expect("system lock");
+                        let sys = self.system.lock();
                         sys.press(e, false)
                     }
                     UnitEV::Detune(e, val) => {
-                        let sys = self.system.lock().expect("system lock");
+                        let sys = self.system.lock();
                         sys.move_f(e, val)
                     }
                     UnitEV::SetControl(e, val) => {
-                        let nodes = self.nodes.lock().expect("lock nodes");
+                        let nodes = self.nodes.lock();
                         if let Some(node) = nodes.get(&e) {
                             log::info!("set control val {val}");
                             node.control.set_value(val);
@@ -201,23 +202,21 @@ impl Unit {
                         }
                     }
                     UnitEV::Configure(nodes) => {
-                        let mut sys = self.system.lock().expect("system lock");
+                        let mut sys = self.system.lock();
                         sys.replace_nodes(nodes);
                     }
                     UnitEV::ListenToInput => {
                         let mut enabled = self
                             .input_analyzer_enabled
-                            .lock()
-                            .expect("lock input_analyzer_enabled");
+                            .lock();
                         *enabled = true;
                     }
                     UnitEV::IgnoreInput => {
                         let mut enabled = self
                             .input_analyzer_enabled
-                            .lock()
-                            .expect("lock input_analyzer_enabled");
+                            .lock();
                         *enabled = false;
-                        let nodes = self.nodes.lock().expect("lock nodes");
+                        let nodes = self.nodes.lock();
                         for (_, node) in nodes.iter() {
                             node.control.set_value(0.0)
                         }
@@ -226,16 +225,17 @@ impl Unit {
                         cfg_if::cfg_if! {
                             if #[cfg(not(feature = "browser"))] {
                                 IN_STREAM.with(|mtx| {
-                                    let mtx = mtx.lock().unwrap();
+                                    let mtx = mtx.lock();
                                     let stream = mtx.as_ref().unwrap();
                                     cpal::traits::StreamTrait::pause(stream).expect("pause input");
                                 });
                                 OUT_STREAM.with(|mtx| {
-                                    let mtx = mtx.lock().unwrap();
+                                    let mtx = mtx.lock();
                                     let stream = mtx.as_ref().unwrap();
                                     cpal::traits::StreamTrait::pause(stream).expect("pause output");
                                 });
-                                self.state.lock().unwrap().clone_from(&UnitState::Paused);
+                                self.state.lock().clone_from(&UnitState::Paused);
+                                log::info!("stream: Suspended");
                             }
                         }
                     }
@@ -243,16 +243,17 @@ impl Unit {
                         cfg_if::cfg_if! {
                             if #[cfg(not(feature = "browser"))] {
                                 IN_STREAM.with(|mtx| {
-                                    let mtx = mtx.lock().unwrap();
+                                    let mtx = mtx.lock();
                                     let stream = mtx.as_ref().unwrap();
                                     cpal::traits::StreamTrait::play(stream).expect("play input");
                                 });
                                 OUT_STREAM.with(|mtx| {
-                                    let mtx = mtx.lock().unwrap();
+                                    let mtx = mtx.lock();
                                     let stream = mtx.as_ref().unwrap();
                                     cpal::traits::StreamTrait::play(stream).expect("play output");
                                 });
-                                self.state.lock().unwrap().clone_from(&UnitState::Playing);
+                                self.state.lock().clone_from(&UnitState::Playing);
+                                log::info!("stream: Resumed");
                             }
                         }
                     }
@@ -267,7 +268,7 @@ impl Unit {
     }
 
     pub fn backends(&self) -> (NetBackend32, NetBackend32) {
-        let mut sys = self.system.lock().expect("system lock");
+        let mut sys = self.system.lock();
         (sys.input_net.backend(), sys.output_net.backend())
     }
 
@@ -285,9 +286,9 @@ impl Unit {
 
         cfg_if::cfg_if! { if #[cfg(feature = "browser")] {
             cfg_if::cfg_if! { if #[cfg(feature = "worklet")] {
-                let mut callback = callback.lock().unwrap();
+                let mut callback = callback.lock();
                 *callback = self.make_callback(input_be, render_be);
-                self.state.lock().unwrap().clone_from(&UnitState::Playing);
+                self.state.lock().clone_from(&UnitState::Playing);
             } else {
                 let unit = self.clone();
                 let resolve = self.resolve_sender.clone();
@@ -296,7 +297,7 @@ impl Unit {
                     match unit.run_audio_ctx().await {
                         Ok(_) => {
                             resolve.unbounded_send(UnitResolve::RunUnit(true)).unwrap();
-                            unit.state.lock().unwrap().clone_from(&UnitState::Playing);
+                            unit.state.lock().clone_from(&UnitState::Playing);
                         }
                         Err(e) => {
                             log::error!("run unit error: {e:?}");
@@ -311,7 +312,7 @@ impl Unit {
                 Ok(_) => {
                     self.resolve_sender.unbounded_send(UnitResolve::RunUnit(true))?;
 
-                    self.state.lock().unwrap().clone_from(&UnitState::Playing);
+                    self.state.lock().clone_from(&UnitState::Playing);
                 },
                 Err(e) => {
                     log::error!("run unit error: {e:?}");
@@ -413,7 +414,7 @@ impl Unit {
                         bincode::deserialize::<SnoopsData>(&arr.to_vec()).expect("deserialize");
 
                     if let Err(_) = snoops_prod.push(snoops_data) {
-                        log::warn!("snoops sender full");
+                        log::debug!("snoops prod full");
                     } else {
                         log::trace!("send snoops");
                     }
@@ -423,7 +424,7 @@ impl Unit {
                         bincode::deserialize::<FFTData>(&arr.to_vec()).expect("deserialize");
 
                     if let Err(_) = fft_prod.push(fft_data) {
-                        log::warn!("fft sender full");
+                        log::debug!("fft prod full");
                     } else {
                         log::trace!("send fft");
                     }
@@ -455,17 +456,17 @@ impl Unit {
         src.connect_with_audio_node(&node).map_err(map_js_err)?;
 
         ON_MESSAGE.with(move |mtx| {
-            let mut mtx = mtx.lock().unwrap();
+            let mut mtx = mtx.lock();
             *mtx = on_message;
         });
 
         NODE.with(move |mtx| {
-            let mut mtx = mtx.lock().unwrap();
+            let mut mtx = mtx.lock();
             _ = mtx.insert(node);
         });
 
         CTX.with(move |mtx| {
-            let mut mtx = mtx.lock().unwrap();
+            let mut mtx = mtx.lock();
             _ = mtx.insert(ctx);
         });
 
@@ -491,11 +492,7 @@ impl Unit {
         let snoops_prod = snoops_prod();
         let snoops_cons = snoops_cons();
 
-        _ = self
-            .consumers
-            .lock()
-            .unwrap()
-            .insert((fft_cons, snoops_cons));
+        _ = self.consumers.lock().insert((fft_cons, snoops_cons));
 
         let mut exchange_buffer = [[0_f32; 128]; 2];
 
@@ -528,17 +525,16 @@ impl Unit {
         fft_prod: &mut FFTProd,
     ) -> Result<()> {
         if consume_analyze.len() >= self.fft_res {
-            if let Ok(nodes) = self.nodes.lock() {
-                let samples = consume_analyze
-                    .pop_iter()
-                    .take(self.fft_res)
-                    .collect::<Vec<_>>();
-                let fft_data = process_input_data(samples.as_slice(), &nodes, self.sample_rate);
-                match fft_prod.push(fft_data) {
-                    Ok(_) => {}
-                    Err(_) => {
-                        log::warn!("fft prod full")
-                    }
+            let nodes = self.nodes.lock();
+            let samples = consume_analyze
+                .pop_iter()
+                .take(self.fft_res)
+                .collect::<Vec<_>>();
+            let fft_data = process_input_data(samples.as_slice(), &nodes, self.sample_rate);
+            match fft_prod.push(fft_data) {
+                Ok(_) => {}
+                Err(_) => {
+                    log::debug!("fft prod full")
                 }
             }
         }
@@ -553,10 +549,7 @@ impl Unit {
         input_be: &mut BigBlockAdapter32,
     ) -> Result<()> {
         let mut output_frames = vec![0.0_f32; data.len()];
-        let is_enabled = self
-            .input_analyzer_enabled
-            .lock()
-            .expect("lock process_input_analyzer_enabled");
+        let is_enabled = self.input_analyzer_enabled.lock();
 
         if *is_enabled {
             input_be.process(data.len(), &[data], &mut [output_frames.as_mut_slice()]);
@@ -585,46 +578,38 @@ impl Unit {
 
     #[cfg(feature = "worklet")]
     pub fn next_fft_reading(&self) -> Option<FFTData> {
-        let mut recv = self.consumers.lock().unwrap();
+        let mut recv = self.consumers.lock();
         let (recv, _) = recv.as_mut().unwrap();
         recv.pop()
     }
 
     #[cfg(feature = "worklet")]
     pub fn next_snoops_reading(&self) -> Option<SnoopsData> {
-        let mut recv = self.consumers.lock().unwrap();
+        let mut recv = self.consumers.lock();
         let (_, recv) = recv.as_mut().unwrap();
         recv.pop()
     }
 
     fn send_snoops_reading(&self, snoops_prod: &mut SnoopsProd) -> Result<()> {
-        if let Ok(system) = self.system.try_lock() {
-            if let Ok(mut snoops) = system.snoops.try_lock() {
-                let snoops = snoops
-                    .iter_mut()
-                    .map(|(s, e)| (e, s.get()))
-                    .collect::<Vec<_>>();
+        let system = self.system.lock();
+        let mut snoops = system.snoops.lock();
+        let mut produced = vec![];
 
-                if snoops.iter().any(|(_, s)| s.is_some()) {
-                    let data = snoops
-                        .into_iter()
-                        .map(|(e, snoop)| {
-                            let mut data = vec![];
-                            if let Some(buf) = snoop {
-                                for i in 0..Ord::min(crate::SNOOP_SIZE, buf.size()) {
-                                    data.push(buf.at(i))
-                                }
-                            }
-                            (*e, data)
-                        })
-                        .collect();
+        for (snoop, entity) in snoops.iter_mut() {
+            if let Some(buf) = snoop.get() {
+                let mut data = vec![];
+                for i in 0..buf.size() {
+                    data.push(buf.at(i));
+                }
+                produced.push((*entity, data));
+            }
+        }
 
-                    match snoops_prod.push(data) {
-                        Ok(_) => {}
-                        Err(_) => {
-                            log::warn!("snoops prod full")
-                        }
-                    }
+        if produced.len() > 0 {
+            match snoops_prod.push(produced) {
+                Ok(_) => {}
+                Err(_) => {
+                    log::debug!("snoops prod full")
                 }
             }
         }
@@ -735,7 +720,7 @@ impl Unit {
                         }
 
                         if underflow > 0 {
-                            log::warn!("underflow: {underflow}")
+                            log::debug!("underflow: {underflow}")
                         }
                     };
 
@@ -758,13 +743,13 @@ impl Unit {
 
         if let Some(in_stream) = in_stream {
             IN_STREAM.with(move |mtx| {
-                let mut stream = mtx.lock().expect("lock in stream");
+                let mut stream = mtx.lock();
                 _ = stream.insert(in_stream);
             });
         }
         if let Some(out_stream) = out_stream {
             OUT_STREAM.with(move |mtx| {
-                let mut stream = mtx.lock().expect("lock out stream");
+                let mut stream = mtx.lock();
                 _ = stream.insert(out_stream);
             });
             Ok(())

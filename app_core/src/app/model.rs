@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use euclid::default::{Box2D, SideOffsets2D};
 use hecs::World;
 use keyframe::AnimationSequence;
-use std::sync::{Arc, Mutex};
+use parking_lot::Mutex;
 
 use super::{config::Config, instrument::Instrument, layout::Layout, objects::Objects};
 

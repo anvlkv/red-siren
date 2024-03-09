@@ -101,7 +101,7 @@ impl App for Visual {
             }
             VisualEV::SnoopsData(data) => {
                 let config = model.get_config().unwrap();
-                let world = model.world.lock().unwrap();
+                let world = model.world.lock();
 
                 for (button, values) in data {
                     let (string, secondary_string) =
@@ -123,7 +123,7 @@ impl App for Visual {
                 caps.render.render();
             }
             VisualEV::ClearSnoops => {
-                let world = model.world.lock().unwrap();
+                let world = model.world.lock();
                 let clear_mock = vec![0.0, 0.0];
                 let config = model.get_config().unwrap();
 
@@ -132,8 +132,7 @@ impl App for Visual {
                     .left_strings
                     .iter()
                     .chain(model.layout.right_strings.iter())
-                    .map(|string| world.get::<&mut Object>(*string).ok())
-                    .flatten()
+                    .filter_map(|string| world.get::<&mut Object>(*string).ok())
                 {
                     Self::draw_snoops_data_on_path(clear_mock.clone(), &mut obj, config);
                 }
@@ -149,7 +148,7 @@ impl App for Visual {
             VisualEV::SetDarkMode(dark) => {
                 model.dark_schema = dark;
                 {
-                    let mut world = model.world.lock().unwrap();
+                    let mut world = model.world.lock();
                     model.objects.repaint(&mut world, dark).unwrap();
                 }
                 self.update(VisualEV::LayoutUpdate, model, caps);

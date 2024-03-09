@@ -71,16 +71,17 @@ where
         F: Fn(T) -> Ev + Send + 'static,
         T: Send + 'static,
     {
-        log::info!("starting animate reception {label}");
-
         let context = self.context.clone();
 
         let label = label.to_string();
         self.context.spawn({
             async move {
                 let mut stream = context.stream_from_shell(AnimateOperation::Start);
+                log::info!("core: starting animate reception {label}");
 
                 while let Some(response) = stream.next().await {
+                    log::info!("receive ts stream");
+
                     if let AnimateOperationOutput::Timestamp(_) = response {
                         match cons.pop() {
                             Some(d) => {
@@ -110,10 +111,14 @@ where
 
         self.context.spawn({
             async move {
-                _ = context.request_from_shell(AnimateOperation::Stop).await;
-                context.update_app(notify());
+                let done = context.request_from_shell(AnimateOperation::Stop).await;
+                if done == AnimateOperationOutput::Done {
+                    context.update_app(notify());
 
-                log::info!("animation stopped");
+                    log::info!("animation stopped");
+                } else {
+                    panic!("unexpected response")
+                }
             }
         });
     }

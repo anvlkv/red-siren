@@ -1,10 +1,11 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use fundsp::hacker32::*;
 use hecs::Entity;
+use parking_lot::Mutex;
 
 use crate::node::*;
 
@@ -23,7 +24,7 @@ pub struct System {
 pub const MOMENT: f32 = 1.0 / 75.0;
 pub const MIN_F: f32 = 60.0;
 pub const MAX_F: f32 = 18_000.0;
-pub const SNOOP_SIZE: usize = 1024;
+pub const SNOOP_SIZE: usize = 512;
 
 impl System {
     pub fn new(sample_rate: u32) -> Self {
@@ -61,7 +62,7 @@ impl System {
         let snoop_pairs = nodes.iter().map(|_| snoop(SNOOP_SIZE)).collect::<Vec<_>>();
         let (snoops, snoop_bes): (Vec<_>, Vec<_>) = snoop_pairs.into_iter().unzip();
         {
-            let mut s_mtx = self.snoops.lock().expect("lock snoops");
+            let mut s_mtx = self.snoops.lock();
             s_mtx.clear();
             s_mtx.extend(snoops.into_iter().zip(nodes.iter().map(|n| n.button)));
         }
@@ -76,22 +77,33 @@ impl System {
                 .flatten()
                 .expect("node data for {i}");
 
+            let i_amp = (size - i as usize) as f32 * 1.75;
+
+            let control = (var(&node_data.control) * i_amp)
+                >> adsr_live(MOMENT, MOMENT, MOMENT * (i + 1) as f32, MOMENT)
+                >> follow(MOMENT * i as f32);
+
+            let pluck_ring = pluck((75 * (i + 1) * 2) as f32, MOMENT, 0.0015);
+
+            let osc = sine() * resonator();
+
             (var(&node_data.f_emit.0)
-                | (var(&node_data.control) >> adsr_live(MOMENT, 0.075, MOMENT, MOMENT)))
+                | control)
                 >> (pass()
-                    | pluck((110 * (i + 1) * 2) as f32, MOMENT, 0.075)
-                    | var(&node_data.f_emit.1) * 2.0
-                    | (var(&node_data.f_emit.1) - var(&node_data.f_emit.0)))
+                    | pluck_ring
+                    | var(&node_data.f_emit.1) * 2.0 // hold sampling
+                    | var(&node_data.f_base) * constant((i + 1) as f32) // resonator cutoff 
+                    | (var(&node_data.f_emit.1) - var(&node_data.f_emit.0))) // resonator band width
                 >> (pass()
                     | pinkpass()
-                    | hold_hz((110 * (i + 1) * 3) as f32, 0.75)
+                    | hold(0.75 / (i + 1) as f32)
                     | clip_to(0.0, 22_000.0))
-                >> (sine() * resonator())
+                >> osc // osc
                 >> declick_s(0.75)
                 >> (pass() | var(&node_data.f_emit.1) | constant(0.75) | constant(1.75))
                 >> bell()
-                >> snoop.clone()
                 >> chorus(size as i64, MOMENT, MOMENT, 0.75)
+                >> snoop.clone()
                 >> (pass() | var(&node_data.pan))
                 >> panner()
                 >> (pass() * var(&self.volume_l) | pass() * var(&self.volume_r))
@@ -111,7 +123,7 @@ impl System {
             let p_q = var(&node_data.f_sense.1 .1);
             let f_mul = var(&node_data.f_sense.0 .1) - var(&node_data.f_sense.0 .0);
 
-            (pass() | p_hz | p_q) >> peak() >> pass() * f_mul
+            ((pass()) | p_hz | p_q) >> peak() >> pass() * f_mul
         };
 
         let (output_node, input_node): (Box<dyn AudioUnit32>, Box<dyn AudioUnit32>) =
@@ -165,20 +177,20 @@ impl System {
         self.output_net.commit();
 
         {
-            let mut n_mtx = self.nodes.lock().expect("lock nodes");
+            let mut n_mtx = self.nodes.lock();
 
             n_mtx.clear();
             n_mtx.extend(nodes.into_iter().map(|n| (n.button, n)));
         }
         {
-            let mut p_mtx = self.pressed.lock().expect("lock pressed");
+            let mut p_mtx = self.pressed.lock();
 
             p_mtx.clear();
         }
     }
 
     pub fn press(&self, entity: Entity, val: bool) {
-        let mut pressed = self.pressed.lock().expect("pressed mtx poison");
+        let mut pressed = self.pressed.lock();
 
         if val {
             _ = pressed.insert(entity);
@@ -188,10 +200,10 @@ impl System {
     }
 
     pub fn move_f(&self, entity: Entity, val: f32) {
-        let pressed = self.pressed.lock().expect("pressed mtx poison");
+        let pressed = self.pressed.lock();
 
         if pressed.contains(&entity) {
-            let nodes = self.nodes.lock().expect("lock nodes");
+            let nodes = self.nodes.lock();
 
             let node = nodes.get(&entity).expect("node");
             let base = node.f_base.value();

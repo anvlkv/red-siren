@@ -32,8 +32,6 @@ pub fn Object(obj: app_core::Object, paint: app_core::Paint) -> impl IntoView {
                     format!("{acc} L {}, {}", p.x, p.y)
                 });
 
-            log::debug!("path of {} points", path.len());
-
             view! {
                 <path d={d}/>
             }

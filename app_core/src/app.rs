@@ -1,17 +1,13 @@
-use std::{
-    borrow::Borrow,
-    sync::{Arc, Mutex},
-};
+use std::sync::Arc;
 
+use au_core::{fft_cons, snoops_cons, Unit, UnitEV, UnitResolve};
 pub use au_core::{FFTData, SnoopsData, UnitState};
-use au_core::{fft_cons, snoops_cons, FFTCons, SnoopsCons, Unit, UnitEV, UnitResolve};
 pub use crux_core::App;
 use crux_core::{render::Render, Capability};
 use crux_macros::Effect;
 use futures::channel::mpsc::unbounded;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-
-
 
 mod animate;
 mod config;
@@ -105,12 +101,12 @@ impl App for RedSiren {
                     .update(VisualEV::AnimateEntrance, model, &caps.into());
                 caps.render.render();
                 let (unit_resolve_sender, unit_resolve_receiver) = unbounded();
-                let unit = Unit::new(unit_resolve_sender);
-                _ = self.audio_unit.lock().unwrap().insert(unit);
                 caps.play.with_receiver(unit_resolve_receiver);
+                let unit = Unit::new(unit_resolve_sender);
+                _ = self.audio_unit.lock().insert(unit);
             }
             Event::StartAudioUnit => {
-                let mut unit = self.audio_unit.lock().unwrap();
+                let mut unit = self.audio_unit.lock();
                 let unit = unit.as_mut().unwrap();
 
                 caps.play.run_unit(Event::PlayOpResolve);
@@ -128,29 +124,27 @@ impl App for RedSiren {
                 caps.animate.stop(Event::AnimationStopped);
             }
             Event::AnimationStopped() => {
-                let mut unit = self.audio_unit.lock().unwrap();
+                let mut unit = self.audio_unit.lock();
                 let unit = unit.as_mut().unwrap();
                 unit.update(UnitEV::Suspend);
                 self.visual
                     .update(VisualEV::ClearSnoops, model, &caps.into());
             }
             Event::Resume => {
-                let mut unit = self.audio_unit.lock().unwrap();
+                let mut unit = self.audio_unit.lock();
                 let unit = unit.as_mut().unwrap();
                 unit.update(UnitEV::Resume);
-                
+                caps.render.render();
                 caps.animate
                     .animate_reception(Event::PlayOpSnoopData, snoops_cons(), "snoops");
                 caps.animate
                     .animate_reception(Event::PlayOpFftData, fft_cons(), "fft");
-
-                caps.render.render();
             }
             Event::PlayOpResolve(unit_resolve) => match unit_resolve {
                 UnitResolve::RunUnit(true) => {
-                    let mut unit = self.audio_unit.lock().unwrap();
+                    let mut unit = self.audio_unit.lock();
                     let unit = unit.as_mut().unwrap();
-                    let world = model.world.lock().unwrap();
+                    let world = model.world.lock();
                     unit.update(au_core::UnitEV::Configure(
                         model.instrument.get_nodes(&world),
                     ));
@@ -198,7 +192,7 @@ impl App for RedSiren {
                         }
 
                         if let Some(config) = model.get_config().cloned() {
-                            let mut world = model.world.lock().unwrap();
+                            let mut world = model.world.lock();
                             world.clear();
 
                             model.layout = Layout::new(&config, &mut world).unwrap();
@@ -207,7 +201,7 @@ impl App for RedSiren {
                                 Instrument::new(&config, &mut world, &model.layout).unwrap();
 
                             model.objects =
-                                model.layout.into_objects(&mut world, model.dark_schema);
+                                model.layout.make_objects(&mut world, model.dark_schema);
                         }
 
                         self.visual
@@ -225,14 +219,13 @@ impl App for RedSiren {
         let unit_state = self
             .audio_unit
             .lock()
-            .unwrap()
             .as_ref()
-            .map(|u| *u.state.lock().unwrap())
+            .map(|u| *u.state.lock())
             .unwrap_or_default();
 
         ViewModel {
             activity: model.activity,
-            visual: self.visual.view(&model),
+            visual: self.visual.view(model),
             unit_state,
         }
     }

@@ -61,7 +61,7 @@ pub fn RedSirenCore() -> impl IntoView {
 
     let reduced_motion = use_media_query("(prefers-reduced-motion)");
     create_effect(move |_| {
-        let reduced_motion = reduced_motion.get();
+        let reduced_motion = reduced_motion();
         set_event.set(Some(app_core::Event::Visual(
             app_core::VisualEV::SetReducedMotion(reduced_motion),
         )));
@@ -69,7 +69,7 @@ pub fn RedSirenCore() -> impl IntoView {
 
     let dark_mode = use_media_query("(prefers-color-scheme: dark)");
     create_effect(move |_| {
-        let dark_mode = dark_mode.get();
+        let dark_mode = dark_mode();
         set_event.set(Some(app_core::Event::Visual(
             app_core::VisualEV::SetDarkMode(dark_mode),
         )));
@@ -91,7 +91,7 @@ pub fn RedSirenCore() -> impl IntoView {
     });
 
     create_effect(move |_| {
-        let (width, height) = size.get();
+        let (width, height) = size();
         set_event(Some(app_core::Event::Visual(app_core::VisualEV::Resize(
             width as f64,
             height as f64,

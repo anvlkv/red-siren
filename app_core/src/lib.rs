@@ -28,7 +28,7 @@ pub fn view() -> Vec<u8> {
 
 #[allow(unused_variables)]
 pub fn log_init() {
-    let lvl = log::LevelFilter::Trace;
+    let lvl = log::LevelFilter::Info;
 
     cfg_if::cfg_if! { if #[cfg(feature="browser")] {
         let lvl = lvl.to_level().unwrap();

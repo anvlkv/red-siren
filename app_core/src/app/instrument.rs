@@ -82,9 +82,9 @@ impl Instrument {
 
         let node_data = au_core::NodeDataBuilder::default()
             .button(button)
-            .f_base(freq)
+            .f_base(config.f0)
             .f_emit((freq, max_freq))
-            .f_sense(((freq, max_freq), (0.0, 1.0)))
+            .f_sense(((freq, max_freq), (0.01, 1.0)))
             .pan(pan)
             .build()?;
 

@@ -12,7 +12,14 @@ pub struct Node {
     pub pan: Shared<f32>,
 }
 
-#[derive(Deserialize, Serialize, Builder)]
+impl std::fmt::Debug for Node {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let d: NodeData = self.into();
+        write!(f, "{d:?}")
+    }
+}
+
+#[derive(Deserialize, Serialize, Builder, Debug)]
 pub struct NodeData {
     #[builder(default = "hecs::Entity::DANGLING")]
     pub button: Entity,

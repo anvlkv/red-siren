@@ -15,16 +15,15 @@ name = "bindgen"
 [features]
 typegen = ["crux_core/typegen", "au_core/typegen"]
 browser = ["console_log", "console_error_panic_hook", "au_core/browser"]
+cpal = ["au_core/cpal"]
 
 [target.'cfg(target_os = "ios")'.dependencies]
 oslog = "0.2.0"
-[[au_core]]
-default-features = true
+
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.13.1"
-[[au_core]]
-default-features = true
+
 
 
 [dependencies]

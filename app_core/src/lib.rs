@@ -58,4 +58,4 @@ pub fn log_init() {
     log::info!("init logging")
 }
 
-uniffi::include_scaffolding!("core");
+uniffi::include_scaffolding!("app_core");

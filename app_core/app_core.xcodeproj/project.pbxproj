@@ -1,0 +1,385 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 53;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		CA007CD18D9CE2C122019988 /* Cargo.toml in Sources */ = {isa = PBXBuildFile; fileRef = CAF94B6BE29A3EF4668187A5 /* Cargo.toml */; settings = {COMPILER_FLAGS = "--lib"; }; };
+		CA017CD18D9C8C1AAC290BF5 /* Cargo.toml in Sources */ = {isa = PBXBuildFile; fileRef = CAF94B6BE29A3EF4668187A5 /* Cargo.toml */; settings = {COMPILER_FLAGS = "--lib"; }; };
+		CA027CD18D9C267ED72E464D /* Cargo.toml in Sources */ = {isa = PBXBuildFile; fileRef = CAF94B6BE29A3EF4668187A5 /* Cargo.toml */; settings = {COMPILER_FLAGS = "--bin 'bindgen'"; }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXBuildRule section */
+		CAF44B6BE29AAC6C1400ACA8 /* PBXBuildRule */ = {
+			isa = PBXBuildRule;
+			compilerSpec = com.apple.compilers.proxy.script;
+			dependencyFile = "$(DERIVED_FILE_DIR)/$(CARGO_XCODE_TARGET_ARCH)-$(EXECUTABLE_NAME).d";
+			filePatterns = "*/Cargo.toml";
+			fileType = pattern.proxy;
+			inputFiles = (
+			);
+			isEditable = 0;
+			name = "Cargo project build";
+			outputFiles = (
+				"$(OBJECT_FILE_DIR)/$(CARGO_XCODE_TARGET_ARCH)-$(EXECUTABLE_NAME)",
+			);
+			script = "# generated with cargo-xcode 1.7.0\nset -xeu;\nexport PATH=\"$HOME/.cargo/bin:$PATH:/usr/local/bin:/opt/homebrew/bin\";\n\nif [ \"${IS_MACCATALYST-NO}\" = YES ]; then\n CARGO_XCODE_TARGET_OS=ios-macabi\nfi\nCARGO_XCODE_TARGET_TRIPLE=\"${CARGO_XCODE_TARGET_ARCH}-apple-${CARGO_XCODE_TARGET_OS}\"\nif [ \"$CARGO_XCODE_TARGET_OS\" != darwin ]; then\n export PATH=\"${PATH/\\/Contents\\/Developer\\/Toolchains\\/XcodeDefault.xctoolchain\\/usr\\/bin:/xcode-provided-ld-cant-link-lSystem-for-the-host-build-script:}\"\nfi\nif [ \"$CARGO_XCODE_BUILD_PROFILE\" == release ]; then\n OTHER_INPUT_FILE_FLAGS=\"${OTHER_INPUT_FILE_FLAGS} --release\"\nfi\n\nif [ \"$ACTION\" = clean ]; then\n cargo clean --verbose --manifest-path=\"$SCRIPT_INPUT_FILE\" ${OTHER_INPUT_FILE_FLAGS} --target=\"${CARGO_XCODE_TARGET_TRIPLE}\";\n rm -f \"$SCRIPT_OUTPUT_FILE_0\"\n exit 0\nfi\ncargo build --verbose --manifest-path=\"$SCRIPT_INPUT_FILE\" --features=\"${CARGO_XCODE_FEATURES:-}\" ${OTHER_INPUT_FILE_FLAGS} --target=\"${CARGO_XCODE_TARGET_TRIPLE}\" || {\n if command -v rustup &> /dev/null; then\n  if ! rustup target list --installed | grep -Eq \"${CARGO_XCODE_TARGET_TRIPLE}\"; then\n   echo >&2 \"warning: this build requires rustup toolchain for $CARGO_XCODE_TARGET_TRIPLE, but it isn't installed (will try rustup next)\"\n   rustup target add \"${CARGO_XCODE_TARGET_TRIPLE}\" || echo >&2 \"warning: can't install $CARGO_XCODE_TARGET_TRIPLE\"\n  fi\n fi\n echo >&2 \"error: cargo build failed\"; exit 1; }\n\n# it's too hard to explain Cargo's actual exe path to Xcode build graph, so hardlink to a known-good path instead\nBUILT_SRC=\"${CARGO_TARGET_DIR}/${CARGO_XCODE_TARGET_TRIPLE}/${CARGO_XCODE_BUILD_PROFILE}/${CARGO_XCODE_CARGO_FILE_NAME}\"\nln -f -- \"$BUILT_SRC\" \"$SCRIPT_OUTPUT_FILE_0\" || { echo >&2 \"can't hardlink $BUILT_SRC to $SCRIPT_OUTPUT_FILE_0\"; exit 1; }\n\n# cargo generates a dep file, but for its own path, so append our rename to it\nDEP_FILE_SRC=\"${CARGO_TARGET_DIR}/${CARGO_XCODE_TARGET_TRIPLE}/${CARGO_XCODE_BUILD_PROFILE}/${CARGO_XCODE_CARGO_DEP_FILE_NAME}\"\nif [ -f \"$DEP_FILE_SRC\" ]; then\n DEP_FILE_DST=\"${DERIVED_FILE_DIR}/${CARGO_XCODE_TARGET_ARCH}-${EXECUTABLE_NAME}.d\"\n cp -f \"$DEP_FILE_SRC\" \"$DEP_FILE_DST\" || { echo >&2 \"can't copy $DEP_FILE_SRC to $DEP_FILE_DST\"; exit 1; }\n\n echo >> \"$DEP_FILE_DST\" \"${SCRIPT_OUTPUT_FILE_0/ /\\\\ /}: ${BUILT_SRC/ /\\\\ /}\"\nfi\n\n# lipo script needs to know all the platform-specific files that have been built\n# archs is in the file name, so that paths don't stay around after archs change\n# must match input for LipoScript\nFILE_LIST=\"${DERIVED_FILE_DIR}/${ARCHS}-${EXECUTABLE_NAME}.xcfilelist\"\ntouch \"$FILE_LIST\"\nif ! grep -Eq \"$SCRIPT_OUTPUT_FILE_0\" \"$FILE_LIST\" ; then\n echo >> \"$FILE_LIST\" \"$SCRIPT_OUTPUT_FILE_0\"\nfi\n\necho \"success: $ACTION of $SCRIPT_OUTPUT_FILE_0 for $CARGO_XCODE_TARGET_TRIPLE\"\n";
+		};
+/* End PBXBuildRule section */
+
+/* Begin PBXFileReference section */
+		CA00452E2269A7CF40E6B452 /* libapp_core_static.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libapp_core_static.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		CA016FB187836BCB24DEB9C4 /* app_core.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = app_core.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
+		CA024874A3E4FB871FBAA695 /* bindgen */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = bindgen; sourceTree = BUILT_PRODUCTS_DIR; };
+		CAF94B6BE29A3EF4668187A5 /* Cargo.toml */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Cargo.toml; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		CAF04B6BE29AD65BC3C892A8 = {
+			isa = PBXGroup;
+			children = (
+				CAF94B6BE29A3EF4668187A5 /* Cargo.toml */,
+				CAF14B6BE29A22869D176AE5 /* Products */,
+				CAF24B6BE29A98AF0B5890DB /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		CAF14B6BE29A22869D176AE5 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				CA00452E2269A7CF40E6B452 /* libapp_core_static.a */,
+				CA016FB187836BCB24DEB9C4 /* app_core.dylib */,
+				CA024874A3E4FB871FBAA695 /* bindgen */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		CAF24B6BE29A98AF0B5890DB /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		CA00452E2269E2C122019988 /* app_core-staticlib */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CA00C6B8BDAFE2C122019988 /* Build configuration list for PBXNativeTarget "app_core-staticlib" */;
+			buildPhases = (
+				CA004564C032E2C122019988 /* Sources */,
+				CAF54B6BE29AAF6EBB7F357C /* Universal Binary lipo */,
+			);
+			buildRules = (
+				CAF44B6BE29AAC6C1400ACA8 /* PBXBuildRule */,
+			);
+			dependencies = (
+			);
+			name = "app_core-staticlib";
+			productName = libapp_core_static.a;
+			productReference = CA00452E2269A7CF40E6B452 /* libapp_core_static.a */;
+			productType = "com.apple.product-type.library.static";
+		};
+		CA016FB187838C1AAC290BF5 /* app_core-cdylib */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CA01C6B8BDAF8C1AAC290BF5 /* Build configuration list for PBXNativeTarget "app_core-cdylib" */;
+			buildPhases = (
+				CA014564C0328C1AAC290BF5 /* Sources */,
+				CAF54B6BE29AAF6EBB7F357C /* Universal Binary lipo */,
+			);
+			buildRules = (
+				CAF44B6BE29AAC6C1400ACA8 /* PBXBuildRule */,
+			);
+			dependencies = (
+			);
+			name = "app_core-cdylib";
+			productName = app_core.dylib;
+			productReference = CA016FB187836BCB24DEB9C4 /* app_core.dylib */;
+			productType = "com.apple.product-type.library.dynamic";
+		};
+		CA024874A3E4267ED72E464D /* bindgen-bin */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CA02C6B8BDAF267ED72E464D /* Build configuration list for PBXNativeTarget "bindgen-bin" */;
+			buildPhases = (
+				CA024564C032267ED72E464D /* Sources */,
+				CAF54B6BE29AAF6EBB7F357C /* Universal Binary lipo */,
+			);
+			buildRules = (
+				CAF44B6BE29AAC6C1400ACA8 /* PBXBuildRule */,
+			);
+			dependencies = (
+			);
+			name = "bindgen-bin";
+			productName = bindgen;
+			productReference = CA024874A3E4FB871FBAA695 /* bindgen */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		CAF34B6BE29AE04653AD465F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					CA00452E2269E2C122019988 = {
+						CreatedOnToolsVersion = 9.2;
+						ProvisioningStyle = Automatic;
+					};
+					CA016FB187838C1AAC290BF5 = {
+						CreatedOnToolsVersion = 9.2;
+						ProvisioningStyle = Automatic;
+					};
+					CA024874A3E4267ED72E464D = {
+						CreatedOnToolsVersion = 9.2;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = CAF64B6BE29A80E02D6C7F57 /* Build configuration list for PBXProject "app_core" */;
+			compatibilityVersion = "Xcode 11.4";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = CAF04B6BE29AD65BC3C892A8;
+			productRefGroup = CAF14B6BE29A22869D176AE5 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				CA00452E2269E2C122019988 /* app_core-staticlib */,
+				CA016FB187838C1AAC290BF5 /* app_core-cdylib */,
+				CA024874A3E4267ED72E464D /* bindgen-bin */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		CAF54B6BE29AAF6EBB7F357C /* Universal Binary lipo */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(DERIVED_FILE_DIR)/$(ARCHS)-$(EXECUTABLE_NAME).xcfilelist",
+			);
+			name = "Universal Binary lipo";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# generated with cargo-xcode 1.7.0\nset -eux;\ntr '\\n' '\\0' < \"$DERIVED_FILE_DIR/$ARCHS-$EXECUTABLE_NAME.xcfilelist\" | xargs -0 lipo -create -output \"$TARGET_BUILD_DIR/$EXECUTABLE_PATH\"\nif [ ${LD_DYLIB_INSTALL_NAME:+1} ]; then\n  install_name_tool -id \"$LD_DYLIB_INSTALL_NAME\" \"$TARGET_BUILD_DIR/$EXECUTABLE_PATH\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		CA004564C032E2C122019988 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CA007CD18D9CE2C122019988 /* Cargo.toml in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CA014564C0328C1AAC290BF5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CA017CD18D9C8C1AAC290BF5 /* Cargo.toml in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CA024564C032267ED72E464D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CA027CD18D9C267ED72E464D /* Cargo.toml in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		CA003120417AE2C122019988 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CARGO_XCODE_CARGO_DEP_FILE_NAME = libapp_core.d;
+				CARGO_XCODE_CARGO_FILE_NAME = libapp_core.a;
+				INSTALL_GROUP = "";
+				INSTALL_MODE_FLAG = "";
+				INSTALL_OWNER = "";
+				PRODUCT_NAME = app_core_static;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "macosx iphonesimulator iphoneos appletvsimulator appletvos";
+			};
+			name = Release;
+		};
+		CA008DC49FB5E2C122019988 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CARGO_XCODE_CARGO_DEP_FILE_NAME = libapp_core.d;
+				CARGO_XCODE_CARGO_FILE_NAME = libapp_core.a;
+				INSTALL_GROUP = "";
+				INSTALL_MODE_FLAG = "";
+				INSTALL_OWNER = "";
+				PRODUCT_NAME = app_core_static;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "macosx iphonesimulator iphoneos appletvsimulator appletvos";
+			};
+			name = Debug;
+		};
+		CA013120417A8C1AAC290BF5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CARGO_XCODE_CARGO_DEP_FILE_NAME = libapp_core.d;
+				CARGO_XCODE_CARGO_FILE_NAME = libapp_core.dylib;
+				DYLIB_COMPATIBILITY_VERSION = 0;
+				PRODUCT_NAME = app_core;
+				SUPPORTED_PLATFORMS = macosx;
+			};
+			name = Release;
+		};
+		CA018DC49FB58C1AAC290BF5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CARGO_XCODE_CARGO_DEP_FILE_NAME = libapp_core.d;
+				CARGO_XCODE_CARGO_FILE_NAME = libapp_core.dylib;
+				DYLIB_COMPATIBILITY_VERSION = 0;
+				PRODUCT_NAME = app_core;
+				SUPPORTED_PLATFORMS = macosx;
+			};
+			name = Debug;
+		};
+		CA023120417A267ED72E464D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CARGO_XCODE_CARGO_DEP_FILE_NAME = bindgen.d;
+				CARGO_XCODE_CARGO_FILE_NAME = bindgen;
+				CARGO_XCODE_FEATURES = cpal;
+				CARGO_XCODE_TARGET_OS = darwin;
+				PRODUCT_NAME = bindgen;
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+			};
+			name = Release;
+		};
+		CA028DC49FB5267ED72E464D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CARGO_XCODE_CARGO_DEP_FILE_NAME = bindgen.d;
+				CARGO_XCODE_CARGO_FILE_NAME = bindgen;
+				CARGO_XCODE_FEATURES = cpal;
+				CARGO_XCODE_TARGET_OS = darwin;
+				PRODUCT_NAME = bindgen;
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+			};
+			name = Debug;
+		};
+		CAF7613E914A3CC16B37690B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CARGO_TARGET_DIR = "$(PROJECT_TEMP_DIR)/cargo_target";
+				CARGO_XCODE_BUILD_PROFILE = release;
+				CARGO_XCODE_FEATURES = cpal;
+				"CARGO_XCODE_TARGET_ARCH[arch=arm64*]" = aarch64;
+				"CARGO_XCODE_TARGET_ARCH[arch=i386]" = i686;
+				"CARGO_XCODE_TARGET_ARCH[arch=x86_64*]" = x86_64;
+				"CARGO_XCODE_TARGET_OS[sdk=appletvos*]" = tvos;
+				"CARGO_XCODE_TARGET_OS[sdk=appletvsimulator*]" = tvos;
+				"CARGO_XCODE_TARGET_OS[sdk=iphoneos*]" = ios;
+				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*]" = "ios-sim";
+				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*][arch=x86_64*]" = ios;
+				"CARGO_XCODE_TARGET_OS[sdk=macosx*]" = darwin;
+				CURRENT_PROJECT_VERSION = 0.1;
+				EXCLUDED_ARCHS = "";
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_NAME = app_core;
+				RUSTUP_TOOLCHAIN = nightly;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+			};
+			name = Release;
+		};
+		CAF8613E914A228BE02872F8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CARGO_TARGET_DIR = "$(PROJECT_TEMP_DIR)/cargo_target";
+				CARGO_XCODE_BUILD_PROFILE = debug;
+				CARGO_XCODE_FEATURES = cpal;
+				"CARGO_XCODE_TARGET_ARCH[arch=arm64*]" = aarch64;
+				"CARGO_XCODE_TARGET_ARCH[arch=i386]" = i686;
+				"CARGO_XCODE_TARGET_ARCH[arch=x86_64*]" = x86_64;
+				"CARGO_XCODE_TARGET_OS[sdk=appletvos*]" = tvos;
+				"CARGO_XCODE_TARGET_OS[sdk=appletvsimulator*]" = tvos;
+				"CARGO_XCODE_TARGET_OS[sdk=iphoneos*]" = ios;
+				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*]" = "ios-sim";
+				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*][arch=x86_64*]" = ios;
+				"CARGO_XCODE_TARGET_OS[sdk=macosx*]" = darwin;
+				CURRENT_PROJECT_VERSION = 0.1;
+				EXCLUDED_ARCHS = "";
+				MARKETING_VERSION = 0.1.0;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = app_core;
+				RUSTUP_TOOLCHAIN = nightly;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		CA00C6B8BDAFE2C122019988 /* Build configuration list for PBXNativeTarget "app_core-staticlib" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA003120417AE2C122019988 /* Release */,
+				CA008DC49FB5E2C122019988 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CA01C6B8BDAF8C1AAC290BF5 /* Build configuration list for PBXNativeTarget "app_core-cdylib" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA013120417A8C1AAC290BF5 /* Release */,
+				CA018DC49FB58C1AAC290BF5 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CA02C6B8BDAF267ED72E464D /* Build configuration list for PBXNativeTarget "bindgen-bin" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA023120417A267ED72E464D /* Release */,
+				CA028DC49FB5267ED72E464D /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CAF64B6BE29A80E02D6C7F57 /* Build configuration list for PBXProject "app_core" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CAF7613E914A3CC16B37690B /* Release */,
+				CAF8613E914A228BE02872F8 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = CAF34B6BE29AE04653AD465F /* Project object */;
+}

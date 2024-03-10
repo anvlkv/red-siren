@@ -1,5 +1,6 @@
 use au_core::{
-    fft_cons, snoops_cons, FFTCons, FFTData, Node, SnoopsCons, SnoopsData, Unit, UnitEV, FFT_BUF_SIZE, MAX_F, MIN_F, SNOOPS_BUF_SIZE
+    fft_cons, snoops_cons, FFTCons, FFTData, Node, SnoopsCons, SnoopsData, Unit, UnitEV, MAX_F,
+    MIN_F,
 };
 use eframe::egui::{self, *};
 use fundsp::hacker32::*;
@@ -168,7 +169,9 @@ impl eframe::App for State {
                 let desired_size = ui.available_width() * vec2(1.0, 0.25);
                 let (_id, rect) = ui.allocate_space(desired_size);
 
-                for (i, (_, data)) in snoops.iter().enumerate() {
+                for (i, data) in snoops.iter().enumerate() {
+                    // let node = self.world.get::<&Node>(*n).unwrap();
+
                     let color = Color32::from_rgb((10 * i).try_into().unwrap_or(0), 200, 220);
                     let points = data.len();
                     let to_screen = emath::RectTransform::from_to(

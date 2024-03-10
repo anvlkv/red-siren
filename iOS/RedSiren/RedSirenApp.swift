@@ -41,12 +41,11 @@ struct iOSApp: App {
     
     init() {
         self.core = Core()
-        self.core.update(Event.start)
     }
     
     var body: some Scene {
         WindowGroup {
-            ContentView(core: self.core).environment(\.coreEnv, CoreEnvProvider(core: self.core))
+            ContentView().environment(\.coreEnv, CoreEnvProvider(core: self.core))
         }
     }
 }

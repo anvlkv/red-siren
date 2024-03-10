@@ -30,7 +30,7 @@ cfg_if::cfg_if! { if #[cfg(feature="browser")] {
             }
         }
     }
-    else if #[cfg(not(feature="typegen"))] {
+    else if #[cfg(feature = "cpal")] {
         thread_local! {
             static IN_STREAM: Arc<Mutex<Option<cpal::Stream>>> = Default::default();
             static OUT_STREAM: Arc<Mutex<Option<cpal::Stream>>> = Default::default();
@@ -223,7 +223,7 @@ impl Unit {
                     }
                     UnitEV::Suspend => {
                         cfg_if::cfg_if! {
-                            if #[cfg(not(any(feature = "browser", feature="typegen")))] {
+                            if #[cfg(feature = "cpal")] {
                                 IN_STREAM.with(|mtx| {
                                     let mtx = mtx.lock();
                                     let stream = mtx.as_ref().unwrap();
@@ -241,7 +241,7 @@ impl Unit {
                     }
                     UnitEV::Resume => {
                         cfg_if::cfg_if! {
-                            if #[cfg(not(any(feature = "browser", feature="typegen")))] {
+                            if #[cfg(feature = "cpal")] {
                                 IN_STREAM.with(|mtx| {
                                     let mtx = mtx.lock();
                                     let stream = mtx.as_ref().unwrap();
@@ -306,7 +306,7 @@ impl Unit {
                     }
                 });
             }}
-        } else if #[cfg(not(feature="typegen"))] {
+        } else if #[cfg(feature = "cpal")] {
             log::info!("run cpal");
             match self.run_cpal_streams(input_be, render_be) {
                 Ok(_) => {
@@ -617,7 +617,7 @@ impl Unit {
         Ok(())
     }
 
-    #[cfg(not(any(feature = "browser", feature = "typegen")))]
+    #[cfg(feature = "cpal")]
     fn run_cpal_streams(
         &mut self,
         mut input_be: BigBlockAdapter32,

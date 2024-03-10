@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use au_core::{
-    fft_cons, snoops_cons, FFTCons, FFTData, Node, SnoopsCons, SnoopsData, Unit, UnitEV,
-    FFT_BUF_SIZE, MAX_F, MIN_F, SNOOPS_BUF_SIZE,
+    fft_cons, snoops_cons, FFTCons, FFTData, Node, SnoopsCons, SnoopsData, Unit, UnitEV, MAX_F,
+    MIN_F,
 };
 use eframe::egui::{self, *};
 use fundsp::hacker32::*;
@@ -278,12 +278,9 @@ impl eframe::App for State {
                             Rect::from_x_y_ranges(0.0..=spots_c as f32, 0.0..=1.0),
                             rect,
                         );
-                        for (i, (e, data)) in snoops.iter().enumerate() {
-                            let node = self
-                                .nodes
-                                .iter()
-                                .find(|(_, b)| b == e)
-                                .map(|(n, _)| self.world.get::<&Node>(*n).unwrap());
+                        for (i, ((n, _), data)) in self.nodes.iter().zip(snoops.iter()).enumerate()
+                        {
+                            let node = self.world.get::<&Node>(*n).ok();
 
                             let points = data.len();
                             let color = Color32::from_rgb(

@@ -8,8 +8,6 @@ import OSLog
 @MainActor
 class Core: ObservableObject {
     @Published var view: ViewModel
-
-    @State var playback: Playback = Playback()
     
     @State var defaults: UserDefaults = UserDefaults()
     
@@ -37,51 +35,12 @@ class Core: ObservableObject {
         switch request.effect {
         case .render:
             view = try! .bincodeDeserialize(input: [UInt8](RedSiren.view()))
-        case let .navigate(.to(activity)):
-            self.update(Event.reflectActivity(activity))
+        case .play(.runUnit):
+            Logger().log("run unit")
             break
-        case .keyValue(.read(let key)):
-            
-            var response = KeyValueOutput.read(.none)
-            
-            if let data = self.defaults.array(forKey: key) {
-                response = KeyValueOutput.read(.some(data as! [UInt8]))
-                Logger().log("restore data for \(key)")
-            }
-            else {
-                Logger().log("no data for \(key)")
-            }
-            
-
-            let effects = [UInt8](handleResponse(Data(request.uuid), Data(try! response.bincodeSerialize())))
-
-            let requests: [Request] = try! .bincodeDeserialize(input: effects)
-            for request in requests {
-                processEffect(request)
-            }
-        case .keyValue(.write(let key, let data)):
-            self.defaults.setValue(data, forKey: key)
-            
-            let response = KeyValueOutput.write(true)
-
-            let effects = [UInt8](handleResponse(Data(request.uuid), Data(try! response.bincodeSerialize())))
-
-            let requests: [Request] = try! .bincodeDeserialize(input: effects)
-            for request in requests {
-                processEffect(request)
-            }
-        case .play(let op):
-            playback.request(op) { response in
-                DispatchQueue.main.async {
-                    let effects = [UInt8](handleResponse(Data(request.uuid), Data(response)))
-
-                    let requests: [Request] = try! .bincodeDeserialize(input: effects)
-                    for request in requests {
-                        self.processEffect(request)
-                    }
-                }
-            }
-            break
+        case .play(.permissions):
+            Logger().log("permissions")
+            break;
         case .animate(.start):
             self.startClock!({ ts in
                 var data = try! AnimateOperationOutput.done.bincodeSerialize()

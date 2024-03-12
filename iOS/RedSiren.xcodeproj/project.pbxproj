@@ -16,9 +16,11 @@
 		FA25DFBF2B9D91790015876F /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA25DFBE2B9D91790015876F /* ContentView.swift */; };
 		FAA15C682B9DA62000E8A529 /* CoreTypes in Frameworks */ = {isa = PBXBuildFile; productRef = FAA15C672B9DA62000E8A529 /* CoreTypes */; };
 		FAA15C692B9DA64400E8A529 /* libapp_core_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = FA1365652B9CF77F00C92FF7 /* libapp_core_static.a */; };
-		FAA15C712B9DAB5300E8A529 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FAA15C702B9DAB5300E8A529 /* CoreAudio.framework */; };
-		FAA15C762B9DAB9C00E8A529 /* CoreAudioKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FAA15C732B9DAB6200E8A529 /* CoreAudioKit.framework */; };
-		FAA15C772B9DACDA00E8A529 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FAA15C6A2B9DA65F00E8A529 /* AVFoundation.framework */; };
+		FAA15C7E2B9DC7AE00E8A529 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FAA15C7A2B9DC6B900E8A529 /* AudioToolbox.framework */; };
+		FAA15C7F2B9DC7B800E8A529 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FAA15C702B9DAB5300E8A529 /* CoreAudio.framework */; };
+		FAA15C802B9DC7BE00E8A529 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FAA15C7C2B9DC6C600E8A529 /* CoreFoundation.framework */; };
+		FAA15C822B9DC7C500E8A529 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FAA15C812B9DC7C500E8A529 /* Security.framework */; };
+		FAA15C842B9DC7DE00E8A529 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FAA15C832B9DC7DE00E8A529 /* Foundation.framework */; };
 		FAAA65362B09DFB500B1F5D1 /* IntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAA65352B09DFB500B1F5D1 /* IntroView.swift */; };
 		FAAA653A2B09EC8300B1F5D1 /* Intro.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FAAA65392B09EC8300B1F5D1 /* Intro.storyboard */; };
 		FAAA653C2B0A23E500B1F5D1 /* AnimationClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAA653B2B0A23E500B1F5D1 /* AnimationClock.swift */; };
@@ -105,6 +107,10 @@
 		FAA15C702B9DAB5300E8A529 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
 		FAA15C722B9DAB6200E8A529 /* CoreAudioTypes.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudioTypes.framework; path = System/Library/Frameworks/CoreAudioTypes.framework; sourceTree = SDKROOT; };
 		FAA15C732B9DAB6200E8A529 /* CoreAudioKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudioKit.framework; path = System/Library/Frameworks/CoreAudioKit.framework; sourceTree = SDKROOT; };
+		FAA15C7A2B9DC6B900E8A529 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
+		FAA15C7C2B9DC6C600E8A529 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
+		FAA15C812B9DC7C500E8A529 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		FAA15C832B9DC7DE00E8A529 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		FAAA65352B09DFB500B1F5D1 /* IntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroView.swift; sourceTree = "<group>"; };
 		FAAA65392B09EC8300B1F5D1 /* Intro.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Intro.storyboard; sourceTree = "<group>"; };
 		FAAA653B2B0A23E500B1F5D1 /* AnimationClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationClock.swift; sourceTree = "<group>"; };
@@ -116,9 +122,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FAA15C772B9DACDA00E8A529 /* AVFoundation.framework in Frameworks */,
-				FAA15C762B9DAB9C00E8A529 /* CoreAudioKit.framework in Frameworks */,
-				FAA15C712B9DAB5300E8A529 /* CoreAudio.framework in Frameworks */,
+				FAA15C7E2B9DC7AE00E8A529 /* AudioToolbox.framework in Frameworks */,
+				FAA15C7F2B9DC7B800E8A529 /* CoreAudio.framework in Frameworks */,
+				FAA15C802B9DC7BE00E8A529 /* CoreFoundation.framework in Frameworks */,
+				FAA15C822B9DC7C500E8A529 /* Security.framework in Frameworks */,
+				FAA15C842B9DC7DE00E8A529 /* Foundation.framework in Frameworks */,
 				45B5157CB6DC4BD490F119FC /* Pods_RedSiren.framework in Frameworks */,
 				FAA15C692B9DA64400E8A529 /* libapp_core_static.a in Frameworks */,
 				FAA15C682B9DA62000E8A529 /* CoreTypes in Frameworks */,
@@ -176,6 +184,10 @@
 		8603ECCCFC0ECC027AB147F8 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				FAA15C832B9DC7DE00E8A529 /* Foundation.framework */,
+				FAA15C812B9DC7C500E8A529 /* Security.framework */,
+				FAA15C7C2B9DC6C600E8A529 /* CoreFoundation.framework */,
+				FAA15C7A2B9DC6B900E8A529 /* AudioToolbox.framework */,
 				FAA15C732B9DAB6200E8A529 /* CoreAudioKit.framework */,
 				FAA15C722B9DAB6200E8A529 /* CoreAudioTypes.framework */,
 				FAA15C702B9DAB5300E8A529 /* CoreAudio.framework */,

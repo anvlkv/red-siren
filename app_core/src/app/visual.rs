@@ -1,6 +1,6 @@
 use crate::Paint;
 
-use super::{config::Config, objects::Object, Animate};
+use super::{config::Config, objects::ViewObject, Animate};
 use au_core::SnoopsData;
 use crux_core::render::Render;
 pub use crux_core::App;
@@ -17,7 +17,7 @@ pub struct VisualVM {
     pub width: f64,
     pub height: f64,
     pub intro_opacity: f64,
-    pub objects: Vec<(Object, Paint)>,
+    pub objects: Vec<(ViewObject, Paint)>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -108,13 +108,13 @@ impl App for Visual {
                         model.instrument.buttons_to_strings.get(button).unwrap();
 
                     if let Some(mut obj) = secondary_string
-                        .map(|string| world.get::<&mut Object>(string).ok())
+                        .map(|string| world.get::<&mut ViewObject>(string).ok())
                         .flatten()
                     {
                         Self::draw_snoops_data_on_path(values.clone(), &mut obj, config);
                     }
 
-                    let mut obj = world.get::<&mut Object>(*string).unwrap();
+                    let mut obj = world.get::<&mut ViewObject>(*string).unwrap();
                     Self::draw_snoops_data_on_path(values, &mut obj, config);
                 }
 
@@ -132,7 +132,7 @@ impl App for Visual {
                     .left_strings
                     .iter()
                     .chain(model.layout.right_strings.iter())
-                    .filter_map(|string| world.get::<&mut Object>(*string).ok())
+                    .filter_map(|string| world.get::<&mut ViewObject>(*string).ok())
                 {
                     Self::draw_snoops_data_on_path(clear_mock.clone(), &mut obj, config);
                 }
@@ -183,7 +183,7 @@ impl App for Visual {
 }
 
 impl Visual {
-    fn draw_snoops_data_on_path(data: Vec<f32>, obj: &mut Object, config: &Config) {
+    fn draw_snoops_data_on_path(data: Vec<f32>, obj: &mut ViewObject, config: &Config) {
         let (path, p0) = match &mut obj.shape {
             crate::Shapes::Path { path, p0, .. } => (path, p0),
             _ => unimplemented!(),

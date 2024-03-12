@@ -14,7 +14,7 @@ pub use uuid::Uuid;
 use super::Paint;
 
 #[derive(Clone, Serialize, Deserialize, Default)]
-pub struct Objects(pub Vec<((Entity, Entity), (Object, Paint))>);
+pub struct Objects(pub Vec<((Entity, Entity), (ViewObject, Paint))>);
 
 impl Objects {
     pub fn make_paint(
@@ -22,10 +22,10 @@ impl Objects {
         e: &Entity,
         dark: bool,
         style: ObjectStyle,
-    ) -> ((Entity, Entity), (Object, Paint)) {
+    ) -> ((Entity, Entity), (ViewObject, Paint)) {
         let paint_obj = Paint::new(dark, style);
         let paint = world.spawn((paint_obj.clone(),));
-        let obj = world.get::<&Object>(*e).unwrap();
+        let obj = world.get::<&ViewObject>(*e).unwrap();
 
         ((*e, paint), (obj.deref().clone(), paint_obj))
     }
@@ -40,8 +40,8 @@ impl Objects {
         Ok(())
     }
 
-    pub fn painted_objects(&self) -> Vec<(Object, Paint)> {
-        let (_, objects): (Vec<(Entity, Entity)>, Vec<(Object, Paint)>) =
+    pub fn painted_objects(&self) -> Vec<(ViewObject, Paint)> {
+        let (_, objects): (Vec<(Entity, Entity)>, Vec<(ViewObject, Paint)>) =
             self.0.iter().cloned().unzip();
 
         objects
@@ -49,7 +49,7 @@ impl Objects {
 
     pub fn update_from_world(&mut self, world: &World) -> Result<()> {
         self.0.iter_mut().try_for_each(|((e, p), values)| {
-            let obj = world.get::<&Object>(*e)?;
+            let obj = world.get::<&ViewObject>(*e)?;
             let paint = world.get::<&Paint>(*p)?;
             *values = (obj.deref().clone(), paint.deref().clone());
             Ok::<(), ComponentError>(())
@@ -95,7 +95,7 @@ impl Default for ObjectId {
 }
 
 #[derive(Bundle, Clone, Serialize, Deserialize, Builder, Hash)]
-pub struct Object {
+pub struct ViewObject {
     #[builder(default = "ObjectId::default()")]
     pub id: ObjectId,
     pub shape: Shapes,
@@ -105,7 +105,7 @@ pub struct Object {
     pub view_label: Option<Text>,
 }
 
-impl CanTween for Object {
+impl CanTween for ViewObject {
     fn ease(from: Self, to: Self, time: impl keyframe::num_traits::Float) -> Self {
         let id = from.id;
         assert_eq!(id, to.id, "same object id");

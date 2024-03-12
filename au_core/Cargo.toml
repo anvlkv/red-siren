@@ -29,22 +29,22 @@ futures = "0.3.28"
 wasm-bindgen-futures = { version = "0.4.36", optional = true }
 getrandom = { version = "0.2.9", features = ["js"], optional = true }
 web-sys = { version = "0.3.63", features = [
-  "AudioContext",
-  "BaseAudioContext",
-  "AudioNode",
-  "AudioWorklet",
-  "AudioWorkletNode",
-  "AudioDestinationNode",
-  "MediaDevices",
-  "MediaStream",
-  "MediaStreamConstraints",
-  "MediaStreamAudioSourceNode",
-  "MediaStreamAudioSourceOptions",
-  "MessagePort",
-  "MessageEvent",
-  "Navigator",
-  "Window",
-  "Response",
+    "AudioContext",
+    "BaseAudioContext",
+    "AudioNode",
+    "AudioWorklet",
+    "AudioWorkletNode",
+    "AudioDestinationNode",
+    "MediaDevices",
+    "MediaStream",
+    "MediaStreamConstraints",
+    "MediaStreamAudioSourceNode",
+    "MediaStreamAudioSourceOptions",
+    "MessagePort",
+    "MessageEvent",
+    "Navigator",
+    "Window",
+    "Response",
 ], optional = true }
 js-sys = { version = "0.3.63", optional = true }
 console_error_panic_hook = { version = "0.1.7", optional = true }
@@ -57,17 +57,21 @@ parking_lot = { version = "0.12.1", features = ["deadlock_detection"] }
 [features]
 cpal = ["dep:cpal", "futures/executor", "futures/thread-pool"]
 browser = [
-  "lazy_static",
-  "wasm-bindgen",
-  "bincode",
-  "getrandom",
-  "web-sys",
-  "js-sys",
-  "wasm-bindgen-futures",
+    "lazy_static",
+    "wasm-bindgen",
+    "bincode",
+    "getrandom",
+    "web-sys",
+    "js-sys",
+    "wasm-bindgen-futures",
 ]
 worklet = ["browser", "console_log", "console_error_panic_hook"]
 typegen = []
 
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21.1"
+ndk-context = "0.1.1"
+libloading = "0.8.3"
 
 [dev-dependencies]
 eframe = "0.26.2"

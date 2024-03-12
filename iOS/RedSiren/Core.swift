@@ -42,21 +42,24 @@ class Core: ObservableObject {
             Logger().log("permissions")
             break;
         case .animate(.start):
-            self.startClock!({ ts in
-                var data = try! AnimateOperationOutput.done.bincodeSerialize()
-                if let ts = ts {
-                    data = try! AnimateOperationOutput.timestamp(ts).bincodeSerialize()
-                }
-                else {
-                    Logger().log("tick is none, animation is done")
-                }
-                let effects = [UInt8](handleResponse(Data(request.uuid), Data(data)))
+            Task {
+                self.startClock!({ ts in
+                    var data = try! AnimateOperationOutput.done.bincodeSerialize()
+                    if let ts = ts {
+                        data = try! AnimateOperationOutput.timestamp(ts).bincodeSerialize()
+                        Logger().log("tick \(ts)")
+                    }
+                    else {
+                        Logger().log("tick is none, animation is done")
+                    }
+                    let effects = [UInt8](handleResponse(Data(request.uuid), Data(data)))
 
-                let requests: [Request] = try! .bincodeDeserialize(input: effects)
-                for request in requests {
-                    self.processEffect(request)
-                }
-            })
+                    let requests: [Request] = try! .bincodeDeserialize(input: effects)
+                    for request in requests {
+                        self.processEffect(request)
+                    }
+                })
+            }
             break
         case .animate(.stop):
             self.stopClock!()

@@ -6,7 +6,7 @@ use crate::{ObjectStyle, Objects};
 
 use super::{
     config::Config,
-    objects::{Object, ObjectBuilder, Shapes},
+    objects::{ViewObject, ViewObjectBuilder, Shapes},
 };
 
 #[derive(Default)]
@@ -128,7 +128,7 @@ impl Layout {
         button_space_main: f64,
         side: f64,
         side_breadth: f64,
-    ) -> Result<Object> {
+    ) -> Result<ViewObject> {
         let offset = if config.portrait {
             config.safe_area[1]
         } else {
@@ -152,7 +152,7 @@ impl Layout {
             )
         };
 
-        let object = ObjectBuilder::default()
+        let object = ViewObjectBuilder::default()
             .shape(Shapes::Circle(rect))
             .build()?;
 
@@ -165,7 +165,7 @@ impl Layout {
         track_length: f64,
         button_track_margin: f64,
         left_hand: bool,
-    ) -> Result<Object> {
+    ) -> Result<ViewObject> {
         let mut offsets = SideOffsets2D::<f64>::zero();
 
         if config.portrait {
@@ -194,13 +194,13 @@ impl Layout {
             (config.button_size + button_track_margin * 2.0) / 2.0,
         );
 
-        let track_obj = ObjectBuilder::default()
+        let track_obj = ViewObjectBuilder::default()
             .shape(Shapes::RoundedRect(rect, rounding))
             .build()?;
         Ok(track_obj)
     }
 
-    fn make_layout_string(config: &Config, left_hand: bool) -> Result<Object> {
+    fn make_layout_string(config: &Config, left_hand: bool) -> Result<ViewObject> {
         let c = if left_hand { 1.0 } else { 2.0 };
 
         let path = if config.portrait {
@@ -219,7 +219,7 @@ impl Layout {
             vec![Point2D::new(0_f64, y), Point2D::new(x_end, y)]
         };
 
-        let string_obj = ObjectBuilder::default()
+        let string_obj = ViewObjectBuilder::default()
             .shape(Shapes::Path {
                 p0: path.first().cloned().unwrap(),
                 p1: path.last().cloned().unwrap(),

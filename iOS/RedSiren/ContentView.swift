@@ -13,17 +13,23 @@ struct SizePreferenceKey: PreferenceKey {
 
 struct ContentView: View {
     @EnvironmentObject var core: Core
-    
+
     @Environment(\.safeAreaInsets) private var safeAreaInsets
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
     @StateObject var clock: AnimationClock = AnimationClock()
-    
+
     var body: some View {
         ZStack {
             IntroView(opacity: CGFloat(core.view.visual.intro_opacity))
+            Button(action: {
+                core.update(.startAudioUnit)
+            }, label: {
+                Text("Play")
+            })
         }
+        
             .ignoresSafeArea(.all)
             .statusBarHidden(true)
             .overlay(
@@ -33,7 +39,6 @@ struct ContentView: View {
                 .ignoresSafeArea(.all)
         )
             .onAppear {
-            Logger().log("set cbs")
             core.startClock = { cb in
                 self.clock.onTick = cb
                 self.clock.createDisplayLink()
@@ -52,6 +57,7 @@ struct ContentView: View {
                 safeAreaInsets.bottom
             )))
             core.update(.visual(.setReducedMotion(reduceMotion)))
+            core.update(.initialNavigation(.intro))
         }
             .onDisappear {
             core.startClock = nil

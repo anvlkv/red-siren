@@ -3,7 +3,10 @@ use std::sync::Arc;
 use once_cell::sync::Lazy;
 use ringbuf::{Consumer, Producer, StaticRb};
 
-use crate::{FFTData, SnoopsData, FFT_BUF_SIZE, SNOOPS_BUF_SIZE};
+use crate::{FFTData, SnoopsData};
+
+pub const FFT_BUF_SIZE: usize = 4;
+pub const SNOOPS_BUF_SIZE: usize = 12;
 
 pub type FFTBuf = StaticRb<FFTData, FFT_BUF_SIZE>;
 pub type SnoopsBuf = StaticRb<SnoopsData, SNOOPS_BUF_SIZE>;
@@ -21,13 +24,14 @@ pub fn fft_prod() -> &'static mut FFTProd {
     unsafe { &mut FFT_RB.0 }
 }
 
+pub fn snoops_prod() -> &'static mut SnoopsProd {
+    unsafe { &mut SNOOPS_RB.0 }
+}
+
 pub fn fft_cons() -> &'static mut FFTCons {
     unsafe { &mut FFT_RB.1 }
 }
 
-pub fn snoops_prod() -> &'static mut SnoopsProd {
-    unsafe { &mut SNOOPS_RB.0 }
-}
 
 pub fn snoops_cons() -> &'static mut SnoopsCons {
     unsafe { &mut SNOOPS_RB.1 }

@@ -7,7 +7,7 @@ fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=../au_core");
 
     use app_core::{
-        Activity, Alignment, Box2D, Object, ObjectBuilder, ObjectId, ObjectStyle, Paint, Point2D,
+        Activity, Alignment, Box2D, ViewObject, ObjectId, ObjectStyle, Paint, Point2D,
         RedSiren, Rgba, Shapes, Size2D, Stroke, Text, UnitState, VisualVM, VisualEV
     };
 
@@ -21,7 +21,7 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<Size2D<f64>>()?;
 
     // internal types
-    gen.register_type::<Object>()?;
+    gen.register_type::<ViewObject>()?;
     gen.register_type::<ObjectStyle>()?;
     gen.register_type::<Alignment>()?;
     gen.register_type::<Activity>()?;

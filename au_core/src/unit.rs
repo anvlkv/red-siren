@@ -1,6 +1,7 @@
 #[allow(unused)]
 use std::{collections::HashMap, sync::Arc};
 
+#[allow(unused)]
 use anyhow::{anyhow, Result};
 use fundsp::hacker32::*;
 #[allow(unused)]
@@ -21,7 +22,7 @@ use crate::{
 };
 
 cfg_if::cfg_if! { if #[cfg(feature="browser")] {
-    cfg_if::cfg_if!{ if #[cfg(not(feature="worklet"))]{
+        cfg_if::cfg_if!{ if #[cfg(not(feature="worklet"))] {
                 thread_local! {
                     static CTX: Arc<Mutex<Option<web_sys::AudioContext>>> = Default::default();
                     static NODE: Arc<Mutex<Option<web_sys::AudioWorkletNode>>> = Default::default();
@@ -41,9 +42,7 @@ cfg_if::cfg_if! { if #[cfg(feature="browser")] {
 
 pub const RENDER_BURSTS: usize = 5;
 pub const FFT_RES: usize = 1024;
-
-pub const FFT_BUF_SIZE: usize = 4;
-pub const SNOOPS_BUF_SIZE: usize = 8;
+const DESIRED_BUFFER_SIZE: u32 = 1024;
 
 pub type FFTData = Vec<(f32, f32)>;
 pub type SnoopsData = Vec<Vec<f32>>;
@@ -67,6 +66,7 @@ pub struct Unit {
 pub enum UnitResolve {
     RunUnit(bool),
     UpdateEV(bool),
+    RecordingPermission(bool),
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Copy, Default)]
@@ -105,12 +105,20 @@ impl Unit {
                 (
                     d.sample_rate().0,
                     match d.buffer_size() {
-                        cpal::SupportedBufferSize::Range { min: _, max } => *max,
-                        cpal::SupportedBufferSize::Unknown => 1024,
-                    },
+                        cpal::SupportedBufferSize::Range { min, max } => {
+                            log::info!("supported buffer size {min} - {max}");
+                            if DESIRED_BUFFER_SIZE > *min && DESIRED_BUFFER_SIZE < *max {
+                                DESIRED_BUFFER_SIZE
+                            }
+                            else {
+                                *min
+                            }
+                        },
+                        cpal::SupportedBufferSize::Unknown => DESIRED_BUFFER_SIZE
+                    }
                 )
             })
-            .unwrap_or((44100, 1024));
+            .unwrap_or((44100, DESIRED_BUFFER_SIZE));
         }}
 
         let fft_res = FFT_RES;
@@ -120,6 +128,8 @@ impl Unit {
         let nodes = sys.nodes.clone();
         let system = Arc::new(Mutex::new(sys));
         let state = Arc::new(Mutex::new(UnitState::None));
+
+        log::info!("unit with buffer {buffer_size}, sample rate {sample_rate}");
 
         Self {
             state,
@@ -307,12 +317,11 @@ impl Unit {
                 });
             }}
         } else if #[cfg(feature = "cpal")] {
-            log::info!("run cpal");
             match self.run_cpal_streams(input_be, render_be) {
                 Ok(_) => {
+                    log::info!("running cpal");
                     self.resolve_sender.unbounded_send(UnitResolve::RunUnit(true))?;
-
-                    self.state.lock().clone_from(&UnitState::Playing);
+                    self.state.lock().clone_from(&UnitState::Paused);
                 },
                 Err(e) => {
                     log::error!("run unit error: {e:?}");
@@ -662,6 +671,11 @@ impl Unit {
             Ok(())
         };
 
+        // let thread_sleeps =
+        //     1.0 / (self.sample_rate as f64 / (self.buffer_size as f64 / RENDER_BURSTS as f64));
+
+        // log::info!("sleep between bursts: {thread_sleeps}s");
+
         POOL.with(move |pool| {
             pool.spawn_ok(async move {
                 loop {
@@ -669,18 +683,25 @@ impl Unit {
                         log::error!("processing error: {e:?}");
                         break;
                     }
+                    log::trace!("au loop tick");
+                    // std::thread::sleep(std::time::Duration::from_secs_f64(thread_sleeps));
                 }
             });
         });
+
+        let config_buffer_size = cpal::BufferSize::Fixed(self.buffer_size);
 
         let unit = self.clone();
         let in_stream = input
             .map(move |input| {
                 if let Ok(config) = cpal::traits::DeviceTrait::default_input_config(&input) {
-                    let config: cpal::StreamConfig = config.into();
+                    let mut config: cpal::StreamConfig = config.into();
+                    config.channels = 1;
+                    config.buffer_size = config_buffer_size;
                     let input_data_fn = move |data: &[f32], _: &cpal::InputCallbackInfo| {
                         unit.store_input(data, &mut produce_analyze, &mut input_be)
                             .unwrap();
+                        log::trace!("store input: {}", data.len());
                     };
                     let stream = cpal::traits::DeviceTrait::build_input_stream(
                         &input,
@@ -690,9 +711,7 @@ impl Unit {
                         None,
                     )
                     .expect("create stream");
-                    cpal::traits::StreamTrait::play(&stream)
-                        .ok()
-                        .map(|_| stream)
+                    Some(stream)
                 } else {
                     None
                 }
@@ -702,7 +721,8 @@ impl Unit {
         let out_stream = output
             .map(move |output| {
                 if let Ok(config) = cpal::traits::DeviceTrait::default_output_config(&output) {
-                    let config: cpal::StreamConfig = config.into();
+                    let mut config: cpal::StreamConfig = config.into();
+                    config.buffer_size = config_buffer_size;
 
                     let output_data_fn = move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                         let mut underflow = 0;
@@ -720,7 +740,9 @@ impl Unit {
                         }
 
                         if underflow > 0 {
-                            log::debug!("underflow: {underflow}")
+                            log::debug!("underflow: {underflow}");
+                        } else {
+                            log::trace!("rendered output: {}", data.len());
                         }
                     };
 
@@ -732,9 +754,7 @@ impl Unit {
                         None,
                     )
                     .expect("create stream");
-                    cpal::traits::StreamTrait::play(&stream)
-                        .ok()
-                        .map(|_| stream)
+                    Some(stream)
                 } else {
                     None
                 }
@@ -742,12 +762,14 @@ impl Unit {
             .flatten();
 
         if let Some(in_stream) = in_stream {
+            // cpal::traits::StreamTrait::play(&in_stream)?;
             IN_STREAM.with(move |mtx| {
                 let mut stream = mtx.lock();
                 _ = stream.insert(in_stream);
             });
         }
         if let Some(out_stream) = out_stream {
+            // cpal::traits::StreamTrait::play(&out_stream)?;
             OUT_STREAM.with(move |mtx| {
                 let mut stream = mtx.lock();
                 _ = stream.insert(out_stream);

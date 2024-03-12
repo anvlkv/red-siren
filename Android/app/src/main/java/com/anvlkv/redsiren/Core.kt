@@ -3,6 +3,8 @@
 package com.anvlkv.redsiren
 
 
+import android.content.ContentResolver
+import android.provider.Settings
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -17,23 +19,16 @@ import com.anvlkv.redsiren.core.typegen.AnimateOperation
 import com.anvlkv.redsiren.core.typegen.AnimateOperationOutput
 import com.anvlkv.redsiren.core.typegen.Effect
 import com.anvlkv.redsiren.core.typegen.Event
-import com.anvlkv.redsiren.core.typegen.KeyValueOperation
-import com.anvlkv.redsiren.core.typegen.KeyValueOutput
-import com.anvlkv.redsiren.core.typegen.NavigateOperation
 import com.anvlkv.redsiren.core.typegen.PlayOperation
-import com.anvlkv.redsiren.core.typegen.PlayOperationOutput
 import com.anvlkv.redsiren.core.typegen.Request
 import com.anvlkv.redsiren.core.typegen.Requests
 import com.anvlkv.redsiren.core.typegen.ViewModel
-import com.anvlkv.redsiren.ffirs.AuCoreBridge
-import com.anvlkv.redsiren.ffirs.AuReceiver
-import com.anvlkv.redsiren.ffirs.auNew
-import com.anvlkv.redsiren.ffirs.auReceive
-import com.anvlkv.redsiren.ffirs.auRequest
-import com.anvlkv.redsiren.ffirs.handleResponse
-import com.anvlkv.redsiren.ffirs.logInit
-import com.anvlkv.redsiren.ffirs.processEvent
-import com.anvlkv.redsiren.ffirs.view
+import com.anvlkv.redsiren.core.handleResponse
+import com.anvlkv.redsiren.core.logInit
+import com.anvlkv.redsiren.core.initializeAndroidContext
+import com.anvlkv.redsiren.core.processEvent
+import com.anvlkv.redsiren.core.typegen.UnitResolve
+import com.anvlkv.redsiren.core.view
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import kotlinx.coroutines.CompletableDeferred
@@ -62,6 +57,7 @@ open class Core : androidx.lifecycle.ViewModel() {
     init {
         viewModelScope.launch {
             logInit()
+            initializeAndroidContext()
         }
     }
 
@@ -80,85 +76,14 @@ open class Core : androidx.lifecycle.ViewModel() {
                 this.view = ViewModel.bincodeDeserialize(view())
             }
 
-            is Effect.Navigate -> {
-                when (val op = effect.value) {
-                    is NavigateOperation.To -> {
-                        this.navigateTo = op.value
-                    }
-                }
-            }
-
-
-            is Effect.KeyValue -> {
-                when (val kv = effect.value) {
-                    is KeyValueOperation.Read -> {
-
-                        coroutineScope {
-                            var response = KeyValueOutput.Read(Optional.empty())
-                            if (store != null) {
-                                val key = stringPreferencesKey(kv.value)
-                                val value = store!!.data.map { kv ->
-                                    kv[key] ?: ""
-                                }
-
-                                val entry = value.first()
-
-                                if (entry.isNotEmpty()) {
-                                    val data = entry.split(",").map {
-                                        it.toByte()
-                                    }
-                                    response = KeyValueOutput.Read(Optional.of(data))
-                                }
-                            }
-
-                            val effects =
-                                handleResponse(request.uuid.toByteArray(), response.bincodeSerialize())
-                            val requests = Requests.bincodeDeserialize(effects)
-                            for (request in requests) {
-                                processEffect(request)
-                            }
-                        }
-                    }
-
-                    is KeyValueOperation.Write -> {
-                        coroutineScope {
-                            val key = stringPreferencesKey(kv.field0)
-                            val data = kv.field1
-                            store!!.edit { kv ->
-                                kv[key] = data.joinToString(",")
-                            }
-                            val response = KeyValueOutput.Write(true)
-
-                            val effects =
-                                handleResponse(request.uuid.toByteArray(), response.bincodeSerialize())
-                            val requests = Requests.bincodeDeserialize(effects)
-                            for (request in requests) {
-                                processEffect(request)
-                            }
-                        }
-                    }
-                }
-            }
-
             is Effect.Play -> {
-                coroutineScope {
-                    playEffect(effect.value) {response ->
-                        launch {
-                            val effects =
-                                handleResponse(
-                                    request.uuid.toByteArray(),
-                                    response
-                                )
-                            val requests = Requests.bincodeDeserialize(effects)
-                            for (request in requests) {
-                                processEffect(request)
-                            }
-
-                            Log.d("redsiren::android", "launched response completed")
+                Log.i("redsiren::android", "play op")
+                when (effect.value) {
+                    is PlayOperation.Permissions -> {
+                        coroutineScope {
+                            getRecordingPermission(request.uuid.toByteArray())
                         }
                     }
-
-                    Log.d("redsiren::android", "play effect coroutine completed")
                 }
             }
 
@@ -182,6 +107,20 @@ open class Core : androidx.lifecycle.ViewModel() {
             }
         }
     }
+
+    private suspend fun getRecordingPermission(uuid: ByteArray) {
+        val permission = onRequestPermissions!!().await()
+        val response = UnitResolve.RecordingPermission(permission)
+        val effects =
+            handleResponse(uuid, response.bincodeSerialize())
+        val requests = Requests.bincodeDeserialize(effects)
+        for (request in requests) {
+            processEffect(request)
+        }
+        Log.d("redsiren::android", "resolved permissions: $permission")
+    }
+
+
 
     private suspend fun animateStream(channel: ReceiveChannel<Long>, uuid: ByteArray) {
         do {
@@ -208,53 +147,7 @@ open class Core : androidx.lifecycle.ViewModel() {
 
         Log.i("redsiren::android", "animation stream loop exited")
     }
-
-    private suspend fun playEffect(value: PlayOperation, onData: (ByteArray) -> Job) {
-        when (value) {
-            is PlayOperation.Permissions -> {
-                var grant = false
-                onRequestPermissions?.let { requestPermissions ->
-                    val deferred = requestPermissions.invoke()
-                    grant = deferred.await()
-                }
-                onData(PlayOperationOutput.Permission(grant).bincodeSerialize()).join()
-            }
-
-            is PlayOperation.InstallAU -> {
-                installAu()
-                forward(value)?.let {rec ->
-                    auReceive(rec)?.let {
-                        onData(it).join()
-                    }
-                }
-            }
-
-            else -> {
-                forward(value)?.let {rec ->
-                    while (true) {
-                        val d = auReceive(rec) ?: break
-                        onData(d).join()
-                    }
-                }
-            }
-        }
-
-        Log.i("redsiren::android", "au effect completed")
-    }
-
-    private companion object {
-        private var auBridge: AuCoreBridge? = null
-
-        fun installAu() {
-            auBridge = auNew()
-        }
-
-        fun forward(op: PlayOperation): AuReceiver? {
-            return auBridge?.let {
-                return auRequest(it, op.bincodeSerialize())
-            }
-        }
-    }
 }
+
 
 

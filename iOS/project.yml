@@ -27,7 +27,6 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        UILaunchScreen: {}
     settings:
       OTHER_LDFLAGS: [-w]
       SWIFT_OBJC_BRIDGING_HEADER: generated/app_coreFFI.h

@@ -3,11 +3,11 @@ extern crate derive_builder;
 
 use lazy_static::lazy_static;
 
+pub use app::*;
 pub use crux_core::{bridge::Bridge, Core, Request};
 pub use crux_http as http;
 pub use crux_kv as key_value;
 pub use hecs::Entity;
-pub use app::*;
 
 pub mod app;
 
@@ -27,9 +27,16 @@ pub fn view() -> Vec<u8> {
     CORE.view()
 }
 
+pub fn initialize_android_context() {
+    #[cfg(target_os = "android")]
+    unsafe {
+        au_core::initialize_android_context()
+    }
+}
+
 #[allow(unused_variables)]
 pub fn log_init() {
-    let lvl = log::LevelFilter::Info;
+    let lvl = log::LevelFilter::Trace;
 
     cfg_if::cfg_if! { if #[cfg(feature="browser")] {
         let lvl = lvl.to_level().unwrap();

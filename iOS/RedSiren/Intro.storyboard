@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="21507" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="Y6W-OH-hqX">
-    <device id="ipad12_9rounded" orientation="landscape" layout="fullscreen" appearance="light"/>
+    <device id="retina6_72" orientation="portrait" appearance="light"/>
     <dependencies>
         <deployment identifier="iOS"/>
         <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="21505"/>
@@ -14,7 +14,7 @@
             <objects>
                 <viewController storyboardIdentifier="IntroViewController" title="Intro" modalPresentationStyle="fullScreen" id="Y6W-OH-hqX" sceneMemberID="viewController">
                     <view key="view" userInteractionEnabled="NO" contentMode="scaleToFill" id="5EZ-qb-Rvc">
-                        <rect key="frame" x="0.0" y="0.0" width="1366" height="1024"/>
+                        <rect key="frame" x="0.0" y="0.0" width="430" height="932"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="Sun" translatesAutoresizingMaskIntoConstraints="NO" id="WMt-vM-VrS">
@@ -26,14 +26,14 @@
                                 </constraints>
                             </imageView>
                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleToFill" image="Shine" translatesAutoresizingMaskIntoConstraints="NO" id="Dlh-BG-04Q">
-                                <rect key="frame" x="0.0" y="172" width="651" height="852"/>
+                                <rect key="frame" x="0.0" y="80" width="651" height="852"/>
                                 <constraints>
                                     <constraint firstAttribute="width" secondItem="Dlh-BG-04Q" secondAttribute="height" multiplier="712:932" id="0TY-gW-Joc"/>
                                     <constraint firstAttribute="height" relation="lessThanOrEqual" constant="852" id="2fU-Ex-Cau"/>
                                 </constraints>
                             </imageView>
                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="Siren" translatesAutoresizingMaskIntoConstraints="NO" id="l91-Hi-eds">
-                                <rect key="frame" x="936" y="92" width="430" height="932"/>
+                                <rect key="frame" x="0.0" y="0.0" width="430" height="932"/>
                                 <constraints>
                                     <constraint firstAttribute="height" relation="lessThanOrEqual" constant="932" id="4pj-LB-wo4"/>
                                 </constraints>

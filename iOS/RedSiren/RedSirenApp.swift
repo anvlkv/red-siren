@@ -37,15 +37,12 @@ private extension UIEdgeInsets {
 
 @main
 struct iOSApp: App {
-    var core: Core
+    @StateObject var core: Core = Core()
     
-    init() {
-        self.core = Core()
-    }
     
     var body: some Scene {
         WindowGroup {
-            ContentView().environment(\.coreEnv, CoreEnvProvider(core: self.core))
+            ContentView().environmentObject(core)
         }
     }
 }

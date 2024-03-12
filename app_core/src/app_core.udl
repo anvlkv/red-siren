@@ -3,4 +3,5 @@ namespace app_core {
   bytes handle_response([ByRef] bytes uuid, [ByRef] bytes res);
   bytes view();
   void log_init();
+  void initialize_android_context();
 };

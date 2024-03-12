@@ -22,7 +22,7 @@ pub fn Objects() -> impl IntoView {
 }
 
 #[component]
-pub fn Object(obj: app_core::Object, paint: app_core::Paint) -> impl IntoView {
+pub fn Object(obj: app_core::ViewObject, paint: app_core::Paint) -> impl IntoView {
     let obj_view = match obj.shape {
         app_core::Shapes::Path { path, .. } => {
             let p_first = path.first().cloned().unwrap_or_default();

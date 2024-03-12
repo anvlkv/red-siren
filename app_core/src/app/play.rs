@@ -4,8 +4,8 @@ use au_core::UnitResolve;
 use crux_core::capability::{CapabilityContext, Operation};
 use crux_macros::Capability;
 use futures::{channel::mpsc::UnboundedReceiver, StreamExt};
-use serde::{Deserialize, Serialize};
 use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum PlayOperation {
@@ -39,6 +39,19 @@ where
         _ = recv_option.insert(receiver);
     }
 
+    pub fn recording_permission<F>(&self, notify: F)
+    where
+        F: Fn(UnitResolve) -> Ev + Send + 'static,
+    {
+        let context = self.context.clone();
+        self.context.spawn({
+            async move {
+                let resolve = context.request_from_shell(PlayOperation::Permissions).await;
+                context.update_app(notify(resolve));
+            }
+        });
+    }
+
     pub fn run_unit<F>(&self, notify: F)
     where
         F: Fn(UnitResolve) -> Ev + Send + 'static,
@@ -48,10 +61,12 @@ where
         let mut receiver = receiver.take().unwrap();
         self.context.spawn({
             async move {
-                context.notify_shell(PlayOperation::RunUnit).await;
+                _ = context.stream_from_shell(PlayOperation::RunUnit);
                 while let Some(resolve) = receiver.next().await {
+                    log::info!("unit resolved ev: {resolve:?}");
                     context.update_app(notify(resolve))
                 }
+                log::info!("resolve exited");
             }
         });
     }

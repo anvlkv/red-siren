@@ -106,19 +106,7 @@ impl App for RedSiren {
                 _ = self.audio_unit.lock().insert(unit);
             }
             Event::StartAudioUnit => {
-                let mut unit = self.audio_unit.lock();
-                let unit = unit.as_mut().unwrap();
-
-                caps.play.run_unit(Event::PlayOpResolve);
-
-                unit.run().expect("run unit");
-
-                caps.animate
-                    .animate_reception(Event::PlayOpSnoopData, snoops_cons(), "snoops");
-                caps.animate
-                    .animate_reception(Event::PlayOpFftData, fft_cons(), "fft");
-
-                log::info!("started unit and animate reception");
+                caps.play.recording_permission(Event::PlayOpResolve);
             }
             Event::Pause => {
                 caps.animate.stop(Event::AnimationStopped);
@@ -137,17 +125,37 @@ impl App for RedSiren {
                 caps.render.render();
                 caps.animate
                     .animate_reception(Event::PlayOpSnoopData, snoops_cons(), "snoops");
-                caps.animate
-                    .animate_reception(Event::PlayOpFftData, fft_cons(), "fft");
+                // caps.animate
+                //     .animate_reception(Event::PlayOpFftData, fft_cons(), "fft");
             }
             Event::PlayOpResolve(unit_resolve) => match unit_resolve {
+                UnitResolve::RecordingPermission(true) => {
+                    let mut unit = self.audio_unit.lock();
+                    let unit = unit.as_mut().unwrap();
+
+                    caps.play.run_unit(Event::PlayOpResolve);
+
+                    unit.run().expect("run unit");
+
+                    caps.animate
+                        .animate_reception(Event::PlayOpSnoopData, snoops_cons(), "snoops");
+                    // caps.animate
+                    //     .animate_reception(Event::PlayOpFftData, fft_cons(), "fft");
+
+                    log::info!("started unit and animate reception");
+                }
+                UnitResolve::RecordingPermission(false) => {
+                    log::error!("no recording permission");
+                }
                 UnitResolve::RunUnit(true) => {
+                    log::info!("unit running, configure");
                     let mut unit = self.audio_unit.lock();
                     let unit = unit.as_mut().unwrap();
                     let world = model.world.lock();
                     unit.update(au_core::UnitEV::Configure(
                         model.instrument.get_nodes(&world),
                     ));
+                    unit.update(au_core::UnitEV::Resume);
                 }
                 UnitResolve::RunUnit(false) => {
                     log::error!("run unit error");

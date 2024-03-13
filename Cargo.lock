@@ -1594,8 +1594,6 @@ checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 [[package]]
 name = "crux_core"
 version = "0.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d2d2e0e23e29fc322a8666f34ee8b201b2f72488662e3eddb3cc8ee57105dd8"
 dependencies = [
  "anyhow",
  "bincode",
@@ -1604,6 +1602,7 @@ dependencies = [
  "derive_more",
  "erased-serde",
  "futures",
+ "log",
  "serde",
  "serde-generate",
  "serde-reflection",
@@ -1616,8 +1615,6 @@ dependencies = [
 [[package]]
 name = "crux_http"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ab019e1c3867f6dada95df7bd6844fadc8e4739ae3b517ca9cff96b29aff485"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1635,8 +1632,6 @@ dependencies = [
 [[package]]
 name = "crux_kv"
 version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "177df429bf04328c9af094305c3bcbd1dcb83aa70ce23524655efcd3ad631fa4"
 dependencies = [
  "anyhow",
  "crux_core",
@@ -1646,8 +1641,6 @@ dependencies = [
 [[package]]
 name = "crux_macros"
 version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d60c832f2e2d924ea8e6e5a918dc725aa3fa245e30379411e4930df855628313"
 dependencies = [
  "darling 0.20.8",
  "proc-macro-error",
@@ -1659,8 +1652,6 @@ dependencies = [
 [[package]]
 name = "crux_platform"
 version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b53c906c2bc75a9ad54876d833e17b1194fd76d1f64d485e2b54439bf806625"
 dependencies = [
  "anyhow",
  "crux_core",
@@ -1670,8 +1661,6 @@ dependencies = [
 [[package]]
 name = "crux_time"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04d07e963a623738d42db4994ff81f84d7cd4e1f72ba02eb55db59791723bf6c"
 dependencies = [
  "anyhow",
  "chrono",
@@ -6357,6 +6346,7 @@ dependencies = [
  "tracing",
  "uuid",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 

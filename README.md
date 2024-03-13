@@ -31,11 +31,11 @@ Web version uses Shared app_core as is (rust), and AuCore via the `worklet` pack
 ### Cores, types and bindgen
 
 ```
-cargo build --package app_core  
+cargo build --package app_core
 ```
 
 ```
-cargo build --package aucore  
+cargo build --package aucore
 ```
 
 ```
@@ -80,4 +80,3 @@ Open `Android/` with Android studio.
 Requires [cargo ndk](https://github.com/bbqsrc/cargo-ndk).
 
 Clean build upon rust code changes.
-

@@ -25,7 +25,6 @@ oslog = "0.2.0"
 android_logger = "0.13.1"
 
 
-
 [dependencies]
 anyhow = "1.0.71"
 bincode = "1.3.3"
@@ -55,9 +54,9 @@ spectrum-analyzer = "1.5.0"
 fundsp = { version = "0.16.0", default-features = false }
 uniffi = { workspace = true }
 euclid = { vesrion = "0.22.9", features = [
-  "mint",
-  "serde",
-  "std",
+    "mint",
+    "serde",
+    "std",
 ], version = "0.22.9" }
 ecolor = { version = "0.26.2", features = ["color-hex", "serde"] }
 au_core = { path = "../au_core", default-features = false }

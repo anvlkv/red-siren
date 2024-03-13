@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use once_cell::sync::Lazy;
-use ringbuf::{Consumer, Producer, StaticRb};
+use parking_lot::Mutex;
+use ringbuf::{Rb, StaticRb};
 
 use crate::{FFTData, SnoopsData};
 
@@ -11,28 +11,32 @@ pub const SNOOPS_BUF_SIZE: usize = 12;
 pub type FFTBuf = StaticRb<FFTData, FFT_BUF_SIZE>;
 pub type SnoopsBuf = StaticRb<SnoopsData, SNOOPS_BUF_SIZE>;
 
-pub type FFTProd = Producer<FFTData, Arc<FFTBuf>>;
-pub type FFTCons = Consumer<FFTData, Arc<FFTBuf>>;
-pub type SnoopsProd = Producer<SnoopsData, Arc<SnoopsBuf>>;
-pub type SnoopsCons = Consumer<SnoopsData, Arc<SnoopsBuf>>;
-
-static mut FFT_RB: Lazy<(FFTProd, FFTCons)> = Lazy::new(|| StaticRb::default().split());
-
-static mut SNOOPS_RB: Lazy<(SnoopsProd, SnoopsCons)> = Lazy::new(|| StaticRb::default().split());
-
-pub fn fft_prod() -> &'static mut FFTProd {
-    unsafe { &mut FFT_RB.0 }
+#[derive(Default, Clone)]
+pub struct AppAuBuffer {
+    fft_rb: Arc<Mutex<FFTBuf>>,
+    snoops_rb: Arc<Mutex<SnoopsBuf>>,
 }
 
-pub fn snoops_prod() -> &'static mut SnoopsProd {
-    unsafe { &mut SNOOPS_RB.0 }
-}
+impl AppAuBuffer {
+    pub fn push_fft_data(&self, data: FFTData) {
+        let mut buf = self.fft_rb.lock();
+        _ = buf.push_overwrite(data);
+    }
 
-pub fn fft_cons() -> &'static mut FFTCons {
-    unsafe { &mut FFT_RB.1 }
-}
+    pub fn push_snoops_data(&self, data: SnoopsData) {
+        let mut buf = self.snoops_rb.lock();
+        _ = buf.push_overwrite(data);
+    }
 
+    pub fn read_fft_data(&self) -> Option<FFTData> {
+        let mut buf = self.fft_rb.try_lock();
+        let buf = buf.as_mut();
+        buf.map(|b| b.pop()).flatten()
+    }
 
-pub fn snoops_cons() -> &'static mut SnoopsCons {
-    unsafe { &mut SNOOPS_RB.1 }
+    pub fn read_snoops_data(&self) -> Option<SnoopsData> {
+        let mut buf = self.snoops_rb.try_lock();
+        let buf = buf.as_mut();
+        buf.map(|b| b.pop()).flatten()
+    }
 }

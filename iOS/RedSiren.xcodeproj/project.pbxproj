@@ -14,6 +14,7 @@
 		FA1248D42B2853A600D6CEC8 /* project_fonts in Resources */ = {isa = PBXBuildFile; fileRef = FA1248D32B2853A600D6CEC8 /* project_fonts */; };
 		FA13656C2B9CF7CC00C92FF7 /* app_core.udl in Sources */ = {isa = PBXBuildFile; fileRef = FA13656B2B9CF7C700C92FF7 /* app_core.udl */; };
 		FA25DFBF2B9D91790015876F /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA25DFBE2B9D91790015876F /* ContentView.swift */; };
+		FA577FE52BA0E3A8008294A1 /* Objects.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA577FE42BA0E3A8008294A1 /* Objects.swift */; };
 		FAA15C682B9DA62000E8A529 /* CoreTypes in Frameworks */ = {isa = PBXBuildFile; productRef = FAA15C672B9DA62000E8A529 /* CoreTypes */; };
 		FAA15C692B9DA64400E8A529 /* libapp_core_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = FA1365652B9CF77F00C92FF7 /* libapp_core_static.a */; };
 		FAA15C7E2B9DC7AE00E8A529 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FAA15C7A2B9DC6B900E8A529 /* AudioToolbox.framework */; };
@@ -101,6 +102,7 @@
 		FA13655E2B9CF77F00C92FF7 /* app_core.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = app_core.xcodeproj; path = ../app_core/app_core.xcodeproj; sourceTree = "<group>"; };
 		FA13656B2B9CF7C700C92FF7 /* app_core.udl */ = {isa = PBXFileReference; lastKnownFileType = text; path = app_core.udl; sourceTree = "<group>"; };
 		FA25DFBE2B9D91790015876F /* ContentView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		FA577FE42BA0E3A8008294A1 /* Objects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Objects.swift; sourceTree = "<group>"; };
 		FAA15C6A2B9DA65F00E8A529 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		FAA15C6C2B9DA66F00E8A529 /* AVFAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFAudio.framework; path = System/Library/Frameworks/AVFAudio.framework; sourceTree = SDKROOT; };
 		FAA15C6E2B9DA77500E8A529 /* AVKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVKit.framework; path = System/Library/Frameworks/AVKit.framework; sourceTree = SDKROOT; };
@@ -144,6 +146,7 @@
 				6F004D450518226D7B50A267 /* Assets.xcassets */,
 				FA1248D32B2853A600D6CEC8 /* project_fonts */,
 				17F008C3C1A819A3D7658E59 /* RedSirenApp.swift */,
+				FA577FE42BA0E3A8008294A1 /* Objects.swift */,
 				FA25DFBE2B9D91790015876F /* ContentView.swift */,
 				FAAA65352B09DFB500B1F5D1 /* IntroView.swift */,
 				FAAA653B2B0A23E500B1F5D1 /* AnimationClock.swift */,
@@ -397,6 +400,7 @@
 				FA25DFBF2B9D91790015876F /* ContentView.swift in Sources */,
 				FAAA65362B09DFB500B1F5D1 /* IntroView.swift in Sources */,
 				7D03E7045F57CA28148D2CA4 /* Core.swift in Sources */,
+				FA577FE52BA0E3A8008294A1 /* Objects.swift in Sources */,
 				FAAA653C2B0A23E500B1F5D1 /* AnimationClock.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

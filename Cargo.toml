@@ -18,12 +18,12 @@ log = "0.4.20"
 mint = "0.5.9"
 wasm-bindgen = "0.2.92"
 uniffi = "0.26.1"
-crux_core = "0.7.3"
-crux_http = "0.8"
-crux_kv = "0.1"
-crux_macros = "0.3"
-crux_platform = "0.1"
-crux_time = "0.3"
+crux_core = { path = "../crux/crux_core" }
+crux_http = { path = "../crux/crux_http" }
+crux_kv = { path = "../crux/crux_kv" }
+crux_macros = { path = "../crux/crux_macros" }
+crux_platform = { path = "../crux/crux_platform" }
+crux_time = { path = "../crux/crux_time" }
 insta = { version = "1.34.0", features = ["yaml"] }
 lazy_static = "1.4.0"
 

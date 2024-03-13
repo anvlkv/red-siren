@@ -1,9 +1,6 @@
 use std::collections::HashSet;
 
-use au_core::{
-    fft_cons, snoops_cons, FFTCons, FFTData, Node, SnoopsCons, SnoopsData, Unit, UnitEV, MAX_F,
-    MIN_F,
-};
+use au_core::{FFTData, Node, SnoopsData, Unit, UnitEV, MAX_F, MIN_F};
 use eframe::egui::{self, *};
 use fundsp::hacker32::*;
 use futures::channel::mpsc::unbounded;
@@ -19,8 +16,6 @@ struct State {
     world: World,
     last_fft: FFTData,
     last_snoops: SnoopsData,
-    fft_cons: &'static mut FFTCons,
-    snoops_cons: &'static mut SnoopsCons,
 }
 
 #[derive(Bundle, Clone)]
@@ -42,7 +37,7 @@ const KEYS: [Key; 10] = [
 ];
 
 fn main() {
-    simple_logger::init_with_level(log::Level::Error).expect("couldn't initialize logging");
+    simple_logger::init_with_level(log::Level::Trace).expect("couldn't initialize logging");
     let (resolve_sender, resolve_receiver) = unbounded();
     std::mem::forget(resolve_receiver);
 
@@ -87,8 +82,6 @@ fn run(mut unit: Unit) -> Result<(), anyhow::Error> {
         input: true,
         world,
         nodes,
-        fft_cons: fft_cons(),
-        snoops_cons: snoops_cons(),
         f0,
         last_fft: vec![],
         last_snoops: vec![],
@@ -267,7 +260,11 @@ impl eframe::App for State {
                     egui::containers::Frame::canvas(ui.style()).show(ui, |ui| {
                         ui.ctx().request_repaint();
 
-                        let snoops = self.snoops_cons.pop().unwrap_or(self.last_snoops.clone());
+                        let snoops = self
+                            .unit
+                            .app_au_buffer
+                            .read_snoops_data()
+                            .unwrap_or(self.last_snoops.clone());
 
                         self.last_snoops = snoops.clone();
 
@@ -322,7 +319,11 @@ impl eframe::App for State {
                     ui.label("Input spectrum");
                     egui::containers::Frame::canvas(ui.style()).show(ui, |ui| {
                         ui.ctx().request_repaint();
-                        let fft = self.fft_cons.pop().unwrap_or(self.last_fft.clone());
+                        let fft = self
+                            .unit
+                            .app_au_buffer
+                            .read_fft_data()
+                            .unwrap_or(self.last_fft.clone());
 
                         self.last_fft = fft.clone();
 

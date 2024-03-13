@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crux_core::capability::{CapabilityContext, Operation};
 use crux_macros::Capability;
 use futures::StreamExt;
@@ -62,13 +60,10 @@ where
         });
     }
 
-    pub fn animate_reception<F, T, const N: usize>(
-        &self,
-        notify: F,
-        cons: &'static mut ringbuf::Consumer<T, Arc<ringbuf::StaticRb<T, N>>>,
-        label: &str,
-    ) where
+    pub fn animate_reception<F, T, R>(&self, notify: F, mut cons: R, label: &str)
+    where
         F: Fn(T) -> Ev + Send + 'static,
+        R: FnMut() -> Option<T> + Send + 'static,
         T: Send + 'static,
     {
         let context = self.context.clone();
@@ -83,7 +78,7 @@ where
                     log::info!("receive ts stream");
 
                     if let AnimateOperationOutput::Timestamp(_) = response {
-                        match cons.pop() {
+                        match cons() {
                             Some(d) => {
                                 context.update_app(notify(d));
                             }

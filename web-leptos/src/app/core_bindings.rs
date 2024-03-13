@@ -1,7 +1,10 @@
 use std::rc::Rc;
 
-use app_core::{Activity, Effect, Event, RedSiren, RedSirenCapabilities, ViewModel};
-use app_core::{AnimateOperation, AnimateOperationOutput};
+#[allow(unused)]
+use app_core::{
+    Activity, AnimateOperation, AnimateOperationOutput, Effect, Event, Operation, RedSiren,
+    RedSirenCapabilities, Request, UnitResolve, ViewModel,
+};
 use futures::{
     channel::mpsc::{channel, Sender},
     StreamExt,
@@ -26,6 +29,21 @@ pub fn update(
     }
 }
 
+fn resolve<Op>(
+    req: &mut Request<Op>,
+    value: Op::Output,
+    core: &Core,
+    render: WriteSignal<ViewModel>,
+    navigate: Callback<&str>,
+    animate: Callback<Option<Sender<f64>>>,
+) where
+    Op: Operation,
+{
+    for effect in core.resolve(req, value) {
+        process_effect(&core, effect, render, navigate, animate);
+    }
+}
+
 #[allow(unused_variables)]
 pub fn process_effect(
     core: &Core,
@@ -38,9 +56,78 @@ pub fn process_effect(
         Effect::Render(_) => {
             render.update(|view| *view = core.view());
         }
-        Effect::Play(req) => match req.operation {
+        #[allow(unused_mut)]
+        Effect::Play(mut req) => match req.operation {
             app_core::PlayOperation::Permissions => {
-                log::info!("permissions");
+                #[cfg(feature = "browser")]
+                {
+                    use js_sys::{Object, Reflect};
+                    use wasm_bindgen_futures::JsFuture;
+                    use web_sys::{
+                        window, MediaStreamConstraints, PermissionState, PermissionStatus,
+                    };
+
+                    let win = window().unwrap();
+                    let navigator = win.navigator();
+                    if let Some(promise) = navigator
+                        .permissions()
+                        .ok()
+                        .map(|perms| {
+                            let q = Object::new();
+                            Reflect::set(&q, &"name".into(), &"microphone".into()).unwrap();
+                            perms.query(&q).ok()
+                        })
+                        .flatten()
+                    {
+                        let core = core.clone();
+                        spawn_local(async move {
+                            let result = JsFuture::from(promise).await.unwrap();
+                            let status = PermissionStatus::from(result);
+                            let grant = match status.state() {
+                                PermissionState::Granted => true,
+                                PermissionState::Denied => false,
+                                PermissionState::Prompt => {
+                                    if let Some(promise) = navigator
+                                        .media_devices()
+                                        .ok()
+                                        .map(|md| {
+                                            let mut constraints = MediaStreamConstraints::new();
+                                            constraints.audio(&true.into());
+                                            md.get_user_media_with_constraints(&constraints).ok()
+                                        })
+                                        .flatten()
+                                    {
+                                        match JsFuture::from(promise).await {
+                                            Ok(_) => true,
+                                            Err(_) => false,
+                                        }
+                                    } else {
+                                        false
+                                    }
+                                }
+                                _ => false,
+                            };
+
+                            resolve(
+                                &mut req,
+                                UnitResolve::RecordingPermission(grant),
+                                &core,
+                                render,
+                                navigate,
+                                animate,
+                            );
+                        })
+                    } else {
+                        resolve(
+                            &mut req,
+                            UnitResolve::RecordingPermission(false),
+                            &core,
+                            render,
+                            navigate,
+                            animate,
+                        );
+                    }
+                }
             }
             app_core::PlayOperation::RunUnit => {
                 log::info!("run unit");
@@ -103,17 +190,24 @@ pub fn process_effect(
 
                 spawn_local(async move {
                     while let Some(ts) = rx.next().await {
-                        for effect in core.resolve(&mut req, AnimateOperationOutput::Timestamp(ts))
-                        {
-                            process_effect(&core, effect, render, navigate, animate);
-                        }
+                        resolve(
+                            &mut req,
+                            AnimateOperationOutput::Timestamp(ts),
+                            &core,
+                            render,
+                            navigate,
+                            animate,
+                        );
                     }
 
-                    for effect in core.resolve(&mut req, AnimateOperationOutput::Done) {
-                        process_effect(&core, effect, render, navigate, animate);
-                    }
-
-                    log::info!("web: receive ts ended");
+                    resolve(
+                        &mut req,
+                        AnimateOperationOutput::Done,
+                        &core,
+                        render,
+                        navigate,
+                        animate,
+                    );
                 });
 
                 animate(Some(sx));
@@ -121,10 +215,15 @@ pub fn process_effect(
             AnimateOperation::Stop => {
                 animate(None);
 
-                for effect in core.resolve(&mut req, AnimateOperationOutput::Done) {
-                    process_effect(&core, effect, render, navigate, animate);
-                }
-            },
+                resolve(
+                    &mut req,
+                    AnimateOperationOutput::Done,
+                    &core,
+                    render,
+                    navigate,
+                    animate,
+                );
+            }
         },
     };
 }

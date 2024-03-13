@@ -148,6 +148,3 @@ open class Core : androidx.lifecycle.ViewModel() {
         Log.i("redsiren::android", "animation stream loop exited")
     }
 }
-
-
-

@@ -7,8 +7,8 @@ fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=../au_core");
 
     use app_core::{
-        Activity, Alignment, Box2D, ViewObject, ObjectId, ObjectStyle, Paint, Point2D,
-        RedSiren, Rgba, Shapes, Size2D, Stroke, Text, UnitState, VisualVM, VisualEV
+        Activity, Alignment, Box2D, ObjectId, ObjectStyle, Paint, Point2D, RedSiren, Rgba, Shapes,
+        Size2D, Stroke, Text, UnitState, ViewObject, VisualEV, VisualVM,
     };
 
     let mut gen = TypeGen::new();

@@ -53,6 +53,9 @@ typedef void (*UniFfiRustFutureContinuation)(void * _Nonnull, int8_t);
 // Scaffolding functions
 RustBuffer uniffi_app_core_fn_func_handle_response(RustBuffer uuid, RustBuffer res, RustCallStatus *_Nonnull out_status
 );
+void uniffi_app_core_fn_func_initialize_android_context(RustCallStatus *_Nonnull out_status
+    
+);
 void uniffi_app_core_fn_func_log_init(RustCallStatus *_Nonnull out_status
     
 );
@@ -174,6 +177,9 @@ void ffi_app_core_rust_future_free_void(void* _Nonnull handle
 void ffi_app_core_rust_future_complete_void(void* _Nonnull handle, RustCallStatus *_Nonnull out_status
 );
 uint16_t uniffi_app_core_checksum_func_handle_response(void
+    
+);
+uint16_t uniffi_app_core_checksum_func_initialize_android_context(void
     
 );
 uint16_t uniffi_app_core_checksum_func_log_init(void

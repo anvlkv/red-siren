@@ -4,19 +4,20 @@ import UIKit
 import CoreTypes
 import Serde
 import OSLog
+import AVFoundation
 
 @MainActor
 class Core: ObservableObject {
     @Published var view: ViewModel
-    
+
     @State var defaults: UserDefaults = UserDefaults()
-    
+
     var startClock: ((
         @escaping(Double?) -> Void
     ) -> Void)?
-    
+
     var stopClock: (() -> Void)?
-    
+
 
     init() {
         self.view = try! .bincodeDeserialize(input: [UInt8](RedSiren.view()))
@@ -39,7 +40,16 @@ class Core: ObservableObject {
             Logger().log("run unit")
             break
         case .play(.permissions):
-            Logger().log("permissions")
+            Task {
+                let grant = await getRecordPermission()
+                let data = try! [UInt8](UnitResolve.recordingPermission(grant).bincodeSerialize())
+                let effects = [UInt8](handleResponse(Data(request.uuid), Data(data)))
+
+                let requests: [Request] = try! .bincodeDeserialize(input: effects)
+                for request in requests {
+                    self.processEffect(request)
+                }
+            }
             break;
         case .animate(.start):
             Task {
@@ -65,8 +75,16 @@ class Core: ObservableObject {
             self.stopClock!()
             break
         }
+    }
 
-        
+    func getRecordPermission() async -> Bool {
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        var isAuthorized = status == .authorized
+        if status == .notDetermined {
+            isAuthorized = await AVCaptureDevice.requestAccess(for: .audio)
+        }
+
+        return isAuthorized
     }
 }
 

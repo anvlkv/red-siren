@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use au_core::Unit;
 use euclid::default::{Box2D, SideOffsets2D};
 use hecs::World;
 use keyframe::AnimationSequence;
@@ -27,6 +28,8 @@ pub struct Model {
     pub intro_opacity: Option<AnimationSequence<f64>>,
     pub view_objects_animation: Option<AnimationSequence<Objects>>,
     pub running_animation: Option<(f64, f64)>,
+    // AU
+    pub audio_unit: Arc<Mutex<Option<Unit>>>,
 }
 
 impl Model {

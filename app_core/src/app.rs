@@ -1,12 +1,9 @@
-use std::sync::Arc;
-
-use au_core::{fft_cons, snoops_cons, Unit, UnitEV, UnitResolve};
-pub use au_core::{FFTData, SnoopsData, UnitState};
+pub use au_core::{FFTData, SnoopsData, UnitResolve, UnitState};
+use au_core::{Unit, UnitEV};
 pub use crux_core::App;
 use crux_core::{render::Render, Capability};
 use crux_macros::Effect;
 use futures::channel::mpsc::unbounded;
-use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
 mod animate;
@@ -64,7 +61,6 @@ impl Eq for Event {}
 #[derive(Default)]
 pub struct RedSiren {
     visual: visual::Visual,
-    audio_unit: Arc<Mutex<Option<Unit>>>,
 }
 
 #[cfg_attr(feature = "typegen", derive(crux_macros::Export))]
@@ -103,7 +99,7 @@ impl App for RedSiren {
                 let (unit_resolve_sender, unit_resolve_receiver) = unbounded();
                 caps.play.with_receiver(unit_resolve_receiver);
                 let unit = Unit::new(unit_resolve_sender);
-                _ = self.audio_unit.lock().insert(unit);
+                _ = model.audio_unit.lock().insert(unit);
             }
             Event::StartAudioUnit => {
                 caps.play.recording_permission(Event::PlayOpResolve);
@@ -112,33 +108,46 @@ impl App for RedSiren {
                 caps.animate.stop(Event::AnimationStopped);
             }
             Event::AnimationStopped() => {
-                let mut unit = self.audio_unit.lock();
-                let unit = unit.as_mut().unwrap();
-                unit.update(UnitEV::Suspend);
+                {
+                    let mut unit = model.audio_unit.lock();
+                    let unit = unit.as_mut().unwrap();
+                    unit.update(UnitEV::Suspend);
+                }
                 self.visual
                     .update(VisualEV::ClearSnoops, model, &caps.into());
             }
             Event::Resume => {
-                let mut unit = self.audio_unit.lock();
-                let unit = unit.as_mut().unwrap();
-                unit.update(UnitEV::Resume);
+                let app_au_buffer = {
+                    let mut unit = model.audio_unit.lock();
+                    let unit = unit.as_mut().unwrap();
+                    unit.update(UnitEV::Resume);
+                    unit.app_au_buffer.clone()
+                };
+                caps.animate.animate_reception(
+                    Event::PlayOpSnoopData,
+                    move || app_au_buffer.read_snoops_data(),
+                    "snoops",
+                );
                 caps.render.render();
-                caps.animate
-                    .animate_reception(Event::PlayOpSnoopData, snoops_cons(), "snoops");
                 // caps.animate
                 //     .animate_reception(Event::PlayOpFftData, fft_cons(), "fft");
             }
             Event::PlayOpResolve(unit_resolve) => match unit_resolve {
                 UnitResolve::RecordingPermission(true) => {
-                    let mut unit = self.audio_unit.lock();
+                    let mut unit = model.audio_unit.lock();
                     let unit = unit.as_mut().unwrap();
 
                     caps.play.run_unit(Event::PlayOpResolve);
 
                     unit.run().expect("run unit");
 
-                    caps.animate
-                        .animate_reception(Event::PlayOpSnoopData, snoops_cons(), "snoops");
+                    let app_au_buffer = unit.app_au_buffer.clone();
+                    caps.animate.animate_reception(
+                        Event::PlayOpSnoopData,
+                        move || app_au_buffer.read_snoops_data(),
+                        "snoops",
+                    );
+
                     // caps.animate
                     //     .animate_reception(Event::PlayOpFftData, fft_cons(), "fft");
 
@@ -149,7 +158,7 @@ impl App for RedSiren {
                 }
                 UnitResolve::RunUnit(true) => {
                     log::info!("unit running, configure");
-                    let mut unit = self.audio_unit.lock();
+                    let mut unit = model.audio_unit.lock();
                     let unit = unit.as_mut().unwrap();
                     let world = model.world.lock();
                     unit.update(au_core::UnitEV::Configure(
@@ -161,6 +170,7 @@ impl App for RedSiren {
                     log::error!("run unit error");
                 }
                 UnitResolve::UpdateEV(true) => {
+                    caps.render.render();
                     log::info!("updated unit");
                 }
                 UnitResolve::UpdateEV(false) => {
@@ -224,7 +234,7 @@ impl App for RedSiren {
     }
 
     fn view(&self, model: &Self::Model) -> ViewModel {
-        let unit_state = self
+        let unit_state = model
             .audio_unit
             .lock()
             .as_ref()

@@ -1,7 +1,8 @@
-#[allow(unused)]
+#[allow(unused_imports)]
 use std::{rc::Rc, sync::Arc};
 
 use futures::channel::mpsc::Sender;
+#[allow(unused_imports)]
 use parking_lot::Mutex;
 
 cfg_if::cfg_if! {
@@ -66,7 +67,7 @@ impl AnimationClock {
                 _ = next_tick.lock().take();
                 let mut senders = senders.lock();
                 if senders.len() == 0 {
-                    return
+                    return;
                 }
 
                 match senders

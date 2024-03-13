@@ -358,6 +358,13 @@ public func handleResponse(_ uuid: Data, _ res: Data)  -> Data {
 }
     )
 }
+public func initializeAndroidContext()  {
+    try! rustCall() {
+    uniffi_app_core_fn_func_initialize_android_context($0)
+}
+}
+
+
 public func logInit()  {
     try! rustCall() {
     uniffi_app_core_fn_func_log_init($0)
@@ -397,6 +404,9 @@ private var initializationResult: InitializationResult {
         return InitializationResult.contractVersionMismatch
     }
     if (uniffi_app_core_checksum_func_handle_response() != 49414) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_app_core_checksum_func_initialize_android_context() != 57604) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_app_core_checksum_func_log_init() != 42543) {

@@ -4,7 +4,7 @@ extern crate derive_builder;
 use lazy_static::lazy_static;
 
 pub use app::*;
-pub use crux_core::{bridge::Bridge, Core, Request};
+pub use crux_core::{bridge::Bridge, capability::Operation, Core, Request};
 pub use crux_http as http;
 pub use crux_kv as key_value;
 pub use hecs::Entity;

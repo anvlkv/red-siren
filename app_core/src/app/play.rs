@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use au_core::UnitResolve;
+pub use au_core::UnitResolve;
 use crux_core::capability::{CapabilityContext, Operation};
 use crux_macros::Capability;
 use futures::{channel::mpsc::UnboundedReceiver, StreamExt};
@@ -63,7 +63,7 @@ where
             async move {
                 _ = context.stream_from_shell(PlayOperation::RunUnit);
                 while let Some(resolve) = receiver.next().await {
-                    log::info!("unit resolved ev: {resolve:?}");
+                    log::info!("core: unit resolved ev: {resolve:?}");
                     context.update_app(notify(resolve))
                 }
                 log::info!("resolve exited");

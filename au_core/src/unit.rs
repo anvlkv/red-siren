@@ -16,12 +16,10 @@ use spectrum_analyzer::{
 };
 
 #[allow(unused)]
-use crate::{
-    fft_cons, fft_prod, snoops_cons, snoops_prod, FFTCons, FFTProd, Node, SnoopsCons, SnoopsProd,
-    System, MAX_F, MIN_F,
-};
+use crate::{AppAuBuffer, Node, System, MAX_F, MIN_F};
 
-cfg_if::cfg_if! { if #[cfg(feature="browser")] {
+cfg_if::cfg_if! {
+    if #[cfg(feature="browser")] {
         cfg_if::cfg_if!{ if #[cfg(not(feature="worklet"))] {
                 thread_local! {
                     static CTX: Arc<Mutex<Option<web_sys::AudioContext>>> = Default::default();
@@ -31,7 +29,7 @@ cfg_if::cfg_if! { if #[cfg(feature="browser")] {
             }
         }
     }
-    else if #[cfg(feature = "cpal")] {
+    else if #[cfg(feature="cpal")] {
         thread_local! {
             static IN_STREAM: Arc<Mutex<Option<cpal::Stream>>> = Default::default();
             static OUT_STREAM: Arc<Mutex<Option<cpal::Stream>>> = Default::default();
@@ -55,11 +53,10 @@ pub struct Unit {
     pub buffer_size: u32,
     pub system: Arc<Mutex<System>>,
     pub state: Arc<Mutex<UnitState>>,
+    pub app_au_buffer: Arc<AppAuBuffer>,
     #[cfg(not(feature = "worklet"))]
     resolve_sender: UnboundedSender<UnitResolve>,
     input_analyzer_enabled: Arc<Mutex<bool>>,
-    #[cfg(feature = "worklet")]
-    consumers: Arc<Mutex<Option<(&'static mut FFTCons, &'static mut SnoopsCons)>>>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
@@ -106,13 +103,8 @@ impl Unit {
                     d.sample_rate().0,
                     match d.buffer_size() {
                         cpal::SupportedBufferSize::Range { min, max } => {
-                            log::info!("supported buffer size {min} - {max}");
-                            if DESIRED_BUFFER_SIZE > *min && DESIRED_BUFFER_SIZE < *max {
-                                DESIRED_BUFFER_SIZE
-                            }
-                            else {
-                                *min
-                            }
+                            // Ord::max(*max, DESIRED_BUFFER_SIZE)
+                            *max
                         },
                         cpal::SupportedBufferSize::Unknown => DESIRED_BUFFER_SIZE
                     }
@@ -141,8 +133,7 @@ impl Unit {
             input_analyzer_enabled: Arc::new(Mutex::new(true)),
             #[cfg(not(feature = "worklet"))]
             resolve_sender,
-            #[cfg(feature = "worklet")]
-            consumers: Default::default(),
+            app_au_buffer: Default::default(),
         }
     }
 
@@ -340,8 +331,6 @@ impl Unit {
         use wasm_bindgen_futures::JsFuture;
         use web_sys::*;
 
-        use crate::{fft_prod, snoops_prod};
-
         let ctx = AudioContext::new().map_err(map_js_err)?;
         let window = window().unwrap();
 
@@ -401,6 +390,7 @@ impl Unit {
         log::info!("setup audio node and ctx");
 
         let port = node.port().map_err(map_js_err)?;
+        let app_au_buffer = self.app_au_buffer.clone();
         let on_message = Closure::wrap(Box::new(move |ev: JsValue| {
             let ev = MessageEvent::from(ev);
             let data = ev.data();
@@ -414,29 +404,18 @@ impl Unit {
 
             log::trace!("unit received ev: {}", ev_type.as_str());
 
-            let fft_prod = fft_prod();
-            let snoops_prod = snoops_prod();
-
             match (ev_type.as_str(), value) {
                 ("snoops_data", Some(arr)) => {
                     let snoops_data =
                         bincode::deserialize::<SnoopsData>(&arr.to_vec()).expect("deserialize");
 
-                    if let Err(_) = snoops_prod.push(snoops_data) {
-                        log::debug!("snoops prod full");
-                    } else {
-                        log::trace!("send snoops");
-                    }
+                    app_au_buffer.push_snoops_data(snoops_data);
                 }
                 ("fft_data", Some(arr)) => {
                     let fft_data =
                         bincode::deserialize::<FFTData>(&arr.to_vec()).expect("deserialize");
 
-                    if let Err(_) = fft_prod.push(fft_data) {
-                        log::debug!("fft prod full");
-                    } else {
-                        log::trace!("send fft");
-                    }
+                    app_au_buffer.push_fft_data(fft_data);
                 }
                 _ => {
                     unimplemented!("event type: {ev_type}")
@@ -496,12 +475,6 @@ impl Unit {
         let an_rb = HeapRb::<f32>::new(self.fft_res as usize * RENDER_BURSTS);
         let (mut produce_analyze, mut consume_analyze) = an_rb.split();
         let (mut produce_render, mut consume_render) = rn_rb.split();
-        let fft_prod = fft_prod();
-        let fft_cons = fft_cons();
-        let snoops_prod = snoops_prod();
-        let snoops_cons = snoops_cons();
-
-        _ = self.consumers.lock().insert((fft_cons, snoops_cons));
 
         let mut exchange_buffer = [[0_f32; 128]; 2];
 
@@ -510,11 +483,11 @@ impl Unit {
         Box::new(move |data: &[f32]| {
             unit.store_input(data, &mut produce_analyze, &mut input_be)
                 .unwrap();
-            unit.process_input(&mut consume_analyze, fft_prod).unwrap();
+            unit.process_input(&mut consume_analyze).unwrap();
 
             unit.produce_output(&mut produce_render, &mut render_be)
                 .unwrap();
-            unit.send_snoops_reading(snoops_prod).unwrap();
+            unit.send_snoops_reading();
 
             let (ch1, ch2): (Vec<f32>, Vec<f32>) = consume_render
                 .pop_iter()
@@ -528,11 +501,7 @@ impl Unit {
         })
     }
 
-    fn process_input(
-        &self,
-        consume_analyze: &mut HeapConsumer<f32>,
-        fft_prod: &mut FFTProd,
-    ) -> Result<()> {
+    fn process_input(&self, consume_analyze: &mut HeapConsumer<f32>) -> Result<()> {
         if consume_analyze.len() >= self.fft_res {
             let nodes = self.nodes.lock();
             let samples = consume_analyze
@@ -540,12 +509,7 @@ impl Unit {
                 .take(self.fft_res)
                 .collect::<Vec<_>>();
             let fft_data = process_input_data(samples.as_slice(), &nodes, self.sample_rate);
-            match fft_prod.push(fft_data) {
-                Ok(_) => {}
-                Err(_) => {
-                    log::debug!("fft prod full")
-                }
-            }
+            self.app_au_buffer.push_fft_data(fft_data);
         }
 
         Ok(())
@@ -587,19 +551,15 @@ impl Unit {
 
     #[cfg(feature = "worklet")]
     pub fn next_fft_reading(&self) -> Option<FFTData> {
-        let mut recv = self.consumers.lock();
-        let (recv, _) = recv.as_mut().unwrap();
-        recv.pop()
+        self.app_au_buffer.read_fft_data()
     }
 
     #[cfg(feature = "worklet")]
     pub fn next_snoops_reading(&self) -> Option<SnoopsData> {
-        let mut recv = self.consumers.lock();
-        let (_, recv) = recv.as_mut().unwrap();
-        recv.pop()
+        self.app_au_buffer.read_snoops_data()
     }
 
-    fn send_snoops_reading(&self, snoops_prod: &mut SnoopsProd) -> Result<()> {
+    fn send_snoops_reading(&self) {
         let system = self.system.lock();
         let mut snoops = system.snoops.lock();
         let mut produced = vec![];
@@ -615,15 +575,8 @@ impl Unit {
         }
 
         if produced.len() > 0 {
-            match snoops_prod.push(produced) {
-                Ok(_) => {}
-                Err(_) => {
-                    log::debug!("snoops prod full")
-                }
-            }
+            self.app_au_buffer.push_snoops_data(produced)
         }
-
-        Ok(())
     }
 
     #[cfg(feature = "cpal")]
@@ -661,13 +614,11 @@ impl Unit {
         let (mut produce_analyze, mut consume_analyze) = an_rb.split();
         let (mut produce_render, mut consume_render) = rn_rb.split();
 
-        let fft_prod = fft_prod();
-        let snoops_prod = snoops_prod();
         let unit = self.clone();
         let mut process_fn = move || -> Result<()> {
-            unit.process_input(&mut consume_analyze, fft_prod)?;
+            unit.process_input(&mut consume_analyze)?;
             unit.produce_output(&mut produce_render, &mut render_be)?;
-            unit.send_snoops_reading(snoops_prod)?;
+            unit.send_snoops_reading();
             Ok(())
         };
 
@@ -689,15 +640,15 @@ impl Unit {
             });
         });
 
-        let config_buffer_size = cpal::BufferSize::Fixed(self.buffer_size);
+        // let config_buffer_size = cpal::BufferSize::Fixed(self.buffer_size);
 
         let unit = self.clone();
         let in_stream = input
             .map(move |input| {
                 if let Ok(config) = cpal::traits::DeviceTrait::default_input_config(&input) {
                     let mut config: cpal::StreamConfig = config.into();
-                    config.channels = 1;
-                    config.buffer_size = config_buffer_size;
+                    // config.channels = 1;
+                    // config.buffer_size = config_buffer_size;
                     let input_data_fn = move |data: &[f32], _: &cpal::InputCallbackInfo| {
                         unit.store_input(data, &mut produce_analyze, &mut input_be)
                             .unwrap();
@@ -722,7 +673,7 @@ impl Unit {
             .map(move |output| {
                 if let Ok(config) = cpal::traits::DeviceTrait::default_output_config(&output) {
                     let mut config: cpal::StreamConfig = config.into();
-                    config.buffer_size = config_buffer_size;
+                    // config.buffer_size = config_buffer_size;
 
                     let output_data_fn = move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                         let mut underflow = 0;

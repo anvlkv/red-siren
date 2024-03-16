@@ -1,20 +1,28 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+pub mod backend;
+mod node;
 
+use std::collections::{HashMap, HashSet};
+
+use crux_core::{
+    capability::{CapabilityContext, Operation},
+    Capability,
+};
 use fundsp::hacker32::*;
 use hecs::Entity;
-use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
+use spectrum_analyzer::{
+    samples_fft_to_spectrum, scaling::divide_by_N_sqrt, windows::hann_window, FrequencyLimit,
+};
 
-use crate::node::*;
+use ::shared::{FFTData, SnoopsData};
+use node::Node;
 
 pub struct System {
     pub output_net: Net32,
     pub input_net: Net32,
-    pub snoops: Arc<Mutex<Vec<(Snoop<f32>, Entity)>>>,
-    pub nodes: Arc<Mutex<HashMap<Entity, Node>>>,
-    pressed: Arc<Mutex<HashSet<Entity>>>,
+    pub nodes: HashMap<Entity, Node>,
+    pub sample_rate: u32,
+    pressed: HashSet<Entity>,
     output_bus_id: NodeId,
     input_bus_id: NodeId,
     volume_l: Shared<f32>,
@@ -52,20 +60,15 @@ impl System {
             input_bus_id,
             volume_l,
             volume_r,
-            snoops: Default::default(),
+            sample_rate,
             nodes: Default::default(),
             pressed: Default::default(),
         }
     }
 
-    pub fn replace_nodes(&mut self, nodes: Vec<Node>) {
+    pub fn replace_nodes(&mut self, nodes: Vec<Node>) -> Vec<(Snoop<f32>, Entity)> {
         let snoop_pairs = nodes.iter().map(|_| snoop(SNOOP_SIZE)).collect::<Vec<_>>();
         let (snoops, snoop_bes): (Vec<_>, Vec<_>) = snoop_pairs.into_iter().unzip();
-        {
-            let mut s_mtx = self.snoops.lock();
-            s_mtx.clear();
-            s_mtx.extend(snoops.into_iter().zip(nodes.iter().map(|n| n.button)));
-        }
 
         let size = nodes.len();
 
@@ -92,7 +95,7 @@ impl System {
                 >> (pass()
                     | pluck_ring
                     | var(&node_data.f_emit.1) * 2.0 // hold sampling
-                    | var(&node_data.f_base) * constant((i + 1) as f32) // resonator cutoff 
+                    | var(&node_data.f_base) * constant((i + 1) as f32) // resonator cutoff
                     | (var(&node_data.f_emit.1) - var(&node_data.f_emit.0))) // resonator band width
                 >> (pass()
                     | pinkpass()
@@ -126,89 +129,183 @@ impl System {
             ((pass()) | p_hz | p_q) >> peak() >> pass() * f_mul
         };
 
-        let (output_node, input_node): (Box<dyn AudioUnit32>, Box<dyn AudioUnit32>) =
+        let (output_node, input_node): (Box<dyn AudioUnit32>, Box<dyn AudioUnit32>) = u_num_it!(
+            1..=100,
             match nodes.len() {
-                1 => (
-                    Box::new(bus::<U1, _, _>(render_node)),
-                    Box::new(bus::<U1, _, _>(preamp_node)),
+                U => (
+                    Box::new(bus::<U, _, _>(render_node)),
+                    Box::new(bus::<U, _, _>(preamp_node)),
                 ),
-                2 => (
-                    Box::new(bus::<U2, _, _>(render_node)),
-                    Box::new(bus::<U2, _, _>(preamp_node)),
-                ),
-                3 => (
-                    Box::new(bus::<U3, _, _>(render_node)),
-                    Box::new(bus::<U3, _, _>(preamp_node)),
-                ),
-                4 => (
-                    Box::new(bus::<U4, _, _>(render_node)),
-                    Box::new(bus::<U4, _, _>(preamp_node)),
-                ),
-                5 => (
-                    Box::new(bus::<U5, _, _>(render_node)),
-                    Box::new(bus::<U5, _, _>(preamp_node)),
-                ),
-                6 => (
-                    Box::new(bus::<U6, _, _>(render_node)),
-                    Box::new(bus::<U6, _, _>(preamp_node)),
-                ),
-                7 => (
-                    Box::new(bus::<U7, _, _>(render_node)),
-                    Box::new(bus::<U7, _, _>(preamp_node)),
-                ),
-                8 => (
-                    Box::new(bus::<U8, _, _>(render_node)),
-                    Box::new(bus::<U8, _, _>(preamp_node)),
-                ),
-                9 => (
-                    Box::new(bus::<U9, _, _>(render_node)),
-                    Box::new(bus::<U9, _, _>(preamp_node)),
-                ),
-                10 => (
-                    Box::new(bus::<U10, _, _>(render_node)),
-                    Box::new(bus::<U10, _, _>(preamp_node)),
-                ),
-                _ => panic!("empty system"),
-            };
+            }
+        );
 
         _ = self.output_net.replace(self.output_bus_id, output_node);
         _ = self.input_net.replace(self.input_bus_id, input_node);
         self.input_net.commit();
         self.output_net.commit();
 
-        {
-            let mut n_mtx = self.nodes.lock();
+        let out_snoops = snoops
+            .into_iter()
+            .zip(nodes.iter().map(|n| n.button.clone()))
+            .collect();
 
-            n_mtx.clear();
-            n_mtx.extend(nodes.into_iter().map(|n| (n.button, n)));
-        }
-        {
-            let mut p_mtx = self.pressed.lock();
+        self.nodes.clear();
+        self.nodes.extend(nodes.into_iter().map(|n| (n.button, n)));
+        self.pressed.clear();
 
-            p_mtx.clear();
-        }
+        out_snoops
     }
 
-    pub fn press(&self, entity: Entity, val: bool) {
-        let mut pressed = self.pressed.lock();
-
+    pub fn press(&mut self, entity: Entity, val: bool) {
         if val {
-            _ = pressed.insert(entity);
+            _ = self.pressed.insert(entity);
         } else {
-            _ = pressed.remove(&entity);
+            _ = self.pressed.remove(&entity);
         }
     }
 
     pub fn move_f(&self, entity: Entity, val: f32) {
-        let pressed = self.pressed.lock();
-
-        if pressed.contains(&entity) {
-            let nodes = self.nodes.lock();
-
-            let node = nodes.get(&entity).expect("node");
+        if self.pressed.contains(&entity) {
+            let node = self.nodes.get(&entity).expect("node");
             let base = node.f_base.value();
             node.f_emit.0.set_value(base + base * val);
             node.f_emit.1.set_value(base * 2.0 + base * (1.0 - val))
         }
+    }
+
+    pub fn control_node(&self, entity: &Entity, value: f32) {
+        if let Some(node) = self.nodes.get(entity) {
+            node.control.set_value(value);
+        } else {
+            log::error!("no node for entity");
+        }
+    }
+
+    pub fn process_input_data(
+        samples: &[f32],
+        nodes: &HashMap<Entity, Node>,
+        sample_rate: u32,
+    ) -> FFTData {
+        let hann_window = hann_window(samples);
+
+        let spectrum_hann_window = samples_fft_to_spectrum(
+            &hann_window,
+            sample_rate,
+            FrequencyLimit::Range(MIN_F, MAX_F),
+            Some(&divide_by_N_sqrt),
+        )
+        .unwrap();
+
+        let data = spectrum_hann_window
+            .data()
+            .iter()
+            .map(|(f, v)| (f.val(), v.val()))
+            .collect::<Vec<_>>();
+
+        for (_, node) in nodes.iter() {
+            let (min_fq, max_fq) = (node.f_sense.0 .0.value(), node.f_sense.0 .1.value());
+            let (min_value, max_value) = (node.f_sense.1 .0.value(), node.f_sense.1 .1.value());
+            let n_breadth = data
+                .iter()
+                .filter(|(freq, _)| *freq >= min_fq && *freq <= max_fq)
+                .count();
+
+            let activation = data.iter().fold(0.0, |acc, (freq, value)| {
+                if *freq >= min_fq && *freq <= max_fq && *value >= min_value && *value <= max_value
+                {
+                    acc + (1.0 / n_breadth as f32)
+                } else {
+                    acc
+                }
+            });
+
+            if activation > 0.0 {
+                log::info!("activated node {} by {}", node.f_base.value(), activation)
+            } else if node.control.value() > 0.0 {
+                log::info!("deactivated node {}", node.f_base.value())
+            }
+
+            node.control.set_value(activation)
+        }
+
+        data
+    }
+
+    pub fn backends(&mut self) -> (BigBlockAdapter32, BlockRateAdapter32) {
+        let (input, output) = (self.input_net.backend(), self.output_net.backend());
+        (
+            BigBlockAdapter32::new(Box::new(input)),
+            BlockRateAdapter32::new(Box::new(output)),
+        )
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum SystemOp {
+    #[serde(skip)]
+    Backends(BigBlockAdapter32, BlockRateAdapter32, uuid::Uuid),
+}
+
+impl std::fmt::Debug for SystemOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SystemOp::Backends(_, _, id) => write!(f, "SystemOp::Backends {}", id),
+        }
+    }
+}
+
+impl PartialEq for SystemOp {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (SystemOp::Backends(_, _, id1), SystemOp::Backends(_, _, id2)) => id1 == id2,
+        }
+    }
+}
+
+impl Operation for SystemOp {
+    type Output = bool;
+}
+
+pub struct SystemCapability<Ev> {
+    context: CapabilityContext<SystemOp, Ev>,
+}
+
+impl<Ev> Capability<Ev> for SystemCapability<Ev> {
+    type Operation = SystemOp;
+
+    type MappedSelf<MappedEv> = SystemCapability<MappedEv>;
+
+    fn map_event<F, NewEv>(&self, f: F) -> Self::MappedSelf<NewEv>
+    where
+        F: Fn(NewEv) -> Ev + Send + Sync + Copy + 'static,
+        Ev: 'static,
+        NewEv: 'static + Send,
+    {
+        SystemCapability::new(self.context.map_event(f))
+    }
+}
+
+impl<Ev> SystemCapability<Ev>
+where
+    Ev: Send + 'static,
+{
+    pub fn new(context: CapabilityContext<SystemOp, Ev>) -> Self {
+        Self { context }
+    }
+
+    pub fn send_be<F>(&self, sys: &mut System, notify: F)
+    where
+        F: Fn(bool) -> Ev + Send + 'static,
+    {
+        self.context.spawn({
+            let (input, output) = sys.backends();
+            let context = self.context.clone();
+            async move {
+                let done = context
+                    .request_from_shell(SystemOp::Backends(input, output, uuid::Uuid::new_v4()))
+                    .await;
+                context.update_app(notify(done))
+            }
+        })
     }
 }

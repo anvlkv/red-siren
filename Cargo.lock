@@ -282,44 +282,28 @@ checksum = "5ad32ce52e4161730f7098c077cd2ed6229b5804ccf99e5366be1ab72a98b4e1"
 name = "app_core"
 version = "0.1.0"
 dependencies = [
- "android_logger",
  "anyhow",
  "assert_let_bind",
- "au_core",
  "bincode",
- "cfg-if",
- "console_error_panic_hook",
- "console_log",
  "crux_core",
  "crux_http",
  "crux_kv",
  "crux_macros",
- "crux_platform",
- "crux_time",
  "derive_builder 0.20.0",
- "derive_more",
  "ecolor",
  "euclid",
- "fundsp",
  "futures",
  "hecs",
  "insta",
  "keyframe",
  "keyframe_derive",
- "lazy_static",
  "log",
  "logging_timer",
  "mint",
  "num-integer",
- "oslog",
  "parking_lot",
- "ringbuf",
  "serde",
- "serde_json",
- "simple_logger",
- "spectrum-analyzer",
- "thiserror",
- "uniffi",
+ "shared",
  "url",
  "uuid",
 ]
@@ -693,28 +677,28 @@ dependencies = [
  "cfg-if",
  "console_error_panic_hook",
  "console_log",
- "cpal",
+ "crux_core",
+ "crux_macros",
  "dasp_sample",
- "derive_builder 0.20.0",
  "eframe",
  "fundsp",
  "futures",
  "getrandom 0.2.12",
  "hecs",
- "itertools",
- "jni",
  "js-sys",
  "lazy_static",
- "libloading 0.8.3",
  "log",
  "logging_timer",
- "ndk-context",
- "once_cell",
  "parking_lot",
  "ringbuf",
+ "send_wrapper",
  "serde",
+ "shared",
  "simple_logger",
  "spectrum-analyzer",
+ "typenum",
+ "u-num-it",
+ "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -953,6 +937,40 @@ dependencies = [
  "futures-lite 2.2.0",
  "piper",
  "tracing",
+]
+
+[[package]]
+name = "bridge"
+version = "0.1.0"
+dependencies = [
+ "android_logger",
+ "anyhow",
+ "app_core",
+ "au_core",
+ "bincode",
+ "cfg-if",
+ "console_error_panic_hook",
+ "console_log",
+ "cpal",
+ "crux_core",
+ "crux_http",
+ "crux_kv",
+ "crux_macros",
+ "crux_platform",
+ "crux_time",
+ "futures",
+ "jni",
+ "lazy_static",
+ "libloading 0.8.3",
+ "log",
+ "ndk-context",
+ "oslog",
+ "parking_lot",
+ "serde",
+ "shared",
+ "simple_logger",
+ "uniffi",
+ "uuid",
 ]
 
 [[package]]
@@ -1594,6 +1612,8 @@ checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 [[package]]
 name = "crux_core"
 version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d2d2e0e23e29fc322a8666f34ee8b201b2f72488662e3eddb3cc8ee57105dd8"
 dependencies = [
  "anyhow",
  "bincode",
@@ -1602,7 +1622,6 @@ dependencies = [
  "derive_more",
  "erased-serde",
  "futures",
- "log",
  "serde",
  "serde-generate",
  "serde-reflection",
@@ -1615,6 +1634,8 @@ dependencies = [
 [[package]]
 name = "crux_http"
 version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ab019e1c3867f6dada95df7bd6844fadc8e4739ae3b517ca9cff96b29aff485"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1632,6 +1653,8 @@ dependencies = [
 [[package]]
 name = "crux_kv"
 version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "177df429bf04328c9af094305c3bcbd1dcb83aa70ce23524655efcd3ad631fa4"
 dependencies = [
  "anyhow",
  "crux_core",
@@ -1641,6 +1664,8 @@ dependencies = [
 [[package]]
 name = "crux_macros"
 version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d60c832f2e2d924ea8e6e5a918dc725aa3fa245e30379411e4930df855628313"
 dependencies = [
  "darling 0.20.8",
  "proc-macro-error",
@@ -1652,6 +1677,8 @@ dependencies = [
 [[package]]
 name = "crux_platform"
 version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b53c906c2bc75a9ad54876d833e17b1194fd76d1f64d485e2b54439bf806625"
 dependencies = [
  "anyhow",
  "crux_core",
@@ -1661,6 +1688,8 @@ dependencies = [
 [[package]]
 name = "crux_time"
 version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04d07e963a623738d42db4994ff81f84d7cd4e1f72ba02eb55db59791723bf6c"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2182,6 +2211,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "eval"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba90c19bed0c67afb0a24340b42d13ddddcb5413c4c17a04c11871bd6b572c42"
+dependencies = [
+ "quick-error",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "event-listener"
 version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2416,7 +2456,6 @@ dependencies = [
  "futures-core",
  "futures-task",
  "futures-util",
- "num_cpus",
 ]
 
 [[package]]
@@ -4522,9 +4561,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.78"
+version = "1.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2422ad645d89c99f8f3e6b88a9fdeca7fabeac836b1002371c4367c8f984aae"
+checksum = "e835ff2298f5721608eb1a980ecaee1aef2c132bf95ecc026a11b7bf3c01c02e"
 dependencies = [
  "unicode-ident",
 ]
@@ -4567,6 +4606,12 @@ dependencies = [
  "quote",
  "syn 1.0.109",
 ]
+
+[[package]]
+name = "quick-error"
+version = "1.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
 name = "quick-xml"
@@ -5194,6 +5239,18 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest",
+]
+
+[[package]]
+name = "shared"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "crux_core",
+ "derive_builder 0.20.0",
+ "hecs",
+ "serde",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -5860,6 +5917,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
 
 [[package]]
+name = "u-num-it"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da70838ec5ecb0feb4fc7326bff7bd6980e2f0c0e0d00bf79119c2bdb6e3bda3"
+dependencies = [
+ "eval",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.52",
+]
+
+[[package]]
 name = "uds_windows"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6320,9 +6389,9 @@ name = "web-leptos"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "app_core",
  "axum",
  "bincode",
+ "bridge",
  "cfg-if",
  "futures",
  "gloo-storage",

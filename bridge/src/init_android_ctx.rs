@@ -1,3 +1,5 @@
+// see https://github.com/mozilla/uniffi-rs/issues/1778
+
 use jni::{
     signature::ReturnType,
     sys::{jint, jsize, JavaVM},

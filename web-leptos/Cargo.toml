@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow = "1.0.71"
-app_core = { path = "../app_core", features = ["browser"] }
+bridge = { path = "../bridge" }
 leptos = { version = "0.6.9", features = ["nightly"] }
 leptos_meta = { version = "0.6.9", features = ["nightly"] }
 leptos_router = { version = "0.6.9", features = ["nightly"] }

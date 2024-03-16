@@ -1,7 +1,7 @@
 use crate::Paint;
 
 use super::{config::Config, objects::ViewObject, Animate};
-use au_core::SnoopsData;
+use ::shared::SnoopsData;
 use crux_core::render::Render;
 pub use crux_core::App;
 use crux_macros::Effect;
@@ -101,29 +101,27 @@ impl App for Visual {
             }
             VisualEV::SnoopsData(data) => {
                 let config = model.get_config().unwrap();
-                let world = model.world.lock();
 
                 for (values, button) in data.into_iter().zip(model.layout.buttons.iter()) {
                     let (string, secondary_string) =
                         model.instrument.buttons_to_strings.get(button).unwrap();
 
                     if let Some(mut obj) = secondary_string
-                        .map(|string| world.get::<&mut ViewObject>(string).ok())
+                        .map(|string| model.world.get::<&mut ViewObject>(string).ok())
                         .flatten()
                     {
                         Self::draw_snoops_data_on_path(values.clone(), &mut obj, config);
                     }
 
-                    let mut obj = world.get::<&mut ViewObject>(*string).unwrap();
+                    let mut obj = model.world.get::<&mut ViewObject>(*string).unwrap();
                     Self::draw_snoops_data_on_path(values, &mut obj, config);
                 }
 
-                model.objects.update_from_world(&world).unwrap();
+                model.objects.update_from_world(&model.world).unwrap();
 
                 caps.render.render();
             }
             VisualEV::ClearSnoops => {
-                let world = model.world.lock();
                 let clear_mock = vec![0.0, 0.0];
                 let config = model.get_config().unwrap();
 
@@ -132,12 +130,12 @@ impl App for Visual {
                     .left_strings
                     .iter()
                     .chain(model.layout.right_strings.iter())
-                    .filter_map(|string| world.get::<&mut ViewObject>(*string).ok())
+                    .filter_map(|string| model.world.get::<&mut ViewObject>(*string).ok())
                 {
                     Self::draw_snoops_data_on_path(clear_mock.clone(), &mut obj, config);
                 }
 
-                model.objects.update_from_world(&world).unwrap();
+                model.objects.update_from_world(&model.world).unwrap();
 
                 caps.render.render();
             }
@@ -147,10 +145,7 @@ impl App for Visual {
             }
             VisualEV::SetDarkMode(dark) => {
                 model.dark_schema = dark;
-                {
-                    let mut world = model.world.lock();
-                    model.objects.repaint(&mut world, dark).unwrap();
-                }
+                model.objects.repaint(&mut model.world, dark).unwrap();
                 self.update(VisualEV::LayoutUpdate, model, caps);
             }
             VisualEV::SetDensity(density) => {

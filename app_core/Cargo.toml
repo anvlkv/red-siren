@@ -5,25 +5,11 @@ edition = { workspace = true }
 rust-version = { workspace = true }
 
 [lib]
-crate-type = ["lib", "staticlib", "cdylib"]
+crate-type = ["rlib"]
 name = "app_core"
 
-[[bin]]
-name = "bindgen"
-
-
 [features]
-typegen = ["crux_core/typegen", "au_core/typegen"]
-browser = ["console_log", "console_error_panic_hook", "au_core/browser"]
-cpal = ["au_core/cpal"]
-
-[target.'cfg(target_os = "ios")'.dependencies]
-oslog = "0.2.0"
-
-
-[target.'cfg(target_os = "android")'.dependencies]
-android_logger = "0.13.1"
-
+typegen = ["crux_core/typegen", "shared/typegen"]
 
 [dependencies]
 anyhow = "1.0.71"
@@ -32,13 +18,7 @@ crux_core = { workspace = true }
 crux_http = { workspace = true }
 crux_kv = { workspace = true }
 crux_macros = { workspace = true }
-crux_platform = { workspace = true }
-crux_time = { workspace = true }
-derive_more = "0.99.17"
-lazy_static = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-serde_json = "1.0.96"
-thiserror = "1.0.40"
 url = "2.3.1"
 log = { workspace = true }
 keyframe = "1.1.1"
@@ -48,31 +28,17 @@ num-integer = "0.1.45"
 hecs = { version = "0.10.3", features = ["serde", "macros"] }
 futures = "0.3.29"
 uuid = { version = "1.7.0", features = ["v4", "serde"] }
-cfg-if = "1.0.0"
 logging_timer = "1.1.0"
-spectrum-analyzer = "1.5.0"
-fundsp = { version = "0.16.0", default-features = false }
-uniffi = { workspace = true }
 euclid = { vesrion = "0.22.9", features = [
     "mint",
     "serde",
     "std",
 ], version = "0.22.9" }
 ecolor = { version = "0.26.2", features = ["color-hex", "serde"] }
-au_core = { path = "../au_core", default-features = false }
-simple_logger = "4.1.0"
-ringbuf = "0.3.3"
-console_error_panic_hook = { version = "0.1.7", optional = true }
-console_log = { version = "1.0.0", optional = true }
 derive_builder = "0.20.0"
 parking_lot = { version = "0.12.1", features = ["deadlock_detection"] }
+shared = { path = "../shared" }
 
 [dev-dependencies]
 assert_let_bind = "0.1.1"
 insta = { workspace = true }
-
-[target.bindgen.dependencies]
-uniffi = { workspace = true, features = ["cli"] }
-
-[build-dependencies]
-uniffi = { workspace = true, features = ["build"] }

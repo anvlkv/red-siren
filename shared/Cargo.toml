@@ -1,0 +1,23 @@
+[package]
+name = "shared"
+authors.workspace = true
+repository.workspace = true
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+
+[features]
+typegen = ["crux_core/typegen"]
+
+[dependencies]
+anyhow = "1.0.71"
+serde = { workspace = true, features = ["derive"] }
+derive_builder = "0.20.0"
+hecs = { version = "0.10.3", features = ["serde", "macros"] }
+crux_core = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { workspace = true }
+anyhow = "1.0.79"

@@ -1,0 +1,69 @@
+[package]
+name = "bridge"
+authors.workspace = true
+repository.workspace = true
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+
+[lib]
+crate-type = ["lib", "staticlib", "cdylib"]
+name = "bridge"
+
+[[bin]]
+name = "bindgen"
+
+[features]
+typegen = [
+    "crux_core/typegen",
+    "au_core/typegen",
+    "app_core/typegen",
+    "shared/typegen",
+]
+
+[dependencies]
+bincode = "1.3.3"
+anyhow = "1.0.71"
+crux_core = { workspace = true }
+crux_http = { workspace = true }
+crux_kv = { workspace = true }
+crux_macros = { workspace = true }
+crux_platform = { workspace = true }
+crux_time = { workspace = true }
+lazy_static = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+uniffi = { workspace = true }
+simple_logger = "4.1.0"
+au_core = { path = "../au_core" }
+app_core = { path = "../app_core" }
+futures = "0.3.28"
+parking_lot = "0.12.1"
+uuid = { version = "1.7.0", features = ["v4"] }
+shared = { path = "../shared" }
+cfg-if = "1.0.0"
+log = { workspace = true }
+
+
+[target.bindgen.dependencies]
+uniffi = { workspace = true, features = ["cli"] }
+
+[build-dependencies]
+uniffi = { workspace = true, features = ["build"] }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+oslog = "0.2.0"
+
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.13.1"
+jni = "0.21.1"
+ndk-context = "0.1.1"
+libloading = "0.8.3"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+cpal = { version = "0.15.2" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = { version = "0.1.7" }
+console_log = { version = "1.0.0" }

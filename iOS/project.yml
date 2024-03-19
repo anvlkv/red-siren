@@ -1,7 +1,7 @@
 name: RedSiren
 projectReferences:
-  Shared:
-    path: ../app_core/core.xcodeproj
+  app_core:
+    path: ../app_core/app_core.xcodeproj
 packages:
   CoreTypes:
     path: ../typegen/generated/swift/CoreTypes
@@ -14,11 +14,11 @@ targets:
     deploymentTarget: "15.0"
     sources:
       - RedSiren
-      - path: ../app_core/src/ffirs.udl
+      - path: ../app_core/src/app_core.udl
         buildPhase: sources
     dependencies:
-      - target: Shared/bindgen-bin
-      - target: Shared/core-staticlib
+      - target: app_core/bindgen-bin
+      - target: app_core/app_core-staticlib
       - package: CoreTypes
     info:
       path: RedSiren/Info.plist
@@ -27,10 +27,9 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        UILaunchScreen: {}
     settings:
       OTHER_LDFLAGS: [-w]
-      SWIFT_OBJC_BRIDGING_HEADER: generated/sharedFFI.h
+      SWIFT_OBJC_BRIDGING_HEADER: generated/app_coreFFI.h
       ENABLE_USER_SCRIPT_SANDBOXING: NO
     buildRules:
       - name: Generate FFI

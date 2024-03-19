@@ -1,4 +1,4 @@
-use leptos::{create_effect, create_signal, Signal, SignalGet};
+use leptos::*;
 use leptos_use::use_media_query;
 
 pub fn use_dpi(mut values: Vec<u16>) -> Signal<u16> {
@@ -23,7 +23,7 @@ pub fn use_dpi(mut values: Vec<u16>) -> Signal<u16> {
     }
 
     create_effect(move |_| {
-        if let Some((dpi, _)) = values.iter().zip(queries.iter()).find(|(_, q)| q.get()) {
+        if let Some((dpi, _)) = values.iter().zip(queries.iter()).find(|(_, q)| q()) {
             set_dpi(*dpi)
         }
     });

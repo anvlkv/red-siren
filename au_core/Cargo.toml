@@ -1,0 +1,92 @@
+[package]
+name = "au_core"
+authors = { workspace = true }
+repository = { workspace = true }
+edition = { workspace = true }
+version = { workspace = true }
+license = { workspace = true }
+rust-version = { workspace = true }
+keywords = { workspace = true }
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+spectrum-analyzer = "1.5.0"
+fundsp = { version = "0.16.0", default-features = false }
+hecs = { version = "0.10.3", features = ["serde", "macros"] }
+log = { workspace = true }
+anyhow = "1.0.79"
+logging_timer = "1.1.0"
+cfg-if = "1.0.0"
+lazy_static = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }
+bincode = { version = "1.3.3", optional = true }
+serde = { workspace = true, features = ["derive"] }
+cpal = { version = "0.15.2", optional = true }
+ringbuf = "0.3.3"
+futures = "0.3.28"
+wasm-bindgen-futures = { version = "0.4.36", optional = true }
+getrandom = { version = "0.2.9", features = ["js"], optional = true }
+web-sys = { version = "0.3.63", features = [
+    "AudioContext",
+    "BaseAudioContext",
+    "AudioNode",
+    "AudioWorklet",
+    "AudioWorkletNode",
+    "AudioDestinationNode",
+    "MediaDevices",
+    "MediaStream",
+    "MediaStreamConstraints",
+    "MediaStreamAudioSourceNode",
+    "MediaStreamAudioSourceOptions",
+    "MessagePort",
+    "MessageEvent",
+    "Navigator",
+    "Window",
+    "Response",
+], optional = true }
+js-sys = { version = "0.3.63", optional = true }
+console_error_panic_hook = { version = "0.1.7", optional = true }
+console_log = { version = "1.0.0", optional = true }
+itertools = "0.12.1"
+derive_builder = "0.20.0"
+once_cell = "1.19.0"
+parking_lot = { version = "0.12.1", features = ["deadlock_detection"] }
+u-num-it = "0.1.2"
+typenum = "1.17.0"
+
+[features]
+cpal = ["dep:cpal", "futures/executor", "futures/thread-pool"]
+browser = [
+    "lazy_static",
+    "wasm-bindgen",
+    "bincode",
+    "getrandom",
+    "web-sys",
+    "js-sys",
+    "wasm-bindgen-futures",
+]
+worklet = ["browser", "console_log", "console_error_panic_hook"]
+typegen = []
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21.1"
+ndk-context = "0.1.1"
+libloading = "0.8.3"
+
+[dev-dependencies]
+eframe = "0.26.2"
+dasp_sample = "0.11.0"
+simple_logger = "4.1.0"
+
+[[example]]
+name = "node"
+path = "examples/single-node.rs"
+required-features = ["cpal"]
+
+
+[[example]]
+name = "multiple-nodes"
+path = "examples/multiple-nodes.rs"
+required-features = ["cpal"]

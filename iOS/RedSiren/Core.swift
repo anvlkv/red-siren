@@ -4,21 +4,20 @@ import UIKit
 import CoreTypes
 import Serde
 import OSLog
+import AVFoundation
 
 @MainActor
 class Core: ObservableObject {
     @Published var view: ViewModel
 
-    @State var playback: Playback = Playback()
-    
     @State var defaults: UserDefaults = UserDefaults()
-    
+
     var startClock: ((
         @escaping(Double?) -> Void
     ) -> Void)?
-    
+
     var stopClock: (() -> Void)?
-    
+
 
     init() {
         self.view = try! .bincodeDeserialize(input: [UInt8](RedSiren.view()))
@@ -37,74 +36,55 @@ class Core: ObservableObject {
         switch request.effect {
         case .render:
             view = try! .bincodeDeserialize(input: [UInt8](RedSiren.view()))
-        case let .navigate(.to(activity)):
-            self.update(Event.reflectActivity(activity))
+        case .play(.runUnit):
+            Logger().log("run unit")
             break
-        case .keyValue(.read(let key)):
-            
-            var response = KeyValueOutput.read(.none)
-            
-            if let data = self.defaults.array(forKey: key) {
-                response = KeyValueOutput.read(.some(data as! [UInt8]))
-                Logger().log("restore data for \(key)")
-            }
-            else {
-                Logger().log("no data for \(key)")
-            }
-            
-
-            let effects = [UInt8](handleResponse(Data(request.uuid), Data(try! response.bincodeSerialize())))
-
-            let requests: [Request] = try! .bincodeDeserialize(input: effects)
-            for request in requests {
-                processEffect(request)
-            }
-        case .keyValue(.write(let key, let data)):
-            self.defaults.setValue(data, forKey: key)
-            
-            let response = KeyValueOutput.write(true)
-
-            let effects = [UInt8](handleResponse(Data(request.uuid), Data(try! response.bincodeSerialize())))
-
-            let requests: [Request] = try! .bincodeDeserialize(input: effects)
-            for request in requests {
-                processEffect(request)
-            }
-        case .play(let op):
-            playback.request(op) { response in
-                DispatchQueue.main.async {
-                    let effects = [UInt8](handleResponse(Data(request.uuid), Data(response)))
-
-                    let requests: [Request] = try! .bincodeDeserialize(input: effects)
-                    for request in requests {
-                        self.processEffect(request)
-                    }
-                }
-            }
-            break
-        case .animate(.start):
-            self.startClock!({ ts in
-                var data = try! AnimateOperationOutput.done.bincodeSerialize()
-                if let ts = ts {
-                    data = try! AnimateOperationOutput.timestamp(ts).bincodeSerialize()
-                }
-                else {
-                    Logger().log("tick is none, animation is done")
-                }
+        case .play(.permissions):
+            Task {
+                let grant = await getRecordPermission()
+                let data = try! [UInt8](UnitResolve.recordingPermission(grant).bincodeSerialize())
                 let effects = [UInt8](handleResponse(Data(request.uuid), Data(data)))
 
                 let requests: [Request] = try! .bincodeDeserialize(input: effects)
                 for request in requests {
                     self.processEffect(request)
                 }
-            })
+            }
+            break;
+        case .animate(.start):
+            Task {
+                self.startClock!({ ts in
+                    var data = try! AnimateOperationOutput.done.bincodeSerialize()
+                    if let ts = ts {
+                        data = try! AnimateOperationOutput.timestamp(ts).bincodeSerialize()
+                        Logger().log("tick \(ts)")
+                    }
+                    else {
+                        Logger().log("tick is none, animation is done")
+                    }
+                    let effects = [UInt8](handleResponse(Data(request.uuid), Data(data)))
+
+                    let requests: [Request] = try! .bincodeDeserialize(input: effects)
+                    for request in requests {
+                        self.processEffect(request)
+                    }
+                })
+            }
             break
         case .animate(.stop):
             self.stopClock!()
             break
         }
+    }
 
-        
+    func getRecordPermission() async -> Bool {
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        var isAuthorized = status == .authorized
+        if status == .notDetermined {
+            isAuthorized = await AVCaptureDevice.requestAccess(for: .audio)
+        }
+
+        return isAuthorized
     }
 }
 

@@ -3,76 +3,45 @@ use std::path::PathBuf;
 use crux_core::typegen::TypeGen;
 
 fn main() -> anyhow::Result<()> {
-    println!("cargo:rerun-if-changed=../core");
-    println!("cargo:rerun-if-changed=../aucore");
+    println!("cargo:rerun-if-changed=../app_core");
+    println!("cargo:rerun-if-changed=../au_core");
 
-    {
-        use app_core::instrument::{Config, Node};
-        use aucore::RedSirenAU;
+    use app_core::{
+        Activity, Alignment, Box2D, ObjectId, ObjectStyle, Paint, Point2D, RedSiren, Rgba, Shapes,
+        Size2D, Stroke, Text, UnitState, ViewObject, VisualEV, VisualVM,
+    };
 
-        let mut gen = TypeGen::new();
-        gen.register_type::<Config>()?;
-        gen.register_type::<Node>()?;
-        gen.register_app::<RedSirenAU>()?;
+    let mut gen = TypeGen::new();
 
-        let output_root = PathBuf::from("./generated");
+    // external types
+    gen.register_type_with_samples::<ObjectId>(vec![ObjectId::default(), ObjectId::default()])?;
+    gen.register_type::<Rgba>()?;
+    gen.register_type::<Point2D<f64>>()?;
+    gen.register_type::<Box2D<f64>>()?;
+    gen.register_type::<Size2D<f64>>()?;
 
-        gen.swift("AUTypes", output_root.join("swift"))?;
+    // internal types
+    gen.register_type::<ViewObject>()?;
+    gen.register_type::<ObjectStyle>()?;
+    gen.register_type::<Alignment>()?;
+    gen.register_type::<Activity>()?;
+    gen.register_type::<Text>()?;
+    gen.register_type::<Stroke>()?;
+    gen.register_type::<Shapes>()?;
+    gen.register_type::<Paint>()?;
+    gen.register_type::<UnitState>()?;
+    gen.register_type::<VisualVM>()?;
+    gen.register_type::<VisualEV>()?;
+    // app type
+    gen.register_app::<RedSiren>()?;
 
-        gen.java(
-            "com.anvlkv.redsiren.core.au_types",
-            output_root.join("java"),
-        )?;
+    let output_root = PathBuf::from("./generated");
 
-        gen.typescript("au_types", output_root.join("typescript"))?;
-    }
+    gen.swift("CoreTypes", output_root.join("swift"))?;
 
-    {
-        use app_core::{
-            geometry::{Line, Rect},
-            instrument::{layout::MenuPosition, Config, InstrumentEV, Layout, Node, PlaybackEV},
-            intro::IntroEV,
-            play::CaptureOutput,
-            tuner::{TriggerState, TunerEV},
-            Activity, RedSiren,
-        };
+    gen.java("com.anvlkv.redsiren.core.typegen", output_root.join("java"))?;
 
-        let mut gen = TypeGen::new();
-        gen.register_type::<InstrumentEV>()?;
-        gen.register_type::<IntroEV>()?;
-        gen.register_type::<TunerEV>()?;
-        gen.register_type::<PlaybackEV>()?;
-        gen.register_type::<TriggerState>()?;
-        gen.register_type_with_samples(vec![
-            CaptureOutput::CaptureFFT(vec![(0.0, 0.0)]),
-            CaptureOutput::CaptureData(vec![0.0]),
-            CaptureOutput::CaptureFFT((0..64).map(|i| (i as f32, (i * 2) as f32 / 1.0)).collect()),
-            CaptureOutput::CaptureData((0..64).map(|i| i as f32 / 1.0).collect()),
-            CaptureOutput::CaptureNodesData(
-                (1..=5)
-                    .map(|f| (f, (0..64).map(|i| i as f32 / 1.0).collect::<Vec<_>>()))
-                    .collect::<Vec<_>>(),
-            ),
-        ])?;
-
-        gen.register_type::<Activity>()?;
-        gen.register_type::<MenuPosition>()?;
-        gen.register_type::<Line>()?;
-        gen.register_type::<Rect>()?;
-        gen.register_type::<Config>()?;
-        gen.register_type::<Layout>()?;
-        gen.register_type::<Node>()?;
-
-        gen.register_app::<RedSiren>()?;
-
-        let output_root = PathBuf::from("./generated");
-
-        gen.swift("CoreTypes", output_root.join("swift"))?;
-
-        gen.java("com.anvlkv.redsiren.core.typegen", output_root.join("java"))?;
-
-        gen.typescript("typegen", output_root.join("typescript"))?;
-    }
+    gen.typescript("typegen", output_root.join("typescript"))?;
 
     Ok(())
 }

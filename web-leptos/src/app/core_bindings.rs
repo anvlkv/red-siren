@@ -1,17 +1,15 @@
+use std::rc::Rc;
+
+#[allow(unused)]
+use app_core::{
+    Activity, AnimateOperation, AnimateOperationOutput, Effect, Event, Operation, RedSiren,
+    RedSirenCapabilities, Request, UnitResolve, ViewModel,
+};
 use futures::{
     channel::mpsc::{channel, Sender},
     StreamExt,
 };
-use std::rc::Rc;
-
 use leptos::*;
-
-use app_core::animate::{AnimateOperation, AnimateOperationOutput};
-use app_core::{
-    navigate::NavigateOperation, Activity, Effect, Event, RedSiren, RedSirenCapabilities, ViewModel,
-};
-
-use super::playback;
 
 pub type Core = Rc<app_core::Core<Effect, RedSiren>>;
 
@@ -23,12 +21,26 @@ pub fn update(
     core: &Core,
     event: Event,
     render: WriteSignal<ViewModel>,
-    playback: playback::Playback,
     navigate: Callback<&str>,
-    animate_cb: Callback<Option<Sender<f64>>>,
+    animate: Callback<Option<Sender<f64>>>,
 ) {
     for effect in core.process_event(event) {
-        process_effect(core, effect, render, playback.clone(), navigate, animate_cb);
+        process_effect(core, effect, render, navigate, animate);
+    }
+}
+
+fn resolve<Op>(
+    req: &mut Request<Op>,
+    value: Op::Output,
+    core: &Core,
+    render: WriteSignal<ViewModel>,
+    navigate: Callback<&str>,
+    animate: Callback<Option<Sender<f64>>>,
+) where
+    Op: Operation,
+{
+    for effect in core.resolve(req, value) {
+        process_effect(&core, effect, render, navigate, animate);
     }
 }
 
@@ -37,127 +49,181 @@ pub fn process_effect(
     core: &Core,
     effect: Effect,
     render: WriteSignal<ViewModel>,
-    playback: playback::Playback,
     navigate: Callback<&str>,
-    animate_cb: Callback<Option<Sender<f64>>>,
+    animate: Callback<Option<Sender<f64>>>,
 ) {
     match effect {
         Effect::Render(_) => {
             render.update(|view| *view = core.view());
         }
         #[allow(unused_mut)]
-        Effect::KeyValue(mut req) => {
-            #[cfg(feature = "browser")]
-            {
-                use gloo_storage::{LocalStorage, Storage};
+        Effect::Play(mut req) => match req.operation {
+            app_core::PlayOperation::Permissions => {
+                #[cfg(feature = "browser")]
+                {
+                    use js_sys::{Object, Reflect};
+                    use wasm_bindgen_futures::JsFuture;
+                    use web_sys::{
+                        window, MediaStreamConstraints, PermissionState, PermissionStatus,
+                    };
 
-                let response = match &req.operation {
-                    app_core::key_value::KeyValueOperation::Read(key) => {
-                        app_core::key_value::KeyValueOutput::Read(LocalStorage::get(key).ok())
-                    }
-                    app_core::key_value::KeyValueOperation::Write(key, data) => {
-                        app_core::key_value::KeyValueOutput::Write(
-                            LocalStorage::set(key, data).is_ok(),
-                        )
-                    }
-                };
+                    let win = window().unwrap();
+                    let navigator = win.navigator();
+                    if let Some(promise) = navigator
+                        .permissions()
+                        .ok()
+                        .map(|perms| {
+                            let q = Object::new();
+                            Reflect::set(&q, &"name".into(), &"microphone".into()).unwrap();
+                            perms.query(&q).ok()
+                        })
+                        .flatten()
+                    {
+                        let core = core.clone();
+                        spawn_local(async move {
+                            let result = JsFuture::from(promise).await.unwrap();
+                            let status = PermissionStatus::from(result);
+                            let grant = match status.state() {
+                                PermissionState::Granted => true,
+                                PermissionState::Denied => false,
+                                PermissionState::Prompt => {
+                                    if let Some(promise) = navigator
+                                        .media_devices()
+                                        .ok()
+                                        .map(|md| {
+                                            let mut constraints = MediaStreamConstraints::new();
+                                            constraints.audio(&true.into());
+                                            md.get_user_media_with_constraints(&constraints).ok()
+                                        })
+                                        .flatten()
+                                    {
+                                        match JsFuture::from(promise).await {
+                                            Ok(_) => true,
+                                            Err(_) => false,
+                                        }
+                                    } else {
+                                        false
+                                    }
+                                }
+                                _ => false,
+                            };
 
-                for effect in core.resolve(&mut req, response) {
-                    process_effect(
-                        &core,
-                        effect,
-                        render,
-                        playback.clone(),
-                        navigate,
-                        animate_cb,
-                    );
-                }
-            }
-        }
-        Effect::Navigate(nav) => match nav.operation {
-            NavigateOperation::To(activity) => {
-                let path = match activity {
-                    Activity::Intro => "/",
-                    Activity::Tune => "/tune",
-                    Activity::Play => "/play",
-                    Activity::Listen => "/listen",
-                    Activity::About => "/about",
-                };
-
-                navigate(path);
-
-                update(
-                    core,
-                    Event::ReflectActivity(activity),
-                    render,
-                    playback,
-                    navigate,
-                    animate_cb,
-                );
-            }
-        },
-        #[allow(unused_mut, unused_variables)]
-        Effect::Play(mut req) => {
-            log::trace!("play request: {:?}", req.operation);
-            
-            #[cfg(feature = "browser")]
-            {
-                let core = core.clone();
-                let mut playback = playback.clone();
-                spawn_local(async move {
-                    let response = playback.request(req.operation.clone()).await;
-
-                    log::trace!("process response: {response:?}");
-                    for effect in core.resolve(&mut req, response) {
-                        process_effect(
+                            resolve(
+                                &mut req,
+                                UnitResolve::RecordingPermission(grant),
+                                &core,
+                                render,
+                                navigate,
+                                animate,
+                            );
+                        })
+                    } else {
+                        resolve(
+                            &mut req,
+                            UnitResolve::RecordingPermission(false),
                             &core,
-                            effect,
                             render,
-                            playback.clone(),
                             navigate,
-                            animate_cb,
+                            animate,
                         );
                     }
-                })
+                }
             }
-        }
+            app_core::PlayOperation::RunUnit => {
+                log::info!("run unit");
+            }
+        },
+
+        // Effect::KeyValue(mut req) => {
+        //     #[cfg(feature = "browser")]
+        //     {
+        //         use gloo_storage::{LocalStorage, Storage};
+
+        //         let response = match &req.operation {
+        //             app_core::key_value::KeyValueOperation::Read(key) => {
+        //                 app_core::key_value::KeyValueOutput::Read(LocalStorage::get(key).ok())
+        //             }
+        //             app_core::key_value::KeyValueOperation::Write(key, data) => {
+        //                 app_core::key_value::KeyValueOutput::Write(
+        //                     LocalStorage::set(key, data).is_ok(),
+        //                 )
+        //             }
+        //         };
+
+        //         for effect in core.resolve(&mut req, response) {
+        //             process_effect(
+        //                 &core,
+        //                 effect,
+        //                 render,
+        //                 navigate,
+        //                 animate_cb,
+        //             );
+        //         }
+        //     }
+        // }
+        // Effect::Navigate(nav) => match nav.operation {
+        //     NavigateOperation::To(activity) => {
+        //         let path = match activity {
+        //             Activity::Intro => "/",
+        //             Activity::Tune => "/tune",
+        //             Activity::Play => "/play",
+        //             Activity::Listen => "/listen",
+        //             Activity::About => "/about",
+        //         };
+
+        //         navigate(path);
+
+        //         update(
+        //             core,
+        //             Event::ReflectActivity(activity),
+        //             render,
+        //             navigate,
+        //             animate_cb,
+        //         );
+        //     }
+        // },
         Effect::Animate(mut req) => match req.operation {
             AnimateOperation::Start => {
                 let (sx, mut rx) = channel::<f64>(1);
                 let core = core.clone();
-                let playback = playback.clone();
+                log::info!("web: req start animation");
+
                 spawn_local(async move {
                     while let Some(ts) = rx.next().await {
-                        for effect in core.resolve(&mut req, AnimateOperationOutput::Timestamp(ts))
-                        {
-                            process_effect(
-                                &core,
-                                effect,
-                                render,
-                                playback.clone(),
-                                navigate,
-                                animate_cb,
-                            );
-                        }
-                    }
-
-                    for effect in core.resolve(&mut req, AnimateOperationOutput::Done) {
-                        process_effect(
+                        resolve(
+                            &mut req,
+                            AnimateOperationOutput::Timestamp(ts),
                             &core,
-                            effect,
                             render,
-                            playback.clone(),
                             navigate,
-                            animate_cb,
+                            animate,
                         );
                     }
 
-                    log::debug!("receive ts ended");
+                    resolve(
+                        &mut req,
+                        AnimateOperationOutput::Done,
+                        &core,
+                        render,
+                        navigate,
+                        animate,
+                    );
                 });
 
-                animate_cb(Some(sx));
+                animate(Some(sx));
             }
-            AnimateOperation::Stop => animate_cb(None),
+            AnimateOperation::Stop => {
+                animate(None);
+
+                resolve(
+                    &mut req,
+                    AnimateOperationOutput::Done,
+                    &core,
+                    render,
+                    navigate,
+                    animate,
+                );
+            }
         },
     };
 }

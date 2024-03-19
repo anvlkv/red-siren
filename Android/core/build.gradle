@@ -66,8 +66,8 @@ cargoNdk {
     targets = ["arm", "arm64", "x86", "x86_64"]
     buildType = "release"
     module = "../"
-    librariesNames = ["libffirs.so"]
-    extraCargoBuildArguments = ['--package', 'bindgen', '--lib', '--features', 'android']
+    librariesNames = ["libapp_core.so"]
+    extraCargoBuildArguments = ['--package', 'app_core', '--lib', '--features', 'cpal']
 }
 
 afterEvaluate {
@@ -96,8 +96,8 @@ tasks.register('bindGen', Exec) {
     if (System.getProperty('os.name').toLowerCase().contains('windows')) {
         commandLine(
                 "cmd", "/c",
-                "cargo build -p bindgen && " +
-                        "target\\debug\\bindgen generate --library target\\debug\\libffirs.so" +
+                "cargo build -p app_core --features cpal && " +
+                        "target\\debug\\bindgen generate --library target\\debug\\libapp_core.so" +
                         "--language kotlin " +
                         "--out-dir " + outDir.replace('/', '\\')
         )
@@ -105,8 +105,8 @@ tasks.register('bindGen', Exec) {
         commandLine(
                 "sh", "-c",
                 """\
-                cargo build -p bindgen && \
-                target/debug/bindgen generate --library target/debug/libffirs.dylib \
+                cargo build -p app_core --features cpal && \
+                target/debug/bindgen generate --library target/debug/libapp_core.dylib \
                 --language kotlin \
                 --out-dir $outDir
                 """

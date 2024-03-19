@@ -18,4 +18,3 @@ crux_kv = { workspace = true }
 crux_platform = { workspace = true }
 crux_time = { workspace = true }
 app_core = { path = "../app_core", features = ["typegen"] }
-aucore = { path = "../aucore", features = ["typegen"] }

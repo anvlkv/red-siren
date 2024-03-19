@@ -1,15 +1,20 @@
 package com.anvlkv.redsiren
 
 import android.animation.TimeAnimator
+import android.content.ContentResolver
 import android.content.Context
 import android.content.res.Resources
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Button
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,17 +32,10 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.anvlkv.redsiren.app.AppAbout
-import com.anvlkv.redsiren.app.AppInstrument
 import com.anvlkv.redsiren.app.AppIntro
-import com.anvlkv.redsiren.app.AppTuner
 import com.anvlkv.redsiren.core.typegen.Event
-import com.anvlkv.redsiren.core.typegen.InstrumentEV
-import com.anvlkv.redsiren.core.typegen.IntroEV
-import com.anvlkv.redsiren.core.typegen.TunerEV
+import com.anvlkv.redsiren.core.typegen.VisualEV
 import com.anvlkv.redsiren.ui.theme.ApplyTheme
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -50,7 +48,7 @@ import com.anvlkv.redsiren.core.typegen.Activity as CoreActivity
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "kv")
 
 class MainActivity : ComponentActivity() {
-    var core: Core? = null
+    public var core: Core? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,10 +79,6 @@ fun RedSiren(core: Core) {
     val navController = rememberNavController()
     val coroutineScope = rememberCoroutineScope()
 
-    LaunchedEffect(core) {
-        core.update(Event.Start())
-    }
-
     val recordAudioPermissionState = rememberPermissionState(
         android.Manifest.permission.RECORD_AUDIO
     )
@@ -109,69 +103,6 @@ fun RedSiren(core: Core) {
     LaunchedEffect(recordAudioPermissionState.status) {
         if (permissionRequested) {
             reqDef.complete(recordAudioPermissionState.status.isGranted)
-        }
-    }
-
-    fun updateConfig(width: Double, height: Double, cutouts: Array<Double>) {
-        val dpi = Resources.getSystem().displayMetrics.densityDpi.toDouble()
-
-        coroutineScope.launch {
-            core.update(Event.CreateConfigAndConfigureApp(width, height, dpi, cutouts.asList()))
-        }
-    }
-
-
-    val introVm = core.view.intro
-    val instrumentVm = core.view.instrument
-    val tunerVm = core.view.tuner
-
-
-    val introEv = fun(ev: IntroEV) {
-        coroutineScope.launch {
-            core.update(Event.IntroEvent(ev))
-        }
-    }
-
-    val instrumentEv = fun(ev: InstrumentEV) {
-        coroutineScope.launch {
-            core.update(Event.InstrumentEvent(ev))
-        }
-    }
-
-    val tunerEv = fun(ev: TunerEV) {
-        coroutineScope.launch {
-            core.update(Event.TunerEvent(ev))
-        }
-    }
-
-    fun navigateTo(act: CoreActivity) {
-        when (act) {
-            is CoreActivity.Intro -> {
-                navController.navigate("intro")
-            }
-
-            is CoreActivity.Play -> {
-                navController.navigate("play")
-            }
-
-            is CoreActivity.Tune -> {
-                navController.navigate("tune")
-            }
-
-            is CoreActivity.Listen -> {
-                navController.navigate("listen")
-            }
-
-            is CoreActivity.About -> {
-                navController.navigate("about")
-            }
-        }
-    }
-
-    LaunchedEffect(core.navigateTo) {
-        if (core.navigateTo != null) {
-            navigateTo(core.navigateTo!!)
-            core.update(Event.ReflectActivity(core.navigateTo))
         }
     }
 
@@ -216,39 +147,63 @@ fun RedSiren(core: Core) {
         }
     }
 
+    LaunchedEffect(safeAreas) {
+        core.update(Event.Visual(VisualEV.SafeAreaResize(safeAreas[0], safeAreas[1], safeAreas[2], safeAreas[3])))
+    }
 
+    val dpi = Resources.getSystem().displayMetrics.densityDpi.toDouble()
+
+    LaunchedEffect(dpi) {
+        core.update(Event.Visual(VisualEV.SetDensity(dpi)))
+    }
+
+    val dark = isSystemInDarkTheme()
+
+    LaunchedEffect(dark) {
+        core.update(Event.Visual(VisualEV.SetDarkMode(dark)))
+    }
+
+    val reducedMotion = isReducedMotionEnabled(context.contentResolver)
+
+    LaunchedEffect(reducedMotion) {
+        core.update(Event.Visual(VisualEV.SetReducedMotion(reducedMotion)))
+    }
 
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
     ) {
-        val width = this.maxWidth
-        val height = this.maxHeight
+        val width = this.maxWidth.value.toDouble()
+        val height = this.maxHeight.value.toDouble()
 
         LaunchedEffect(width, height) {
+            core.update(Event.Visual(VisualEV.Resize(width, height)))
+        }
+        AppIntro()
 
-            updateConfig(width.value.toDouble(), height.value.toDouble(), safeAreas)
+        Button(onClick = {
+            coroutineScope.launch {
+                core.update(Event.StartAudioUnit())
+            }
+        }) {
+            Text(text = "Play")
         }
-        NavHost(navController = navController, startDestination = "intro") {
-            composable("intro") {
-                AppIntro(introVm, introEv)
-            }
-            composable("play") {
-                AppInstrument(instrumentVm, instrumentEv)
-            }
-            composable("listen") {
-                AppInstrument(instrumentVm, instrumentEv)
-            }
-            composable("tune") {
-                AppTuner(tunerVm, tunerEv)
-            }
-            composable("about") {
-                AppAbout(introVm, introEv)
-            }
-        }
+    }
+
+    LaunchedEffect(core) {
+        core.update(Event.InitialNavigation(CoreActivity.Intro()))
     }
 }
 
+
+fun isReducedMotionEnabled(resolver: ContentResolver): Boolean {
+    val animationDuration = try {
+        Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE)
+    } catch (e: Settings.SettingNotFoundException) {
+        1f
+    }
+    return animationDuration == 0f
+}
 
 @Preview(showBackground = true)
 @Composable

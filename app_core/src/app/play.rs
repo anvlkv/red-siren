@@ -1,58 +1,26 @@
+use std::sync::Arc;
+
+pub use au_core::UnitResolve;
 use crux_core::capability::{CapabilityContext, Operation};
 use crux_macros::Capability;
+use futures::{channel::mpsc::UnboundedReceiver, StreamExt};
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
-use crate::tuner::TuningValue;
-
-use super::instrument::{Config, Node};
-
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum PlayOperation {
+    RunUnit,
     Permissions,
-    InstallAU,
-    Suspend,
-    Resume,
-    Capture(bool),
-    QueryInputDevices,
-    QueryOutputDevices,
-    Config(Config, Vec<Node>, Vec<TuningValue>),
-    Input(Vec<Vec<f32>>),
-    SendSnoops
 }
 
-impl Eq for PlayOperation {}
-
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
-pub enum PlayOperationOutput {
-    Success,
-    Failure
-}
-
-impl Eq for PlayOperationOutput {}
 impl Operation for PlayOperation {
-    type Output = PlayOperationOutput;
-}
-
-impl Operation for PlayOperationOutput {
-    type Output = ();
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
-pub enum CaptureOutput {
-    CaptureFFT(Vec<(f32, f32)>),
-    CaptureData(Vec<f32>),
-    CaptureNodesData(Vec<(usize, Vec<f32>)>)
-}
-
-impl Eq for CaptureOutput {}
-
-impl Operation for CaptureOutput {
-    type Output = ();
+    type Output = UnitResolve;
 }
 
 #[derive(Capability)]
 pub struct Play<Ev> {
     context: CapabilityContext<PlayOperation, Ev>,
+    receiver: Arc<Mutex<Option<UnboundedReceiver<UnitResolve>>>>,
 }
 
 impl<Ev> Play<Ev>
@@ -60,107 +28,46 @@ where
     Ev: 'static,
 {
     pub fn new(context: CapabilityContext<PlayOperation, Ev>) -> Self {
-        Self { context }
+        Self {
+            context,
+            receiver: Default::default(),
+        }
     }
 
-    pub fn configure<F>(&self, config: &Config, nodes: &[Node], tuning: &[TuningValue], f: F)
+    pub fn with_receiver(&self, receiver: UnboundedReceiver<UnitResolve>) {
+        let mut recv_option = self.receiver.lock();
+        _ = recv_option.insert(receiver);
+    }
+
+    pub fn recording_permission<F>(&self, notify: F)
     where
-        Ev: 'static,
-        F: Fn(bool) -> Ev + Send + 'static,
+        F: Fn(UnitResolve) -> Ev + Send + 'static,
     {
-        let ctx = self.context.clone();
-        let config = config.clone();
-        let nodes = Vec::from(nodes);
-        let tuning = Vec::from(tuning);
-
-        self.context.spawn(async move {
-            let done = ctx
-                .request_from_shell(PlayOperation::Config(config, nodes, tuning))
-                .await;
-            ctx.update_app(f(done == PlayOperationOutput::Success));
-        })
-    }
-
-    pub fn play<F>(&self, f: F)
-    where
-        Ev: 'static,
-        F: Fn(bool) -> Ev + Send + 'static,
-    {
-        let ctx = self.context.clone();
-
-        self.context.spawn(async move {
-            let playing = ctx.request_from_shell(PlayOperation::Resume).await;
-            ctx.update_app(f(playing == PlayOperationOutput::Success));
-        })
-    }
-
-    pub fn pause<F>(&self, f: F)
-    where
-        Ev: 'static,
-        F: Fn(bool) -> Ev + Send + 'static,
-    {
-        let ctx = self.context.clone();
-
-        self.context.spawn(async move {
-            let paused = ctx.request_from_shell(PlayOperation::Suspend).await;
-            ctx.update_app(f(paused == PlayOperationOutput::Success));
-        })
-    }
-
-    pub fn install_au<F>(&self, f: F)
-    where
-        Ev: 'static,
-        F: Fn(bool) -> Ev + Send + 'static,
-    {
-        let ctx = self.context.clone();
-
-        self.context.spawn(async move {
-            let done = ctx.request_from_shell(PlayOperation::InstallAU).await;
-            ctx.update_app(f(done == PlayOperationOutput::Success));
-        })
-    }
-    
-    pub fn query_snoops(&self)
-    {
-        let ctx = self.context.clone();
-
-        self.context.spawn(async move {
-            ctx.notify_shell(PlayOperation::SendSnoops).await;
-        })
-    }
-
-    pub fn permissions<F>(&self, f: F)
-    where
-        Ev: 'static,
-        F: Fn(bool) -> Ev + Send + 'static,
-    {
-        let ctx = self.context.clone();
-
-        self.context.spawn(async move {
-            let granted = ctx.request_from_shell(PlayOperation::Permissions).await;
-            ctx.update_app(f(granted == PlayOperationOutput::Success));
-        })
-    }
-    pub fn capture_fft<F>(&self, notify: F)
-    where
-        Ev: 'static,
-        F: Fn(bool) -> Ev + Send + 'static,
-    {
-        let ctx = self.context.clone();
-        self.context.spawn(async move {
-            let capturing = ctx.request_from_shell(PlayOperation::Capture(true)).await;
-            ctx.update_app(notify(capturing == PlayOperationOutput::Success));
+        let context = self.context.clone();
+        self.context.spawn({
+            async move {
+                let resolve = context.request_from_shell(PlayOperation::Permissions).await;
+                context.update_app(notify(resolve));
+            }
         });
     }
 
-    pub fn stop_capture_fft<F>(&self, notify: F)
+    pub fn run_unit<F>(&self, notify: F)
     where
-        Ev: 'static,
-        F: Fn(bool) -> Ev + Send + 'static, {
-        let ctx = self.context.clone();
-        self.context.spawn(async move {
-            let stopped = ctx.request_from_shell(PlayOperation::Capture(false)).await;
-            ctx.update_app(notify(stopped == PlayOperationOutput::Success));
-        })
+        F: Fn(UnitResolve) -> Ev + Send + 'static,
+    {
+        let context = self.context.clone();
+        let mut receiver = self.receiver.lock();
+        let mut receiver = receiver.take().unwrap();
+        self.context.spawn({
+            async move {
+                _ = context.stream_from_shell(PlayOperation::RunUnit);
+                while let Some(resolve) = receiver.next().await {
+                    log::info!("core: unit resolved ev: {resolve:?}");
+                    context.update_app(notify(resolve))
+                }
+                log::info!("resolve exited");
+            }
+        });
     }
 }

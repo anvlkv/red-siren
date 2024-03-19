@@ -2,7 +2,6 @@ use cfg_if::cfg_if;
 
 pub mod app;
 pub mod error_template;
-pub mod fileserv;
 mod util;
 
 cfg_if! { if #[cfg(feature = "hydrate")] {
@@ -13,7 +12,7 @@ cfg_if! { if #[cfg(feature = "hydrate")] {
     #[wasm_bindgen]
     pub fn hydrate() {
         #[cfg(feature = "browser")]
-        app_core::log_init(log::LevelFilter::Warn);
+        app_core::log_init();
 
         leptos::mount_to_body(RootComponent);
     }

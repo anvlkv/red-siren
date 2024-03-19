@@ -1,8 +1,8 @@
 use std::{collections::HashMap, ops::Deref};
 
 use anyhow::{anyhow, Result};
+use au_core::Node;
 use hecs::{Entity, World};
-use shared::{NodeData, NodeDataBuilder};
 
 use super::{config::Config, layout::Layout};
 
@@ -75,12 +75,12 @@ impl Instrument {
         })
     }
 
-    fn make_node(config: &Config, idx: usize, button: Entity, pan: f32) -> Result<NodeData> {
+    fn make_node(config: &Config, idx: usize, button: Entity, pan: f32) -> Result<Node> {
         let f_n = config.n_buttons - idx;
         let freq = config.f0 * (f_n * 2) as f32 - config.f0;
         let max_freq = freq + config.f0;
 
-        let node_data = NodeDataBuilder::default()
+        let node_data = au_core::NodeDataBuilder::default()
             .button(button)
             .f_base(config.f0)
             .f_emit((freq, max_freq))
@@ -88,13 +88,13 @@ impl Instrument {
             .pan(pan)
             .build()?;
 
-        Ok(node_data)
+        Ok(node_data.into())
     }
 
-    pub fn get_nodes(&self, world: &World) -> Vec<NodeData> {
+    pub fn get_nodes(&self, world: &World) -> Vec<Node> {
         self.nodes
             .iter()
-            .filter_map(|e| world.get::<&NodeData>(*e).ok().map(|n| n.deref().clone()))
+            .filter_map(|e| world.get::<&Node>(*e).ok().map(|n| n.deref().clone()))
             .collect()
     }
 }

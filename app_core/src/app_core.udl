@@ -1,6 +1,7 @@
-namespace bridge {
+namespace app_core {
   bytes process_event([ByRef] bytes msg);
   bytes handle_response([ByRef] bytes uuid, [ByRef] bytes res);
   bytes view();
-  void platform_init_once();
+  void log_init();
+  void initialize_android_context();
 };

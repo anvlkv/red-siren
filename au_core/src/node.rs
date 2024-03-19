@@ -1,9 +1,8 @@
-use ::shared::NodeData;
 use fundsp::hacker32::*;
-use hecs::Entity;
+use hecs::{Bundle, Entity};
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone)]
+#[derive(Bundle, Clone)]
 pub struct Node {
     pub f_base: Shared<f32>,
     pub f_emit: (Shared<f32>, Shared<f32>),
@@ -18,6 +17,18 @@ impl std::fmt::Debug for Node {
         let d: NodeData = self.into();
         write!(f, "{d:?}")
     }
+}
+
+#[derive(Deserialize, Serialize, Builder, Debug)]
+pub struct NodeData {
+    #[builder(default = "hecs::Entity::DANGLING")]
+    pub button: Entity,
+    pub f_base: f32,
+    pub f_emit: (f32, f32),
+    pub f_sense: ((f32, f32), (f32, f32)),
+    #[builder(default = "0_f32")]
+    pub control: f32,
+    pub pan: f32,
 }
 
 impl From<NodeData> for Node {

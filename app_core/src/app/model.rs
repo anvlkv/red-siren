@@ -1,13 +1,16 @@
-use ::shared::UnitState;
+use std::sync::Arc;
+
+use au_core::Unit;
 use euclid::default::{Box2D, SideOffsets2D};
 use hecs::World;
 use keyframe::AnimationSequence;
+use parking_lot::Mutex;
 
 use super::{config::Config, instrument::Instrument, layout::Layout, objects::Objects};
 
 #[derive(Default)]
 pub struct Model {
-    pub world: World,
+    pub world: Arc<Mutex<World>>,
     pub activity: super::Activity,
     pub configs: Vec<Config>,
     pub current_config: usize,
@@ -25,8 +28,8 @@ pub struct Model {
     pub intro_opacity: Option<AnimationSequence<f64>>,
     pub view_objects_animation: Option<AnimationSequence<Objects>>,
     pub running_animation: Option<(f64, f64)>,
-    // audio unit
-    pub unit_state: UnitState,
+    // AU
+    pub audio_unit: Arc<Mutex<Option<Unit>>>,
 }
 
 impl Model {

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use ringbuf::{Rb, StaticRb};
 
-use ::shared::{FFTData, SnoopsData};
+use crate::{FFTData, SnoopsData};
 
 pub const FFT_BUF_SIZE: usize = 4;
 pub const SNOOPS_BUF_SIZE: usize = 12;

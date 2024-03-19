@@ -1,11 +1,11 @@
-use au_core::{FFTData, Node, RedSirenAU, SnoopsData, UnitEvent, MAX_F, MIN_F};
+use au_core::{FFTData, Node, SnoopsData, Unit, UnitEV, MAX_F, MIN_F};
 use eframe::egui::{self, *};
 use fundsp::hacker32::*;
 use futures::channel::mpsc::unbounded;
 use hecs::Entity;
 
 struct State {
-    unit: RedSirenAU,
+    unit: Unit,
     input: bool,
     node: Node,
     last_fft: FFTData,
@@ -17,11 +17,11 @@ fn main() {
     let (resolve_sender, resolve_receiver) = unbounded();
     std::mem::forget(resolve_receiver);
 
-    let unit = RedSirenAU::new(resolve_sender);
+    let unit = Unit::new(resolve_sender);
     run(unit).unwrap();
 }
 
-fn run(mut unit: RedSirenAU) -> Result<(), anyhow::Error> {
+fn run(mut unit: Unit) -> Result<(), anyhow::Error> {
     let node = Node {
         f_base: shared(440.0),
         f_emit: (shared(440.0), shared(480.0)),
@@ -33,7 +33,7 @@ fn run(mut unit: RedSirenAU) -> Result<(), anyhow::Error> {
 
     unit.run()?;
 
-    unit.update(UnitEvent::Configure(vec![node.clone()]));
+    unit.update(UnitEV::Configure(vec![node.clone()]));
 
     let state = State {
         unit,
@@ -73,9 +73,9 @@ impl eframe::App for State {
                 let input1 = ui.selectable_value(&mut self.input, false, "Use keyboard");
                 if input1.changed() || input2.changed() {
                     if self.input {
-                        self.unit.update(UnitEvent::ListenToInput)
+                        self.unit.update(UnitEV::ListenToInput)
                     } else {
-                        self.unit.update(UnitEvent::IgnoreInput)
+                        self.unit.update(UnitEV::IgnoreInput)
                     }
                 }
             });
@@ -219,11 +219,9 @@ impl eframe::App for State {
 
             if !self.input {
                 if ctx.input(|c| c.key_down(Key::Space)) {
-                    self.unit
-                        .update(UnitEvent::SetControl(Entity::DANGLING, 1.0));
+                    self.unit.update(UnitEV::SetControl(Entity::DANGLING, 1.0));
                 } else {
-                    self.unit
-                        .update(UnitEvent::SetControl(Entity::DANGLING, 0.0));
+                    self.unit.update(UnitEV::SetControl(Entity::DANGLING, 0.0));
                 }
             }
         });

@@ -12,8 +12,6 @@ keywords = { workspace = true }
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-crux_core = { workspace = true }
-crux_macros = { workspace = true }
 spectrum-analyzer = "1.5.0"
 fundsp = { version = "0.16.0", default-features = false }
 hecs = { version = "0.10.3", features = ["serde", "macros"] }
@@ -21,25 +19,15 @@ log = { workspace = true }
 anyhow = "1.0.79"
 logging_timer = "1.1.0"
 cfg-if = "1.0.0"
+lazy_static = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }
+bincode = { version = "1.3.3", optional = true }
 serde = { workspace = true, features = ["derive"] }
-futures = "0.3.28"
-u-num-it = "0.1.0"
-typenum = "1.17.0"
-send_wrapper = "0.6.0"
-uuid = { version = "1.7.0", features = ["v4"] }
+cpal = { version = "0.15.2", optional = true }
 ringbuf = "0.3.3"
-shared = { path = "../shared" }
-parking_lot = "0.12.1"
-
-[features]
-typegen = ["crux_core/typegen", "shared/typegen"]
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-lazy_static = { workspace = true }
-bincode = { version = "1.3.3" }
-wasm-bindgen = { workspace = true }
-wasm-bindgen-futures = { version = "0.4.36" }
-getrandom = { version = "0.2.9", features = ["js"] }
+futures = "0.3.28"
+wasm-bindgen-futures = { version = "0.4.36", optional = true }
+getrandom = { version = "0.2.9", features = ["js"], optional = true }
 web-sys = { version = "0.3.63", features = [
     "AudioContext",
     "BaseAudioContext",
@@ -57,10 +45,33 @@ web-sys = { version = "0.3.63", features = [
     "Navigator",
     "Window",
     "Response",
-] }
-js-sys = { version = "0.3.63" }
-console_error_panic_hook = { version = "0.1.7" }
-console_log = { version = "1.0.0" }
+], optional = true }
+js-sys = { version = "0.3.63", optional = true }
+console_error_panic_hook = { version = "0.1.7", optional = true }
+console_log = { version = "1.0.0", optional = true }
+itertools = "0.12.1"
+derive_builder = "0.20.0"
+once_cell = "1.19.0"
+parking_lot = { version = "0.12.1", features = ["deadlock_detection"] }
+
+[features]
+cpal = ["dep:cpal", "futures/executor", "futures/thread-pool"]
+browser = [
+    "lazy_static",
+    "wasm-bindgen",
+    "bincode",
+    "getrandom",
+    "web-sys",
+    "js-sys",
+    "wasm-bindgen-futures",
+]
+worklet = ["browser", "console_log", "console_error_panic_hook"]
+typegen = []
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21.1"
+ndk-context = "0.1.1"
+libloading = "0.8.3"
 
 [dev-dependencies]
 eframe = "0.26.2"

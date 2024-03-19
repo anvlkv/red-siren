@@ -1,7 +1,0 @@
-[bindings.kotlin]
-cdylib_name = "bridge"
-package_name = "com.anvlkv.redsiren.bridge"
-
-[bindings.swift]
-cdylib_name = "bridge"
-omit_argument_labels = true

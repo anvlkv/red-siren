@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use au_core::{FFTData, Node, RedSirenAU, SnoopsData, UnitEvent, MAX_F, MIN_F};
+use au_core::{FFTData, Node, SnoopsData, Unit, UnitEV, MAX_F, MIN_F};
 use eframe::egui::{self, *};
 use fundsp::hacker32::*;
 use futures::channel::mpsc::unbounded;
@@ -8,7 +8,7 @@ use hecs::{Bundle, Entity, World};
 use logging_timer::timer;
 
 struct State {
-    unit: RedSirenAU,
+    unit: Unit,
     input: bool,
     f0: f32,
     nodes: Vec<(Entity, Entity)>,
@@ -41,7 +41,7 @@ fn main() {
     let (resolve_sender, resolve_receiver) = unbounded();
     std::mem::forget(resolve_receiver);
 
-    let unit = RedSirenAU::new(resolve_sender);
+    let unit = Unit::new(resolve_sender);
     run(unit).unwrap();
 }
 
@@ -68,14 +68,14 @@ fn make_nodes(world: &mut World, count: usize, f0: f32) -> (Vec<(Entity, Entity)
     (nodes, config)
 }
 
-fn run(mut unit: RedSirenAU) -> Result<(), anyhow::Error> {
+fn run(mut unit: Unit) -> Result<(), anyhow::Error> {
     let mut world = World::new();
     let f0 = 85.0;
     let (nodes, config) = make_nodes(&mut world, 4, f0);
 
     unit.run()?;
 
-    unit.update(UnitEvent::Configure(config));
+    unit.update(UnitEV::Configure(config));
 
     let state = State {
         unit,
@@ -122,9 +122,9 @@ impl eframe::App for State {
                         let input1 = ui.selectable_value(&mut self.input, false, "Use keyboard");
                         if input1.changed() || input2.changed() {
                             if self.input {
-                                self.unit.update(UnitEvent::ListenToInput)
+                                self.unit.update(UnitEV::ListenToInput)
                             } else {
-                                self.unit.update(UnitEvent::IgnoreInput)
+                                self.unit.update(UnitEV::IgnoreInput)
                             }
                         }
                     });
@@ -142,7 +142,7 @@ impl eframe::App for State {
 
                                 let (nodes, config) = make_nodes(&mut self.world, count, self.f0);
 
-                                self.unit.update(UnitEvent::Configure(config));
+                                self.unit.update(UnitEV::Configure(config));
                                 self.nodes.extend(nodes);
                             }
                         });
@@ -159,7 +159,7 @@ impl eframe::App for State {
 
                                 let (nodes, config) = make_nodes(&mut self.world, count, self.f0);
 
-                                self.unit.update(UnitEvent::Configure(config));
+                                self.unit.update(UnitEV::Configure(config));
                                 self.nodes.extend(nodes);
                             }
                         });
@@ -356,13 +356,13 @@ impl eframe::App for State {
                     if let Some((_, b)) = self.nodes.get(i) {
                         if ctx.input(|c| c.key_down(*k)) {
                             if !self.pressed.contains(b) {
-                                self.unit.update(UnitEvent::SetControl(*b, 1.0));
+                                self.unit.update(UnitEV::SetControl(*b, 1.0));
                                 self.pressed.insert(*b);
                                 log::info!("activated node {}", i + 1);
                             }
                         } else {
                             if self.pressed.contains(b) {
-                                self.unit.update(UnitEvent::SetControl(*b, 0.0));
+                                self.unit.update(UnitEV::SetControl(*b, 0.0));
                                 self.pressed.remove(b);
                                 log::info!("deactivated node {}", i + 1);
                             }

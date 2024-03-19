@@ -6,6 +6,7 @@ use std::{
 use fundsp::hacker32::*;
 use hecs::Entity;
 use parking_lot::Mutex;
+use u_num_it::u_num_it;
 
 use crate::node::*;
 
@@ -92,7 +93,7 @@ impl System {
                 >> (pass()
                     | pluck_ring
                     | var(&node_data.f_emit.1) * 2.0 // hold sampling
-                    | var(&node_data.f_base) * constant((i + 1) as f32) // resonator cutoff 
+                    | var(&node_data.f_base) * constant((i + 1) as f32) // resonator cutoff
                     | (var(&node_data.f_emit.1) - var(&node_data.f_emit.0))) // resonator band width
                 >> (pass()
                     | pinkpass()
@@ -126,50 +127,15 @@ impl System {
             ((pass()) | p_hz | p_q) >> peak() >> pass() * f_mul
         };
 
-        let (output_node, input_node): (Box<dyn AudioUnit32>, Box<dyn AudioUnit32>) =
+        let (output_node, input_node): (Box<dyn AudioUnit32>, Box<dyn AudioUnit32>) = u_num_it!(
+            1..=100,
             match nodes.len() {
-                1 => (
-                    Box::new(bus::<U1, _, _>(render_node)),
-                    Box::new(bus::<U1, _, _>(preamp_node)),
+                U => (
+                    Box::new(bus::<U, _, _>(render_node)),
+                    Box::new(bus::<U, _, _>(preamp_node)),
                 ),
-                2 => (
-                    Box::new(bus::<U2, _, _>(render_node)),
-                    Box::new(bus::<U2, _, _>(preamp_node)),
-                ),
-                3 => (
-                    Box::new(bus::<U3, _, _>(render_node)),
-                    Box::new(bus::<U3, _, _>(preamp_node)),
-                ),
-                4 => (
-                    Box::new(bus::<U4, _, _>(render_node)),
-                    Box::new(bus::<U4, _, _>(preamp_node)),
-                ),
-                5 => (
-                    Box::new(bus::<U5, _, _>(render_node)),
-                    Box::new(bus::<U5, _, _>(preamp_node)),
-                ),
-                6 => (
-                    Box::new(bus::<U6, _, _>(render_node)),
-                    Box::new(bus::<U6, _, _>(preamp_node)),
-                ),
-                7 => (
-                    Box::new(bus::<U7, _, _>(render_node)),
-                    Box::new(bus::<U7, _, _>(preamp_node)),
-                ),
-                8 => (
-                    Box::new(bus::<U8, _, _>(render_node)),
-                    Box::new(bus::<U8, _, _>(preamp_node)),
-                ),
-                9 => (
-                    Box::new(bus::<U9, _, _>(render_node)),
-                    Box::new(bus::<U9, _, _>(preamp_node)),
-                ),
-                10 => (
-                    Box::new(bus::<U10, _, _>(render_node)),
-                    Box::new(bus::<U10, _, _>(preamp_node)),
-                ),
-                _ => panic!("empty system"),
-            };
+            }
+        );
 
         _ = self.output_net.replace(self.output_bus_id, output_node);
         _ = self.input_net.replace(self.input_bus_id, input_node);

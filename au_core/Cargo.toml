@@ -53,6 +53,8 @@ itertools = "0.12.1"
 derive_builder = "0.20.0"
 once_cell = "1.19.0"
 parking_lot = { version = "0.12.1", features = ["deadlock_detection"] }
+u-num-it = "0.1.2"
+typenum = "1.17.0"
 
 [features]
 cpal = ["dep:cpal", "futures/executor", "futures/thread-pool"]

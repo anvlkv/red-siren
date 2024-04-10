@@ -8,7 +8,7 @@ pub type JniGetCreatedJavaVms =
     unsafe extern "system" fn(vmBuf: *mut *mut JavaVM, bufLen: jsize, nVMs: *mut jsize) -> jint;
 pub const JNI_GET_JAVA_VMS_NAME: &[u8] = b"JNI_GetCreatedJavaVMs";
 
-pub unsafe fn initialize_android_context() {
+pub unsafe fn init_android_ctx() {
     let lib = libloading::os::unix::Library::this();
     let get_created_java_vms: JniGetCreatedJavaVms =
         unsafe { *lib.get(JNI_GET_JAVA_VMS_NAME).unwrap() };

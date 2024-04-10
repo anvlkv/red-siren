@@ -1,101 +1,95 @@
-#[allow(unused)]
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
-#[allow(unused)]
 use anyhow::{anyhow, Result};
+use crux_core::App;
+use crux_macros::Effect;
 use fundsp::hacker32::*;
-#[allow(unused)]
 use futures::channel::mpsc::UnboundedSender;
 use hecs::Entity;
 use parking_lot::Mutex;
-#[allow(unused)]
 use ringbuf::{HeapConsumer, HeapProducer, HeapRb};
 use serde::{Deserialize, Serialize};
+use shared_types::{FFTData, NodeData, SnoopsData, UnitEV, UnitResolve, UnitState};
 use spectrum_analyzer::{
     samples_fft_to_spectrum, scaling::divide_by_N_sqrt, windows::hann_window, FrequencyLimit,
 };
 
-#[allow(unused)]
 use crate::{AppAuBuffer, Node, System, MAX_F, MIN_F};
-
-cfg_if::cfg_if! {
-    if #[cfg(feature="browser")] {
-        cfg_if::cfg_if!{ if #[cfg(not(feature="worklet"))] {
-                thread_local! {
-                    static CTX: Arc<Mutex<Option<web_sys::AudioContext>>> = Default::default();
-                    static NODE: Arc<Mutex<Option<web_sys::AudioWorkletNode>>> = Default::default();
-                    static ON_MESSAGE: Arc<Mutex<wasm_bindgen::closure::Closure<dyn FnMut(wasm_bindgen::JsValue)>>> = Arc::new(Mutex::new(wasm_bindgen::closure::Closure::wrap(Box::new(|_| {}) as Box<dyn FnMut(wasm_bindgen::JsValue)>)));
-                }
-            }
-        }
-    }
-    else if #[cfg(feature="cpal")] {
-        thread_local! {
-            static IN_STREAM: Arc<Mutex<Option<cpal::Stream>>> = Default::default();
-            static OUT_STREAM: Arc<Mutex<Option<cpal::Stream>>> = Default::default();
-            static POOL: futures::executor::ThreadPool = futures::executor::ThreadPool::new().expect("create pool");
-        }
-    }
-}
 
 pub const RENDER_BURSTS: usize = 5;
 pub const FFT_RES: usize = 1024;
 const DESIRED_BUFFER_SIZE: u32 = 1024;
 
-pub type FFTData = Vec<(f32, f32)>;
-pub type SnoopsData = Vec<Vec<f32>>;
+#[derive(Default)]
+pub struct Unit;
 
-#[derive(Clone)]
-pub struct Unit {
-    pub nodes: Arc<Mutex<HashMap<Entity, Node>>>,
-    pub sample_rate: u32,
-    pub fft_res: usize,
-    pub buffer_size: u32,
-    pub system: Arc<Mutex<System>>,
-    pub state: Arc<Mutex<UnitState>>,
-    pub app_au_buffer: Arc<AppAuBuffer>,
-    #[cfg(not(feature = "worklet"))]
-    resolve_sender: UnboundedSender<UnitResolve>,
-    input_analyzer_enabled: Arc<Mutex<bool>>,
+#[cfg_attr(feature = "typegen", derive(crux_macros::Export))]
+#[derive(Effect)]
+#[effect(app = "Unit")]
+pub struct AUCapabilities {}
+
+impl App for Unit {
+    type Event = UnitEV;
+    type Model = super::model::UnitModel;
+    type ViewModel = ();
+    type Capabilities = AUCapabilities;
+
+    fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) {
+        match event {
+            UnitEV::ButtonPressed(e) => model.system.press(e, true),
+            UnitEV::ButtonReleased(e) => model.system.press(e, false),
+            UnitEV::Detune(e, val) => model.system.move_f(e, val),
+            UnitEV::SetControl(e, val) => {
+                model.system.control_node(&e, val);
+            }
+            UnitEV::Configure(nodes) => {
+                model.snoops = model
+                    .system
+                    .replace_nodes(nodes.into_iter().map(|n| Node::from(n)).collect());
+            }
+            UnitEV::ListenToInput(val) => {
+                model.input_analyzer_enabled.store(val, Ordering::AcqRel);
+            }
+            UnitEV::Suspend => {
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(stream) = self.in_stream.as_mut() {
+                    cpal::traits::StreamTrait::pause(stream).expect("pause input");
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(stream) = self.out_stream.as_mut() {
+                    cpal::traits::StreamTrait::pause(stream).expect("pause output");
+                }
+            }
+            UnitEV::Resume => {
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(stream) = self.in_stream.as_mut() {
+                    cpal::traits::StreamTrait::play(stream).expect("play input");
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(stream) = self.out_stream.as_mut() {
+                    cpal::traits::StreamTrait::play(stream).expect("play output");
+                }
+            }
+        }
+    }
+
+    fn view(&self, _model: &Self::Model) -> Self::ViewModel {
+        ()
+    }
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
-pub enum UnitResolve {
-    RunUnit(bool),
-    UpdateEV(bool),
-    RecordingPermission(bool),
-}
-
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Copy, Default)]
-pub enum UnitState {
-    #[default]
-    None,
-    Playing,
-    Paused,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-pub enum UnitEV {
-    ButtonPressed(Entity),
-    ButtonReleased(Entity),
-    Detune(Entity, f32),
-    Configure(Vec<Node>),
-    SetControl(Entity, f32),
-    ListenToInput,
-    IgnoreInput,
-    Suspend,
-    Resume,
-}
-
-#[allow(unused)]
 impl Unit {
-    pub fn new(
-        #[cfg(not(feature = "worklet"))] resolve_sender: UnboundedSender<UnitResolve>,
-    ) -> Self {
-        cfg_if::cfg_if! {if #[cfg(any(feature = "browser", feature="typegen"))] {
-            let (sample_rate, buffer_size) = (44100, 128);
+    fn stream_params() -> (u32, u32) {
+        cfg_if::cfg_if! {if #[cfg(target_arch = "wasm32")] {
+            return (44100, 128)
         } else {
-            let (sample_rate, buffer_size) = cpal::traits::HostTrait::default_output_device(&cpal::default_host())
+            return cpal::traits::HostTrait::default_output_device(&cpal::default_host())
             .map(|d| cpal::traits::DeviceTrait::default_output_config(&d).ok())
             .flatten()
             .map(|d| {
@@ -103,23 +97,29 @@ impl Unit {
                     d.sample_rate().0,
                     match d.buffer_size() {
                         cpal::SupportedBufferSize::Range { min, max } => {
-                            // Ord::max(*max, DESIRED_BUFFER_SIZE)
-                            *max
+                            if *min != 0 && *max != 0 {
+                                Ord::min(Ord::max(DESIRED_BUFFER_SIZE, *min), *max)
+                            }
+                            else {
+                                DESIRED_BUFFER_SIZE
+                            }
                         },
                         cpal::SupportedBufferSize::Unknown => DESIRED_BUFFER_SIZE
                     }
                 )
             })
-            .unwrap_or((44100, DESIRED_BUFFER_SIZE));
+            .unwrap_or((44100, DESIRED_BUFFER_SIZE))
         }}
+    }
 
-        let fft_res = FFT_RES;
+    pub fn new() -> Self {
+        let (sample_rate, buffer_size) = Self::stream_params();
 
-        let sys = System::new(sample_rate);
+        let fft_res = Ord::max(FFT_RES, buffer_size as usize);
 
-        let nodes = sys.nodes.clone();
-        let system = Arc::new(Mutex::new(sys));
-        let state = Arc::new(Mutex::new(UnitState::None));
+        let system = System::new(sample_rate);
+
+        let state = UnitState::None;
 
         log::info!("unit with buffer {buffer_size}, sample rate {sample_rate}");
 
@@ -127,150 +127,16 @@ impl Unit {
             state,
             fft_res,
             system,
-            nodes,
             sample_rate,
             buffer_size,
-            input_analyzer_enabled: Arc::new(Mutex::new(true)),
-            #[cfg(not(feature = "worklet"))]
-            resolve_sender,
+            input_analyzer_enabled: AtomicBool::new(true),
             app_au_buffer: Default::default(),
+            snoops: vec![],
+            #[cfg(not(target_arch = "wasm32"))]
+            in_stream: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            out_stream: None,
         }
-    }
-
-    pub fn update(&mut self, ev: UnitEV) {
-        log::trace!("unit msg: {ev:?}");
-        cfg_if::cfg_if! {
-            if #[cfg(all(feature = "browser", not(feature = "worklet")))] {
-                match ev {
-                    UnitEV::Resume => {
-                        CTX.with(|mtx| {
-                            let mtx = mtx.lock();
-                            let ctx = mtx.as_ref().unwrap();
-                            _ = ctx.resume().expect("play ctx");
-                        });
-                        self.state.lock().clone_from(&UnitState::Playing);
-                        log::info!("web: Resumed");
-                    }
-                    UnitEV::Suspend => {
-                        CTX.with(|mtx| {
-                            let mtx = mtx.lock();
-                            let ctx = mtx.as_ref().unwrap();
-                            _ = ctx.suspend().expect("play ctx");
-                        });
-                        self.state.lock().clone_from(&UnitState::Paused);
-                        log::info!("web: Suspended");
-                    }
-                    ev => {
-                        use js_sys::{Object, Reflect, Uint8Array};
-                        NODE.with(|mtx| {
-                            let mut mtx = mtx.lock();
-                            let node = mtx.as_mut().unwrap();
-
-                            let port = node.port().unwrap();
-
-                            let value = bincode::serialize(&ev).unwrap();
-                            let arr = Uint8Array::from(value.as_slice());
-                            let msg = Object::new();
-                            Reflect::set(&msg, &"type".into(), &"update".into()).unwrap();
-                            Reflect::set(&msg, &"value".into(), &arr).unwrap();
-
-                            port.post_message(&msg).unwrap();
-                        });
-                    }
-                }
-            }
-            else {
-                match ev {
-                    UnitEV::ButtonPressed(e) => {
-                        let sys = self.system.lock();
-                        sys.press(e, true)
-                    }
-                    UnitEV::ButtonReleased(e) => {
-                        let sys = self.system.lock();
-                        sys.press(e, false)
-                    }
-                    UnitEV::Detune(e, val) => {
-                        let sys = self.system.lock();
-                        sys.move_f(e, val)
-                    }
-                    UnitEV::SetControl(e, val) => {
-                        let nodes = self.nodes.lock();
-                        if let Some(node) = nodes.get(&e) {
-                            log::info!("set control val {val}");
-                            node.control.set_value(val);
-                        } else {
-                            log::error!("no node for entity")
-                        }
-                    }
-                    UnitEV::Configure(nodes) => {
-                        let mut sys = self.system.lock();
-                        sys.replace_nodes(nodes);
-                    }
-                    UnitEV::ListenToInput => {
-                        let mut enabled = self
-                            .input_analyzer_enabled
-                            .lock();
-                        *enabled = true;
-                    }
-                    UnitEV::IgnoreInput => {
-                        let mut enabled = self
-                            .input_analyzer_enabled
-                            .lock();
-                        *enabled = false;
-                        let nodes = self.nodes.lock();
-                        for (_, node) in nodes.iter() {
-                            node.control.set_value(0.0)
-                        }
-                    }
-                    UnitEV::Suspend => {
-                        cfg_if::cfg_if! {
-                            if #[cfg(feature = "cpal")] {
-                                IN_STREAM.with(|mtx| {
-                                    let mtx = mtx.lock();
-                                    let stream = mtx.as_ref().unwrap();
-                                    cpal::traits::StreamTrait::pause(stream).expect("pause input");
-                                });
-                                OUT_STREAM.with(|mtx| {
-                                    let mtx = mtx.lock();
-                                    let stream = mtx.as_ref().unwrap();
-                                    cpal::traits::StreamTrait::pause(stream).expect("pause output");
-                                });
-                                self.state.lock().clone_from(&UnitState::Paused);
-                                log::info!("stream: Suspended");
-                            }
-                        }
-                    }
-                    UnitEV::Resume => {
-                        cfg_if::cfg_if! {
-                            if #[cfg(feature = "cpal")] {
-                                IN_STREAM.with(|mtx| {
-                                    let mtx = mtx.lock();
-                                    let stream = mtx.as_ref().unwrap();
-                                    cpal::traits::StreamTrait::play(stream).expect("play input");
-                                });
-                                OUT_STREAM.with(|mtx| {
-                                    let mtx = mtx.lock();
-                                    let stream = mtx.as_ref().unwrap();
-                                    cpal::traits::StreamTrait::play(stream).expect("play output");
-                                });
-                                self.state.lock().clone_from(&UnitState::Playing);
-                                log::info!("stream: Resumed");
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        #[cfg(not(feature = "worklet"))]
-        self.resolve_sender
-            .unbounded_send(UnitResolve::UpdateEV(true))
-            .unwrap();
-    }
-
-    pub fn backends(&self) -> (NetBackend32, NetBackend32) {
-        let mut sys = self.system.lock();
-        (sys.input_net.backend(), sys.output_net.backend())
     }
 
     pub fn run(

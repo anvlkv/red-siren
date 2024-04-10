@@ -1,0 +1,14 @@
+[package]
+name = "shared_types"
+authors.workspace = true
+repository.workspace = true
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+
+[dependencies]
+derive_builder = "0.20.0"
+hecs = { version = "0.10.3", features = ["serde", "macros"] }
+serde = { workspace = true, features = ["derive"] }

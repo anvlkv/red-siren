@@ -27,18 +27,11 @@ pub fn view() -> Vec<u8> {
     CORE.view()
 }
 
-pub fn initialize_android_context() {
-    #[cfg(target_os = "android")]
-    unsafe {
-        au_core::initialize_android_context()
-    }
-}
-
 #[allow(unused_variables)]
-pub fn log_init() {
+pub fn init_once() {
     let lvl = log::LevelFilter::Trace;
 
-    cfg_if::cfg_if! { if #[cfg(feature="browser")] {
+    cfg_if::cfg_if! { if #[cfg(target_arch = "wasm32")] {
         let lvl = lvl.to_level().unwrap();
 
         _ = console_log::init_with_level(lvl);
@@ -49,6 +42,9 @@ pub fn log_init() {
                 .with_max_level(lvl)
                 .with_tag("red_siren::core"),
         );
+        unsafe {
+            au_core::init_android_ctx()
+        }
     }
     else if #[cfg(target_os = "ios")] {
         oslog::OsLogger::new("com.anvlkv.RedSiren.Core")
@@ -58,11 +54,10 @@ pub fn log_init() {
     }
     else {
         let lvl = lvl.to_level().unwrap();
-
         simple_logger::init_with_level(lvl).expect("couldn't initialize logging");
     }}
 
-    log::info!("init logging")
+    log::info!("init logging");
 }
 
 uniffi::include_scaffolding!("app_core");

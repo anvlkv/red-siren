@@ -1,21 +1,21 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::collections::{HashMap, HashSet};
 
 use fundsp::hacker32::*;
 use hecs::Entity;
-use parking_lot::Mutex;
-use u_num_it::u_num_it;
+use serde::{Deserialize, Serialize};
+use shared_types::{FFTData, SnoopsData};
+use spectrum_analyzer::{
+    samples_fft_to_spectrum, scaling::divide_by_N_sqrt, windows::hann_window, FrequencyLimit,
+};
 
-use crate::node::*;
+use crate::Node;
 
 pub struct System {
     pub output_net: Net32,
     pub input_net: Net32,
-    pub snoops: Arc<Mutex<Vec<(Snoop<f32>, Entity)>>>,
-    pub nodes: Arc<Mutex<HashMap<Entity, Node>>>,
-    pressed: Arc<Mutex<HashSet<Entity>>>,
+    pub nodes: HashMap<Entity, Node>,
+    pub sample_rate: u32,
+    pressed: HashSet<Entity>,
     output_bus_id: NodeId,
     input_bus_id: NodeId,
     volume_l: Shared<f32>,
@@ -53,20 +53,15 @@ impl System {
             input_bus_id,
             volume_l,
             volume_r,
-            snoops: Default::default(),
+            sample_rate,
             nodes: Default::default(),
             pressed: Default::default(),
         }
     }
 
-    pub fn replace_nodes(&mut self, nodes: Vec<Node>) {
+    pub fn replace_nodes(&mut self, nodes: Vec<Node>) -> Vec<(Snoop<f32>, Entity)> {
         let snoop_pairs = nodes.iter().map(|_| snoop(SNOOP_SIZE)).collect::<Vec<_>>();
         let (snoops, snoop_bes): (Vec<_>, Vec<_>) = snoop_pairs.into_iter().unzip();
-        {
-            let mut s_mtx = self.snoops.lock();
-            s_mtx.clear();
-            s_mtx.extend(snoops.into_iter().zip(nodes.iter().map(|n| n.button)));
-        }
 
         let size = nodes.len();
 
@@ -142,39 +137,98 @@ impl System {
         self.input_net.commit();
         self.output_net.commit();
 
-        {
-            let mut n_mtx = self.nodes.lock();
+        let out_snoops = snoops
+            .into_iter()
+            .zip(nodes.iter().map(|n| n.button.clone()))
+            .collect();
 
-            n_mtx.clear();
-            n_mtx.extend(nodes.into_iter().map(|n| (n.button, n)));
-        }
-        {
-            let mut p_mtx = self.pressed.lock();
+        self.nodes.clear();
+        self.nodes.extend(nodes.into_iter().map(|n| (n.button, n)));
+        self.pressed.clear();
 
-            p_mtx.clear();
-        }
+        out_snoops
     }
 
-    pub fn press(&self, entity: Entity, val: bool) {
-        let mut pressed = self.pressed.lock();
-
+    pub fn press(&mut self, entity: Entity, val: bool) {
         if val {
-            _ = pressed.insert(entity);
+            _ = self.pressed.insert(entity);
         } else {
-            _ = pressed.remove(&entity);
+            _ = self.pressed.remove(&entity);
         }
     }
 
     pub fn move_f(&self, entity: Entity, val: f32) {
-        let pressed = self.pressed.lock();
-
-        if pressed.contains(&entity) {
-            let nodes = self.nodes.lock();
-
-            let node = nodes.get(&entity).expect("node");
+        if self.pressed.contains(&entity) {
+            let node = self.nodes.get(&entity).expect("node");
             let base = node.f_base.value();
             node.f_emit.0.set_value(base + base * val);
             node.f_emit.1.set_value(base * 2.0 + base * (1.0 - val))
         }
+    }
+
+    pub fn control_node(&self, entity: &Entity, value: f32) {
+        if let Some(node) = self.nodes.get(entity) {
+            node.control.set_value(value);
+        } else {
+            log::error!("no node for entity");
+        }
+    }
+
+    pub fn process_input_data(
+        samples: &[f32],
+        nodes: &HashMap<Entity, Node>,
+        sample_rate: u32,
+    ) -> FFTData {
+        let hann_window = hann_window(samples);
+
+        let spectrum_hann_window = samples_fft_to_spectrum(
+            &hann_window,
+            sample_rate,
+            FrequencyLimit::Range(MIN_F, MAX_F),
+            Some(&divide_by_N_sqrt),
+        )
+        .unwrap();
+
+        let data = spectrum_hann_window
+            .data()
+            .iter()
+            .map(|(f, v)| (f.val(), v.val()))
+            .collect::<Vec<_>>();
+
+        for (_, node) in nodes.iter() {
+            let (min_fq, max_fq) = (node.f_sense.0 .0.value(), node.f_sense.0 .1.value());
+            let (min_value, max_value) = (node.f_sense.1 .0.value(), node.f_sense.1 .1.value());
+            let n_breadth = data
+                .iter()
+                .filter(|(freq, _)| *freq >= min_fq && *freq <= max_fq)
+                .count();
+
+            let activation = data.iter().fold(0.0, |acc, (freq, value)| {
+                if *freq >= min_fq && *freq <= max_fq && *value >= min_value && *value <= max_value
+                {
+                    acc + (1.0 / n_breadth as f32)
+                } else {
+                    acc
+                }
+            });
+
+            if activation > 0.0 {
+                log::info!("activated node {} by {}", node.f_base.value(), activation)
+            } else if node.control.value() > 0.0 {
+                log::info!("deactivated node {}", node.f_base.value())
+            }
+
+            node.control.set_value(activation)
+        }
+
+        data
+    }
+
+    pub fn backends(&mut self) -> (BigBlockAdapter32, BlockRateAdapter32) {
+        let (input, output) = (self.input_net.backend(), self.output_net.backend());
+        (
+            BigBlockAdapter32::new(Box::new(input)),
+            BlockRateAdapter32::new(Box::new(output)),
+        )
     }
 }

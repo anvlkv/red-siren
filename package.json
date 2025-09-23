@@ -1,0 +1,25 @@
+{
+  "name": "red-siren",
+  "version": "1.0.0",
+  "description": "This template should help get you started developing with Tauri and Leptos.",
+  "homepage": "https://github.com/anvlkv/red-siren#readme",
+  "bugs": {
+    "url": "https://github.com/anvlkv/red-siren/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anvlkv/red-siren.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@tailwindcss/cli": "^4.1.13",
+    "@tauri-apps/plugin-log": "^2.7.0",
+    "tailwindcss": "^4.1.13"
+  }
+}

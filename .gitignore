@@ -32,3 +32,5 @@ iOS/Pods/
 .idea/
 
 _*
+
+node_modules/

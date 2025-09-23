@@ -1,0 +1,17 @@
+{
+  "lsp": {
+    "rust-analyzer": {
+      "initialization_options": {
+        "cargo": {},
+        "rustfmt": {
+          "overrideCommand": ["leptosfmt", "--stdin", "--rustfmt"]
+        },
+        "procMacro": {
+          "ignored": {
+            "leptos": ["server"]
+          }
+        }
+      }
+    }
+  }
+}

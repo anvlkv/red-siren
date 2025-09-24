@@ -25,7 +25,7 @@ pub fn AppRoutes() -> impl IntoView {
             outside_errors.insert_with_default_key(AppError::NotFound);
             view! { <ErrorTemplate outside_errors /> }.into_view()
         }>
-            <Route path=path!("/") view=Home />
+            <Route path=path!("/") view=move || view! { <Home /> } />
         // <Route path="about" view=move || view! { <about::AboutComponent /> } />
         // <Route path="play" view=move || view! { <instrument::InstrumentComponent /> } />
         // <Route path="tune" view=move || view! { <tuner::TunerComponent /> } />

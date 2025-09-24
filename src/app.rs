@@ -15,10 +15,10 @@ pub fn App() -> impl IntoView {
 
     view! {
         <main class="bg-red dark:bg-black font-serif italic text-black dark:text-red relative h-screen w-screen">
-            <div class="absolute h-full w-full">
+            <div class="absolute h-full w-full overflow-hidden">
                 <Intro />
             </div>
-            <div class="absolute h-full w-full">
+            <div class="absolute h-full w-full overflow-hidden">
                 <Router>
                     <routes::AppRoutes />
                 </Router>

@@ -14,7 +14,7 @@ pub fn App() -> impl IntoView {
     });
 
     view! {
-        <main class="bg-red dark:bg-black font-serif italic">
+        <main class="bg-red dark:bg-black font-serif italic relative h-screen w-screen">
             <Intro />
             <Router>
                 <routes::AppRoutes />

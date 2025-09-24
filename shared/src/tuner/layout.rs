@@ -1,3 +1,5 @@
+use std::num::NonZero;
+
 use mint::{Point2, Vector2};
 
 use crate::{orientation::LayoutOrientation, safe_area::SafeArea};
@@ -18,4 +20,6 @@ pub struct Layout {
     pub sensor_radius: f32,
     /// max split of each sensor
     pub sensor_max_split: Vector2<f32>,
+    /// number of groups
+    pub num_groups: NonZero<u8>,
 }

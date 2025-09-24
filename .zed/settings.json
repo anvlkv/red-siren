@@ -1,4 +1,9 @@
 {
+  "languages": {
+    "Rust": {
+      "language_servers": ["rust-analyzer", "tailwindcss-language-server"]
+    }
+  },
   "lsp": {
     "rust-analyzer": {
       "initialization_options": {
@@ -9,6 +14,23 @@
         "procMacro": {
           "ignored": {
             "leptos": ["server"]
+          }
+        }
+      }
+    },
+    "tailwindcss-language-server": {
+      "settings": {
+        "tailwindCSS": {
+          "includeLanguages": {
+            "rust": "html"
+          },
+          "experimental": {
+            "classRegex": [
+              "class\\s*=\\s*\"([^\"]*)\"",
+              "class\\s*=\\s*'([^']*)'",
+              ["class\\s*=\\s*\\(([^)]*)\\)", "\"([^\"]+)\""],
+              "class:([\\w\\-:/]+)\\s*="
+            ]
           }
         }
       }

@@ -15,10 +15,14 @@ pub fn App() -> impl IntoView {
 
     view! {
         <main class="bg-red dark:bg-black font-serif italic text-black dark:text-red relative h-screen w-screen">
-            <Intro />
-            <Router>
-                <routes::AppRoutes />
-            </Router>
+            <div class="absolute h-full w-full">
+                <Intro />
+            </div>
+            <div class="absolute h-full w-full">
+                <Router>
+                    <routes::AppRoutes />
+                </Router>
+            </div>
         </main>
     }
 }

@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::components::{Intro, Menu};
+use crate::components::Menu;
 
 #[component]
 pub fn Home() -> impl IntoView {

@@ -2,7 +2,7 @@ use leptos::prelude::*;
 use leptos_router::components::*;
 use tauri_use::{use_invoke, UseTauriReturn};
 
-use crate::routes;
+use crate::{components::Intro, routes};
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -15,6 +15,7 @@ pub fn App() -> impl IntoView {
 
     view! {
         <main class="bg-red dark:bg-black font-serif italic">
+            <Intro />
             <Router>
                 <routes::AppRoutes />
             </Router>

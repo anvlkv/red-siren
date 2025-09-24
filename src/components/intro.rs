@@ -5,7 +5,8 @@ use leptos_use::{
     UseRafFnCallbackArgs, UseRafFnOptions,
 };
 use mint::{Point2, Vector2};
-use shared::instrument::LayoutOrientation;
+use shared::orientation::LayoutOrientation;
+use wasm_bindgen::JsValue;
 
 use crate::util::animation::{tween_tuple_vectors, tween_vectors, ReducedMotionState};
 
@@ -123,11 +124,13 @@ pub fn Intro(
             .as_ref()
             .and_then(|doc| doc.get_element_by_id("splash-dummy").zip(Some(doc)))
         {
-            if let Err(e) = doc.remove_child(&splash_element) {
+            if let Err(e) = doc
+                .body()
+                .ok_or(JsValue::from_str("No body element"))
+                .and_then(|bod| bod.remove_child(&splash_element))
+            {
                 log::warn!("Failed to remove dummy: {:?}", e)
             }
-        } else {
-            log::warn!("Failed to get dummy element")
         }
     });
 

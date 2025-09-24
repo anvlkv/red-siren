@@ -1,1 +1,1 @@
-pub const GUI_READY: &str = "on_gui_ready";
+pub const GUI_READY: &str = "health_on_gui_ready";

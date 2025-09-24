@@ -6,7 +6,6 @@ use crate::components::{Intro, Menu};
 pub fn Home() -> impl IntoView {
     view! {
         <>
-            <Intro />
             <Menu />
         </>
     }

@@ -1,12 +1,12 @@
 use leptos::prelude::*;
 
-use crate::components::{Menu, Splash};
+use crate::components::{Intro, Menu};
 
 #[component]
 pub fn Home() -> impl IntoView {
     view! {
         <>
-            <Splash />
+            <Intro />
             <Menu />
         </>
     }

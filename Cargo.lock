@@ -2329,6 +2329,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "keyframe_derive"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "377d191d4db9904c659a7336fc943feb17bc737e18e8d7dbf4c3cfc86698f610"
+dependencies = [
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "kuchikiki"
 version = "0.8.8-speedreader"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4423,6 +4433,9 @@ dependencies = [
 [[package]]
 name = "shared"
 version = "0.1.0"
+dependencies = [
+ "mint",
+]
 
 [[package]]
 name = "shlex"
@@ -4835,6 +4848,7 @@ dependencies = [
  "console_error_panic_hook",
  "js-sys",
  "keyframe",
+ "keyframe_derive",
  "leptos",
  "leptos-use",
  "leptos_router",

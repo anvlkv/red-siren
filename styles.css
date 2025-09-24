@@ -26,11 +26,11 @@
     --intro-opacity: 0;
 }
 
-.splash-dummy {
+.splash-dummy svg {
     opacity: calc(1 - var(--intro-opacity));
 }
 
-.splash-picture {
+.splash-picture svg {
     opacity: var(--intro-opacity);
 }
 

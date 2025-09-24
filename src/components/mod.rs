@@ -1,7 +1,7 @@
 mod error_template;
+mod intro;
 mod menu;
-mod splash;
 
 pub use error_template::*;
+pub use intro::*;
 pub use menu::*;
-pub use splash::*;

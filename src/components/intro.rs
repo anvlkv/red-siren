@@ -1,171 +1,466 @@
+use keyframe::{keyframes, AnimationSequence, CanTween};
 use leptos::prelude::*;
-use leptos_use::{use_raf_fn_with_options, use_window, utils::Pausable, UseRafFnOptions};
+use leptos_use::{
+    use_prefers_reduced_motion, use_raf_fn_with_options, use_window, utils::Pausable,
+    UseRafFnCallbackArgs, UseRafFnOptions,
+};
+use mint::{Point2, Vector2};
+
+use crate::util::animation::{tween_tuple_vectors, tween_vectors, ReducedMotionState};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SplashAnimation {
-    ToInstrument,
-    ToTuner,
-    FromInstrument,
-    FromTuner,
+pub enum IntroAnimationTarget {
+    Intro,
+    Tuner,
+    Instrument(shared::instrument::Layout),
 }
 
-/*
-#[derive(Serialize, Deserialize, Clone, PartialEq, CanTween)]
-pub struct IntroVM {
-    pub layout: instrument::Layout,
-    pub animation_progress: f64,
-    pub view_box: Rect,
-    pub intro_opacity: f64,
-    pub flute_rotation: Point3<f64>,
-    pub flute_position: Point2<f64>,
-    pub buttons_position: Point2<f64>,
-    pub button_size: f64,
-    pub menu_opacity: f64,
-    pub menu_flip: f64,
+#[derive(Debug, Clone, PartialEq)]
+struct IntroAnimationState {
+    view_box: (Point2<f32>, Point2<f32>),
+    picture_opacity: f32,
+    suns_positions: Vec<Point2<f32>>,
+    suns_splits: Vec<Vector2<f32>>,
+    sun_radius: f32,
+    keybands_positions: Vec<(Point2<f32>, Point2<f32>)>,
+    string_1_position: (Point2<f32>, Point2<f32>),
+    string_2_position: (Point2<f32>, Point2<f32>),
+    strings_rotation: (f32, Point2<f32>),
+    strings_stroke: f32,
 }
-
-impl Eq for IntroVM {}
-
-impl Default for IntroVM {
-    fn default() -> Self {
-        Self {
-            layout: instrument::Layout::dummy(4.25253, 282.096, 78.0),
-            animation_progress: 0.0,
-            view_box: Rect::size(430.0, 932.0),
-            intro_opacity: 1.0,
-            menu_opacity: 0.0,
-            flute_rotation: Point3 {
-                z: -17.1246,
-                x: 48.3365,
-                y: 585.964,
-            },
-            flute_position: Point2 {
-                x: 48.3365,
-                y: 585.964,
-            },
-            buttons_position: Point2 {
-                x: 107.0 - 39.0,
-                y: 164.0 - 39.0,
-            },
-            button_size: 78.0,
-            menu_flip: 0.0,
-        }
-    }
-}
- */
 
 #[component]
-pub fn Splash(#[prop(optional)] animation: Signal<Option<SplashAnimation>>) -> impl IntoView {
-    struct AnimationState {}
+pub fn Intro(
+    /// animate transition `from` one state `to` another
+    #[prop(optional)]
+    animation: Signal<Option<(IntroAnimationTarget, IntroAnimationTarget)>>,
+    /// notify `callback` on animation end
+    #[prop(optional, into)]
+    on_animation_ended: Option<Callback<()>>,
+) -> impl IntoView {
+    let reduced_motion = use_prefers_reduced_motion();
 
-    let Pausable {
-        pause,
-        resume,
-        is_active,
-    } = use_raf_fn_with_options(move |_| {}, UseRafFnOptions::default().immediate(false));
+    // determine initial animation state on component launch
+    let animation_state = RwSignal::new({
+        let state = animation
+            .get_untracked()
+            .map(|(start, _)| IntroAnimationState::from(start))
+            .unwrap_or_default();
+
+        keyframes![(state, 0.0)]
+    });
+
+    // state to track keyframes for reduced motion animation
+
+    let reduced_motion_state = RwSignal::new(ReducedMotionState {
+        total_keyframes: animation_state.get_untracked().keyframes(),
+        current_keyframe: 0,
+        accumulated_time: 0.0,
+    });
+
+    let completed = RwSignal::new(false);
+
+    let Pausable { pause, resume, .. } = use_raf_fn_with_options(
+        move |UseRafFnCallbackArgs { delta, .. }| {
+            let mut state = animation_state();
+            let remainder = if reduced_motion() {
+                let mut rm_state = reduced_motion_state();
+                rm_state.accumulated_time += delta;
+
+                // Get the current keyframe pair (current, next)
+                let (_, next_kf) = state.pair();
+
+                if let Some(next_kf) = next_kf {
+                    // If we've accumulated enough time to reach the next keyframe
+                    if rm_state.accumulated_time >= next_kf.time() {
+                        // Jump directly to the next keyframe time
+                        let remainder = state.advance_to(next_kf.time());
+                        rm_state.current_keyframe += 1;
+                        animation_state.set(state);
+                        reduced_motion_state.set(rm_state);
+                        Some(remainder)
+                    } else {
+                        // Not enough time accumulated yet, just update state
+                        reduced_motion_state.set(rm_state);
+                        None
+                    }
+                } else {
+                    // No next keyframe (animation finished)
+                    reduced_motion_state.set(rm_state);
+                    None
+                }
+            } else {
+                let remainder = state.advance_by(delta);
+                animation_state.set(state);
+                Some(remainder)
+            };
+
+            if remainder.is_some_and(|r| r <= 0.0) {
+                completed.set(true);
+                on_animation_ended.iter().for_each(|cb| cb.run(()));
+            }
+        },
+        UseRafFnOptions::default().immediate(false),
+    );
 
     let window = use_window();
 
+    // hide static splash and make dynamic intro visible
     Effect::new(move |_| {
-        if let Some(doc) = window
+        if let Some(doc_element) = window
             .document()
             .as_ref()
             .and_then(|doc| doc.document_element())
         {
-            doc.style(Some("--intro-opacity: 1;"));
+            doc_element.style(Some("--intro-opacity: 1;"));
+        } else {
+            log::warn!("Failed to get document.")
+        }
+
+        if let Some((splash_element, doc)) = window
+            .document()
+            .as_ref()
+            .and_then(|doc| doc.get_element_by_id("splash-dummy").zip(Some(doc)))
+        {
+            if let Err(e) = doc.remove_child(&splash_element) {
+                log::warn!("Failed to remove dummy: {:?}", e)
+            }
+        } else {
+            log::warn!("Failed to get dummy element")
         }
     });
 
+    // play and pause animations
+    // TODO: build correct animation end states
+    Effect::new({
+        let pause = pause.clone();
+
+        move |_| {
+            if animation().is_some() {
+                resume();
+                // TODO: actual number of keyframes
+                reduced_motion_state.set(ReducedMotionState {
+                    total_keyframes: animation_state.get_untracked().keyframes(),
+                    current_keyframe: 0,
+                    accumulated_time: 0.0,
+                });
+            } else {
+                pause();
+            }
+        }
+    });
+
+    // stop raf once sequence ended
     Effect::new(move |_| {
-        if animation().is_some() {
-            resume();
-        } else {
+        if completed() {
             pause();
         }
     });
 
+    let now_state = move || animation_state().now();
+
+    let view_box_value = move || {
+        let (start, end) = now_state().view_box;
+        format!("{} {} {} {}", start.x, start.y, end.x, end.y)
+    };
+
     // see index.html for updating the dummy image
     view! {
-        <div class="absolute h-screen w-screen splash-picture overflow-hidden">
-            <svg
-                viewBox="0 0 1048 932"
-                fill="none"
-                class="splash-fragment waves stroke-gray dark:stroke-cinnabar blur-[.5px]"
-                xmlns="http://www.w3.org/2000/svg"
+        <>
+            <div
+                class="absolute h-screen w-screen overflow-hidden"
+                style:opacity=move || (1.0 - now_state().picture_opacity).to_string()
             >
-                <path d=WAWES_PATH stroke-width="0.5" />
-            </svg>
-            <svg
-                viewBox="0 0 430 932"
-                class="splash-fragment stone fill-red dark:fill-black stroke-black dark:stroke-red"
-                xmlns="http://www.w3.org/2000/svg"
+                <svg
+                    viewBox=view_box_value
+                    fill="none"
+                    class="stroke-black dark:stroke-red"
+                    xmlns="http://www.w3.org/2000/svg"
+                >
+                    <g
+                        transform=move || {
+                            let (angle, pos) = now_state().strings_rotation;
+                            format!("rotate({} {} {})", angle, pos.x, pos.y)
+                        }
+                        stroke-width=move || now_state().strings_stroke.to_string()
+                    >
+                        <path d=move || {
+                            let (pos_start, pos_end) = now_state().string_1_position;
+                            format!("M{} {}L{} {}", pos_start.x, pos_start.y, pos_end.x, pos_end.y)
+                        } />
+                        <path d=move || {
+                            let (pos_start, pos_end) = now_state().string_2_position;
+                            format!("M{} {}L{} {}", pos_start.x, pos_start.y, pos_end.x, pos_end.y)
+                        } />
+                    </g>
+                </svg>
+                <svg
+                    viewBox=view_box_value
+                    fill="none"
+                    class="fill-black dark:fill-red"
+                    xmlns="http://www.w3.org/2000/svg"
+                >
+                    {move || {
+                        let radius = now_state().sun_radius;
+                        let stroke_width = now_state().strings_stroke;
+                        now_state()
+                            .suns_positions
+                            .into_iter()
+                            .zip(now_state().suns_splits)
+                            .map(|(pos, split)| {
+
+                                view! {
+                                    {if split.x == 0.0 && split.y == 0.0 {
+                                        // Draw whole circle when split is zero
+                                        view! { <circle r=radius cx=pos.x cy=pos.y /> }
+                                            .into_any()
+                                    } else {
+                                        view! {
+                                            <SplitSuns
+                                                pos=pos
+                                                radius=radius
+                                                split=split
+                                                stroke_width=stroke_width
+                                            />
+                                        }
+                                            .into_any()
+                                    }}
+                                }
+                            })
+                            .collect_view()
+                    }}
+                </svg>
+            </div>
+            <div
+                class="absolute h-screen w-screen splash-picture overflow-hidden"
+                style:opacity=move || now_state().picture_opacity.to_string()
             >
-                <path d=STONE_PATH stroke-width="3" />
-            </svg>
-            <svg
-                viewBox="0 0 430 932"
-                class="splash-fragment siren fill-black dark:fill-red"
-                xmlns="http://www.w3.org/2000/svg"
-            >
-                <path d=SIREN_PATH_1 />
-                <path d=SIREN_PATH_2 />
-                <path d=SIREN_PATH_3 />
-            </svg>
-            <svg
-                viewBox="0 0 430 932"
-                fill="none"
-                class="splash-fragment flute-shadow stroke-red dark:stroke-black"
-                xmlns="http://www.w3.org/2000/svg"
-            >
-                <rect
-                    x="73.7113"
-                    y="576.054"
-                    width="53.653"
-                    height="8.25253"
-                    transform="rotate(-17.1246 48.3365 585.964)"
-                    stroke-width="2"
-                />
-            </svg>
-            <svg
-                viewBox="0 0 430 932"
-                class="splash-fragment flute fill-red dark:fill-black stroke-black dark:stroke-red"
-                xmlns="http://www.w3.org/2000/svg"
-            >
-                <rect
-                    width="282.096"
-                    height="4.25253"
-                    x="48.3365"
-                    y="585.964"
-                    transform="rotate(-17.1246 48.3365, 585.964)"
-                    stroke-width="2"
-                />
-            </svg>
-            <svg
-                viewBox="0 0 430 932"
-                class="splash-fragment sun fill-black dark:fill-red"
-                xmlns="http://www.w3.org/2000/svg"
-            >
-                <circle r="39" cx="107" cy="164" />
-            </svg>
-            <svg
-                viewBox="0 0 430 932"
-                class="splash-fragment siren-arm fill-black dark:fill-red stroke-red dark:stroke-black"
-                xmlns="http://www.w3.org/2000/svg"
-            >
-                <path d=SIREN_ARM_PATH stroke-width="2" />
-            </svg>
-            <svg
-                viewBox="0 0 430 932"
-                class="splash-fragment siren-front fill-black dark:fill-red"
-                xmlns="http://www.w3.org/2000/svg"
-            >
-                <path d=SIREN_FRONT_PATH_1 />
-                <path d=SIREN_FRONT_PATH_2 />
-                <path d=SIREN_FRONT_PATH_3 />
-                <path d=SIREN_FRONT_PATH_4 />
-                <path d=SIREN_FRONT_PATH_5 />
-            </svg>
-        </div>
+                <svg
+                    viewBox="0 0 1048 932"
+                    fill="none"
+                    class="splash-fragment waves stroke-gray dark:stroke-cinnabar blur-[.5px]"
+                    xmlns="http://www.w3.org/2000/svg"
+                >
+                    <path d=WAWES_PATH stroke-width="0.5" />
+                </svg>
+                <svg
+                    viewBox="0 0 430 932"
+                    class="splash-fragment stone fill-red dark:fill-black stroke-black dark:stroke-red"
+                    xmlns="http://www.w3.org/2000/svg"
+                >
+                    <path d=STONE_PATH stroke-width="3" />
+                </svg>
+                <svg
+                    viewBox="0 0 430 932"
+                    class="splash-fragment siren fill-black dark:fill-red"
+                    xmlns="http://www.w3.org/2000/svg"
+                >
+                    <path d=SIREN_PATH_1 />
+                    <path d=SIREN_PATH_2 />
+                    <path d=SIREN_PATH_3 />
+                </svg>
+                <svg
+                    viewBox="0 0 430 932"
+                    fill="none"
+                    class="splash-fragment flute-shadow stroke-red dark:stroke-black"
+                    xmlns="http://www.w3.org/2000/svg"
+                >
+                    <rect
+                        x="73.7113"
+                        y="576.054"
+                        width="53.653"
+                        height="8.25253"
+                        transform="rotate(-17.1246 48.3365 585.964)"
+                        stroke-width="2"
+                    />
+                </svg>
+                <svg
+                    viewBox="0 0 430 932"
+                    class="splash-fragment flute fill-red dark:fill-black stroke-black dark:stroke-red"
+                    xmlns="http://www.w3.org/2000/svg"
+                >
+                    <rect
+                        width="282.096"
+                        height="4.25253"
+                        x="48.3365"
+                        y="585.964"
+                        transform="rotate(-17.1246 48.3365, 585.964)"
+                        stroke-width="2"
+                    />
+                </svg>
+                <svg
+                    viewBox="0 0 430 932"
+                    class="splash-fragment sun fill-black dark:fill-red"
+                    xmlns="http://www.w3.org/2000/svg"
+                >
+                    <circle r="39" cx="107" cy="164" />
+                </svg>
+                <svg
+                    viewBox="0 0 430 932"
+                    class="splash-fragment siren-arm fill-black dark:fill-red stroke-red dark:stroke-black"
+                    xmlns="http://www.w3.org/2000/svg"
+                >
+                    <path d=SIREN_ARM_PATH stroke-width="2" />
+                </svg>
+                <svg
+                    viewBox="0 0 430 932"
+                    class="splash-fragment siren-front fill-black dark:fill-red"
+                    xmlns="http://www.w3.org/2000/svg"
+                >
+                    <path d=SIREN_FRONT_PATH_1 />
+                    <path d=SIREN_FRONT_PATH_2 />
+                    <path d=SIREN_FRONT_PATH_3 />
+                    <path d=SIREN_FRONT_PATH_4 />
+                    <path d=SIREN_FRONT_PATH_5 />
+                </svg>
+            </div>
+        </>
+    }
+}
+
+#[component]
+fn SplitSuns(
+    pos: Point2<f32>,
+    radius: f32,
+    split: Vector2<f32>,
+    stroke_width: f32,
+) -> impl IntoView {
+    // Calculate points for the two semi-circles
+    let center_x = pos.x;
+    let center_y = pos.y;
+    let split_x = split.x;
+    let split_y = split.y;
+
+    // Calculate the angle of the split vector
+    let angle = split_y.atan2(split_x);
+    let start_angle_1 = angle;
+    let end_angle_1 = angle + std::f32::consts::PI;
+    let start_angle_2 = angle + std::f32::consts::PI;
+    let end_angle_2 = angle + 2.0 * std::f32::consts::PI;
+
+    // Generate arc paths for semi-circles
+    let arc_1 = generate_arc_path(center_x, center_y, radius, start_angle_1, end_angle_1);
+    let arc_2 = generate_arc_path(center_x, center_y, radius, start_angle_2, end_angle_2);
+
+    // Calculate connection line endpoints
+    let line_start_x = center_x + radius * start_angle_1.cos();
+    let line_start_y = center_y + radius * start_angle_1.sin();
+    let line_end_x = center_x + radius * end_angle_1.cos();
+    let line_end_y = center_y + radius * end_angle_1.sin();
+
+    view! {
+        <>
+            <path d=arc_1 />
+            <path d=arc_2 />
+            <path
+                d=format!("M{} {}L{} {}", line_start_x, line_start_y, line_end_x, line_end_y)
+                stroke-width=stroke_width
+            />
+        </>
+    }
+}
+
+fn generate_arc_path(cx: f32, cy: f32, r: f32, start_angle: f32, end_angle: f32) -> String {
+    let start_x = cx + r * start_angle.cos();
+    let start_y = cy + r * start_angle.sin();
+    let end_x = cx + r * end_angle.cos();
+    let end_y = cy + r * end_angle.sin();
+
+    let large_arc_flag = if (end_angle - start_angle).abs() > std::f32::consts::PI {
+        1
+    } else {
+        0
+    };
+    let sweep_flag = if end_angle > start_angle { 1 } else { 0 };
+
+    format!(
+        "M{} {}A{} {} 0 {} {} {} {}",
+        start_x, start_y, r, r, large_arc_flag, sweep_flag, end_x, end_y
+    )
+}
+
+impl Default for IntroAnimationState {
+    fn default() -> Self {
+        Self {
+            view_box: (Point2 { x: 0.0, y: 0.0 }, Point2 { x: 430.0, y: 932.0 }),
+            picture_opacity: 1.0,
+            suns_positions: vec![Point2 { x: 107.0, y: 164.0 }],
+            suns_splits: vec![Vector2 { x: 0.0, y: 0.0 }],
+            sun_radius: 39.0,
+            keybands_positions: Vec::default(),
+            string_1_position: (
+                Point2 {
+                    x: 73.7113,
+                    y: 576.054,
+                },
+                Point2 {
+                    x: 73.7113 + 53.653,
+                    y: 576.054,
+                },
+            ),
+            string_2_position: (
+                Point2 {
+                    x: 73.7113,
+                    y: 576.054 + 8.25253,
+                },
+                Point2 {
+                    x: 73.7113 + 53.653,
+                    y: 576.054 + 8.25253,
+                },
+            ),
+            strings_rotation: (
+                -17.1246,
+                Point2 {
+                    x: 48.3365,
+                    y: 585.964,
+                },
+            ),
+            strings_stroke: 2.0,
+        }
+    }
+}
+
+impl From<IntroAnimationTarget> for IntroAnimationState {
+    fn from(value: IntroAnimationTarget) -> Self {
+        match value {
+            IntroAnimationTarget::Intro => Self::default(),
+            IntroAnimationTarget::Tuner => todo!(),
+            IntroAnimationTarget::Instrument(layout) => todo!(),
+        }
+    }
+}
+
+impl CanTween for IntroAnimationState {
+    fn ease(from: Self, to: Self, time: impl keyframe::num_traits::Float) -> Self {
+        let suns_positions = tween_vectors(&from.suns_positions, &to.suns_positions, time);
+        let suns_splits = tween_vectors(&from.suns_splits, &to.suns_splits, time);
+        let keybands_positions =
+            tween_tuple_vectors(&from.keybands_positions, &to.keybands_positions, time);
+
+        Self {
+            view_box: (
+                CanTween::ease(from.view_box.0, to.view_box.0, time),
+                CanTween::ease(from.view_box.1, to.view_box.1, time),
+            ),
+            suns_positions,
+            suns_splits,
+            keybands_positions,
+            sun_radius: CanTween::ease(from.sun_radius, to.sun_radius, time),
+            picture_opacity: CanTween::ease(from.picture_opacity, to.picture_opacity, time),
+            string_1_position: (
+                CanTween::ease(from.string_1_position.0, to.string_1_position.0, time),
+                CanTween::ease(from.string_1_position.1, to.string_1_position.1, time),
+            ),
+            string_2_position: (
+                CanTween::ease(from.string_2_position.0, to.string_2_position.0, time),
+                CanTween::ease(from.string_2_position.1, to.string_2_position.1, time),
+            ),
+            strings_rotation: (
+                CanTween::ease(from.strings_rotation.0, to.strings_rotation.0, time),
+                CanTween::ease(from.strings_rotation.1, to.strings_rotation.1, time),
+            ),
+            strings_stroke: CanTween::ease(from.strings_stroke, to.strings_stroke, time),
+        }
     }
 }
 

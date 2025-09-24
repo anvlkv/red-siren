@@ -26,6 +26,11 @@ pub struct Layout {
     /// breadth of the `track` of key's band
     pub key_band_breadth: f32,
     /// minimum distance from edge of the screen to any interactive element
+    ///
+    /// The array follows CSS box model convention: [top, right, bottom, left]
+    /// When calculating layout positions:
+    /// - For main axis (primary direction): uses [0] and [2] (left/right for horizontal, top/bottom for vertical)
+    /// - For cross axis (secondary direction): uses [1] and [3] (top/bottom for horizontal, left/right for vertical)
     pub safe_area_padding: [f32; 4],
     /// distance between `track`s in one group,
     /// along the main axis of instrument

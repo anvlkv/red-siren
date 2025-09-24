@@ -5,6 +5,7 @@ use leptos_use::{
     UseRafFnCallbackArgs, UseRafFnOptions,
 };
 use mint::{Point2, Vector2};
+use shared::instrument::LayoutOrientation;
 
 use crate::util::animation::{tween_tuple_vectors, tween_vectors, ReducedMotionState};
 
@@ -425,7 +426,92 @@ impl From<IntroAnimationTarget> for IntroAnimationState {
         match value {
             IntroAnimationTarget::Intro => Self::default(),
             IntroAnimationTarget::Tuner => todo!(),
-            IntroAnimationTarget::Instrument(layout) => todo!(),
+            IntroAnimationTarget::Instrument(layout) => {
+                let total_keys =
+                    layout.num_groups.get() as usize * layout.num_keys_per_group.get() as usize;
+                let num_groups = layout.num_groups.get() as usize;
+                let keys_per_group = layout.num_keys_per_group.get() as usize;
+
+                // Calculate sun positions (keys) and keyband positions
+                let mut suns_positions = Vec::with_capacity(total_keys);
+                let mut keybands_positions = Vec::with_capacity(total_keys);
+
+                // Determine main and cross axes based on orientation
+                let (main_axis, cross_axis) = match layout.orientation {
+                    LayoutOrientation::Horizontal => (layout.space.x, layout.space.y),
+                    LayoutOrientation::Vertical => (layout.space.y, layout.space.x),
+                };
+
+                // Calculate available space after safe area padding
+                let available_main =
+                    main_axis - layout.safe_area_padding[0] - layout.safe_area_padding[2];
+                let available_cross =
+                    cross_axis - layout.safe_area_padding[1] - layout.safe_area_padding[3];
+
+                // Calculate group spacing
+                let total_groups_gap = layout.groups_gap * (num_groups - 1) as f32;
+                let group_main_size = (available_main - total_groups_gap) / num_groups as f32;
+
+                // Calculate key spacing within groups
+                let total_key_gaps = layout.key_bands_gap * (keys_per_group - 1) as f32;
+                let key_cross_size = (available_cross - total_key_gaps) / keys_per_group as f32;
+
+                for group_idx in 0..num_groups {
+                    let group_main_offset = layout.safe_area_padding[0]
+                        + (group_main_size + layout.groups_gap) * group_idx as f32;
+
+                    for key_idx in 0..keys_per_group {
+                        let key_cross_offset = layout.safe_area_padding[1]
+                            + (key_cross_size + layout.key_bands_gap) * key_idx as f32;
+
+                        // Calculate position based on orientation
+                        let (x, y) = match layout.orientation {
+                            LayoutOrientation::Horizontal => (
+                                group_main_offset + group_main_size * 0.5,
+                                key_cross_offset + key_cross_size * 0.5,
+                            ),
+                            LayoutOrientation::Vertical => (
+                                key_cross_offset + key_cross_size * 0.5,
+                                group_main_offset + group_main_size * 0.5,
+                            ),
+                        };
+
+                        suns_positions.push(Point2 { x, y });
+
+                        // Calculate keyband positions (full-rounded rectangles around keys)
+                        let band_start = Point2 {
+                            x: x - layout.key_band_length * 0.5,
+                            y: y - layout.key_band_breadth * 0.5,
+                        };
+                        let band_end = Point2 {
+                            x: x + layout.key_band_length * 0.5,
+                            y: y + layout.key_band_breadth * 0.5,
+                        };
+                        keybands_positions.push((band_start, band_end));
+                    }
+                }
+
+                Self {
+                    view_box: (
+                        Point2 { x: 0.0, y: 0.0 },
+                        Point2 {
+                            x: layout.space.x,
+                            y: layout.space.y,
+                        },
+                    ),
+                    picture_opacity: 0.0,
+                    suns_positions,
+                    suns_splits: (0..total_keys)
+                        .map(|_| Vector2 { x: 0.0, y: 0.0 })
+                        .collect(), // splits not used
+                    sun_radius: layout.key_radius,
+                    keybands_positions,
+                    string_1_position: layout.left_string_position,
+                    string_2_position: layout.right_string_position,
+                    strings_rotation: (0.0, Point2 { x: 0.0, y: 0.0 }), // rotation not specified, use default
+                    strings_stroke: 1.0,
+                }
+            }
         }
     }
 }

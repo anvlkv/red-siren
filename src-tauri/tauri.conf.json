@@ -11,7 +11,24 @@
   },
   "app": {
     "withGlobalTauri": true,
-    "windows": [],
+    "windows": [
+      {
+        "label": "main",
+        "url": "/",
+        "title": "Red Siren",
+        "decorations": false,
+        "visible": false,
+        "titleBarStyle": "Transparent",
+        "width": 800,
+        "height": 600
+      },
+      {
+        "label": "splashscreen",
+        "decorations": false,
+        "url": "splashscreen.html",
+        "shadow": true
+      }
+    ],
     "security": {
       "csp": null
     }

@@ -3,10 +3,12 @@
     <head>
         <meta charset="utf-8" />
         <title>Red Siren</title>
-        <link data-trunk rel="tailwind-css" href="styles.css" />
-        <link data-trunk rel="rust" data-wasm-opt="z" />
+        <link rel="stylesheet" href="splash.css" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     </head>
-    <body class="relative bg-red dark:bg-black">
+    <body
+        class="relative bg-red dark:bg-black text-black dark:text-red font-serif italic"
+    >
         <!--see src/components/splash.rs for updating the splash image-->
         <div
             class="absolute h-screen w-screen splash-dummy overflow-hidden"
@@ -115,6 +117,7 @@
                     d="M100.8 570.575C99.3555 570.215 106.417 558.455 107.476 559.299C108.645 560.231 107.932 561.272 107.315 563.122C107.009 564.041 101.821 570.83 100.8 570.575Z"
                 />
             </svg>
+            <h1 class="w-full text-center text-5xl my-20">Red Siren</h1>
         </div>
     </body>
 </html>

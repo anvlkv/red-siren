@@ -7,3 +7,19 @@ ignore = ["./src-tauri"]
 [serve]
 port = 1420
 open = false
+
+[[hooks]]
+stage = "post_build"
+command = "sh"
+command_arguments = [
+  "-c",
+  "cp splashscreen.html \"$TRUNK_STAGING_DIR/splashscreen.html\"",
+]
+
+[[hooks]]
+stage = "post_build"
+command = "sh"
+command_arguments = [
+  "-c",
+  "tailwindcss -i styles.css -o \"$TRUNK_STAGING_DIR/splash.css\" --content splashscreen.html",
+]

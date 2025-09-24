@@ -22,18 +22,6 @@
     font-style: italic;
 }
 
-:root {
-    --intro-opacity: 0;
-}
-
-.splash-dummy svg {
-    opacity: calc(1 - var(--intro-opacity));
-}
-
-.splash-picture svg {
-    opacity: var(--intro-opacity);
-}
-
 svg.splash-fragment {
     position: absolute;
     height: 100%;

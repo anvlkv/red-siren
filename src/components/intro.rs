@@ -1,12 +1,11 @@
 use keyframe::{keyframes, AnimationSequence, CanTween};
 use leptos::prelude::*;
 use leptos_use::{
-    use_prefers_reduced_motion, use_raf_fn_with_options, use_window, utils::Pausable,
-    UseRafFnCallbackArgs, UseRafFnOptions,
+    use_prefers_reduced_motion, use_raf_fn_with_options, utils::Pausable, UseRafFnCallbackArgs,
+    UseRafFnOptions,
 };
 use mint::{Point2, Vector2};
 use shared::orientation::LayoutOrientation;
-use wasm_bindgen::JsValue;
 
 use crate::util::animation::{tween_tuple_vectors, tween_vectors, ReducedMotionState};
 
@@ -104,35 +103,6 @@ pub fn Intro(
         },
         UseRafFnOptions::default().immediate(false),
     );
-
-    let window = use_window();
-
-    // hide static splash and make dynamic intro visible
-    Effect::new(move |_| {
-        if let Some(doc_element) = window
-            .document()
-            .as_ref()
-            .and_then(|doc| doc.document_element())
-        {
-            doc_element.style(Some("--intro-opacity: 1;"));
-        } else {
-            log::warn!("Failed to get document.")
-        }
-
-        if let Some((splash_element, doc)) = window
-            .document()
-            .as_ref()
-            .and_then(|doc| doc.get_element_by_id("splash-dummy").zip(Some(doc)))
-        {
-            if let Err(e) = doc
-                .body()
-                .ok_or(JsValue::from_str("No body element"))
-                .and_then(|bod| bod.remove_child(&splash_element))
-            {
-                log::warn!("Failed to remove dummy: {:?}", e)
-            }
-        }
-    });
 
     // play and pause animations
     // TODO: build correct animation end states

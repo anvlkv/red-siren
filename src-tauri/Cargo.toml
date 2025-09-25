@@ -17,7 +17,7 @@ name = "tauri_app_lib"
 log = { workspace = true }
 mint = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
-serde_json = "1"
+serde_json = { workspace = true }
 shared = { workspace = true }
 tauri = { version = "2", features = [] }
 tauri-plugin-log = "2"

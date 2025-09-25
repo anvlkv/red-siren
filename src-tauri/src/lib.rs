@@ -1,6 +1,12 @@
+use crate::navigation::{new_manager, parse_incoming_route_payload};
+use navigation_manager::NavigationManager;
+use shared::RouteId;
+use tauri::Manager;
 use tokio::sync::Mutex;
 
 mod health;
+mod navigation;
+mod navigation_manager;
 mod setup;
 
 #[cfg(target_os = "macos")]
@@ -14,7 +20,14 @@ pub fn run() {
             gui_ready: false,
             backend_ready: false,
         }))
-        .setup(setup::app_setup)
+        .setup(|app| {
+            // Existing setup logic
+            setup::app_setup(app)?;
+            // Initialize navigation manager with initial route (Home)
+            let nav_manager = new_manager(app.handle().clone(), RouteId::Home);
+            app.manage(nav_manager);
+            Ok(())
+        })
         .plugin(
             tauri_plugin_window_state::Builder::new()
                 .with_state_flags(
@@ -25,7 +38,13 @@ pub fn run() {
         )
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![health::health_on_gui_ready])
+        .invoke_handler(tauri::generate_handler![
+            health::health_on_gui_ready,
+            navigation::navigation_request,
+            navigation::navigation_leave_done,
+            navigation::navigation_enter_done,
+            navigation::navigation_sync
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

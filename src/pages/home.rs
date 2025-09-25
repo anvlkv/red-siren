@@ -1,74 +1,173 @@
-use keyframe::{functions::EaseInCubic, keyframes, AnimationSequence};
-use keyframe_derive::CanTween;
 use leptos::prelude::*;
-use leptos_use::{use_prefers_reduced_motion, use_raf_fn, utils::Pausable, UseRafFnCallbackArgs};
-use mint::Point2;
+use shared::RouteId;
+use tauri_use::{use_invoke_with_args, use_listen, EventType, UseListenReturn, UseTauriWithReturn};
 
-use crate::components::Menu;
-
-const ANIMATION_DURATION_MS: f64 = 800.0;
-
-#[derive(Debug, Default, Clone, Copy, CanTween)]
-struct HomeMenuAnimationState {
-    y_offset: f32,
-    x_offset: f32,
-    x_tilt: f32,
-}
+use crate::components::{Card, Menu};
 
 #[component]
-pub fn Home(#[prop(into, optional)] initial_position: Option<Point2<f32>>) -> impl IntoView {
-    let reduced_motion = use_prefers_reduced_motion();
-    let first_frame = match initial_position {
-        Some(pos) => HomeMenuAnimationState {
-            y_offset: pos.y,
-            x_offset: pos.x,
-            x_tilt: 0.0,
-        },
-        None => HomeMenuAnimationState {
-            y_offset: 1000.0,
-            x_offset: 0.0,
-            x_tilt: -120.0,
-        },
-    };
-    let animation_state = RwSignal::new(keyframes![
-        (first_frame, 0.0),
-        (
-            HomeMenuAnimationState::default(),
-            ANIMATION_DURATION_MS,
-            EaseInCubic
-        )
-    ]);
-
-    let Pausable { pause, .. } = use_raf_fn(move |UseRafFnCallbackArgs { delta, .. }| {
-        let reduced_motion = reduced_motion();
-
-        animation_state.update(|state| {
-            if reduced_motion {
-                state.advance_to(ANIMATION_DURATION_MS);
-            } else {
-                state.advance_by(delta);
-            }
-            log::trace!("advanced animation state by: {delta}");
-        });
-    });
-
+pub fn Home() -> impl IntoView {
+    // Orchestrated enter/leave signals from backend events
+    // Listen for committed (to == Home) -> enter
+    let UseListenReturn {
+        data: committed,
+        error: error_committed,
+        open: open_committed,
+        ..
+    } = use_listen::<shared::NavCommittedPayload>(EventType::Custom(
+        shared::events::navigation::NAV_COMMITTED,
+    ));
+    Effect::new(move |_| open_committed());
     Effect::new(move |_| {
-        if animation_state().finished() {
-            pause()
+        if let Some(err) = error_committed() {
+            log::error!(
+                "Error listening to {}: {err}",
+                shared::events::navigation::NAV_COMMITTED
+            );
         }
     });
 
-    let menu_transform = move || {
-        let state = animation_state().now();
-        format!(
-            "perspective(10cm) translate3d({}px, {}px, 0) rotate3d(1, 0, 0, {}deg)",
-            state.x_offset, state.y_offset, state.x_tilt
-        )
-    };
+    // Listen for backend navigation_sync (UI reload alignment)
+    let UseListenReturn {
+        data: sync,
+        error: error_sync,
+        open: open_sync,
+        ..
+    } = use_listen::<shared::NavSyncPayload>(EventType::Custom(
+        shared::events::navigation::NAV_SYNC,
+    ));
+    Effect::new(move |_| open_sync());
+    Effect::new(move |_| {
+        if let Some(err) = error_sync() {
+            log::error!(
+                "Error listening to {}: {err}",
+                shared::events::navigation::NAV_SYNC
+            );
+        }
+    });
+
+    // Listen for started (from == Home) -> leave
+    let UseListenReturn {
+        data: started,
+        error: error_started,
+        open: open_started,
+        ..
+    } = use_listen::<shared::NavStartedPayload>(EventType::Custom(
+        shared::events::navigation::NAV_STARTED,
+    ));
+    Effect::new(move |_| open_started());
+    Effect::new(move |_| {
+        if let Some(err) = error_started() {
+            log::error!(
+                "Error listening to {}: {err}",
+                shared::events::navigation::NAV_STARTED
+            );
+        }
+    });
+
+    // Build enter/leave tx signals for the Card
+    let start_enter_tx = Signal::derive(move || {
+        committed().as_ref().and_then(|p| {
+            if p.to == RouteId::Home {
+                Some(p.tx_id)
+            } else {
+                None
+            }
+        })
+    });
+    let start_leave_tx = Signal::derive(move || {
+        started().as_ref().and_then(|ev| {
+            if ev.from == RouteId::Home {
+                Some(ev.tx_id)
+            } else {
+                None
+            }
+        })
+    });
+
+    // One-time appear animation trigger (first time Home appears after sync/commit)
+    let appear_tx = RwSignal::new(None::<u64>);
+    let appear_started = RwSignal::new(false);
+    Effect::new(move |_| {
+        // If we haven't started appear animation yet, trigger when either:
+        // - navigation_sync reports Home, or
+        // - navigation_committed reports Home
+        if !appear_started()
+            && ((sync()
+                .as_ref()
+                .map(|p| p.to == RouteId::Home)
+                .unwrap_or(false))
+                || (committed()
+                    .as_ref()
+                    .map(|p| p.to == RouteId::Home)
+                    .unwrap_or(false)))
+        {
+            appear_tx.set(Some(1));
+            appear_started.set(true);
+        }
+    });
+
+    // Triggers to notify backend that enter/leave animations completed
+    let UseTauriWithReturn {
+        trigger: enter_done_trigger,
+        error: enter_done_error,
+        ..
+    } = use_invoke_with_args::<shared::commands::navigation::NavTxPayload, ()>(
+        shared::commands::navigation::NAV_ENTER_DONE,
+    );
+    Effect::new(move |_| {
+        if let Some(err) = enter_done_error() {
+            log::error!(
+                "Error invoking {}: {}",
+                shared::commands::navigation::NAV_ENTER_DONE,
+                err
+            );
+        }
+    });
+
+    let UseTauriWithReturn {
+        trigger: leave_done_trigger,
+        error: leave_done_error,
+        ..
+    } = use_invoke_with_args::<shared::commands::navigation::NavTxPayload, ()>(
+        shared::commands::navigation::NAV_LEAVE_DONE,
+    );
+    Effect::new(move |_| {
+        if let Some(err) = leave_done_error() {
+            log::error!(
+                "Error invoking {}: {}",
+                shared::commands::navigation::NAV_LEAVE_DONE,
+                err
+            );
+        }
+    });
 
     view! {
-        <div class="w-full h-full flex items-center justify-center" style:transform=menu_transform>
-            <Menu />
+        <div class="w-full h-full flex items-center justify-center">
+            <Card
+                start_appear_tx=Signal::derive(move || appear_tx())
+                start_enter_tx=start_enter_tx
+                start_leave_tx=start_leave_tx
+                on_enter_done=Callback::new({
+                    move |tx_id| {
+                        enter_done_trigger(
+                            Some(shared::commands::navigation::NavTxPayload {
+                                tx_id,
+                            }),
+                        );
+                    }
+                })
+                on_leave_done=Callback::new({
+                    move |tx_id| {
+                        leave_done_trigger(
+                            Some(shared::commands::navigation::NavTxPayload {
+                                tx_id,
+                            }),
+                        );
+                    }
+                })
+            >
+                <Menu />
+            </Card>
         </div>
     }
 }

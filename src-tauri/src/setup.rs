@@ -1,6 +1,6 @@
 use tauri::{async_runtime::spawn, App, Manager};
 use tauri_plugin_window_state::WindowExt;
-use tokio::{sync::Mutex, time::Duration};
+use tokio::{sync::Mutex};
 
 use crate::health;
 
@@ -19,7 +19,7 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     let app_handle = app.handle().clone();
     spawn(async move {
         // Wait a bit for the app to fully initialize
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        // tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Get state from app handle
         let app_handle_clone = app_handle.clone();

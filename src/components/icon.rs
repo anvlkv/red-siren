@@ -3,6 +3,7 @@ use leptos::prelude::*;
 const INFO_ICON: &str = include_str!("./icon/info.svg");
 const PLAY_ICON: &str = include_str!("./icon/play.svg");
 const TUNE_ICON: &str = include_str!("./icon/tune.svg");
+const BACK_ICON: &str = include_str!("./icon/back.svg");
 
 #[component]
 pub fn Icon(
@@ -18,6 +19,7 @@ pub fn Icon(
                     "info" => INFO_ICON,
                     "play" => PLAY_ICON,
                     "tune" => TUNE_ICON,
+                    "back" => BACK_ICON,
                     _ => "No such icon",
                 };
                 decorate_svg(raw, stroke_width)

@@ -11,7 +11,7 @@ use leptos_use::{
 const PERSPECTIVE_CM: f64 = 60.0;
 const FLIP_ANIMATION_DURATION_MS: f64 = 600.0;
 const APPEAR_ANIMATION_DURATION_MS: f64 = 800.0;
-const APPEAR_PERSPECTIVE_CM: f64 = 10.0;
+const APPEAR_PERSPECTIVE_CM: f64 = 60.0;
 
 #[derive(Debug, Default, Clone, Copy, CanTween)]
 struct RotY {
@@ -58,10 +58,10 @@ pub enum CardAnimation {
 /// Example:
 /// view! {
 ///   <Card
-///     start_enter_tx=Some(enter_tx_signal)
-///     start_leave_tx=Some(leave_tx_signal)
-///     on_enter_done=Some(Callback::new(|tx| notify_enter_done(tx)))
-///     on_leave_done=Some(Callback::new(|tx| notify_leave_done(tx)))
+///     start_animation=start_animation
+///     on_animation_done=Callback::new(|(tx, kind)| {
+///         // Optionally branch on kind: EnterY | LeaveY | Appear
+///     })
 ///   >
 ///     <p>"Hello card"</p>
 ///   </Card>
@@ -81,31 +81,21 @@ pub fn Card(
     // Behavior
     #[prop(optional)] interactive: bool,
 
+    // Unified animation interface:
+    // Provide (tx_id, CardAnimation) to start an animation; done callback notified when sequence completes.
+    #[prop(optional)] start_animation: Signal<Option<(u64, CardAnimation)>>,
+    #[prop(optional)] on_animation_done: Option<Callback<(u64, CardAnimation)>>,
     // Imperative animation controls (optional):
     // Set a new tx_id to start an animation. Card will run animations and then call on_*_done if provided.
-    #[prop(optional)] start_appear_tx: Signal<Option<u64>>,
-    #[prop(optional)] start_enter_tx: Signal<Option<u64>>,
-    #[prop(optional)] start_leave_tx: Signal<Option<u64>>,
-    #[prop(optional)] on_enter_done: Option<Callback<u64>>,
-    #[prop(optional)] on_leave_done: Option<Callback<u64>>,
+
     // Animation tuning (rotateY)
-    #[prop(optional)] enter_from_deg: f32,
-    #[prop(optional)] enter_to_deg: f32,
-    #[prop(optional)] enter_ms: f64,
-    #[prop(optional)] leave_from_deg: f32,
-    #[prop(optional)] leave_to_deg: f32,
-    #[prop(optional)] leave_ms: f64,
+
     // Animation tuning (appear)
-    #[prop(optional)] appear_x_from_px: f32,
-    #[prop(optional)] appear_y_from_px: f32,
-    #[prop(optional)] appear_tilt_x_from_deg: f32,
-    #[prop(optional)] appear_ms: f64,
 ) -> impl IntoView {
     // Base layout and typography colors tuned to the existing theme
     let base = "text-black dark:text-red \
                 transition-all duration-200 \
-                focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 \
-                will-change-transform";
+                focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2";
 
     let bg_and_border = match variant {
         CardVariant::Elevated => {
@@ -151,47 +141,10 @@ pub fn Card(
     // Built-in rotateY animation plumbing (imperative)
     let reduced_motion = use_prefers_reduced_motion();
 
-    let ef = if enter_from_deg == 0.0 {
-        -90.0
-    } else {
-        enter_from_deg
-    };
-    let et = enter_to_deg;
-    let ems = if enter_ms == 0.0 {
-        FLIP_ANIMATION_DURATION_MS
-    } else {
-        enter_ms
-    };
-
-    let lf = leave_from_deg;
-    let lt = if leave_to_deg == 0.0 {
-        90.0
-    } else {
-        leave_to_deg
-    };
-    let lms = if leave_ms == 0.0 {
-        FLIP_ANIMATION_DURATION_MS
-    } else {
-        leave_ms
-    };
-
-    // Appear animation defaults (replicates old Home animation)
-    let ax = appear_x_from_px;
-    let ay = if appear_y_from_px == 0.0 {
-        1000.0
-    } else {
-        appear_y_from_px
-    };
-    let atilt = if appear_tilt_x_from_deg == 0.0 {
-        -120.0
-    } else {
-        appear_tilt_x_from_deg
-    };
-    let ams = if appear_ms == 0.0 {
-        APPEAR_ANIMATION_DURATION_MS
-    } else {
-        appear_ms
-    };
+    // Animation durations are driven by the incoming CardAnimation variant
+    let enter_ms_sig = RwSignal::new(FLIP_ANIMATION_DURATION_MS);
+    let leave_ms_sig = RwSignal::new(FLIP_ANIMATION_DURATION_MS);
+    let appear_ms_sig = RwSignal::new(APPEAR_ANIMATION_DURATION_MS);
 
     let enter_seq = RwSignal::new(keyframes![(RotY { y_deg: 0.0 }, 0.0)]);
     let leave_seq = RwSignal::new(keyframes![(RotY { y_deg: 0.0 }, 0.0)]);
@@ -205,9 +158,9 @@ pub fn Card(
     )]);
 
     // Track last seen tx ids to avoid retriggering same animation
-    let last_enter_tx = RwSignal::new(None::<u64>);
-    let last_leave_tx = RwSignal::new(None::<u64>);
-    let last_appear_tx = RwSignal::new(None::<u64>);
+    let last_enter_tx = RwSignal::new(None::<(u64, CardAnimation)>);
+    let last_leave_tx = RwSignal::new(None::<(u64, CardAnimation)>);
+    let last_appear_tx = RwSignal::new(None::<(u64, CardAnimation)>);
 
     // RAF loops
     let Pausable {
@@ -219,7 +172,7 @@ pub fn Card(
             let reduced = reduced_motion();
             enter_seq.update(|seq| {
                 if reduced {
-                    seq.advance_to(ems);
+                    seq.advance_to(enter_ms_sig());
                 } else {
                     seq.advance_by(delta);
                 }
@@ -238,7 +191,7 @@ pub fn Card(
             let reduced = reduced_motion();
             leave_seq.update(|seq| {
                 if reduced {
-                    seq.advance_to(lms);
+                    seq.advance_to(leave_ms_sig());
                 } else {
                     seq.advance_by(delta);
                 }
@@ -257,7 +210,7 @@ pub fn Card(
             let reduced = reduced_motion();
             appear_seq.update(|seq| {
                 if reduced {
-                    seq.advance_to(ams);
+                    seq.advance_to(appear_ms_sig());
                 } else {
                     seq.advance_by(delta);
                 }
@@ -267,71 +220,106 @@ pub fn Card(
         UseRafFnOptions::default().immediate(false),
     );
 
-    // Start ENTER when parent sets a new tx_id
+    // Start animation when parent sets a new (tx_id, CardAnimation)
     Effect::new(move |_| {
-        if let Some(tx) = start_enter_tx() {
-            if last_enter_tx() != Some(tx) {
-                last_enter_tx.set(Some(tx));
-                enter_seq.set(keyframes![
-                    (RotY { y_deg: ef }, 0.0),
-                    (RotY { y_deg: et }, ems, EaseInCubic)
-                ]);
-                // Reset leave contribution
-                leave_seq.set(keyframes![(RotY { y_deg: 0.0 }, 0.0)]);
-                enter_resume();
-                log::debug!("Card: ENTER start tx_id={tx} {ef} -> {et}ms={ems}");
-            }
-        }
-    });
-
-    // Start APPEAR when parent sets a new tx_id
-    Effect::new(move |_| {
-        if let Some(tx) = start_appear_tx() {
-            if last_appear_tx() != Some(tx) {
-                last_appear_tx.set(Some(tx));
-                appear_seq.set(keyframes![
-                    (
-                        Appear {
-                            x_px: ax,
-                            y_px: ay,
-                            tilt_x_deg: atilt
-                        },
-                        0.0
-                    ),
-                    (
-                        Appear {
-                            x_px: 0.0,
-                            y_px: 0.0,
-                            tilt_x_deg: 0.0
-                        },
-                        ams,
-                        EaseInCubic
-                    )
-                ]);
-                appear_resume();
-                log::debug!(
-                    "Card: APPEAR start tx_id={tx} trans=({}, {}) tilt={}ms={ams}",
-                    ax,
-                    ay,
-                    atilt
-                );
-            }
-        }
-    });
-
-    // Start LEAVE when parent sets a new tx_id
-    Effect::new(move |_| {
-        if let Some(tx) = start_leave_tx() {
-            if last_leave_tx() != Some(tx) {
-                last_leave_tx.set(Some(tx));
-                leave_seq.set(keyframes![
-                    (RotY { y_deg: lf }, 0.0),
-                    (RotY { y_deg: lt }, lms, EaseInCubic)
-                ]);
-                // Reset enter contribution
-                enter_seq.set(keyframes![(RotY { y_deg: 0.0 }, 0.0)]);
-                leave_resume();
-                log::debug!("Card: LEAVE start tx_id={tx} {lf} -> {lt}ms={lms}");
+        if let Some((tx, kind)) = start_animation() {
+            match kind {
+                CardAnimation::EnterY {
+                    from_deg,
+                    to_deg,
+                    ms,
+                } => {
+                    if last_enter_tx().map(|(id, _)| id) != Some(tx) {
+                        last_enter_tx.set(Some((
+                            tx,
+                            CardAnimation::EnterY {
+                                from_deg,
+                                to_deg,
+                                ms,
+                            },
+                        )));
+                        enter_ms_sig.set(ms);
+                        enter_seq.set(keyframes![
+                            (RotY { y_deg: from_deg }, 0.0),
+                            (RotY { y_deg: to_deg }, ms, EaseInCubic)
+                        ]);
+                        // Reset leave contribution
+                        leave_seq.set(keyframes![(RotY { y_deg: 0.0 }, 0.0)]);
+                        enter_resume();
+                        log::debug!("Card: ENTER start tx_id={tx} {from_deg} -> {to_deg}ms={ms}");
+                    }
+                }
+                CardAnimation::LeaveY {
+                    from_deg,
+                    to_deg,
+                    ms,
+                } => {
+                    if last_leave_tx().map(|(id, _)| id) != Some(tx) {
+                        last_leave_tx.set(Some((
+                            tx,
+                            CardAnimation::LeaveY {
+                                from_deg,
+                                to_deg,
+                                ms,
+                            },
+                        )));
+                        leave_ms_sig.set(ms);
+                        leave_seq.set(keyframes![
+                            (RotY { y_deg: from_deg }, 0.0),
+                            (RotY { y_deg: to_deg }, ms, EaseInCubic)
+                        ]);
+                        // Reset enter contribution
+                        enter_seq.set(keyframes![(RotY { y_deg: 0.0 }, 0.0)]);
+                        leave_resume();
+                        log::debug!("Card: LEAVE start tx_id={tx} {from_deg} -> {to_deg}ms={ms}");
+                    }
+                }
+                CardAnimation::Appear {
+                    x_from_px,
+                    y_from_px,
+                    tilt_x_from_deg,
+                    ms,
+                } => {
+                    if last_appear_tx().map(|(id, _)| id) != Some(tx) {
+                        last_appear_tx.set(Some((
+                            tx,
+                            CardAnimation::Appear {
+                                x_from_px,
+                                y_from_px,
+                                tilt_x_from_deg,
+                                ms,
+                            },
+                        )));
+                        appear_ms_sig.set(ms);
+                        appear_seq.set(keyframes![
+                            (
+                                Appear {
+                                    x_px: x_from_px,
+                                    y_px: y_from_px,
+                                    tilt_x_deg: tilt_x_from_deg
+                                },
+                                0.0
+                            ),
+                            (
+                                Appear {
+                                    x_px: 0.0,
+                                    y_px: 0.0,
+                                    tilt_x_deg: 0.0
+                                },
+                                ms,
+                                EaseInCubic
+                            )
+                        ]);
+                        appear_resume();
+                        log::debug!(
+                            "Card: APPEAR start tx_id={tx} trans=({}, {}) tilt={}ms={}",
+                            x_from_px,
+                            y_from_px,
+                            tilt_x_from_deg,
+                            ms
+                        );
+                    }
+                }
             }
         }
     });
@@ -346,9 +334,12 @@ pub fn Card(
         } else {
             PERSPECTIVE_CM
         };
+        // Clamp X tilt to avoid exaggerated foreshortening which reads like scale.
+        let tilt_x = c.tilt_x_deg.clamp(-75.0, 0.0);
+        // Ensure a stable baseline: translateZ(0) and scale(1) explicitly set.
         format!(
-            "perspective({}cm) translate3d({}px, {}px, 0) rotate3d(1, 0, 0, {}deg) rotate3d(0, 1, 0, {}deg)",
-            perspective, c.x_px, c.y_px, c.tilt_x_deg, total
+            "perspective({}cm) translate3d({}px, {}px, 0) translateZ(0) rotate3d(1, 0, 0, {}deg) rotate3d(0, 1, 0, {}deg) scale(1)",
+            perspective, c.x_px, c.y_px, tilt_x, total
         )
     };
 
@@ -356,8 +347,8 @@ pub fn Card(
     Effect::new(move |_| {
         if enter_seq().finished() && enter_active() {
             enter_pause();
-            if let Some((tx, cb)) = last_enter_tx().zip(on_enter_done) {
-                set_timeout(move || cb.run(tx), Duration::from_millis(20));
+            if let Some(((tx, kind), cb)) = last_enter_tx().zip(on_animation_done) {
+                set_timeout(move || cb.run((tx, kind)), Duration::from_millis(20));
             }
         }
     });
@@ -365,8 +356,8 @@ pub fn Card(
     Effect::new(move |_| {
         if leave_seq().finished() && leave_active() {
             leave_pause();
-            if let Some((tx, cb)) = last_leave_tx().zip(on_leave_done) {
-                set_timeout(move || cb.run(tx), Duration::from_millis(20));
+            if let Some(((tx, kind), cb)) = last_leave_tx().zip(on_animation_done) {
+                set_timeout(move || cb.run((tx, kind)), Duration::from_millis(20));
             }
         }
     });
@@ -382,7 +373,11 @@ pub fn Card(
             class=class
             role=if interactive { "button" } else { "group" }
             tabindex=if interactive { Some("0") } else { None }
+            class:will-change-transform=true
             style:transform=transform_style
+            style:transform-origin="50% 100%"
+            style:backface-visibility="hidden"
+            style:contain="layout paint"
         >
             <div class="card-body contents">{children()}</div>
         </div>

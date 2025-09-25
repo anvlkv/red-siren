@@ -28,6 +28,7 @@ pub fn run() {
             app.manage(nav_manager);
             Ok(())
         })
+        .plugin(tauri_plugin_prevent_default::init())
         .plugin(
             tauri_plugin_window_state::Builder::new()
                 .with_state_flags(

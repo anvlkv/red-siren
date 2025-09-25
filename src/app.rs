@@ -11,10 +11,6 @@ pub struct ActiveWindowContext(pub Option<(f64, f64)>);
 #[component]
 pub fn App() -> impl IntoView {
     let UseTauriWithReturn { trigger, .. } = use_command::<()>(shared::commands::health::GUI_READY);
-    let UseTauriWithReturn {
-        trigger: sync_trigger,
-        ..
-    } = use_command::<()>("navigation_sync");
 
     let UseListenReturn {
         event_id,
@@ -60,9 +56,29 @@ pub fn App() -> impl IntoView {
             .next()
         {
             set_window.set(ActiveWindowContext(Some(size)));
-            log::info!("App ready event received, active window context set");
-            // Request backend navigation snapshot to sync router after reloads
-            sync_trigger(Some(()));
+            log::info!(
+                "App ready event received, active window: {:.0}x{:.0}",
+                size.0,
+                size.1
+            );
+        }
+    });
+
+    // Track and log initial and subsequent window size updates; update context on change
+    Effect::new(move |_| {
+        let w = width();
+        let h = height();
+        if w > 0.0 && h > 0.0 {
+            let prev = window().0;
+            let new = Some((w, h));
+            if prev != new {
+                set_window.set(ActiveWindowContext(new));
+                if prev.is_some() {
+                    log::info!("Window size updated: {:.0}x{:.0}", w, h);
+                } else {
+                    log::info!("Initial window size: {:.0}x{:.0}", w, h);
+                }
+            }
         }
     });
 

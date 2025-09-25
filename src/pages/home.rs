@@ -26,25 +26,6 @@ pub fn Home() -> impl IntoView {
         }
     });
 
-    // Listen for backend navigation_sync (UI reload alignment)
-    let UseListenReturn {
-        data: sync,
-        error: error_sync,
-        open: open_sync,
-        ..
-    } = use_listen::<shared::NavSyncPayload>(EventType::Custom(
-        shared::events::navigation::NAV_SYNC,
-    ));
-    Effect::new(move |_| open_sync());
-    Effect::new(move |_| {
-        if let Some(err) = error_sync() {
-            log::error!(
-                "Error listening to {}: {err}",
-                shared::events::navigation::NAV_SYNC
-            );
-        }
-    });
-
     // Listen for started (from == Home) -> leave
     let UseListenReturn {
         data: started,
@@ -84,25 +65,86 @@ pub fn Home() -> impl IntoView {
         })
     });
 
-    // One-time appear animation trigger (first time Home appears after sync/commit)
-    let appear_tx = RwSignal::new(None::<u64>);
+    // Unified animation signal (single source driving Card)
+    let (start_animation, set_start_animation) =
+        signal(None::<(u64, crate::components::CardAnimation)>);
+
+    // Access window size context to scale appear animation for screen size
+    let window = use_context::<Signal<crate::app::ActiveWindowContext>>();
+
+    // One-time appear animation trigger (first time Home appears after commit), scaled by window size
     let appear_started = RwSignal::new(false);
     Effect::new(move |_| {
-        // If we haven't started appear animation yet, trigger when either:
-        // - navigation_sync reports Home, or
-        // - navigation_committed reports Home
-        if !appear_started()
-            && ((sync()
+        if appear_started() {
+            return;
+        }
+
+        // Wait for a valid window height before triggering appear
+        let size = window.as_ref().and_then(|w| w().0);
+        if let Some((_, height)) = size {
+            // Trigger when navigation was committed to Home
+            if committed()
                 .as_ref()
                 .map(|p| p.to == RouteId::Home)
-                .unwrap_or(false))
-                || (committed()
-                    .as_ref()
-                    .map(|p| p.to == RouteId::Home)
-                    .unwrap_or(false)))
-        {
-            appear_tx.set(Some(1));
-            appear_started.set(true);
+                .unwrap_or(false)
+            {
+                // Scale translation and duration by height (clamped)
+                let base_h = 900.0;
+                let mut y_scale = height / base_h;
+                y_scale = y_scale.clamp(0.75, 1.25);
+                let y_from_px = (800.0 * y_scale) as f32;
+
+                let mut t_scale = height / base_h;
+                t_scale = t_scale.clamp(0.85, 1.15);
+                let ms = 800.0 * t_scale;
+
+                set_start_animation(Some((
+                    1,
+                    crate::components::CardAnimation::Appear {
+                        x_from_px: 0.0,
+                        y_from_px,
+                        tilt_x_from_deg: -60.0,
+                        ms,
+                    },
+                )));
+                appear_started.set(true);
+                log::info!(
+                    "Home: queued APPEAR (y_from_px={:.1}, ms={:.0}) for height {:.0}",
+                    y_from_px,
+                    ms,
+                    height
+                );
+            }
+        }
+    });
+
+    // Enter when navigation is committed to Home
+    Effect::new(move |_| {
+        if let Some(tx) = start_enter_tx() {
+            set_start_animation(Some((
+                tx,
+                crate::components::CardAnimation::EnterY {
+                    from_deg: -90.0,
+                    to_deg: 0.0,
+                    ms: 600.0,
+                },
+            )));
+            log::debug!("Home: queued ENTER tx_id={}", tx);
+        }
+    });
+
+    // Leave when navigation starts from Home
+    Effect::new(move |_| {
+        if let Some(tx) = start_leave_tx() {
+            set_start_animation(Some((
+                tx,
+                crate::components::CardAnimation::LeaveY {
+                    from_deg: 0.0,
+                    to_deg: 90.0,
+                    ms: 600.0,
+                },
+            )));
+            log::debug!("Home: queued LEAVE tx_id={}", tx);
         }
     });
 
@@ -144,25 +186,26 @@ pub fn Home() -> impl IntoView {
     view! {
         <div class="w-full h-full flex items-center justify-center">
             <Card
-                start_appear_tx=Signal::derive(move || appear_tx())
-                start_enter_tx=start_enter_tx
-                start_leave_tx=start_leave_tx
-                on_enter_done=Callback::new({
-                    move |tx_id| {
-                        enter_done_trigger(
-                            Some(shared::commands::navigation::NavTxPayload {
-                                tx_id,
-                            }),
-                        );
-                    }
-                })
-                on_leave_done=Callback::new({
-                    move |tx_id| {
-                        leave_done_trigger(
-                            Some(shared::commands::navigation::NavTxPayload {
-                                tx_id,
-                            }),
-                        );
+                start_animation=Signal::derive(start_animation)
+                on_animation_done=Callback::new({
+                    move |(tx_id, kind)| {
+                        match kind {
+                            crate::components::CardAnimation::EnterY { .. } => {
+                                enter_done_trigger(
+                                    Some(shared::commands::navigation::NavTxPayload {
+                                        tx_id,
+                                    }),
+                                );
+                            }
+                            crate::components::CardAnimation::LeaveY { .. } => {
+                                leave_done_trigger(
+                                    Some(shared::commands::navigation::NavTxPayload {
+                                        tx_id,
+                                    }),
+                                );
+                            }
+                            crate::components::CardAnimation::Appear { .. } => {}
+                        }
                     }
                 })
             >

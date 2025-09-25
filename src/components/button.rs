@@ -38,10 +38,9 @@ pub fn Button(
 ) -> impl IntoView {
     // Compose classes (tailwind-like)
     let base = "relative inline-flex items-center justify-center cursor-pointer \
-                transition-all duration-200 focus:outline-none \
+                transition-colors transition-shadow transition-opacity duration-200 focus:outline-none \
                 focus-visible:ring-2 focus-visible:ring-offset-2 \
-                hover:shadow-md active:shadow-sm \
-                will-change-transform";
+                hover:shadow-md active:shadow-sm";
     let rounding = if round { "rounded-full" } else { "rounded-lg" };
 
     let size_cls = if square {

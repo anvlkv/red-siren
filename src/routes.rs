@@ -1,17 +1,10 @@
 use leptos::prelude::*;
 use leptos_router::NavigateOptions;
 use leptos_router::{components::*, hooks::use_navigate, path};
-use tauri_use::{use_listen, EventType, UseListenReturn};
+use tauri_use::{use_invoke, use_listen, EventType, UseListenReturn, UseTauriReturn};
 
 use crate::components::{AppError, ErrorTemplate};
 use crate::pages::{About, Home};
-
-// Phase 2 Navigation:
-// Now listening for NAV_COMMITTED events emitted by the backend NavigationManager.
-// Payload shape (JSON): { "tx_id": <u64>, "to": "<RouteId>", "path": "<string path>" }
-// We navigate only on committed (point-of-no-return) rather than raw intent.
-// Legacy GO_TO event handling removed.
-// Same-route requests are already ignored backend-side, so no guarding needed here.
 
 #[component]
 pub fn AppRoutes() -> impl IntoView {
@@ -25,6 +18,12 @@ pub fn AppRoutes() -> impl IntoView {
         shared::events::navigation::NAV_COMMITTED,
     ));
     let navigate = use_navigate();
+    let UseTauriReturn {
+        error: invoke_nav_syn_error,
+        trigger: trigger_nav_sync,
+        ..
+    } = use_invoke::<(), (), ()>(shared::commands::navigation::NAV_SYNC);
+
     // Listen for navigation_sync (UI reload alignment)
     let UseListenReturn {
         data: sync,
@@ -39,6 +38,7 @@ pub fn AppRoutes() -> impl IntoView {
     Effect::new(move |_| {
         open();
         sync_open();
+        trigger_nav_sync(Some(((), ())));
     });
 
     Effect::new(move |_| {
@@ -52,6 +52,12 @@ pub fn AppRoutes() -> impl IntoView {
             log::error!(
                 "Error listening to {}: {err}",
                 shared::events::navigation::NAV_SYNC
+            );
+        }
+        if let Some(err) = invoke_nav_syn_error() {
+            log::error!(
+                "Error invoking {}: {err}",
+                shared::commands::navigation::NAV_SYNC
             );
         }
     });

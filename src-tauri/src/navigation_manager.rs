@@ -456,10 +456,7 @@ impl NavigationManager {
     /// Emits a one-shot navigation synchronization snapshot.
     /// Consumers can listen for `navigation_sync` and align UI state.
     pub fn emit_sync_snapshot(&self) {
-        let to = {
-            let guard = self.state.lock().unwrap();
-            guard.current
-        };
+        let to = self.current_route();
         let path = to.path().to_string();
         self.emit(NAV_SYNC, &shared::events::navigation::NavSyncPayload { to, path });
     }

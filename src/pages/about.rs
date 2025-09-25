@@ -1,4 +1,4 @@
-use crate::components::{Button, Card};
+use crate::components::{Button, Card, Icon};
 use leptos::prelude::*;
 use shared::{NavCommittedPayload, NavStartedPayload, RouteId};
 use tauri_use::{use_invoke_with_args, use_listen, EventType, UseListenReturn, UseTauriWithReturn};
@@ -68,6 +68,40 @@ pub fn About() -> impl IntoView {
         })
     });
 
+    // Unified animation signal driving Card
+    let (start_animation, set_start_animation) =
+        signal(None::<(u64, crate::components::CardAnimation)>);
+
+    // Queue ENTER on commit to About
+    Effect::new(move |_| {
+        if let Some(tx) = committed_tx_id() {
+            set_start_animation(Some((
+                tx,
+                crate::components::CardAnimation::EnterY {
+                    from_deg: -90.0,
+                    to_deg: 0.0,
+                    ms: 600.0,
+                },
+            )));
+            log::debug!("About: queued ENTER tx_id={}", tx);
+        }
+    });
+
+    // Queue LEAVE on navigation start from About
+    Effect::new(move |_| {
+        if let Some(tx) = leave_tx_id() {
+            set_start_animation(Some((
+                tx,
+                crate::components::CardAnimation::LeaveY {
+                    from_deg: 0.0,
+                    to_deg: 90.0,
+                    ms: 600.0,
+                },
+            )));
+            log::debug!("About: queued LEAVE tx_id={}", tx);
+        }
+    });
+
     // Trigger to notify backend that the enter animation has completed.
     let UseTauriWithReturn {
         trigger: enter_done_trigger,
@@ -129,28 +163,30 @@ pub fn About() -> impl IntoView {
         <div class="w-full h-full flex items-center justify-center">
             // Card receives tx signals and notifies backend when animations complete
             <Card
-                start_enter_tx=committed_tx_id
-                start_leave_tx=leave_tx_id
-                on_enter_done=Callback::new({
-                    move |tx_id| {
-                        enter_done_trigger(
-                            Some(shared::commands::navigation::NavTxPayload {
-                                tx_id,
-                            }),
-                        );
-                    }
-                })
-                on_leave_done=Callback::new({
-                    move |tx_id| {
-                        leave_done_trigger(
-                            Some(shared::commands::navigation::NavTxPayload {
-                                tx_id,
-                            }),
-                        );
+                start_animation=Signal::derive(start_animation)
+                on_animation_done=Callback::new({
+                    move |(tx_id, kind)| {
+                        match kind {
+                            crate::components::CardAnimation::EnterY { .. } => {
+                                enter_done_trigger(
+                                    Some(shared::commands::navigation::NavTxPayload {
+                                        tx_id,
+                                    }),
+                                );
+                            }
+                            crate::components::CardAnimation::LeaveY { .. } => {
+                                leave_done_trigger(
+                                    Some(shared::commands::navigation::NavTxPayload {
+                                        tx_id,
+                                    }),
+                                );
+                            }
+                            crate::components::CardAnimation::Appear { .. } => {}
+                        }
                     }
                 })
             >
-                <div class="flex items-center justify-between gap-4">
+                <div class="flex items-center justify-between gap-4 mb-4">
                     <Button
                         size="Md".to_string()
                         variant="Outline".to_string()
@@ -161,8 +197,12 @@ pub fn About() -> impl IntoView {
                                 }),
                             );
                         }
+                        class="relative pl-14"
                     >
-                        "Back"
+                        <span class="absolute left-4 text-4xl">
+                            <Icon name="back" stroke_width=12.0 />
+                        </span>
+                        Back
                     </Button>
                     <h1 class="block text-5xl text-center text-black dark:text-red">"About"</h1>
                 </div>

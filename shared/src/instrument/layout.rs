@@ -119,10 +119,16 @@ impl LayoutCandidate {
                 return false;
             }
             // group gap must exceed key gap by ratio (if both exist)
-            if have_key_gaps
-                && !(self.groups_gap >= self.key_bands_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO)
-            {
-                return false;
+            if have_key_gaps {
+                // Fix: use partial_cmp instead of negated comparison
+                match self
+                    .groups_gap
+                    .partial_cmp(&(self.key_bands_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO))
+                {
+                    Some(std::cmp::Ordering::Less) => return false,
+                    Some(_) => {}
+                    None => return false, // Incomparable, treat as invalid
+                }
             }
         } else if self.groups_gap != 0.0 {
             return false;
@@ -202,10 +208,12 @@ impl LayoutCandidate {
 
 /// Evaluation result for a candidate (for nearest-fit heuristics)
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct CandidateEval {
     candidate: LayoutCandidate,
     valid: bool,
     penalty: u32,
+    diversity_score: f32,
     // Flags for diagnostics / tests
     radius_deficit: bool,
     band_deficit: bool,
@@ -222,6 +230,7 @@ fn evaluate_candidate(
     k: u32,
     safe_length: f32,
     instrument_breadth: f32,
+    diversity_target: (f32, f32),
 ) -> Option<CandidateEval> {
     if g == 0 || k == 0 {
         return None;
@@ -345,10 +354,16 @@ fn evaluate_candidate(
         penalty += 30;
     }
 
+    // Diversity scoring heuristic:
+    // Encourage (g, k) near target (tg, tk) derived from aspect ratio.
+    let (tg, tk) = diversity_target;
+    let diversity_score = (g as f32 - tg).abs() + (k as f32 - tk).abs();
+
     Some(CandidateEval {
         candidate,
         valid,
         penalty,
+        diversity_score,
         radius_deficit,
         band_deficit,
         key_gap_deficit,
@@ -358,12 +373,31 @@ fn evaluate_candidate(
     })
 }
 
-/// Enumerate prime-based candidate grid.
+/// Enumerate prime-based candidate grid (reverse order for broader layout diversity).
 fn enumerate_candidates(safe_length: f32, instrument_breadth: f32) -> Vec<CandidateEval> {
     let mut out = Vec::new();
-    for &k in LAYOUT_PRIMES.iter() {
+
+    // Aspect ratio heuristic to derive soft targets for groups / keys-per-group.
+    // Longer main axis -> more keys per group; broader breadth -> more groups.
+    let aspect = safe_length.max(1.0) / instrument_breadth.max(1.0);
+    let target_groups = if aspect > 6.0 { 3.0 } else { 2.0 };
+    let target_keys = if aspect > 7.0 {
+        7.0
+    } else if aspect > 5.0 {
+        5.0
+    } else if aspect > 3.0 {
+        3.0
+    } else {
+        2.0
+    };
+    let diversity_target = (target_groups, target_keys);
+
+    // Iterate in reverse so larger primes (larger structures) are considered first.
+    for &k in LAYOUT_PRIMES.iter().rev() {
         for &g in LAYOUT_PRIMES.iter() {
-            if let Some(ev) = evaluate_candidate(g, k, safe_length, instrument_breadth) {
+            if let Some(ev) =
+                evaluate_candidate(g, k, safe_length, instrument_breadth, diversity_target)
+            {
                 out.push(ev);
             }
         }
@@ -371,35 +405,36 @@ fn enumerate_candidates(safe_length: f32, instrument_breadth: f32) -> Vec<Candid
     out
 }
 
-/// Pick best strictly valid candidate (maximize radius).
+/// Pick best strictly valid candidate using composite score:
+/// score = key_radius - diversity_weight * diversity_score
 fn pick_best(cands: &[CandidateEval]) -> Option<LayoutCandidate> {
+    let diversity_weight = 4.0;
     cands
         .iter()
         .filter(|c| c.valid)
         .max_by(|a, b| {
-            a.candidate
-                .key_radius
-                .partial_cmp(&b.candidate.key_radius)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            let sa = a.candidate.key_radius - diversity_weight * a.diversity_score;
+            let sb = b.candidate.key_radius - diversity_weight * b.diversity_score;
+            sa.partial_cmp(&sb).unwrap_or(std::cmp::Ordering::Equal)
         })
         .map(|c| c.candidate)
 }
 
-/// Pick nearest (lowest penalty, then larger radius, then fewer total keys).
+/// Pick nearest (lowest penalty, then composite diversity/radius score, then fewer total keys).
 fn pick_nearest(cands: &[CandidateEval]) -> Option<LayoutCandidate> {
+    let diversity_weight = 2.5;
     cands
         .iter()
         .min_by(|a, b| {
             a.penalty
                 .cmp(&b.penalty)
                 .then_with(|| {
-                    b.candidate
-                        .key_radius
-                        .partial_cmp(&a.candidate.key_radius)
-                        .unwrap_or(std::cmp::Ordering::Equal)
+                    // For tie on penalty prefer higher (radius - w * diversity_score)
+                    let sa = a.candidate.key_radius - diversity_weight * a.diversity_score;
+                    let sb = b.candidate.key_radius - diversity_weight * b.diversity_score;
+                    sb.partial_cmp(&sa).unwrap_or(std::cmp::Ordering::Equal)
                 })
                 .then_with(|| {
-                    // prefer simpler layout if still tied
                     let a_total = a.candidate.num_groups * a.candidate.num_keys_per_group;
                     let b_total = b.candidate.num_groups * b.candidate.num_keys_per_group;
                     a_total.cmp(&b_total)
@@ -717,6 +752,8 @@ mod tests {
 
     #[test]
     fn has_primes() {
+        println!("Layout primes: {:?}", LAYOUT_PRIMES);
+        println!("(Diversity heuristic active: reverse iteration + aspect targets)");
         assert_eq!(LAYOUT_PRIMES.len(), 54);
         assert_eq!(LAYOUT_PRIMES[0], 2);
         assert_eq!(LAYOUT_PRIMES[53], 251);
@@ -1021,9 +1058,11 @@ mod tests {
         let mut counts = [0usize; 7]; // radius, band, key_gap, group_gap, ratio, group_to_key_ratio, total
         let mut samples = Vec::new();
 
-        for &k in LAYOUT_PRIMES.iter() {
-            for &g in LAYOUT_PRIMES.iter() {
-                if let Some(ev) = super::evaluate_candidate(g, k, safe_length, instrument_breadth) {
+        for &g in LAYOUT_PRIMES.iter() {
+            for &k in LAYOUT_PRIMES.iter() {
+                if let Some(ev) =
+                    super::evaluate_candidate(g, k, safe_length, instrument_breadth, (2.0, 3.0))
+                {
                     counts[6] += 1;
                     if ev.radius_deficit {
                         counts[0] += 1

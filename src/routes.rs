@@ -1,7 +1,11 @@
 use leptos::prelude::*;
 use leptos_router::NavigateOptions;
-use leptos_router::{components::*, hooks::use_navigate, path};
-use tauri_use::{use_invoke, use_listen, EventType, UseListenReturn, UseTauriReturn};
+use leptos_router::{
+    components::*,
+    hooks::{use_location, use_navigate},
+    path,
+};
+use tauri_use::{use_invoke_with_args, use_listen, EventType, UseListenReturn, UseTauriWithReturn};
 
 use crate::components::{AppError, ErrorTemplate};
 use crate::pages::{About, Home};
@@ -18,11 +22,14 @@ pub fn AppRoutes() -> impl IntoView {
         shared::events::navigation::NAV_COMMITTED,
     ));
     let navigate = use_navigate();
-    let UseTauriReturn {
+    let location = use_location();
+    let UseTauriWithReturn {
         error: invoke_nav_syn_error,
         trigger: trigger_nav_sync,
         ..
-    } = use_invoke::<(), (), ()>(shared::commands::navigation::NAV_SYNC);
+    } = use_invoke_with_args::<shared::commands::navigation::NavSyncRequestPayload, ()>(
+        shared::commands::navigation::NAV_SYNC,
+    );
 
     // Listen for navigation_sync (UI reload alignment)
     let UseListenReturn {
@@ -38,7 +45,10 @@ pub fn AppRoutes() -> impl IntoView {
     Effect::new(move |_| {
         open();
         sync_open();
-        trigger_nav_sync(Some(((), ())));
+        let current = location.pathname.get();
+        trigger_nav_sync(Some(shared::commands::navigation::NavSyncRequestPayload {
+            path: current,
+        }));
     });
 
     Effect::new(move |_| {

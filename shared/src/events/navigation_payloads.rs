@@ -1,19 +1,3 @@
-/*!
-Shared navigation event payloads.
-
-WHY:
-- Centralize event payload shapes used across backend (Tauri) and frontend (Leptos).
-- Keep payloads typed with `RouteId` to avoid stringly-typed bugs.
-- Own all string data so deserialization works reliably across boundaries.
-
-NOTES:
-- `NavCommittedPayload` includes both `to: RouteId` and the canonical `path` (String) to simplify client routing.
-- `NavCanceledPayload.reason` is a short machine-readable string: "superseded" | "denied" | "error".
-
-MAYA DRY KISS:
-- Minimal types; only externally meaningful milestones are represented.
-*/
-
 use serde::{Deserialize, Serialize};
 
 use crate::RouteId;

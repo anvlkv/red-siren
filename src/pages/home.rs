@@ -1,8 +1,13 @@
 use leptos::prelude::*;
+use leptos_use::{use_window_size, UseWindowSizeReturn};
 use shared::RouteId;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::OnceLock;
 use tauri_use::{use_invoke_with_args, use_listen, EventType, UseListenReturn, UseTauriWithReturn};
 
 use crate::components::{Card, Menu};
+
+static HOME_APPEAR_PLAYED: OnceLock<AtomicBool> = OnceLock::new();
 
 #[component]
 pub fn Home() -> impl IntoView {
@@ -69,52 +74,45 @@ pub fn Home() -> impl IntoView {
     let (start_animation, set_start_animation) =
         signal(None::<(u64, crate::components::CardAnimation)>);
 
-    // Access window size context to scale appear animation for screen size
-    let window = use_context::<Signal<crate::app::ActiveWindowContext>>();
+    // Access window size directly to scale appear animation for screen size
+    let UseWindowSizeReturn { width: _, height } = use_window_size();
 
     // One-time appear animation trigger (first time Home appears after commit), scaled by window size
     let appear_started = RwSignal::new(false);
+    let played = HOME_APPEAR_PLAYED.get_or_init(|| AtomicBool::new(false));
     Effect::new(move |_| {
-        if appear_started() {
+        if played.load(Ordering::Relaxed) || appear_started() {
             return;
         }
 
-        // Wait for a valid window height before triggering appear
-        let size = window.as_ref().and_then(|w| w().0);
-        if let Some((_, height)) = size {
-            // Trigger when navigation was committed to Home
-            if committed()
-                .as_ref()
-                .map(|p| p.to == RouteId::Home)
-                .unwrap_or(false)
-            {
-                // Scale translation and duration by height (clamped)
-                let base_h = 900.0;
-                let mut y_scale = height / base_h;
-                y_scale = y_scale.clamp(0.75, 1.25);
-                let y_from_px = (800.0 * y_scale) as f32;
+        // Wait for a valid window height before triggering appear (cold mount only)
+        let h = height();
+        if h > 0.0 && start_enter_tx().is_none() {
+            // Scale translation and duration by height (clamped)
+            let base_h = 900.0;
+            let y_scale = (h / base_h).clamp(0.75, 1.25);
+            let y_from_px = (800.0 * y_scale) as f32;
 
-                let mut t_scale = height / base_h;
-                t_scale = t_scale.clamp(0.85, 1.15);
-                let ms = 800.0 * t_scale;
+            let t_scale = (h / base_h).clamp(0.85, 1.15);
+            let ms = 800.0 * t_scale;
 
-                set_start_animation(Some((
-                    1,
-                    crate::components::CardAnimation::Appear {
-                        x_from_px: 0.0,
-                        y_from_px,
-                        tilt_x_from_deg: -60.0,
-                        ms,
-                    },
-                )));
-                appear_started.set(true);
-                log::info!(
-                    "Home: queued APPEAR (y_from_px={:.1}, ms={:.0}) for height {:.0}",
+            set_start_animation(Some((
+                1,
+                crate::components::CardAnimation::Appear {
+                    x_from_px: 0.0,
                     y_from_px,
+                    tilt_x_from_deg: -60.0,
                     ms,
-                    height
-                );
-            }
+                },
+            )));
+            appear_started.set(true);
+            played.store(true, Ordering::Relaxed);
+            log::info!(
+                "Home: queued APPEAR (y_from_px={:.1}, ms={:.0}) for height {:.0}",
+                y_from_px,
+                ms,
+                h
+            );
         }
     });
 

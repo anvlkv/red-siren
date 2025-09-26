@@ -11,6 +11,12 @@ pub const NAV_SYNC: &str = "navigation_sync";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct NavSyncRequestPayload {
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NavigateRequestPayload {
     pub path: String,
 }

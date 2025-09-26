@@ -97,7 +97,19 @@ pub async fn navigation_request(
 pub async fn navigation_sync(
     _app: tauri::AppHandle,
     manager: State<'_, NavigationManager>,
+    path: String
 ) -> Result<(), String> {
-    manager.emit_sync_snapshot();
+    let current = manager.current_route();
+    let current_path = current.path();
+    if current_path != path {
+        manager.emit_sync_snapshot();
+        log::info!(
+            "navigation_sync mismatch: path='{}' backend='{}' -> emitted snapshot",
+            path,
+            current_path
+        );
+    } else {
+        log::info!("navigation_sync aligned: '{}', no emit", path);
+    }
     Ok(())
 }

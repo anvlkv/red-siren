@@ -2,10 +2,7 @@ use std::ops::Range;
 
 use serde::{Deserialize, Serialize};
 
-use super::Layout;
-
-// Include the generated constants
-include!(concat!(env!("OUT_DIR"), "/instrument_constants_gen.rs"));
+use super::{consts::*, Layout};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Instrument configuartion for audio generation

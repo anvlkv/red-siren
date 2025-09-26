@@ -4711,6 +4711,7 @@ dependencies = [
  "const-primes",
  "log",
  "mint",
+ "num-complex",
  "serde",
  "serde_json",
  "smallvec",

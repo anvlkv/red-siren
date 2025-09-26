@@ -1,5 +1,9 @@
+pub mod config;
 pub mod data;
 pub mod layout;
+pub mod sensor;
 
-// Intentionally not re-exporting data::* to avoid unused import warnings
+pub use config::*;
+pub use data::*;
 pub use layout::*;
+pub use sensor::*;

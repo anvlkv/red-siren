@@ -97,7 +97,7 @@ pub fn Home() -> impl IntoView {
             let ms = 800.0 * t_scale;
 
             set_start_animation(Some((
-                1,
+                0,
                 crate::components::CardAnimation::Appear {
                     x_from_px: 0.0,
                     y_from_px,

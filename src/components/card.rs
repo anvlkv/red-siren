@@ -163,6 +163,7 @@ pub fn Card(
                 if reduced {
                     seq.advance_to(anim_ms_sig());
                 } else {
+                    let delta = delta.min(32.0);
                     seq.advance_by(delta);
                 }
                 log::trace!("Card: anim advanced by {delta}ms");

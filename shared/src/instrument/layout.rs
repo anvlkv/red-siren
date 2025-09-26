@@ -1,23 +1,7 @@
-/// Instrument layout geometry computation and tests
-///
-/// Refactored to:
-/// - Introduce structured candidate evaluation with penalties
-/// - Provide a "nearest" candidate selection before absolute fallback
-/// - Enforce group gap > key gap ratio (configurable)
-/// - Allow single group / single key cases with zero conceptual gaps
-/// - Keep external API unchanged
-///
-/// Design notes (WHY, not WHAT):
-/// - Previous algorithm packed keys exactly in the safe axis, leaving zero room for mandatory gaps.
-///   That guaranteed invalidation of all candidates.
-/// - We now compute maximal feasible radius given mandatory minimal gaps first, then distribute leftover.
-/// - If no strictly valid candidate exists, we optionally pick a "nearest" candidate (above a softness
-///   threshold) rather than immediately dropping into a crude fallback. This provides graceful scaling
-///   for awkward dimensions.
-/// - Extremely tiny spaces still trigger the old fallback path (tiny-space test expectation remains).
 use std::num::NonZero;
 
 use mint::{Point2, Vector2};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     orientation::LayoutOrientation,
@@ -27,7 +11,7 @@ use crate::{
 /// Line between two points
 pub type Line = (Point2<f32>, Point2<f32>);
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Layout {
     /// total screen estate available to layout the instrument
     pub space: Vector2<f32>,
@@ -57,420 +41,437 @@ pub struct Layout {
 
 impl Eq for Layout {}
 
-/// 54 first primes - up to 251
 const LAYOUT_PRIMES: const_primes::Primes<54> = const_primes::Primes::new();
-/// minimum radius of each key (strict validity threshold)
+
 const MIN_KEY_RADIUS: f32 = 16.0;
-/// minimum padding of a key in a band
 const MIN_BAND_PADDING: f32 = 8.0;
-/// minimum gap between keys or groups (when they conceptually exist)
 const MIN_GAP: f32 = 16.0;
-/// maximum ratio of key radius to overall instrument breadth section
-const MAX_KEY_RADIUS_TO_BREADTH_RATIO: f32 = 0.4;
-/// required ratio: group gap must be at least this multiple of key gap (when both exist)
 const MIN_KEY_GAP_TO_GROUP_GAP_RATIO: f32 = 1.15;
-/// threshold below which we do NOT accept a "nearest" candidate (forces legacy fallback)
-/// (Chosen so tiny square (40x40) space still fails `compute()` preserving original test expectation.)
-const NEAREST_RADIUS_ACCEPTANCE_FRACTION: f32 = 0.60; // fraction of MIN_KEY_RADIUS
 
-#[derive(Debug, Clone, Copy)]
-struct LayoutCandidate {
-    key_radius: f32,
-    key_band_breadth: f32,
-    key_bands_gap: f32,
-    groups_gap: f32,
-    num_keys_per_group: u32,
-    num_groups: u32,
-}
+const SOFT_RADIUS_RATIO: f32 = 0.40;
+const ABSOLUTE_RADIUS_RATIO_MAX: f32 = 0.55;
 
-impl LayoutCandidate {
-    fn valid(&self, instrument_breadth: f32) -> bool {
-        if self.num_groups == 0
-            || self.num_groups > u8::MAX as u32
-            || self.num_keys_per_group == 0
-            || self.num_keys_per_group > u8::MAX as u32
-        {
-            return false;
-        }
+// Gap model ratios (relative to diameter)
+const KEY_GAP_RATIO_BASE: f32 = 0.25;
+const KEY_GAP_MAX_RATIO: f32 = 0.90;
+const GROUP_GAP_RATIO_MULTI: f32 = 1.20;
+const GROUP_GAP_MAX_RATIO: f32 = 1.40;
 
-        let g = self.num_groups;
-        let k = self.num_keys_per_group;
+// Packing target parameters
+const BASE_PACK_TARGET: f32 = 0.42;
+const PACK_SLOPE: f32 = 0.045;
+const MIN_PACK: f32 = 0.35;
+const MAX_PACK: f32 = 0.62;
 
-        // Conceptual gap presence
-        let have_key_gaps = k > 1;
-        let have_group_gaps = g > 1;
+// Leftover tolerance (fraction of safe length)
+const LEFTOVER_TOLERANCE_FRAC: f32 = 0.04;
 
-        if self.key_radius < MIN_KEY_RADIUS {
-            return false;
-        }
-        if self.key_band_breadth < (self.key_radius * 2.0 + MIN_BAND_PADDING) {
-            return false;
-        }
-        if have_key_gaps {
-            if self.key_bands_gap < MIN_GAP {
-                return false;
-            }
-        } else if self.key_bands_gap != 0.0 {
-            // No conceptual key gaps, must be zero
-            return false;
-        }
-        if have_group_gaps {
-            if self.groups_gap < MIN_GAP {
-                return false;
-            }
-            // group gap must exceed key gap by ratio (if both exist)
-            if have_key_gaps {
-                // Fix: use partial_cmp instead of negated comparison
-                match self
-                    .groups_gap
-                    .partial_cmp(&(self.key_bands_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO))
-                {
-                    Some(std::cmp::Ordering::Less) => return false,
-                    Some(_) => {}
-                    None => return false, // Incomparable, treat as invalid
-                }
-            }
-        } else if self.groups_gap != 0.0 {
-            return false;
-        }
-        if (self.key_radius / instrument_breadth) > MAX_KEY_RADIUS_TO_BREADTH_RATIO {
-            return false;
-        }
+// Scoring weights
+const W_R_SQRT: f32 = 0.60; // reduce radius dominance
+const W_PACK: f32 = 0.50; // slight reduction
+const W_STRUCT: f32 = 0.70; // boost structural richness (larger k)
+const W_BALANCE: f32 = 0.20;
+const W_LEFTOVER: f32 = 0.70;
+const W_GAP_TENSION: f32 = 0.25;
+const HIGH_K_BONUS: f32 = 0.08; // bonus for higher prime k
 
-        true
-    }
-
-    /// Legacy fallback (kept, but corrected to never produce negative gaps)
-    fn fallback(length: f32, instrument_breadth: f32) -> Self {
-        // Fixed 2 groups * 3 keys layout
-        let num_groups = 2.0;
-        let num_keys_per_group = 3.0;
-        let total_keys = num_groups * num_keys_per_group;
-
-        let intra_key_gaps = num_groups * (num_keys_per_group - 1.0);
-        let group_gaps = num_groups - 1.0;
-        let min_gap_slots = intra_key_gaps + group_gaps;
-        let min_gap_length = min_gap_slots * MIN_GAP;
-
-        let available_for_keys = (length - min_gap_length).max(0.0);
-        let mut key_radius = if total_keys > 0.0 {
-            (available_for_keys / (2.0 * total_keys)).max(1.0)
-        } else {
-            1.0
-        };
-
-        let max_radius_from_breadth = instrument_breadth * MAX_KEY_RADIUS_TO_BREADTH_RATIO * 0.9;
-        key_radius = key_radius.min(max_radius_from_breadth);
-
-        let used = 2.0 * key_radius * total_keys + min_gap_length;
-        let leftover = (length - used).max(0.0);
-
-        let weight_key = 1.0;
-        let weight_group = 2.0;
-        let total_weight = intra_key_gaps * weight_key + group_gaps * weight_group;
-        let extra_unit = if total_weight > 0.0 {
-            leftover / total_weight
-        } else {
-            0.0
-        };
-
-        let key_bands_gap = if intra_key_gaps > 0.0 {
-            MIN_GAP + extra_unit * weight_key
-        } else {
-            0.0
-        };
-        let mut groups_gap = if group_gaps > 0.0 {
-            MIN_GAP + extra_unit * weight_group
-        } else {
-            0.0
-        };
-
-        // Ratio soft enforcement (do not shrink key gap, only raise group gap if needed)
-        if group_gaps > 0.0 && intra_key_gaps > 0.0 {
-            let required = key_bands_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO;
-            if groups_gap < required {
-                groups_gap = required;
-            }
-        }
-
-        let key_band_breadth = (key_radius * 2.0 + MIN_BAND_PADDING).max(instrument_breadth / 4.0);
-
-        LayoutCandidate {
-            key_radius,
-            key_band_breadth,
-            key_bands_gap,
-            groups_gap,
-            num_keys_per_group: num_keys_per_group as u32,
-            num_groups: num_groups as u32,
-        }
-    }
-}
-
-/// Evaluation result for a candidate (for nearest-fit heuristics)
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-struct CandidateEval {
-    candidate: LayoutCandidate,
-    valid: bool,
-    penalty: u32,
-    diversity_score: f32,
-    // Flags for diagnostics / tests
-    radius_deficit: bool,
-    band_deficit: bool,
-    key_gap_deficit: bool,
-    group_gap_deficit: bool,
-    ratio_exceeded: bool,
-    group_to_key_ratio_deficit: bool,
-}
-
-/// Create one candidate and compute validity + penalties.
-/// Returns None only if math produced nonsensical geometry (e.g. negative radius).
-fn evaluate_candidate(
+struct Candidate {
     g: u32,
     k: u32,
-    safe_length: f32,
-    instrument_breadth: f32,
-    diversity_target: (f32, f32),
-) -> Option<CandidateEval> {
-    if g == 0 || k == 0 {
-        return None;
-    }
-
-    // Total keys
-    let total_keys = (g * k) as f32;
-
-    // Count conceptual gaps
-    let intra_key_gaps = (g as f32) * (k.saturating_sub(1) as f32);
-    let group_gaps = if g > 1 { (g - 1) as f32 } else { 0.0 };
-
-    // Minimal length consumed by mandatory base gaps
-    let min_gap_length = (intra_key_gaps + group_gaps) * MIN_GAP;
-
-    // If not enough length even for minimal gaps + a minimal radius, bail early
-    if safe_length <= min_gap_length + 2.0 * total_keys {
-        // leaves less than radius 1 for each key
-        return None;
-    }
-
-    // Max radius from length after reserving minimal gaps:
-    let r_max_unclamped = (safe_length - min_gap_length) / (2.0 * total_keys);
-    if r_max_unclamped <= 0.0 {
-        return None;
-    }
-
-    // Ratio bound
-    let ratio_bound = instrument_breadth * MAX_KEY_RADIUS_TO_BREADTH_RATIO;
-    let r = r_max_unclamped.min(ratio_bound);
-
-    // Leftover after using radius r + minimal gaps
-    let used = 2.0 * r * total_keys + min_gap_length;
-    let leftover = (safe_length - used).max(0.0);
-
-    // Weighted leftover distribution (group gaps get higher weight to bias ratio)
-    let weight_key = 1.0;
-    let weight_group = 3.0; // stronger emphasis to satisfy group > key gap ratio
-    let total_weight = intra_key_gaps * weight_key + group_gaps * weight_group;
-
-    let extra_unit = if total_weight > 0.0 {
-        leftover / total_weight
-    } else {
-        0.0
-    };
-
-    let key_bands_gap = if intra_key_gaps > 0.0 {
-        MIN_GAP + extra_unit * weight_key
-    } else {
-        0.0
-    };
-    let mut groups_gap = if group_gaps > 0.0 {
-        MIN_GAP + extra_unit * weight_group
-    } else {
-        0.0
-    };
-
-    // Enforce group gap ratio relative to key gap if both exist (softly: only increase)
-    if group_gaps > 0.0 && intra_key_gaps > 0.0 {
-        let required = key_bands_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO;
-        if groups_gap < required {
-            groups_gap = required;
-        }
-    }
-
-    let key_band_breadth = (instrument_breadth / 3.0).max(r * 2.0 + MIN_BAND_PADDING);
-
-    let candidate = LayoutCandidate {
-        key_radius: r,
-        key_band_breadth,
-        key_bands_gap,
-        groups_gap,
-        num_keys_per_group: k,
-        num_groups: g,
-    };
-
-    let valid = candidate.valid(instrument_breadth);
-
-    // Penalties for nearest strategy
-    let g_has = g > 1;
-    let k_has = k > 1;
-
-    let radius_deficit = candidate.key_radius < MIN_KEY_RADIUS;
-    let band_deficit = candidate.key_band_breadth < (candidate.key_radius * 2.0 + MIN_BAND_PADDING);
-
-    let key_gap_deficit = if k_has {
-        candidate.key_bands_gap < MIN_GAP
-    } else {
-        false
-    };
-    let group_gap_deficit = if g_has {
-        candidate.groups_gap < MIN_GAP
-    } else {
-        false
-    };
-    let ratio_exceeded =
-        (candidate.key_radius / instrument_breadth) > MAX_KEY_RADIUS_TO_BREADTH_RATIO;
-    let group_to_key_ratio_deficit = if g_has && k_has {
-        candidate.groups_gap < candidate.key_bands_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO
-    } else {
-        false
-    };
-
-    let mut penalty: u32 = 0;
-    if radius_deficit {
-        penalty += 100;
-    }
-    if band_deficit {
-        penalty += 50;
-    }
-    if key_gap_deficit {
-        penalty += 25;
-    }
-    if group_gap_deficit {
-        penalty += 25;
-    }
-    if ratio_exceeded {
-        penalty += 80;
-    }
-    if group_to_key_ratio_deficit {
-        penalty += 30;
-    }
-
-    // Diversity scoring heuristic:
-    // Encourage (g, k) near target (tg, tk) derived from aspect ratio.
-    let (tg, tk) = diversity_target;
-    let diversity_score = (g as f32 - tg).abs() + (k as f32 - tk).abs();
-
-    Some(CandidateEval {
-        candidate,
-        valid,
-        penalty,
-        diversity_score,
-        radius_deficit,
-        band_deficit,
-        key_gap_deficit,
-        group_gap_deficit,
-        ratio_exceeded,
-        group_to_key_ratio_deficit,
-    })
+    r: f32,
+    key_gap: f32,
+    group_gap: f32,
+    band_breadth: f32,
+    packing_eff: f32,
+    leftover: f32,
+    score: f32,
+    valid: bool,
+    total_keys: u32,
+    gap_tension: f32,
 }
 
-/// Enumerate prime-based candidate grid (reverse order for broader layout diversity).
-fn enumerate_candidates(safe_length: f32, instrument_breadth: f32) -> Vec<CandidateEval> {
-    let mut out = Vec::new();
+impl Candidate {
+    fn layout(
+        &self,
+        space: Vector2<f32>,
+        orientation: LayoutOrientation,
+        safe_area_padding: SafeArea,
+    ) -> Option<Layout> {
+        if !self.valid {
+            return None;
+        }
+        Some(Layout {
+            space,
+            orientation,
+            left_string_position: string_positions(orientation, space, true, self.band_breadth),
+            right_string_position: string_positions(orientation, space, false, self.band_breadth),
+            key_radius: self.r,
+            key_band_length: self.band_breadth * 2.0,
+            key_band_breadth: self.band_breadth,
+            safe_area_padding,
+            key_bands_gap: self.key_gap,
+            groups_gap: self.group_gap,
+            num_keys_per_group: NonZero::new(self.k as u8)?,
+            num_groups: NonZero::new(self.g as u8)?,
+        })
+    }
+}
 
-    // Aspect ratio heuristic to derive soft targets for groups / keys-per-group.
-    // Longer main axis -> more keys per group; broader breadth -> more groups.
-    let aspect = safe_length.max(1.0) / instrument_breadth.max(1.0);
-    let target_groups = if aspect > 6.0 { 3.0 } else { 2.0 };
-    let target_keys = if aspect > 7.0 {
-        7.0
-    } else if aspect > 5.0 {
-        5.0
-    } else if aspect > 3.0 {
-        3.0
-    } else {
-        2.0
-    };
-    let diversity_target = (target_groups, target_keys);
-
-    // Iterate in reverse so larger primes (larger structures) are considered first.
-    for &k in LAYOUT_PRIMES.iter().rev() {
-        for &g in LAYOUT_PRIMES.iter() {
-            if let Some(ev) =
-                evaluate_candidate(g, k, safe_length, instrument_breadth, diversity_target)
-            {
-                out.push(ev);
-            }
+fn string_positions(
+    orientation: LayoutOrientation,
+    space: Vector2<f32>,
+    left: bool,
+    instrument_breadth: f32,
+) -> Line {
+    match orientation {
+        LayoutOrientation::Vertical => {
+            // Strings run along Y
+            let x_base = space.x / 3.0;
+            let (x, x2) = if left {
+                (x_base, x_base)
+            } else {
+                (x_base + instrument_breadth, x_base + instrument_breadth)
+            };
+            (
+                Point2 { x, y: 0.0 },
+                Point2 {
+                    x: x2,
+                    y: orientation.length(space),
+                },
+            )
+        }
+        LayoutOrientation::Horizontal => {
+            // Strings run along X
+            let y_base = space.y / 3.0;
+            let (y, y2) = if left {
+                (y_base + instrument_breadth, y_base + instrument_breadth)
+            } else {
+                (y_base, y_base)
+            };
+            (
+                Point2 { x: 0.0, y },
+                Point2 {
+                    x: orientation.length(space),
+                    y: y2,
+                },
+            )
         }
     }
+}
+
+fn adaptive_min_key_radius(safe_length: f32, instrument_breadth: f32) -> f32 {
+    let scale_len = (safe_length / 600.0).clamp(0.85, 1.35);
+    let scale_breadth = (instrument_breadth / 180.0).clamp(0.85, 1.30);
+    let blended = 0.5 * (scale_len + scale_breadth);
+    (MIN_KEY_RADIUS * blended).clamp(MIN_KEY_RADIUS * 0.70, MIN_KEY_RADIUS * 1.28)
+}
+
+fn enumerate(
+    space: Vector2<f32>,
+    orientation: LayoutOrientation,
+    safe_area_padding: SafeArea,
+) -> Vec<Candidate> {
+    let safe_length = orientation.safe_length(space, safe_area_padding);
+    let safe_breadth = orientation.safe_breadth(space, safe_area_padding);
+    if safe_length <= 0.0 || safe_breadth <= 0.0 {
+        return vec![];
+    }
+    let instrument_breadth = safe_breadth / 3.0;
+    let r_cap = instrument_breadth * SOFT_RADIUS_RATIO;
+    let abs_r_cap = instrument_breadth * ABSOLUTE_RADIUS_RATIO_MAX;
+    let adaptive_min = adaptive_min_key_radius(safe_length, instrument_breadth);
+
+    // Choose primes subsets
+    let prim_g: Vec<u32> = LAYOUT_PRIMES.iter().copied().collect();
+
+    let prim_k: Vec<u32> = LAYOUT_PRIMES.iter().copied().collect();
+
+    let mut out = Vec::new();
+
+    for &g in &prim_g {
+        for &k in prim_k.iter().filter(|k| **k != g) {
+            let total_keys = g * k;
+            // target packing increases slowly with total keys (diminishing returns)
+            let tk_log = (total_keys as f32).ln_1p();
+            let mut target_packing =
+                (BASE_PACK_TARGET + PACK_SLOPE * tk_log).clamp(MIN_PACK, MAX_PACK);
+
+            // initial radius guess
+            let mut r = (safe_length * target_packing) / (2.0 * total_keys as f32);
+            // Enforce adaptive floor before applying cap to avoid tiny diameter that inverts later gap clamps
+            r = r.max(adaptive_min);
+            r = r.min(r_cap);
+
+            let g_have_gaps = g > 1;
+            let g_have_key_gaps = k > 1;
+            if !g_have_key_gaps && !g_have_gaps {
+                continue; // trivial 1x1 not interesting
+            }
+
+            // iterative solve to incorporate gap dependency
+            let mut key_gap = MIN_GAP;
+            let mut group_gap = if g_have_gaps { MIN_GAP } else { 0.0 };
+            for _ in 0..4 {
+                let diameter = 2.0 * r;
+                let key_gap_ratio = KEY_GAP_RATIO_BASE + (k as f32) / 60.0;
+                key_gap = if g_have_key_gaps {
+                    let desired = diameter * key_gap_ratio;
+                    let upper = (diameter * KEY_GAP_MAX_RATIO).max(MIN_GAP);
+                    if desired < MIN_GAP {
+                        MIN_GAP
+                    } else if desired > upper {
+                        upper
+                    } else {
+                        desired
+                    }
+                } else {
+                    0.0
+                };
+                group_gap = if g_have_gaps {
+                    let desired = key_gap * GROUP_GAP_RATIO_MULTI;
+                    let upper = (diameter * GROUP_GAP_MAX_RATIO).max(MIN_GAP);
+                    if desired < MIN_GAP {
+                        MIN_GAP
+                    } else if desired > upper {
+                        upper
+                    } else {
+                        desired
+                    }
+                } else {
+                    0.0
+                };
+                // enforce ratio rule if both conceptual
+                if g_have_gaps
+                    && g_have_key_gaps
+                    && group_gap < key_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO
+                {
+                    group_gap = key_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO;
+                }
+                let intra_key_gap_count = g as f32 * (k.saturating_sub(1) as f32);
+                let group_gap_count = (g.saturating_sub(1)) as f32;
+                let used = diameter * total_keys as f32
+                    + intra_key_gap_count * key_gap
+                    + group_gap_count * group_gap;
+
+                let packing_eff = (diameter * total_keys as f32) / safe_length;
+                // adjust target_packing slightly upward if actual packing too low but leftover big
+                if packing_eff + 0.03 < target_packing {
+                    target_packing = (target_packing * 0.98).max(MIN_PACK);
+                }
+
+                if used > safe_length * target_packing {
+                    let scale = (safe_length * target_packing) / used;
+                    r *= scale;
+                } else {
+                    // we could try to expand a little (but stay <= r_cap)
+                    let headroom = r_cap - r;
+                    if headroom > 1.0 {
+                        r += headroom * 0.15;
+                    }
+                }
+                r = r.min(r_cap);
+            }
+
+            // final geometry
+            let diameter = 2.0 * r;
+            let intra_key_gap_count = g as f32 * (k.saturating_sub(1) as f32);
+            let group_gap_count = (g.saturating_sub(1)) as f32;
+            let used = diameter * total_keys as f32
+                + intra_key_gap_count * key_gap
+                + group_gap_count * group_gap;
+            let leftover = (safe_length - used).max(0.0);
+            let packing_eff = (diameter * total_keys as f32) / safe_length;
+
+            // validity
+            let mut valid = true;
+            if r < adaptive_min.max(MIN_KEY_RADIUS * 0.85) {
+                valid = false;
+            }
+            if r > abs_r_cap {
+                valid = false;
+            }
+            if g_have_key_gaps && key_gap < MIN_GAP {
+                valid = false;
+            }
+            if g_have_gaps && group_gap < MIN_GAP {
+                valid = false;
+            }
+            if g_have_gaps
+                && g_have_key_gaps
+                && group_gap < key_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO
+            {
+                valid = false;
+            }
+            if group_gap > diameter * GROUP_GAP_MAX_RATIO + 0.001 {
+                valid = false;
+            }
+            if key_gap > diameter * KEY_GAP_MAX_RATIO + 0.001 {
+                valid = false;
+            }
+            if (r / instrument_breadth) > ABSOLUTE_RADIUS_RATIO_MAX {
+                valid = false;
+            }
+            let band_breadth = (diameter + MIN_BAND_PADDING).max(instrument_breadth / 3.2);
+            if band_breadth < diameter + MIN_BAND_PADDING {
+                valid = false;
+            }
+
+            // gap tension if near max
+            let mut gap_tension = 0.0;
+            if g_have_key_gaps {
+                let near = diameter * KEY_GAP_MAX_RATIO * 0.95;
+                if key_gap >= near {
+                    gap_tension += 0.5;
+                }
+            }
+            if g_have_gaps {
+                let near = diameter * GROUP_GAP_MAX_RATIO * 0.95;
+                if group_gap >= near {
+                    gap_tension += 0.7;
+                }
+            }
+
+            // scoring components
+            let r_norm = if r_cap > 0.0 {
+                (r / r_cap).min(1.0)
+            } else {
+                0.0
+            };
+            let r_term = r_norm.powf(0.6);
+
+            let struct_term = (total_keys as f32).ln_1p();
+            let balance_term = 1.0 / (1.0 + (g as f32 - k as f32).abs());
+
+            let leftover_fraction = if safe_length > 0.0 {
+                leftover / safe_length
+            } else {
+                1.0
+            };
+
+            let leftover_penalty = if leftover_fraction > LEFTOVER_TOLERANCE_FRAC {
+                let adj = leftover_fraction - LEFTOVER_TOLERANCE_FRAC;
+                adj * adj
+            } else {
+                0.0
+            };
+
+            let high_k_bonus = LAYOUT_PRIMES
+                .iter()
+                .position(|p| p == &k)
+                .map(|pos| ((pos as f32) / LAYOUT_PRIMES.len() as f32) * HIGH_K_BONUS)
+                .unwrap_or(0.0);
+
+            let score = W_R_SQRT * r_term
+                + W_PACK * packing_eff
+                + W_STRUCT * struct_term
+                + W_BALANCE * balance_term
+                - W_LEFTOVER * leftover_penalty
+                - W_GAP_TENSION * gap_tension
+                + high_k_bonus;
+
+            out.push(Candidate {
+                g,
+                k,
+                r,
+                key_gap,
+                group_gap,
+                band_breadth,
+                packing_eff,
+                leftover,
+                score: if valid { score } else { -1_000_000.0 },
+                valid,
+                total_keys,
+                gap_tension,
+            });
+        }
+    }
+
     out
 }
 
-/// Pick best strictly valid candidate using composite score:
-/// score = key_radius - diversity_weight * diversity_score
-fn pick_best(cands: &[CandidateEval]) -> Option<LayoutCandidate> {
-    let diversity_weight = 4.0;
-    cands
-        .iter()
-        .filter(|c| c.valid)
-        .max_by(|a, b| {
-            let sa = a.candidate.key_radius - diversity_weight * a.diversity_score;
-            let sb = b.candidate.key_radius - diversity_weight * b.diversity_score;
-            sa.partial_cmp(&sb).unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|c| c.candidate)
-}
-
-/// Pick nearest (lowest penalty, then composite diversity/radius score, then fewer total keys).
-fn pick_nearest(cands: &[CandidateEval]) -> Option<LayoutCandidate> {
-    let diversity_weight = 2.5;
-    cands
-        .iter()
-        .min_by(|a, b| {
-            a.penalty
-                .cmp(&b.penalty)
-                .then_with(|| {
-                    // For tie on penalty prefer higher (radius - w * diversity_score)
-                    let sa = a.candidate.key_radius - diversity_weight * a.diversity_score;
-                    let sb = b.candidate.key_radius - diversity_weight * b.diversity_score;
-                    sb.partial_cmp(&sa).unwrap_or(std::cmp::Ordering::Equal)
-                })
-                .then_with(|| {
-                    let a_total = a.candidate.num_groups * a.candidate.num_keys_per_group;
-                    let b_total = b.candidate.num_groups * b.candidate.num_keys_per_group;
-                    a_total.cmp(&b_total)
-                })
-        })
-        .map(|c| c.candidate)
-}
-
-/// Internal compute producing either a valid or nearest candidate.
-/// Returns:
-///   Some(candidate, true)  => strictly valid
-///   Some(candidate, false) => nearest (soft invalid but accepted)
-///   None                   => no candidate (fallback later)
-fn compute_internal(safe_length: f32, instrument_breadth: f32) -> Option<(LayoutCandidate, bool)> {
-    if safe_length <= 0.0 || instrument_breadth <= 0.0 {
+fn pick_best(
+    space: Vector2<f32>,
+    orientation: LayoutOrientation,
+    safe_area_padding: SafeArea,
+) -> Option<Candidate> {
+    let mut cands = enumerate(space, orientation, safe_area_padding);
+    if cands.is_empty() {
         return None;
     }
 
-    let candidates = enumerate_candidates(safe_length, instrument_breadth);
-    if candidates.is_empty() {
+    // Keep only valid
+    cands.retain(|c| c.valid);
+    if cands.is_empty() {
         return None;
     }
 
-    if let Some(best) = pick_best(&candidates) {
-        return Some((best, true));
-    }
+    // Tie-break order:
+    // 1. higher score
+    // 2. higher total_keys
+    // 3. higher packing_eff
+    // 4. larger min(g,k)
+    // 5. smaller leftover
+    cands.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| b.total_keys.cmp(&a.total_keys))
+            .then_with(|| {
+                b.packing_eff
+                    .partial_cmp(&a.packing_eff)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| {
+                let a_min = a.g.min(a.k);
+                let b_min = b.g.min(b.k);
+                b_min.cmp(&a_min)
+            })
+            .then_with(|| {
+                a.leftover
+                    .partial_cmp(&b.leftover)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+    });
 
-    // Nearest (soft) candidate
-    if let Some(nearest) = pick_nearest(&candidates) {
-        // Accept only if radius above threshold to avoid breaking existing tiny-space expectation
-        if nearest.key_radius >= MIN_KEY_RADIUS * NEAREST_RADIUS_ACCEPTANCE_FRACTION {
-            return Some((nearest, false));
-        }
-    }
+    cands.into_iter().next()
+}
 
-    None
+fn fallback(
+    space: Vector2<f32>,
+    orientation: LayoutOrientation,
+    safe_area_padding: SafeArea,
+) -> Layout {
+    // Extremely small: single group of two keys basic layout
+    let _safe_length = orientation.safe_length(space, safe_area_padding).max(1.0);
+    let safe_breadth = orientation.safe_breadth(space, safe_area_padding).max(1.0);
+    let instrument_breadth = safe_breadth / 3.0;
+    let r = {
+        let raw = instrument_breadth * 0.25;
+        // Avoid panics from reversed clamp bounds when raw < 6 or MIN_KEY_RADIUS < 6 (future tweaks)
+        let lower = 6.0_f32.min(MIN_KEY_RADIUS);
+        let upper = 6.0_f32.max(MIN_KEY_RADIUS);
+        raw.max(lower).min(upper)
+    };
+    let key_gap = MIN_GAP;
+    let group_gap = 0.0;
+    let band_breadth = (2.0 * r + MIN_BAND_PADDING).max(instrument_breadth / 4.0);
+
+    Layout {
+        space,
+        orientation,
+        left_string_position: string_positions(orientation, space, true, band_breadth),
+        right_string_position: string_positions(orientation, space, false, band_breadth),
+        key_radius: r,
+        key_band_length: band_breadth * 2.0,
+        key_band_breadth: band_breadth,
+        safe_area_padding,
+        key_bands_gap: key_gap,
+        groups_gap: group_gap,
+        num_keys_per_group: NonZero::new(2).unwrap(),
+        num_groups: NonZero::new(1).unwrap(),
+    }
 }
 
 impl Layout {
@@ -543,54 +544,6 @@ impl Layout {
         })
     }
 
-    fn string_positions(
-        orientation: LayoutOrientation,
-        breadth: f32,
-        length: f32,
-        instrument_breadth: f32,
-    ) -> (Line, Line) {
-        match orientation {
-            LayoutOrientation::Vertical => {
-                let left_start = Point2 {
-                    x: breadth / 3.0,
-                    y: 0.0,
-                };
-                let left_end = Point2 {
-                    x: breadth / 3.0,
-                    y: length,
-                };
-                let right_start = Point2 {
-                    x: breadth / 3.0 + instrument_breadth,
-                    y: 0.0,
-                };
-                let right_end = Point2 {
-                    x: breadth / 3.0 + instrument_breadth,
-                    y: length,
-                };
-                ((left_start, left_end), (right_start, right_end))
-            }
-            LayoutOrientation::Horizontal => {
-                let left_start = Point2 {
-                    x: 0.0,
-                    y: breadth / 3.0 + instrument_breadth,
-                };
-                let left_end = Point2 {
-                    x: length,
-                    y: breadth / 3.0 + instrument_breadth,
-                };
-                let right_start = Point2 {
-                    x: 0.0,
-                    y: breadth / 3.0,
-                };
-                let right_end = Point2 {
-                    x: length,
-                    y: breadth / 3.0,
-                };
-                ((left_start, left_end), (right_start, right_end))
-            }
-        }
-    }
-
     fn compute(
         space: Vector2<f32>,
         top_safe_area: f32,
@@ -613,34 +566,9 @@ impl Layout {
                 left_safe_area,
             ),
         };
-        let length = orientation.length(space);
-        let breadth = orientation.breadth(space);
-        let safe_length = orientation.safe_length(space, safe_area_padding);
-        let safe_breadth = orientation.safe_breadth(space, safe_area_padding);
-        let instrument_breadth = safe_breadth / 3.0;
 
-        let candidate_opt = compute_internal(safe_length, instrument_breadth);
-
-        let (final_candidate, _strict) = candidate_opt?;
-
-        let (left_string_position, right_string_position) =
-            Self::string_positions(orientation, breadth, length, instrument_breadth);
-        let key_band_length = instrument_breadth * 2.0;
-
-        Some(Self {
-            space,
-            orientation,
-            left_string_position,
-            right_string_position,
-            key_band_length,
-            key_radius: final_candidate.key_radius,
-            key_band_breadth: final_candidate.key_band_breadth,
-            safe_area_padding,
-            key_bands_gap: final_candidate.key_bands_gap,
-            groups_gap: final_candidate.groups_gap,
-            num_keys_per_group: NonZero::new(final_candidate.num_keys_per_group as u8).unwrap(),
-            num_groups: NonZero::new(final_candidate.num_groups as u8).unwrap(),
-        })
+        let best = pick_best(space, orientation, safe_area_padding)?;
+        best.layout(space, orientation, safe_area_padding)
     }
 
     fn fallback(
@@ -665,32 +593,7 @@ impl Layout {
                 left_safe_area,
             ),
         };
-        let length = orientation.length(space);
-        let breadth = orientation.breadth(space);
-        let safe_breadth = orientation.safe_breadth(space, safe_area_padding);
-        let safe_length = orientation.safe_length(space, safe_area_padding);
-
-        let instrument_breadth = safe_breadth / 3.0;
-        let fallback_candidate = LayoutCandidate::fallback(safe_length, instrument_breadth);
-
-        let (left_string_position, right_string_position) =
-            Self::string_positions(orientation, breadth, length, instrument_breadth);
-        let key_band_length = instrument_breadth * 2.0;
-
-        Self {
-            space,
-            orientation,
-            left_string_position,
-            right_string_position,
-            key_band_length,
-            key_radius: fallback_candidate.key_radius,
-            key_band_breadth: fallback_candidate.key_band_breadth,
-            safe_area_padding,
-            key_bands_gap: fallback_candidate.key_bands_gap,
-            groups_gap: fallback_candidate.groups_gap,
-            num_keys_per_group: NonZero::new(fallback_candidate.num_keys_per_group as u8).unwrap(),
-            num_groups: NonZero::new(fallback_candidate.num_groups as u8).unwrap(),
-        }
+        fallback(space, orientation, safe_area_padding)
     }
 }
 
@@ -702,516 +605,155 @@ mod tests {
         TABLET_SAFE_AREA_INSETS, TABLET_SCREEN_SIZES,
     };
 
-    // Simple ASCII summarizer (approximate)
-    fn ascii_layout(layout: &Layout) -> String {
-        let groups = layout.num_groups.get() as usize;
-        let keys_per_group = layout.num_keys_per_group.get() as usize;
-
-        let shown = keys_per_group.min(12);
-        let mut key_block = "o".repeat(shown);
-        if keys_per_group > shown {
-            key_block.push('+');
+    fn ascii_summary(layout: &Layout) -> String {
+        let g = layout.num_groups.get();
+        let k = layout.num_keys_per_group.get();
+        let shown = k.min(13);
+        let mut block = "o".repeat(shown as usize);
+        if k > shown {
+            block.push('+');
         }
-
-        let mut gap_units = if layout.key_bands_gap > 0.0 {
-            (layout.groups_gap / (layout.key_radius * 2.0))
-                .round()
-                .clamp(1.0, 8.0) as usize
-        } else {
+        let mut groups = Vec::new();
+        for _ in 0..g {
+            groups.push(format!("[{}]", block));
+        }
+        let gap_units = if layout.key_bands_gap <= 0.0 {
             1
+        } else {
+            ((layout.key_bands_gap / (layout.key_radius * 2.0))
+                .round()
+                .clamp(1.0, 8.0)) as usize
         };
-        if gap_units == 0 {
-            gap_units = 1;
-        }
         let gap = "-".repeat(gap_units);
-
-        let body = (0..groups)
-            .map(|_| format!("[{}]", key_block))
-            .collect::<Vec<_>>()
-            .join(&gap);
-
-        let ori = match layout.orientation {
-            LayoutOrientation::Horizontal => 'H',
-            LayoutOrientation::Vertical => 'V',
-        };
-
         format!(
-            "{}x{} {} r={:.1} bw={:.1} g_gap≈{:.1} k_gap≈{:.1} groups={} keys/g={}: {}",
+            "{}x{} {} r={:.1} bw={:.1} g_gap≈{:.1} k_gap≈{:.1} groups={} keys/g={} : {}",
             layout.space.x as u32,
             layout.space.y as u32,
-            ori,
+            match layout.orientation {
+                LayoutOrientation::Horizontal => 'H',
+                LayoutOrientation::Vertical => 'V',
+            },
             layout.key_radius,
             layout.key_band_breadth,
             layout.groups_gap,
             layout.key_bands_gap,
-            layout.num_groups,
-            layout.num_keys_per_group,
-            body
+            g,
+            k,
+            groups.join(&gap)
         )
     }
 
     #[test]
-    fn has_primes() {
-        println!("Layout primes: {:?}", LAYOUT_PRIMES);
-        println!("(Diversity heuristic active: reverse iteration + aspect targets)");
-        assert_eq!(LAYOUT_PRIMES.len(), 54);
-        assert_eq!(LAYOUT_PRIMES[0], 2);
-        assert_eq!(LAYOUT_PRIMES[53], 251);
-    }
-
-    #[test]
-    fn candidate_validity_conditions_basic() {
-        // Construct a candidate directly that should be valid for a generous breadth
-        let instrument_breadth = 900.0 / 3.0;
-        let candidate = LayoutCandidate {
-            key_radius: MIN_KEY_RADIUS + 4.0,
-            key_band_breadth: (MIN_KEY_RADIUS + 4.0) * 2.0 + MIN_BAND_PADDING + 1.0,
-            key_bands_gap: MIN_GAP + 2.0,
-            groups_gap: (MIN_GAP + 2.0) * MIN_KEY_GAP_TO_GROUP_GAP_RATIO + 1.0,
-            num_keys_per_group: 5,
-            num_groups: 3,
+    fn scoring_diagnostics_large_desktop() {
+        let space = Vector2 {
+            x: 2560.0,
+            y: 1440.0,
         };
-        assert!(candidate.valid(instrument_breadth));
+        let ori = LayoutOrientation::from_space(space);
+        let sap = safe_area::horizontal(
+            DEFAULT_SAFE_AREA,
+            DEFAULT_SAFE_AREA,
+            DEFAULT_SAFE_AREA,
+            DEFAULT_SAFE_AREA,
+        );
+        let cands = super::enumerate(space, ori, sap);
 
-        // Radius too small
-        let mut c = candidate;
-        c.key_radius = MIN_KEY_RADIUS - 0.1;
-        assert!(!c.valid(instrument_breadth));
+        let mut valids: Vec<_> = cands.into_iter().filter(|c| c.valid).collect();
+        assert!(!valids.is_empty(), "Expected at least one valid candidate");
+        valids.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let max_score = valids.first().unwrap().score;
 
-        // Band breadth too small
-        let mut c = candidate;
-        c.key_band_breadth = c.key_radius * 2.0 + MIN_BAND_PADDING - 0.1;
-        assert!(!c.valid(instrument_breadth));
-
-        // Key gap too small
-        let mut c = candidate;
-        c.key_bands_gap = MIN_GAP - 0.1;
-        assert!(!c.valid(instrument_breadth));
-
-        // Group gap ratio not satisfied
-        let mut c = candidate;
-        c.groups_gap = c.key_bands_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO - 0.01;
-        assert!(!c.valid(instrument_breadth));
-
-        // Single group => groups_gap must be 0, ratio irrelevant
-        let mut c = candidate;
-        c.num_groups = 1;
-        c.groups_gap = 0.0;
-        assert!(c.valid(instrument_breadth));
-
-        // Single key per group => key gap must be 0
-        let mut c = candidate;
-        c.num_keys_per_group = 1;
-        c.key_bands_gap = 0.0;
-        // ratio condition bypassed because no key gaps conceptually
-        c.groups_gap = MIN_GAP * MIN_KEY_GAP_TO_GROUP_GAP_RATIO + 2.0;
-        assert!(c.valid(instrument_breadth));
-    }
-
-    #[test]
-    fn single_group_zero_group_gap_ok() {
-        let instrument_breadth = 600.0 / 3.0;
-        let c = LayoutCandidate {
-            key_radius: MIN_KEY_RADIUS + 5.0,
-            key_band_breadth: (MIN_KEY_RADIUS + 5.0) * 2.0 + MIN_BAND_PADDING + 2.0,
-            key_bands_gap: MIN_GAP + 1.0,
-            groups_gap: 0.0,
-            num_keys_per_group: 7,
-            num_groups: 1,
-        };
-        assert!(c.valid(instrument_breadth));
-    }
-
-    #[test]
-    fn compute_standard_desktops_success() {
-        // Representative set
-        let sizes = [
-            mint::Vector2 {
-                x: 1920.0,
-                y: 1080.0,
-            },
-            mint::Vector2 {
-                x: 1366.0,
-                y: 768.0,
-            },
-            mint::Vector2 {
-                x: 1280.0,
-                y: 720.0,
-            },
-        ];
-
-        for space in sizes {
-            let res = Layout::compute(
-                space,
-                DEFAULT_SAFE_AREA,
-                DEFAULT_SAFE_AREA,
-                DEFAULT_SAFE_AREA,
-                DEFAULT_SAFE_AREA,
+        // Print top 12 and also any with k in {7,11,13}
+        println!("--- TOP 12 ---");
+        for c in valids.iter().take(12) {
+            println!(
+                "g={} k={} r={:.1} key_gap={:.1} group_gap={:.1} total={} pack={:.3} left={:.1} score={:.3}",
+                c.g, c.k, c.r, c.key_gap, c.group_gap, c.total_keys, c.packing_eff, c.leftover, c.score
             );
-            println!("Desktop {:?} compute success? {}", space, res.is_some());
-            assert!(
-                res.is_some(),
-                "Expected compute() to succeed for {:?}",
-                space
+        }
+        println!("--- LARGE k presence (7,11,13) ---");
+        let mut large_presence = false;
+        for c in valids.iter().filter(|c| [7, 11, 13].contains(&c.k)) {
+            println!(
+                "LARGE k candidate -> g={} k={} r={:.1} score={:.3} ({}% of max)",
+                c.g,
+                c.k,
+                c.r,
+                c.score,
+                (c.score / max_score * 100.0)
             );
-            if let Some(layout) = res {
-                println!(" -> {}", ascii_layout(&layout));
-                if layout.num_groups.get() > 1 && layout.num_keys_per_group.get() > 1 {
-                    assert!(
-                        layout.groups_gap >= layout.key_bands_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO,
-                        "Group gap ratio violated"
-                    );
-                }
+            if c.score >= max_score * 0.60 {
+                large_presence = true;
             }
         }
-    }
-
-    #[test]
-    fn nearest_candidate_triggered_for_awful_but_not_tiny() {
-        // Choose a narrow safe length but not so tiny that radius plummets below threshold
-        // We'll simulate by using a tall-but-narrow vertical-ish orientation forcing small safe length.
-        let space = mint::Vector2 { x: 300.0, y: 420.0 };
-        // Direct compute
-        let res = Layout::compute(space, 0.0, 0.0, 0.0, 0.0);
-        // Should succeed (maybe nearest or valid)
-        assert!(res.is_some());
-        let layout = res.unwrap();
-        println!("Nearest scenario -> {}", ascii_layout(&layout));
-        // Sanity: not fallback path (fallback uses fixed 2x3 pattern)
         assert!(
-            layout.num_keys_per_group.get() as u32 != 3
-                || layout.num_groups.get() as u32 != 2
-                || layout.key_bands_gap == 0.0
-                || layout.groups_gap == 0.0
-                || layout.key_radius >= MIN_KEY_RADIUS * NEAREST_RADIUS_ACCEPTANCE_FRACTION
+            large_presence,
+            "Expected at least one k in {{7,11,13}} within 60% of top score"
         );
     }
 
     #[test]
-    fn tiny_space_forces_fallback() {
-        // Intentionally very small so compute() returns None (radius threshold)
-        let space = mint::Vector2 { x: 40.0, y: 40.0 };
-        let computed = Layout::compute(
-            space,
-            DEFAULT_SAFE_AREA,
-            DEFAULT_SAFE_AREA,
-            DEFAULT_SAFE_AREA,
-            DEFAULT_SAFE_AREA,
-        );
-        println!("Tiny space computed={:?}", computed.is_some());
-        assert!(
-            computed.is_none(),
-            "Compute should fail for extremely tiny space"
-        );
-        let layout = Layout::from_screen_estate(space);
-        println!("Tiny fallback -> {}", ascii_layout(&layout));
-        assert!(layout.key_radius < MIN_KEY_RADIUS);
-    }
-
-    #[test]
-    fn huge_screen_layout() {
-        let space = mint::Vector2 {
-            x: 8000.0,
-            y: 4000.0,
-        };
-        let layout = Layout::from_screen_estate(space);
-        println!("Huge -> {}", ascii_layout(&layout));
-        let orientation = LayoutOrientation::from_space(space);
-        assert_eq!(layout.orientation, orientation);
-        let safe_breadth = orientation.safe_breadth(space, layout.safe_area_padding);
-        let instrument_breadth = safe_breadth / 3.0;
-        assert!(layout.key_band_breadth >= layout.key_radius * 2.0 + MIN_BAND_PADDING - 0.01);
-        assert!(layout.key_radius <= instrument_breadth * MAX_KEY_RADIUS_TO_BREADTH_RATIO + 0.01);
-        if layout.num_groups.get() > 1 && layout.num_keys_per_group.get() > 1 {
-            assert!(layout.groups_gap >= layout.key_bands_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO);
-        }
-    }
-
-    #[test]
-    fn elongated_screens() {
-        let horiz = mint::Vector2 {
-            x: 10000.0,
-            y: 300.0,
-        };
-        let vert = mint::Vector2 {
-            x: 300.0,
-            y: 10000.0,
-        };
-        let layout_h = Layout::from_screen_estate(horiz);
-        let layout_v = Layout::from_screen_estate(vert);
-        println!("Elongated H -> {}", ascii_layout(&layout_h));
-        println!("Elongated V -> {}", ascii_layout(&layout_v));
-        assert_eq!(layout_h.orientation, LayoutOrientation::Horizontal);
-        assert_eq!(layout_v.orientation, LayoutOrientation::Vertical);
-    }
-
-    #[test]
-    fn aggressive_safe_area() {
-        let space = mint::Vector2 { x: 600.0, y: 900.0 };
-        let top = 300.0;
-        let bottom = 250.0;
-        let layout = Layout::from_screen_estate_with_safe_area(space, top, 0.0, bottom, 0.0);
-        println!(
-            "Aggressive safe areas (t={}, b={}) -> {}",
-            top,
-            bottom,
-            ascii_layout(&layout)
-        );
-        let safe_len = layout
-            .orientation
-            .safe_length(space, layout.safe_area_padding);
-        assert!(safe_len > 0.0);
-    }
-
-    #[test]
-    fn geometry_consistency_mid_sizes() {
-        let cases = [
-            mint::Vector2 {
-                x: 1280.0,
-                y: 720.0,
-            },
-            mint::Vector2 {
-                x: 1440.0,
-                y: 900.0,
-            },
-            mint::Vector2 {
-                x: 768.0,
-                y: 1024.0,
-            },
-        ];
-        for space in cases {
-            let layout = Layout::from_screen_estate(space);
-            println!("Consistency -> {}", ascii_layout(&layout));
-            assert!(layout.key_band_breadth >= 0.0);
-            assert!(layout.key_bands_gap >= 0.0);
-            assert!(layout.groups_gap >= 0.0);
-            if layout.num_groups.get() > 1 && layout.num_keys_per_group.get() > 1 {
-                assert!(layout.groups_gap >= layout.key_bands_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO);
-            }
-        }
-    }
-
-    #[test]
-    fn orientation_inference() {
-        let h = mint::Vector2 { x: 500.0, y: 400.0 };
-        let v = mint::Vector2 { x: 400.0, y: 500.0 };
-        let sq = mint::Vector2 { x: 600.0, y: 600.0 };
-        assert_eq!(
-            LayoutOrientation::from_space(h),
-            LayoutOrientation::Horizontal
-        );
-        assert_eq!(
-            LayoutOrientation::from_space(v),
-            LayoutOrientation::Vertical
-        );
-        assert_eq!(
-            LayoutOrientation::from_space(sq),
-            LayoutOrientation::Horizontal
-        );
-    }
-
-    #[test]
-    fn compute_failure_reason_analysis() {
-        // Now compute is expected to succeed for typical desktop,
-        // but keep analysis logic defensively.
-        let space = mint::Vector2 {
-            x: 1920.0,
-            y: 1080.0,
-        };
-        let res = Layout::compute(
-            space,
-            DEFAULT_SAFE_AREA,
-            DEFAULT_SAFE_AREA,
-            DEFAULT_SAFE_AREA,
-            DEFAULT_SAFE_AREA,
-        );
-        println!("Direct compute result present? {}", res.is_some());
-
-        if let Some(layout) = res {
-            // Success path; ensure ratio condition holds for multi-group layouts.
-            if layout.num_groups.get() > 1 && layout.num_keys_per_group.get() > 1 {
-                assert!(layout.groups_gap >= layout.key_bands_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO);
-            }
-            return;
-        }
-
-        // If it does fail (unexpected), run diagnostic enumeration:
-        let orientation = LayoutOrientation::from_space(space);
-        let safe_area_padding = match orientation {
-            LayoutOrientation::Horizontal => safe_area::horizontal(
-                DEFAULT_SAFE_AREA,
-                DEFAULT_SAFE_AREA,
-                DEFAULT_SAFE_AREA,
-                DEFAULT_SAFE_AREA,
-            ),
-            LayoutOrientation::Vertical => safe_area::vertical(
-                DEFAULT_SAFE_AREA,
-                DEFAULT_SAFE_AREA,
-                DEFAULT_SAFE_AREA,
-                DEFAULT_SAFE_AREA,
-            ),
-        };
-        let safe_length = orientation.safe_length(space, safe_area_padding);
-        let safe_breadth = orientation.safe_breadth(space, safe_area_padding);
-        let instrument_breadth = safe_breadth / 3.0;
-
-        let mut counts = [0usize; 7]; // radius, band, key_gap, group_gap, ratio, group_to_key_ratio, total
-        let mut samples = Vec::new();
-
-        for &g in LAYOUT_PRIMES.iter() {
-            for &k in LAYOUT_PRIMES.iter() {
-                if let Some(ev) =
-                    super::evaluate_candidate(g, k, safe_length, instrument_breadth, (2.0, 3.0))
-                {
-                    counts[6] += 1;
-                    if ev.radius_deficit {
-                        counts[0] += 1
-                    }
-                    if ev.band_deficit {
-                        counts[1] += 1
-                    }
-                    if ev.key_gap_deficit {
-                        counts[2] += 1
-                    }
-                    if ev.group_gap_deficit {
-                        counts[3] += 1
-                    }
-                    if ev.ratio_exceeded {
-                        counts[4] += 1
-                    }
-                    if ev.group_to_key_ratio_deficit {
-                        counts[5] += 1
-                    }
-                    if samples.len() < 10 {
-                        samples.push(format!(
-                            "g={} k={} r={:.2} kg={:.2} gg={:.2} valid={} pen={}",
-                            g,
-                            k,
-                            ev.candidate.key_radius,
-                            ev.candidate.key_bands_gap,
-                            ev.candidate.groups_gap,
-                            ev.valid,
-                            ev.penalty
-                        ));
-                    }
-                }
-            }
-        }
-
-        println!(
-            "Diagnostic counts => radius:{} band:{} key_gap:{} group_gap:{} ratio:{} group_to_key_ratio:{} total:{}",
-            counts[0], counts[1], counts[2], counts[3], counts[4], counts[5], counts[6]
-        );
-        for s in samples {
-            println!("  {s}");
-        }
-
-        assert!(counts[6] > 0);
-    }
-
-    #[test]
-    fn common_screen_layouts_stats() {
-        let mut total = 0usize;
-        let mut compute_success = 0usize;
-        let mut compute_fail = 0usize;
-
-        fn attempt(space: (u32, u32), sa: (u32, u32, u32, u32)) -> (bool, Layout) {
-            let v = mint::Vector2 {
+    fn layouts_across_common_sets() {
+        let mut any_large_prime = false;
+        for (space, safe_area) in DESKTOP_SCREEN_SIZES
+            .iter()
+            .zip(DESKTOP_SCREEN_SIZES.iter().map(|_| {
+                &(
+                    DEFAULT_SAFE_AREA,
+                    DEFAULT_SAFE_AREA,
+                    DEFAULT_SAFE_AREA,
+                    DEFAULT_SAFE_AREA,
+                )
+            }))
+            .chain(
+                MOBILE_SCREEN_SIZES
+                    .iter()
+                    .zip(MOBILE_SAFE_AREA_INSETS.iter().cycle()),
+            )
+            .chain(
+                TABLET_SCREEN_SIZES
+                    .iter()
+                    .zip(TABLET_SAFE_AREA_INSETS.iter().cycle()),
+            )
+        {
+            let v = Vector2 {
                 x: space.0 as f32,
                 y: space.1 as f32,
             };
-            let computed = Layout::compute(v, sa.0 as f32, sa.1 as f32, sa.2 as f32, sa.3 as f32);
-            let layout = Layout::from_screen_estate_with_safe_area(
+            let l = Layout::from_screen_estate_with_safe_area(
                 v,
-                sa.0 as f32,
-                sa.1 as f32,
-                sa.2 as f32,
-                sa.3 as f32,
+                safe_area.0,
+                safe_area.1,
+                safe_area.2,
+                safe_area.3,
             );
-            (computed.is_some(), layout)
-        }
-
-        println!("--- DESKTOP (NO SAFE AREA) ---");
-        for size in DESKTOP_SCREEN_SIZES {
-            total += 1;
-            let (ok, layout) = attempt(size, (0, 0, 0, 0));
-            println!(
-                "size={:?} computed={} -> {}",
-                size,
-                ok,
-                ascii_layout(&layout)
-            );
-            if ok {
-                compute_success += 1
+            println!("{}", ascii_summary(&l));
+            if [7, 11, 13].contains(&l.num_keys_per_group.get()) {
+                any_large_prime = true;
+            }
+            // Core validity invariants
+            assert!(l.key_radius >= MIN_KEY_RADIUS * 0.85);
+            if l.num_keys_per_group.get() > 1 {
+                assert!(l.key_bands_gap >= MIN_GAP);
             } else {
-                compute_fail += 1
+                assert!(l.key_bands_gap == 0.0);
             }
-        }
-
-        println!("--- DESKTOP (DEFAULT SAFE AREA) ---");
-        let dsa = DEFAULT_SAFE_AREA as u32;
-        for size in DESKTOP_SCREEN_SIZES {
-            total += 1;
-            let (ok, layout) = attempt(size, (dsa, dsa, dsa, dsa));
-            println!(
-                "size={:?} default_safe_area={} computed={} -> {}",
-                size,
-                dsa,
-                ok,
-                ascii_layout(&layout)
-            );
-            if ok {
-                compute_success += 1
+            if l.num_groups.get() > 1 {
+                assert!(l.groups_gap >= MIN_GAP);
+                if l.num_keys_per_group.get() > 1 {
+                    assert!(l.groups_gap >= l.key_bands_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO);
+                }
             } else {
-                compute_fail += 1
+                assert!(l.groups_gap == 0.0);
             }
         }
-
-        println!("--- MOBILE ---");
-        for size in MOBILE_SCREEN_SIZES {
-            for sa in MOBILE_SAFE_AREA_INSETS {
-                total += 1;
-                let (ok, layout) = attempt(size, sa);
-                println!(
-                    "size={:?} sa={:?} computed={} -> {}",
-                    size,
-                    sa,
-                    ok,
-                    ascii_layout(&layout)
-                );
-                if ok {
-                    compute_success += 1
-                } else {
-                    compute_fail += 1
-                }
-            }
-        }
-
-        println!("--- TABLET ---");
-        for size in TABLET_SCREEN_SIZES {
-            for sa in TABLET_SAFE_AREA_INSETS {
-                total += 1;
-                let (ok, layout) = attempt(size, sa);
-                println!(
-                    "size={:?} sa={:?} computed={} -> {}",
-                    size,
-                    sa,
-                    ok,
-                    ascii_layout(&layout)
-                );
-                if ok {
-                    compute_success += 1
-                } else {
-                    compute_fail += 1
-                }
-            }
-        }
-
-        println!(
-            "SUMMARY: total={} success={} fail={} fallback_used={}",
-            total, compute_success, compute_fail, compute_fail
+        assert!(
+            any_large_prime,
+            "Expected at least one layout selecting keys-per-group in {{7,11,13}}"
         );
-
-        assert_eq!(compute_success + compute_fail, total);
     }
 }

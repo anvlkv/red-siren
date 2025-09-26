@@ -1,8 +1,9 @@
 use mint::Vector2;
+use serde::{Deserialize, Serialize};
 
 use crate::safe_area::SafeArea;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LayoutOrientation {
     Vertical,
     Horizontal,

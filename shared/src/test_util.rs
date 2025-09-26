@@ -22,15 +22,15 @@ pub const TABLET_SCREEN_SIZES: [(u32, u32); 5] = [
 ];
 
 /// Safe area insets (pixels) for common mobile layouts (portrait).
-pub const MOBILE_SAFE_AREA_INSETS: [(u32, u32, u32, u32); 3] = [
+pub const MOBILE_SAFE_AREA_INSETS: [(f32, f32, f32, f32); 3] = [
     // (top, right, bottom, left)
-    (44, 0, 34, 0), // iPhone X, 11, 12, 13, 14, 15 series w/ notch
-    (24, 0, 16, 0), // Typical Android (navigation bar, status bar)
-    (0, 0, 0, 0),   // Devices without a notch or special gesture area
+    (44.0, 0.0, 34.0, 0.0), // iPhone X, 11, 12, 13, 14, 15 series w/ notch
+    (24.0, 0.0, 16.0, 0.0), // Typical Android (navigation bar, status bar)
+    (0.0, 0.0, 0.0, 0.0),   // Devices without a notch or special gesture area
 ];
 
 /// Safe area insets (pixels) for common tablet layouts (portrait).
-pub const TABLET_SAFE_AREA_INSETS: [(u32, u32, u32, u32); 2] = [
-    (24, 0, 20, 0), // Typical iPad Pro with home indicator area
-    (0, 0, 0, 0),   // Older iPads, Android tablets, no system gesture zone
+pub const TABLET_SAFE_AREA_INSETS: [(f32, f32, f32, f32); 2] = [
+    (24.0, 0.0, 20.0, 0.0), // Typical iPad Pro with home indicator area
+    (0.0, 0.0, 0.0, 0.0),   // Older iPads, Android tablets, no system gesture zone
 ];

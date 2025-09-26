@@ -7,10 +7,8 @@ use crate::{
     instrument::GroupChanel,
     orientation::LayoutOrientation,
     safe_area::{self, SafeArea, DEFAULT_SAFE_AREA},
+    Line,
 };
-
-/// Line between two points
-pub type Line = (Point2<f32>, Point2<f32>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Layout {

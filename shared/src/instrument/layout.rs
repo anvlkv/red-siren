@@ -45,7 +45,7 @@ pub struct Layout {
     /// `Scale::Yo` by default
     ///
     /// change to `Scale::In` before producing `instrument::Config` if necessary
-    pub dark_scale: super::Scale,
+    pub scale: super::Scale,
 }
 
 impl Eq for Layout {}
@@ -128,7 +128,7 @@ impl Candidate {
             num_keys_per_group: NonZero::new(self.k as u8)?,
             num_groups: NonZero::new(self.g as u8)?,
             first_group_channel,
-            dark_scale: super::Scale::default(),
+            scale: super::Scale::default(),
         })
     }
 }
@@ -486,7 +486,7 @@ fn fallback(
         num_keys_per_group: NonZero::new(2).unwrap(),
         num_groups: NonZero::new(1).unwrap(),
         first_group_channel: GroupChanel::from_keys_groups(2, 1),
-        dark_scale: super::Scale::default(),
+        scale: super::Scale::default(),
     }
 }
 
@@ -614,12 +614,25 @@ impl Layout {
 }
 
 #[cfg(test)]
+pub fn layout_test_cases() -> impl Iterator<Item = Layout> {
+    crate::test_util::test_cases().map(|(space, safe_area)| {
+        let v = Vector2 {
+            x: space.0 as f32,
+            y: space.1 as f32,
+        };
+        Layout::from_screen_estate_with_safe_area(
+            v,
+            safe_area.0,
+            safe_area.1,
+            safe_area.2,
+            safe_area.3,
+        )
+    })
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_util::{
-        DESKTOP_SCREEN_SIZES, MOBILE_SAFE_AREA_INSETS, MOBILE_SCREEN_SIZES,
-        TABLET_SAFE_AREA_INSETS, TABLET_SCREEN_SIZES,
-    };
 
     fn ascii_summary(layout: &Layout) -> String {
         let g = layout.num_groups.get();
@@ -715,56 +728,27 @@ mod tests {
     #[test]
     fn layouts_across_common_sets() {
         let mut any_large_prime = false;
-        for (space, safe_area) in DESKTOP_SCREEN_SIZES
-            .iter()
-            .zip(DESKTOP_SCREEN_SIZES.iter().map(|_| {
-                &(
-                    DEFAULT_SAFE_AREA,
-                    DEFAULT_SAFE_AREA,
-                    DEFAULT_SAFE_AREA,
-                    DEFAULT_SAFE_AREA,
-                )
-            }))
-            .chain(
-                MOBILE_SCREEN_SIZES
-                    .iter()
-                    .zip(MOBILE_SAFE_AREA_INSETS.iter().cycle()),
-            )
-            .chain(
-                TABLET_SCREEN_SIZES
-                    .iter()
-                    .zip(TABLET_SAFE_AREA_INSETS.iter().cycle()),
-            )
-        {
-            let v = Vector2 {
-                x: space.0 as f32,
-                y: space.1 as f32,
-            };
-            let l = Layout::from_screen_estate_with_safe_area(
-                v,
-                safe_area.0,
-                safe_area.1,
-                safe_area.2,
-                safe_area.3,
-            );
-            println!("{}", ascii_summary(&l));
-            if [7, 11, 13].contains(&l.num_keys_per_group.get()) {
+        for layout in layout_test_cases() {
+            println!("{}", ascii_summary(&layout));
+            if [7, 11, 13].contains(&layout.num_keys_per_group.get()) {
                 any_large_prime = true;
             }
             // Core validity invariants
-            assert!(l.key_radius >= MIN_KEY_RADIUS * 0.85);
-            if l.num_keys_per_group.get() > 1 {
-                assert!(l.key_bands_gap >= MIN_GAP);
+            assert!(layout.key_radius >= MIN_KEY_RADIUS * 0.85);
+            if layout.num_keys_per_group.get() > 1 {
+                assert!(layout.key_bands_gap >= MIN_GAP);
             } else {
-                assert!(l.key_bands_gap == 0.0);
+                assert!(layout.key_bands_gap == 0.0);
             }
-            if l.num_groups.get() > 1 {
-                assert!(l.groups_gap >= MIN_GAP);
-                if l.num_keys_per_group.get() > 1 {
-                    assert!(l.groups_gap >= l.key_bands_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO);
+            if layout.num_groups.get() > 1 {
+                assert!(layout.groups_gap >= MIN_GAP);
+                if layout.num_keys_per_group.get() > 1 {
+                    assert!(
+                        layout.groups_gap >= layout.key_bands_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO
+                    );
                 }
             } else {
-                assert!(l.groups_gap == 0.0);
+                assert!(layout.groups_gap == 0.0);
             }
         }
         assert!(

@@ -1,3 +1,5 @@
+use crate::safe_area::DEFAULT_SAFE_AREA;
+
 /// Common desktop display resolutions in pixels
 pub const DESKTOP_SCREEN_SIZES: [(u32, u32); 6] = [
     (1920, 1080), // Full HD
@@ -34,3 +36,26 @@ pub const TABLET_SAFE_AREA_INSETS: [(f32, f32, f32, f32); 2] = [
     (24.0, 0.0, 20.0, 0.0), // Typical iPad Pro with home indicator area
     (0.0, 0.0, 0.0, 0.0),   // Older iPads, Android tablets, no system gesture zone
 ];
+
+pub fn test_cases() -> impl Iterator<Item = (&'static (u32, u32), &'static (f32, f32, f32, f32))> {
+    DESKTOP_SCREEN_SIZES
+        .iter()
+        .zip(DESKTOP_SCREEN_SIZES.iter().map(|_| {
+            &(
+                DEFAULT_SAFE_AREA,
+                DEFAULT_SAFE_AREA,
+                DEFAULT_SAFE_AREA,
+                DEFAULT_SAFE_AREA,
+            )
+        }))
+        .chain(
+            MOBILE_SCREEN_SIZES
+                .iter()
+                .zip(MOBILE_SAFE_AREA_INSETS.iter().cycle()),
+        )
+        .chain(
+            TABLET_SCREEN_SIZES
+                .iter()
+                .zip(TABLET_SAFE_AREA_INSETS.iter().cycle()),
+        )
+}

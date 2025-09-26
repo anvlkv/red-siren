@@ -4709,9 +4709,11 @@ name = "shared"
 version = "0.1.0"
 dependencies = [
  "const-primes",
+ "log",
  "mint",
  "serde",
  "serde_json",
+ "smallvec",
  "strum",
 ]
 

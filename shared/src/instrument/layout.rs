@@ -4,6 +4,7 @@ use mint::{Point2, Vector2};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    instrument::GroupChanel,
     orientation::LayoutOrientation,
     safe_area::{self, SafeArea, DEFAULT_SAFE_AREA},
 };
@@ -13,30 +14,32 @@ pub type Line = (Point2<f32>, Point2<f32>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Layout {
-    /// total screen estate available to layout the instrument
+    /// Total screen estate available to layout the instrument
     pub space: Vector2<f32>,
-    /// whether `Horizontal` or `Vertical` layout is used
+    /// Whether `Horizontal` or `Vertical` layout is used
     pub orientation: LayoutOrientation,
-    /// start and end postions of **left** channel string
+    /// Start and end postions of **left** channel string
     pub left_string_position: Line,
-    /// start and end postions of **right** channel string
+    /// Start and end postions of **right** channel string
     pub right_string_position: Line,
-    /// radius of each key
+    /// Radius of each key
     pub key_radius: f32,
-    /// length of the `track` of key's band
+    /// Length of the `track` of key's band
     pub key_band_length: f32,
-    /// breadth of the `track` of key's band
+    /// Breadth of the `track` of key's band
     pub key_band_breadth: f32,
-    /// minimum distance from edge of the screen to any interactive element
+    /// Minimum distance from edge of the screen to any interactive element
     pub safe_area_padding: SafeArea,
-    /// distance between `track`s (keys) inside a group (main axis)
+    /// Distance between `track`s (keys) inside a group (main axis)
     pub key_bands_gap: f32,
-    /// distance between groups (main axis)
+    /// Distance between groups (main axis)
     pub groups_gap: f32,
-    /// number of keys and bands in each group
+    /// Number of keys and bands in each group
     pub num_keys_per_group: NonZero<u8>,
-    /// number of groups
+    /// Number of groups
     pub num_groups: NonZero<u8>,
+    /// Channel of the first group in the layout
+    pub first_group_channel: super::GroupChanel,
 }
 
 impl Eq for Layout {}
@@ -102,6 +105,9 @@ impl Candidate {
         if !self.valid {
             return None;
         }
+
+        let first_group_channel = GroupChanel::from_keys_groups(self.k, self.g);
+
         Some(Layout {
             space,
             orientation,
@@ -115,6 +121,7 @@ impl Candidate {
             groups_gap: self.group_gap,
             num_keys_per_group: NonZero::new(self.k as u8)?,
             num_groups: NonZero::new(self.g as u8)?,
+            first_group_channel,
         })
     }
 }
@@ -471,6 +478,7 @@ fn fallback(
         groups_gap: group_gap,
         num_keys_per_group: NonZero::new(2).unwrap(),
         num_groups: NonZero::new(1).unwrap(),
+        first_group_channel: GroupChanel::from_keys_groups(2, 1),
     }
 }
 

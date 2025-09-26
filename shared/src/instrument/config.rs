@@ -1,6 +1,5 @@
 use std::ops::Range;
 
-use mint::Point2;
 use serde::{Deserialize, Serialize};
 
 use super::Layout;
@@ -19,6 +18,10 @@ pub enum GroupChanel {
     Right,
 }
 
+fn fundamental_frequency(n: usize, v: f64, l: f64) -> f64 {
+    (n as f64 * v) / (2.0 * l)
+}
+
 impl GroupChanel {
     pub(crate) fn from_keys_groups(k: u32, g: u32) -> Self {
         match (g % 2, k % 2) {
@@ -29,6 +32,54 @@ impl GroupChanel {
             _ => Self::Left,       // fallback (should not occur)
         }
     }
+
+    fn nth_channel_from_first(&self, n: usize) -> Self {
+        if n % 2 == 0 {
+            *self
+        } else {
+            match self {
+                Self::Left => Self::Right,
+                Self::Right => Self::Left,
+            }
+        }
+    }
+
+    fn compute_fundamentals(&self, l: f32) -> (f64, usize) {
+        let v = match self {
+            Self::Left => CRIMSON_RED_WAVESPEED,
+            Self::Right => CINNABAR_RED_WAVESPEED,
+        };
+
+        let mut n_base = 1;
+        let mut f: f64 = 0.0;
+
+        while f < SOFT_MIN_FREQ_HZ {
+            f = fundamental_frequency(n_base, v, l as f64);
+            if f < SOFT_MIN_FREQ_HZ {
+                n_base += 1;
+            }
+        }
+
+        (f, n_base)
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Japanese Scale Interval Patterns
+pub enum Scale {
+    /// Yo Scale (bright pentatonic)
+    ///
+    /// Semitone sequence: 2 - 3 - 2 - 2 - 3
+    ///
+    /// Formula (counted from tonic, C): C, D (+2), F (+5), G (+7), A (+9)
+    #[default]
+    Yo,
+    /// In Scale (dark pentatonic)
+    ///
+    /// Semitone sequence: 1 - 4 - 1 - 4 - 2
+    ///
+    /// Formula: C, D♭ (+1), F (+5), G (+7), A♭ (+8)
+    In,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -44,11 +95,11 @@ pub struct GroupConfig {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NodeConfig {
     /// Base frequency of the node
-    pub base_frequency: f32,
+    pub base_frequency: f64,
     /// Starting phase of the oscillator
-    pub phase: f32,
+    pub phase: f64,
     /// Range in which node frequency may change
-    pub band_range: Range<f32>,
+    pub band_range: Range<f64>,
 }
 
 impl NodeConfig {
@@ -122,12 +173,20 @@ impl Config {
 
 impl From<Layout> for Config {
     fn from(value: Layout) -> Self {
-        // let v = value.first_group_channel;
+        let a = value.left_string_position.0;
+        let b = value.left_string_position.1;
 
-        // let a = value.left_string_position.0;
-        // let b = value.left_string_position.1;
+        let l = ((b.x - a.x).powi(2) + (b.y - a.y).powi(2)).sqrt();
 
-        // let base_freq = find_base_freq(v, a, b);
+        let tet = value.num_keys_per_group.get();
+
+        for g_x in 0..value.num_groups.get() {
+            let g_channel = value
+                .first_group_channel
+                .nth_channel_from_first(g_x as usize);
+
+            let (f_base, n_base) = g_channel.compute_fundamentals(l);
+        }
 
         todo!()
     }

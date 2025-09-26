@@ -40,6 +40,12 @@ pub struct Layout {
     pub num_groups: NonZero<u8>,
     /// Channel of the first group in the layout
     pub first_group_channel: super::GroupChanel,
+    /// Whether dark or bright scale is used
+    ///
+    /// `Scale::Yo` by default
+    ///
+    /// change to `Scale::In` before producing `instrument::Config` if necessary
+    pub dark_scale: super::Scale,
 }
 
 impl Eq for Layout {}
@@ -122,6 +128,7 @@ impl Candidate {
             num_keys_per_group: NonZero::new(self.k as u8)?,
             num_groups: NonZero::new(self.g as u8)?,
             first_group_channel,
+            dark_scale: super::Scale::default(),
         })
     }
 }
@@ -479,6 +486,7 @@ fn fallback(
         num_keys_per_group: NonZero::new(2).unwrap(),
         num_groups: NonZero::new(1).unwrap(),
         first_group_channel: GroupChanel::from_keys_groups(2, 1),
+        dark_scale: super::Scale::default(),
     }
 }
 

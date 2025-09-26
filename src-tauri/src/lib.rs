@@ -44,7 +44,8 @@ pub fn run() {
             navigation::navigation_request,
             navigation::navigation_leave_done,
             navigation::navigation_enter_done,
-            navigation::navigation_sync
+            navigation::navigation_sync,
+            setup::update_window_appearance,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

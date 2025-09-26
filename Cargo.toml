@@ -25,6 +25,7 @@ leptos = { version = "0.8", features = ["csr", "nightly"] }
 leptos_router = { version = "0.8", features = ["nightly"] }
 leptos-use = { version = "0.16.2", default-features = false, features = [
   "use_document",
+  "use_preferred_dark",
   "use_prefers_reduced_motion",
   "use_raf_fn",
   "use_window",

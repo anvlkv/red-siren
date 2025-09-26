@@ -1,7 +1,11 @@
 use leptos::prelude::*;
 use leptos_router::components::*;
-use leptos_use::{use_window_size, UseWindowSizeReturn};
-use tauri_use::{use_command, use_listen, EventType, UseListenReturn, UseTauriWithReturn};
+use leptos_use::{use_preferred_dark, use_window_size, UseWindowSizeReturn};
+use shared::commands::setup::UpdateWindowAppearancePayload;
+use tauri_use::{
+    use_command, use_invoke, use_listen, EventType, UseListenReturn, UseTauriReturn,
+    UseTauriWithReturn,
+};
 
 use crate::{components::Intro, routes};
 
@@ -80,6 +84,17 @@ pub fn App() -> impl IntoView {
                 }
             }
         }
+    });
+
+    let preferred_dark = use_preferred_dark();
+    let UseTauriReturn { trigger, .. } = use_invoke::<UpdateWindowAppearancePayload, (), ()>(
+        shared::commands::setup::UPDATE_WINDOW_APPEARANCE,
+    );
+
+    Effect::new(move |_| {
+        let dark = preferred_dark();
+        log::info!("Preferred dark mode: {}", dark);
+        trigger(Some((UpdateWindowAppearancePayload { dark }, ())));
     });
 
     view! {

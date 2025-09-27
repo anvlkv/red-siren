@@ -47,15 +47,15 @@ fn maybe_toggle_windows(state_lock: &MutexGuard<'_, SetupState>, app: &AppHandle
         log::info!("Both GUI and backend ready, closing splashscreen and showing main window");
 
         // Close splashscreen and show main window
-        if let Some(splash_window) = app.get_webview_window("splashscreen") {
-            splash_window.close().map_err(|e| format!("Failed to close splashscreen: {}", e))?;
-        }
+        // if let Some(splash_window) = app.get_webview_window("splashscreen") {
+        //     splash_window.close().map_err(|e| format!("Failed to close splashscreen: {}", e))?;
+        // }
 
-        if let Some(main_window) = app.get_webview_window("main") {
-            main_window.show().map_err(|e| format!("Failed to show main window: {}", e))?;
+        // if let Some(main_window) = app.get_webview_window("main") {
+        //     main_window.show().map_err(|e| format!("Failed to show main window: {}", e))?;
 
-            main_window.set_focus().map_err(|e| format!("Failed to focus main window: {}", e))?;
-        }
+        //     main_window.set_focus().map_err(|e| format!("Failed to focus main window: {}", e))?;
+        // }
 
         app.emit(shared::events::health::APP_READY, ()).map_err(|e| e.to_string())?;
 

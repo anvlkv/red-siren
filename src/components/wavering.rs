@@ -35,11 +35,6 @@ pub fn Wavering() -> impl IntoView {
         ..
     } = use_command::<IntroSnoopBatchPayload>(INTRO_NEXT_FRAME);
 
-    // Prime first frame immediately.
-    Effect::new(move |_| {
-        fetch_frame(Some(()));
-    });
-
     // Cache of 11 SVG path strings for the animated wave lines.
     let wave_paths = RwSignal::<Vec<(String, String)>>::new(
         (0..11)
@@ -60,12 +55,9 @@ pub fn Wavering() -> impl IntoView {
             .collect(),
     );
 
-    // RAF loop: invoke backend for latest snoops then render.
     let _wave_raf = use_raf_fn_with_options(
         {
             move |_| {
-                // Ask backend for next frame snapshot (async result populates `batch` signal).
-                fetch_frame(Some(()));
                 if let Some(batch) = batch.get() {
                     wave_paths.update(|paths| {
                         for (i, (snoop, (p, _))) in
@@ -88,6 +80,7 @@ pub fn Wavering() -> impl IntoView {
                         }
                     });
                 }
+                fetch_frame(Some(()));
             }
         },
         UseRafFnOptions::default().immediate(true),

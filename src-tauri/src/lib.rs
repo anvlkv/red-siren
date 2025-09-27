@@ -24,6 +24,9 @@ pub fn run() {
     // Intro engine state
     builder = builder.manage(intro::IntroEngineState::new());
     builder = builder.setup(|app| {
+        let config = app.config();
+        log::debug!("App starting with config: {config:#?}");
+
         // Existing setup logic
         setup::app_setup(app)?;
         // Initialize navigation manager with initial route (Home)

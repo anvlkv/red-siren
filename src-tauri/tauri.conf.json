@@ -44,17 +44,15 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "entitlements": "src-tauri/macos/Entitlements.plist",
-      "files": {
-        "Info.plist": "src-tauri/macos/Info.plist"
-      }
+      "entitlements": "./RedSiren.entitlements"
     },
     "iOS": {
       "minimumSystemVersion": "15.6",
-      "template": "src-tauri/ios/project.yml"
+      "frameworks": ["CoreAudio.framework", "AVFoundation.framework"]
     },
     "android": {
-      "minSdkVersion": 26
+      "minSdkVersion": 26,
+      "versionCode": 1
     }
   }
 }

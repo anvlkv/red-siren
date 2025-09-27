@@ -5,6 +5,7 @@ use tauri::Manager;
 use tokio::sync::Mutex;
 
 mod health;
+mod intro;
 mod navigation;
 mod navigation_manager;
 mod setup;
@@ -20,6 +21,8 @@ pub fn run() {
             gui_ready: false,
             backend_ready: false,
         }))
+        // Intro engine state
+        .manage(intro::IntroEngineState::new())
         .setup(|app| {
             // Existing setup logic
             setup::app_setup(app)?;
@@ -28,7 +31,7 @@ pub fn run() {
             app.manage(nav_manager);
             Ok(())
         })
-        .plugin(tauri_plugin_prevent_default::init())
+        // .plugin(tauri_plugin_prevent_default::init())
         .plugin(
             tauri_plugin_window_state::Builder::new()
                 .with_state_flags(
@@ -46,6 +49,9 @@ pub fn run() {
             navigation::navigation_enter_done,
             navigation::navigation_sync,
             setup::update_window_appearance,
+            intro::intro_stream,
+            intro::intro_pause,
+            intro::intro_resume,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

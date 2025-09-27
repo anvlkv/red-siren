@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 use leptos_use::{use_raf_fn_with_options, UseRafFnOptions};
-use tauri_use::{use_invoke, UseTauriReturn};
+use tauri_use::{use_command, UseTauriWithReturn};
 
 // Wave geometry (tiled, taller, centered under sun)
 // Sun center (107,164), radius 39 => bottom ≈ 203 -> start just below.
@@ -16,93 +16,77 @@ const WAVE_Y_OFFSET: f32 = 32.0; // pushes stack downward
 const WAVE_AMPLITUDE_PX: f32 = 20.0;
 const WAVE_CENTER_X: f32 = 107.0;
 const WAVES_LENGHT: [f32; 11] = [
-    64.0, 128.0, 232.0, 336.0, 440.0, 544.0, 648.0, 752.0, 856.0, 960.0, 1280.0,
+    48.0, 128.0, 232.0, 336.0, 440.0, 544.0, 648.0, 752.0, 856.0, 960.0, 1280.0,
 ];
+const FIRST_WAVE_SCALE_X: f32 = 0.75;
+const LAST_WAVE_SCALE_X: f32 = 0.95;
 
 #[component]
 pub fn Wavering() -> impl IntoView {
-    // --- Channel-based intro DSP wave integration (MAYA DRY KISS) ---
-    // Local imports (scoped) to avoid polluting the broader module namespace.
-    use crate::util::channel::{invoke_channel_only, use_typed_channel};
-    use shared::commands::intro::INTRO_STREAM;
+    // Pull-model intro DSP wave integration (MAYA DRY KISS) ---
+    // Each RAF tick invokes backend command returning latest batch.
+    use shared::commands::intro::INTRO_NEXT_FRAME;
     use shared::events::intro::IntroSnoopBatchPayload;
 
-    // Envelope { event, data } as emitted by backend intro engine.
-    #[derive(Clone, serde::Deserialize)]
-    struct IntroBatchEnvelope {
-        event: String,
-        data: IntroSnoopBatchPayload,
-    }
+    // Invoke handle for next-frame command (no args).
+    let UseTauriWithReturn {
+        trigger: fetch_frame,
+        data: batch,
+        ..
+    } = use_command::<IntroSnoopBatchPayload>(INTRO_NEXT_FRAME);
 
-    // Latest envelope from backend + the JS channel handle.
-    let (snoop_env, channel_js) = use_typed_channel::<IntroBatchEnvelope>();
-
-    // Start backend stream exactly once (idempotent; backend swaps channel if re-invoked).
-    Effect::new({
-        let channel_js = channel_js.clone();
-        move |_| {
-            invoke_channel_only(INTRO_STREAM, "onEvent", channel_js.clone());
-        }
+    // Prime first frame immediately.
+    Effect::new(move |_| {
+        fetch_frame(Some(()));
     });
 
     // Cache of 11 SVG path strings for the animated wave lines.
-    let wave_paths = RwSignal::new(vec![String::new(); 11]);
+    let wave_paths = RwSignal::<Vec<(String, String)>>::new(
+        (0..11)
+            .map(|i| {
+                // Prepopulate with straight lines (flat at y=0)
+                let samples = vec![0.0; 32];
+                (
+                    waveform_path(
+                        &samples,
+                        WAVES_LENGHT[i],
+                        WAVE_CENTER_X,
+                        WAVE_TOP_Y + WAVE_Y_OFFSET + (i as f32) * WAVE_VERTICAL_SPACING,
+                        WAVE_AMPLITUDE_PX,
+                    ),
+                    wave_scale(i),
+                )
+            })
+            .collect(),
+    );
 
-    // RAF-driven renderer (separate from animation tween RAF) – keeps drawing smooth
-    // even if backend batch rate is lower than monitor refresh.
+    // RAF loop: invoke backend for latest snoops then render.
     let _wave_raf = use_raf_fn_with_options(
         {
             move |_| {
-                if let Some(env) = snoop_env.get() {
-                    let batch = &env.data;
-
-                    // Render a single waveform path from the chronological samples (no repetition).
-                    fn waveform_path(
-                        samples: &[f32],
-                        total_len: f32,
-                        center_x: f32,
-                        center_y: f32,
-                        amp: f32,
-                    ) -> String {
-                        if samples.len() < 2 {
-                            return String::new();
-                        }
-                        let points = samples.len();
-                        let dx = total_len / (points - 1) as f32;
-                        let start_x = center_x - total_len * 0.5;
-                        let mut s = String::with_capacity(points * 12);
-                        for (i, &src) in samples.iter().enumerate() {
-                            let x = start_x + dx * i as f32;
-                            let y = center_y - src * amp;
-                            if i == 0 {
-                                s.push_str(&format!("M{:.2} {:.2}", x, y));
-                            } else {
-                                s.push_str(&format!("L{:.2} {:.2}", x, y));
+                // Ask backend for next frame snapshot (async result populates `batch` signal).
+                fetch_frame(Some(()));
+                if let Some(batch) = batch.get() {
+                    wave_paths.update(|paths| {
+                        for (i, (snoop, (p, _))) in
+                            batch.snoops.iter().zip(paths.iter_mut()).enumerate()
+                        {
+                            if i >= 11 {
+                                break;
                             }
+                            let base_y =
+                                WAVE_TOP_Y + WAVE_Y_OFFSET + (i as f32) * WAVE_VERTICAL_SPACING;
+                            let samples = &snoop.samples;
+                            let path = waveform_path(
+                                samples,
+                                WAVES_LENGHT[i],
+                                WAVE_CENTER_X,
+                                base_y,
+                                WAVE_AMPLITUDE_PX,
+                            );
+                            *p = path;
                         }
-                        s
-                    }
-
-                    let mut new_paths = Vec::with_capacity(11);
-                    for (i, snoop) in batch.snoops.iter().enumerate() {
-                        if i >= 11 {
-                            break;
-                        }
-                        let base_y =
-                            WAVE_TOP_Y + WAVE_Y_OFFSET + (i as f32) * WAVE_VERTICAL_SPACING;
-                        let samples = &snoop.samples;
-                        let path = waveform_path(
-                            samples,
-                            WAVES_LENGHT[i],
-                            WAVE_CENTER_X,
-                            base_y,
-                            WAVE_AMPLITUDE_PX,
-                        );
-                        new_paths.push(path);
-                    }
-                    if new_paths.len() == 11 {
-                        wave_paths.set(new_paths);
-                    }
+                    });
                 }
             }
         },
@@ -119,7 +103,14 @@ pub fn Wavering() -> impl IntoView {
             {move || {
                 wave_paths()
                     .into_iter()
-                    .map(|p| view! { <path d=p stroke-width="1.5" /> }.into_any())
+                    .map(|(p, t)| {
+                        view! {
+                            <g transform=t>
+                                <path d=p stroke-width="1.5" />
+                            </g>
+                        }
+                            .into_any()
+                    })
                     .collect_view()
             }}
             <g transform=format!(
@@ -129,10 +120,56 @@ pub fn Wavering() -> impl IntoView {
                 {move || {
                     wave_paths()
                         .into_iter()
-                        .map(|p| view! { <path d=p stroke-width="1.5" /> }.into_any())
+                        .map(|(p, _)| view! { <path d=p stroke-width="1.5" /> }.into_any())
                         .collect_view()
                 }}
             </g>
         </svg>
     }
+}
+
+// Render a single waveform path from the chronological samples.
+fn waveform_path(
+    samples: &[f32],
+    total_len: f32,
+    center_x: f32,
+    center_y: f32,
+    amp: f32,
+) -> String {
+    if samples.len() < 2 {
+        return String::new();
+    }
+    let points = samples.len();
+    let dx = total_len / (points - 1) as f32;
+    let start_x = center_x - total_len * 0.5;
+    let mut s = String::with_capacity(points * 12);
+    for (i, &src) in samples.iter().enumerate() {
+        let x = start_x + dx * i as f32;
+        let y = center_y - src * amp;
+        if i == 0 {
+            s.push_str(&format!("M{:.2} {:.2}", x, y));
+        } else {
+            s.push_str(&format!("L{:.2} {:.2}", x, y));
+        }
+    }
+    s
+}
+
+fn wave_scale(i: usize) -> String {
+    format!(
+        "translate({:.2},{:.2}) scale({:.4},1) translate({:.2},{:.2})",
+        WAVE_CENTER_X,
+        { WAVE_TOP_Y + WAVE_Y_OFFSET + (i as f32) * WAVE_VERTICAL_SPACING },
+        {
+            let idx = i as f32;
+            let max_idx = (WAVES_LENGHT.len().saturating_sub(1)) as f32;
+            if max_idx == 0.0 {
+                FIRST_WAVE_SCALE_X
+            } else {
+                FIRST_WAVE_SCALE_X + (LAST_WAVE_SCALE_X - FIRST_WAVE_SCALE_X) * (idx / max_idx)
+            }
+        },
+        -WAVE_CENTER_X,
+        -(WAVE_TOP_Y + WAVE_Y_OFFSET + (i as f32) * WAVE_VERTICAL_SPACING),
+    )
 }

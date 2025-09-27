@@ -30,10 +30,6 @@ MAYA DRY KISS: Keep this file lean and focused on data definition only.
 
 use serde::{Deserialize, Serialize};
 
-/// Event name for a full batch of intro snoop samples.
-/// Emitted over a Tauri Channel as JSON.
-pub const INTRO_SNOOP_BATCH: &str = "intro_snoop_batch";
-
 /// One snoop’s current snapshot.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

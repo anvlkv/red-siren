@@ -31,9 +31,12 @@ pub fn run() {
         app.manage(nav_manager);
         Ok(())
     });
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    #[cfg(not(debug_assertions))]
     {
         builder = builder.plugin(tauri_plugin_prevent_default::init());
+    }
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    {
         builder = builder.plugin(
             tauri_plugin_window_state::Builder::new()
                 .with_state_flags(
@@ -52,9 +55,9 @@ pub fn run() {
         navigation::navigation_enter_done,
         navigation::navigation_sync,
         setup::update_window_appearance,
-        intro::intro_stream,
         intro::intro_pause,
         intro::intro_resume,
+        intro::intro_next_frame,
     ]);
     builder
         .run(tauri::generate_context!())

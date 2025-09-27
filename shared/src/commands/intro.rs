@@ -1,39 +1,18 @@
 /*!
 Intro (splash) DSP visualization commands.
 
-These commands orchestrate the backend low-frequency Fundsp engine
-that generates “snoop” line data for the intro animation.
-
-Design Choices:
-- Stream initiation is idempotent. First invoke starts the engine thread.
-  Subsequent invokes simply replace the channel sink (e.g. after a UI reload).
-- Pause/Resume control emission & internal stepping without tearing down
-  the network (phases preserved).
-- No separate STOP command for now (engine lives for app lifetime).
-  Add one later if lifecycle needs to shrink.
-
-JS Pattern (mirrors the Tauri channel example):
-```ts
-import { invoke, channel } from '@tauri-apps/api/core';
-
-const onEvent = new channel.Channel<IntroSnoopBatchPayload>();
-onEvent.onmessage = (batch) => {
-  // batch.tUnixMs, batch.snoops[...]
-};
-
-await invoke(INTRO_STREAM, { onEvent });  // payload is `()` on Rust side
-// Later:
-await invoke(INTRO_PAUSE,  () => {});
-await invoke(INTRO_RESUME, () => {});
-```
+Refactored to a pull model (no streaming channel):
+- Background engine thread continually advances the low-frequency Fundsp graph.
+- Frontend requests the latest snoop batch on demand with INTRO_NEXT_FRAME.
+- Pause/Resume still toggle engine stepping without destroying graph state.
+- No channel plumbing; each call returns a full `IntroSnoopBatchPayload`.
 
 MAYA DRY KISS:
-Keep this module limited to string constants; avoid premature abstractions.
+Keep this file limited to string constants; avoid premature abstractions.
 */
 
-/// Start (or reattach to) the intro DSP stream.
-/// Expects an argument object containing `onEvent` (Tauri Channel).
-pub const INTRO_STREAM: &str = "intro_stream";
+/// Request the next intro snoop batch (pull model).
+pub const INTRO_NEXT_FRAME: &str = "intro_next_frame";
 
 /// Temporarily pause DSP generation (no events emitted while paused).
 pub const INTRO_PAUSE: &str = "intro_pause";

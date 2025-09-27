@@ -92,14 +92,14 @@ struct EngineConfig {
 }
 
 const INTRO_NUM_SNOOPS: usize = 11;
-const INTRO_SAMPLE_RATE_HZ: f32 = 240.0;
-const INTRO_BASE_FREQ_HZ: f32 = 0.012;
-const INTRO_MOD_FREQ_HZ: f32 = 0.025;
+const INTRO_SAMPLE_RATE_HZ: f32 = 75.0;
+const INTRO_BASE_FREQ_HZ: f32 = 0.75;
+const INTRO_MOD_FREQ_HZ: f32 = 0.25;
 const INTRO_MAX_DEPTH: f32 = 0.7;
-const INTRO_AMPLITUDE: f32 = 0.35;
+const INTRO_AMPLITUDE: f32 = 0.85;
 const INTRO_FRAME_INTERVAL_MS: u64 = 55;
 // Distinct ring capacities (short → long) for visual width variance.
-const INTRO_BUFFER_SIZES: [usize; INTRO_NUM_SNOOPS] = [90, 110, 130, 150, 170, 190, 210, 230, 250, 270, 320];
+const INTRO_BUFFER_SIZES: [usize; INTRO_NUM_SNOOPS] = [70, 110, 140, 180, 190, 200, 240, 280, 320, 360, 400];
 
 impl Default for EngineConfig {
     fn default() -> Self {
@@ -165,6 +165,7 @@ impl FundspEngine {
             let capacity = capacities[idx];
             let (front, back) = snoop(capacity);
             capture_fronts.borrow_mut().push(front);
+            let amp = ((idx + 1) as f32 / capacities.len() as f32) * amp;
             // (1 + depth * saw) * sine * amplitude >> snoop backend
             ((dc(1.0) + saw_hz(mod_freq) * depth) * sine_hz(base_freq) * amp) >> back
         });

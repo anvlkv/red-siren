@@ -5,6 +5,7 @@ mod icon;
 mod intro;
 mod menu;
 mod tooltip;
+mod wavering;
 
 pub use button::*;
 pub use card::*;
@@ -13,3 +14,4 @@ pub use icon::*;
 pub use intro::*;
 pub use menu::*;
 pub use tooltip::*;
+pub use wavering::*;

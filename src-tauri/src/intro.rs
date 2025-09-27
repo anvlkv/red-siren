@@ -9,6 +9,7 @@ MAYA DRY KISS
 - We only need the graph to advance so snoop ring buffers fill; mono output is discarded.
 - Depth linearly ramps 0.0 → INTRO_MAX_DEPTH across index.
 - Emits JSON envelope identical to prior contract:
+```json
   {
     "event": INTRO_SNOOP_BATCH",
     "data": {
@@ -19,6 +20,7 @@ MAYA DRY KISS
       ]
     }
   }
+```
 - Pause/Resume: stop/resume advancing without losing phase.
 - Idempotent stream start: re-invoking swaps the channel.
 
@@ -58,9 +60,9 @@ pub struct IntroEngineState {
 struct Inner {
     started: bool,
     paused: bool,
-    channel: Option<TauriChannel<serde_json::Value>>,
     tx: Option<Sender<Control>>,
     join: Option<thread::JoinHandle<()>>,
+    snoops: Vec<Snoop>
 }
 
 impl IntroEngineState {
@@ -69,7 +71,7 @@ impl IntroEngineState {
             inner: Mutex::new(Inner {
                 started: false,
                 paused: false,
-                channel: None,
+                snoops: Vec::new(),
                 tx: None,
                 join: None,
             }),
@@ -88,7 +90,6 @@ struct EngineConfig {
     max_depth: f32,
     amplitude: f32,
     buffer_sizes: Vec<usize>,
-    frame_interval: Duration,
 }
 
 const INTRO_NUM_SNOOPS: usize = 11;
@@ -97,7 +98,6 @@ const INTRO_BASE_FREQ_HZ: f32 = 0.75;
 const INTRO_MOD_FREQ_HZ: f32 = 0.25;
 const INTRO_MAX_DEPTH: f32 = 0.7;
 const INTRO_AMPLITUDE: f32 = 0.85;
-const INTRO_FRAME_INTERVAL_MS: u64 = 55;
 // Distinct ring capacities (short → long) for visual width variance.
 const INTRO_BUFFER_SIZES: [usize; INTRO_NUM_SNOOPS] = [70, 110, 140, 180, 190, 200, 240, 280, 320, 360, 400];
 
@@ -111,7 +111,6 @@ impl Default for EngineConfig {
             max_depth: INTRO_MAX_DEPTH,
             amplitude: INTRO_AMPLITUDE,
             buffer_sizes: INTRO_BUFFER_SIZES.to_vec(),
-            frame_interval: Duration::from_millis(INTRO_FRAME_INTERVAL_MS),
         }
     }
 }
@@ -124,7 +123,6 @@ struct FundspEngine {
     net: Net,
     snoops: Vec<Snoop>,
     depths: Vec<f32>,
-    frame_samples: usize,
 }
 
 impl FundspEngine {
@@ -180,9 +178,6 @@ impl FundspEngine {
         // net.connect_input(0, node, 0);
         net.connect_output(node, 0, 0);
 
-        let frame_samples =
-            ((cfg.frame_interval.as_secs_f32()) * cfg.sample_rate).round().max(1.0) as usize;
-
         let snoops = Rc::try_unwrap(fronts)
             .map_err(|_| "errored")
             .unwrap()
@@ -192,54 +187,47 @@ impl FundspEngine {
             net,
             snoops,
             depths,
-            frame_samples,
         }
     }
 
     fn tick_frame(&mut self) {
-        for _ in 0..self.frame_samples {
-            // Advance one mono sample (joining underlying 11 branches), updating all snoops.
-            let _ = self.net.get_mono();
-        }
+        let _ = self.net.get_mono();
     }
 
-    fn collect(&mut self) -> Vec<Vec<f32>> {
-        self.snoops
-            .iter_mut()
-            .map(|s| {
-                s.update();
-                let cap = s.capacity();
-                let mut v = Vec::with_capacity(cap);
-                for rev in (0..cap).rev() {
-                    v.push(s.at(rev));
-                }
-                v
-            })
-            .collect()
-    }
+    // fn collect(&mut self) -> Vec<Vec<f32>> {
+    //     self.snoops
+    //         .iter_mut()
+    //         .map(|s| {
+    //             s.update();
+    //             let cap = s.capacity();
+    //             let mut v = Vec::with_capacity(cap);
+    //             for rev in (0..cap).rev() {
+    //                 v.push(s.at(rev));
+    //             }
+    //             v
+    //         })
+    //         .collect()
+    // }
 }
 
 // -----------------------------------------------------------------------------
 // Thread & Run Loop
 // -----------------------------------------------------------------------------
 fn spawn_engine(
-    mut channel: Option<TauriChannel<serde_json::Value>>,
     paused: bool,
     config: EngineConfig,
 ) -> (Sender<Control>, thread::JoinHandle<()>) {
     let (tx, rx) = mpsc::channel();
-    let handle = thread::spawn(move || run_engine(&config, &rx, &mut channel, paused));
+    let handle = thread::spawn(move || run_engine(&config, &rx, paused));
     (tx, handle)
 }
 
 fn run_engine(
     config: &EngineConfig,
     rx: &Receiver<Control>,
-    channel: &mut Option<TauriChannel<serde_json::Value>>,
     mut paused: bool,
 ) {
     let mut engine = FundspEngine::new(config);
-    let mut last_emit = Instant::now();
 
     loop {
         // Handle control messages
@@ -258,34 +246,6 @@ fn run_engine(
         }
 
         engine.tick_frame();
-
-        if last_emit.elapsed() >= config.frame_interval {
-            last_emit = Instant::now();
-
-            if let Some(ch) = channel {
-                let t_unix_ms = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis() as u64;
-
-                let buffers = engine.collect();
-                let snoops: Vec<IntroSnoopSample> = buffers
-                    .into_iter()
-                    .enumerate()
-                    .map(|(idx, samples)| IntroSnoopSample {
-                        snoop_id: (idx + 1) as u8,
-                        modulation_depth: engine.depths[idx],
-                        samples,
-                    })
-                    .collect();
-
-                let payload = IntroSnoopBatchPayload { t_unix_ms, snoops };
-                let _ = ch.send(json!({
-                    "event": INTRO_SNOOP_BATCH,
-                    "data": payload
-                }));
-            }
-        }
     }
 }
 

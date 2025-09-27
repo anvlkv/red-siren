@@ -17,16 +17,7 @@
         "url": "/",
         "title": "Red Siren",
         "decorations": false,
-        "visible": false,
-        "titleBarStyle": "Transparent",
-        "width": 800,
-        "height": 600
-      },
-      {
-        "label": "splashscreen",
-        "decorations": false,
-        "url": "splashscreen.html",
-        "shadow": true
+        "titleBarStyle": "Transparent"
       }
     ],
     "security": {
@@ -43,8 +34,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "macOS": {
-      "entitlements": "./RedSiren.entitlements"
+    "iOS": {
+      "minimumSystemVersion": "15.6",
+      "frameworks": ["CoreAudio.framework", "AVFoundation.framework"]
     }
   }
 }

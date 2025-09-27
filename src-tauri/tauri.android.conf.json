@@ -21,12 +21,6 @@
         "titleBarStyle": "Transparent",
         "width": 800,
         "height": 600
-      },
-      {
-        "label": "splashscreen",
-        "decorations": false,
-        "url": "splashscreen.html",
-        "shadow": true
       }
     ],
     "security": {
@@ -43,8 +37,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "macOS": {
-      "entitlements": "./RedSiren.entitlements"
+    "android": {
+      "minSdkVersion": 26,
+      "versionCode": 1
     }
   }
 }

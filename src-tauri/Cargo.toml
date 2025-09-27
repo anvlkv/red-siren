@@ -14,8 +14,8 @@ crate-type = ["cdylib", "rlib", "staticlib"]
 name = "tauri_app_lib"
 
 [dependencies]
-cpal = "0.16.0"
-fundsp = "0.20.0"
+cpal = "0.16"
+fundsp = "0.20"
 log = { workspace = true }
 mint = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
@@ -26,13 +26,16 @@ tauri-plugin-log = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-prevent-default = "3"
 thiserror = { workspace = true }
+tokio = { version = "1" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "test-util"] }
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-window-state = "2"
-tokio = { version = "1", features = ["full"] }
 
 [target."cfg(target_os = \"macos\")".dependencies]
 objc2 = "0.6"

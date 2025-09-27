@@ -1,6 +1,7 @@
 use tauri::{async_runtime::spawn, App, Manager};
-use tauri_plugin_window_state::WindowExt;
 use tokio::{sync::Mutex};
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+use tauri_plugin_window_state::WindowExt;
 
 use crate::health;
 
@@ -13,6 +14,7 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         crate::setup_mac_window::setup(&mut main_window)?;
     }
 
+    #[cfg(not(any(target_os="ios", target_os="android")))]
     main_window.restore_state(tauri_plugin_window_state::StateFlags::SIZE & tauri_plugin_window_state::StateFlags::POSITION)?;
 
     // Start backend setup as an async task

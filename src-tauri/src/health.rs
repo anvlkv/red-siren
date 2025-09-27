@@ -42,6 +42,7 @@ pub async fn perform_backend_setup(app: AppHandle, state: &Mutex<SetupState>) ->
 ///
 /// Show `main` window
 fn maybe_toggle_windows(state_lock: &MutexGuard<'_, SetupState>, app: &AppHandle) -> Result<(), String> {
+    #[cfg(not(any(target_os="ios", target_os="android")))]
     if state_lock.gui_ready && state_lock.backend_ready {
         log::info!("Both GUI and backend ready, closing splashscreen and showing main window");
 

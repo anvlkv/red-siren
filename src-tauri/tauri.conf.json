@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "red-siren",
+  "productName": "Red Siren",
   "version": "0.1.0",
   "identifier": "com.anvlkv.red-siren.app",
   "build": {
@@ -44,7 +44,17 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "entitlements": "./Entitlements.plist"
+      "entitlements": "src-tauri/macos/Entitlements.plist",
+      "files": {
+        "Info.plist": "src-tauri/macos/Info.plist"
+      }
+    },
+    "iOS": {
+      "minimumSystemVersion": "15.6",
+      "template": "src-tauri/ios/project.yml"
+    },
+    "android": {
+      "minSdkVersion": 26
     }
   }
 }

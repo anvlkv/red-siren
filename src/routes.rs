@@ -110,7 +110,7 @@ pub fn AppRoutes() -> impl IntoView {
                 view=move || view! { <div>"Tune"</div> }
             />
             <Route
-                path=(StaticSegment(RouteId::Permissions.as_ref()))
+                path=(StaticSegment(RouteId::Permissions.as_ref()),)
                 view=move || view! { <div>"Permissions"</div> }
             />
 

@@ -66,12 +66,11 @@ pub fn Menu(#[prop(into, optional)] compact: bool) -> impl IntoView {
     ]);
 
     view! {
-        <div class="inline-grid grid-cols-1 gap-4">
+        <div class="inline-grid grid-cols-1 gap-4 w-full">
             <Show
                 when=move || compact
                 fallback=move || {
                     view! {
-                        <h1 class="block text-5xl text-center italic">Red Siren</h1>
                         <nav class="contents text-3xl">
                             {items()
                                 .iter()

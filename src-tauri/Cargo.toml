@@ -21,6 +21,7 @@ mint = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 shared = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-opener = "2"

@@ -1,12 +1,13 @@
 use crate::components::{Button, Card, Icon};
 use leptos::prelude::*;
-use shared::{
-    commands::navigation::NavigateRequestPayload, NavCommittedPayload, NavStartedPayload, RouteId,
-};
+use leptos_use::use_preferred_dark;
+use shared::{NavCommittedPayload, NavStartedPayload, RouteId};
 use tauri_use::{use_invoke_with_args, use_listen, EventType, UseListenReturn, UseTauriWithReturn};
 
 #[component]
-pub fn About() -> impl IntoView {
+pub fn Donate() -> impl IntoView {
+    let is_dark = use_preferred_dark();
+
     // Listen for the commit event to get tx_id for enter_done (if available).
     let UseListenReturn {
         data: committed,
@@ -30,7 +31,7 @@ pub fn About() -> impl IntoView {
         }
     });
 
-    // Listen for navigation_started to handle leave (About -> Home).
+    // Listen for navigation_started to handle leave (Donate -> About).
     let UseListenReturn {
         data: started,
         error: error_started,
@@ -53,7 +54,7 @@ pub fn About() -> impl IntoView {
 
     let committed_tx_id = Signal::derive(move || {
         committed().as_ref().and_then(|p| {
-            if p.to == RouteId::About {
+            if p.to == RouteId::Donate {
                 Some(p.tx_id)
             } else {
                 None
@@ -62,7 +63,7 @@ pub fn About() -> impl IntoView {
     });
     let leave_tx_id = Signal::derive(move || {
         started().as_ref().and_then(|ev| {
-            if ev.from == RouteId::About {
+            if ev.from == RouteId::Donate {
                 Some(ev.tx_id)
             } else {
                 None
@@ -74,7 +75,7 @@ pub fn About() -> impl IntoView {
     let (start_animation, set_start_animation) =
         signal(None::<(u64, crate::components::CardAnimation)>);
 
-    // Queue ENTER on commit to About
+    // Queue ENTER on commit to Donate
     Effect::new(move |_| {
         if let Some(tx) = committed_tx_id() {
             set_start_animation(Some((
@@ -85,11 +86,11 @@ pub fn About() -> impl IntoView {
                     ms: 600.0,
                 },
             )));
-            log::debug!("About: queued ENTER tx_id={}", tx);
+            log::debug!("Donate: queued ENTER tx_id={}", tx);
         }
     });
 
-    // Queue LEAVE on navigation start from About
+    // Queue LEAVE on navigation start from Donate
     Effect::new(move |_| {
         if let Some(tx) = leave_tx_id() {
             set_start_animation(Some((
@@ -100,7 +101,7 @@ pub fn About() -> impl IntoView {
                     ms: 600.0,
                 },
             )));
-            log::debug!("About: queued LEAVE tx_id={}", tx);
+            log::debug!("Donate: queued LEAVE tx_id={}", tx);
         }
     });
 
@@ -142,7 +143,7 @@ pub fn About() -> impl IntoView {
         }
     });
 
-    // Trigger to notify backend that the leave animation has completed (when navigating away from About).
+    // Trigger to notify backend that the leave animation has completed (when navigating away from Donate).
     let UseTauriWithReturn {
         trigger: leave_done_trigger,
         error: leave_error,
@@ -195,7 +196,7 @@ pub fn About() -> impl IntoView {
                         on:click=move |_| {
                             navigate_trigger(
                                 Some(shared::commands::navigation::NavigateRequestPayload {
-                                    route: RouteId::Home,
+                                    route: RouteId::About,
                                 }),
                             );
                         }
@@ -206,35 +207,51 @@ pub fn About() -> impl IntoView {
                         </span>
                         Back
                     </Button>
-                    <h1 class="block text-5xl text-center italic">"About"</h1>
+                    <h1 class="block text-5xl text-center italic">"Donate"</h1>
                 </div>
                 <div class="flex flex-col items-center justify-center gap-6">
-                    <h2 class="text-2xl text-bold max-w-[42ch] italic">
-                        "Red Siren is a noise chime"
-                    </h2>
+                    <h2 class="text-2xl italic">"Support the Creator of Red Siren"</h2>
                     <p class="text-xl max-w-[42ch] ">
-                        "It pulls the present into focus — a siren’s call, loud and true. A sound that blooms, that bends, that sharpens to the edge you set. It is a siren that sings only when you do, a mirror of noise, a vessel of tone."
+                        "Red Siren is a labor of love — designed, built, and shared with a passion for sound and creativity."
                     </p>
                     <p class="text-xl max-w-[42ch] ">
-                        "It hums with what you give it — loud, brief, true. A thousand crystal bowls shattering into light, a frequency tuned to the shape of your breath. Strike it, and it strikes back. Call it, and it calls you forward."
+                        "If Red Siren has sparked something in you, consider donating. Every bit helps, and I’m deeply grateful for your kindness. Thank you for believing in this work."
                     </p>
-                    <Button
-                        on:click=move |_| {
-                            navigate_trigger(
-                                Some(NavigateRequestPayload {
-                                    route: RouteId::Donate,
-                                }),
-                            )
-                        }
-                        full_width=true
-                        class="relative pl-14"
-                        attr:aria-label="Donations"
-                    >
-                        <span class="absolute left-4 text-4xl">
-                            <Icon name="donate" stroke_width=12.0 />
-                        </span>
-                        "Donate"
-                    </Button>
+
+                    <div class="contents">
+                        {move || {
+                            if is_dark() {
+                                view! {
+                                    <a
+                                        href="https://nowpayments.io/donation?api_key=5014fba8-64de-4526-84c1-527cd621d274"
+                                        target="_blank"
+                                        rel="noreferrer noopener"
+                                    >
+                                        <img
+                                            src="https://nowpayments.io/images/embeds/donation-button-black.svg"
+                                            alt="Crypto donation button by NOWPayments"
+                                        />
+                                    </a>
+                                }
+                            } else {
+                                view! {
+                                    <a
+                                        href="https://nowpayments.io/donation?api_key=5014fba8-64de-4526-84c1-527cd621d274"
+                                        target="_blank"
+                                        rel="noreferrer noopener"
+                                    >
+                                        <img
+                                            src="https://nowpayments.io/images/embeds/donation-button-white.svg"
+                                            alt="Cryptocurrency & Bitcoin donation button by NOWPayments"
+                                        />
+                                    </a>
+                                }
+                            }
+                        }}
+                    </div>
+                    <p class="text-xl max-w-[42ch]">
+                        "Your support helps me keep going. It fuels the time, care, and resources needed to craft each instrument and bring this project to life."
+                    </p>
                 </div>
             </Card>
         </div>

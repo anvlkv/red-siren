@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use shared::commands::navigation::NavigateRequestPayload;
+use shared::{commands::navigation::NavigateRequestPayload, navigation::RouteId};
 use tauri_use::{use_invoke_with_args, UseTauriWithReturn};
 
 use crate::components::{Button, Icon, Tooltip};
@@ -8,7 +8,7 @@ use crate::components::{Button, Icon, Tooltip};
 #[derive(Clone, Debug)]
 pub enum MenuItem {
     Navigate {
-        path: String,
+        route: RouteId,
         icon: String,
         label: String,
     },
@@ -22,7 +22,7 @@ pub enum MenuItem {
 impl Default for MenuItem {
     fn default() -> Self {
         MenuItem::Navigate {
-            path: "/".to_string(),
+            route: RouteId::Home,
             icon: "home".to_string(),
             label: "Home".to_string(),
         }
@@ -49,17 +49,17 @@ pub fn Menu(#[prop(into, optional)] compact: bool) -> impl IntoView {
 
     let items = RwSignal::new(vec![
         MenuItem::Navigate {
-            path: "/play".to_string(),
+            route: RouteId::Home,
             icon: "play".to_string(),
             label: "Play".to_string(),
         },
         MenuItem::Navigate {
-            path: "/tune".to_string(),
+            route: RouteId::Tune,
             icon: "tune".to_string(),
             label: "Tune".to_string(),
         },
         MenuItem::Navigate {
-            path: "/about".to_string(),
+            route: RouteId::About,
             icon: "info".to_string(),
             label: "About".to_string(),
         },
@@ -71,8 +71,8 @@ pub fn Menu(#[prop(into, optional)] compact: bool) -> impl IntoView {
                 when=move || compact
                 fallback=move || {
                     view! {
-                        <h1 class="block text-5xl text-center">Red Siren</h1>
-                        <nav class="contents text-red dark:text-black text-3xl">
+                        <h1 class="block text-5xl text-center italic">Red Siren</h1>
+                        <nav class="contents text-3xl">
                             {items()
                                 .iter()
                                 .map(|item| {
@@ -85,7 +85,7 @@ pub fn Menu(#[prop(into, optional)] compact: bool) -> impl IntoView {
             >
                 {move || {
                     view! {
-                        <nav class="contents text-red dark:text-black text-3xl">
+                        <nav class="contents text-3xl">
                             <div class="flex flex-row items-center justify-center gap-4">
                                 {items()
                                     .iter()
@@ -97,10 +97,62 @@ pub fn Menu(#[prop(into, optional)] compact: bool) -> impl IntoView {
                                     .collect_view()}
                             </div>
                         </nav>
-                        <h1 class="block text-2xl text-center">Red Siren</h1>
+                        <h1 class="block text-2xl text-center italic">Red Siren</h1>
                     }
                 }}
             </Show>
+        </div>
+    }
+}
+
+#[component]
+fn MenuItemView(
+    #[prop(into)] item: MenuItem,
+    trigger_navigate: WriteSignal<Option<NavigateRequestPayload>>,
+) -> impl IntoView {
+    view! {
+        <div class="rounded-lg" role="menuitem">
+            {match item {
+                MenuItem::Navigate { route, icon, label } => {
+                    let aria_label = label.clone();
+                    view! {
+                        <Button
+                            on:click=move |_| {
+                                log::debug!("Trigger navigate to: {route}");
+                                trigger_navigate(Some(NavigateRequestPayload { route }));
+                            }
+                            full_width=true
+                            class="relative pl-14"
+                            attr:aria-label=aria_label.clone()
+                        >
+                            <span class="absolute left-4 text-4xl">
+                                <Icon name=icon stroke_width=12.0 />
+                            </span>
+                            {label}
+                        </Button>
+                    }
+                        .into_any()
+                }
+                MenuItem::Action { icon, label, action } => {
+                    let aria_label = label.clone();
+                    view! {
+                        <Button
+                            on:click=move |_| {
+                                log::info!("Action triggered: {}", action);
+                            }
+                            full_width=true
+                            class="relative pl-14"
+                            attr:aria-label=Some(aria_label.clone())
+                        >
+                            <span class="absolute left-4 text-4xl">
+                                <Icon name=icon stroke_width=12.0 />
+                            </span>
+                            {label}
+                        </Button>
+                    }
+                        .into_any()
+                }
+            }}
         </div>
     }
 }
@@ -113,18 +165,14 @@ fn MenuItemCompactView(
     view! {
         <div class="rounded-full" role="menuitem">
             {match item {
-                MenuItem::Navigate { path, icon, label } => {
+                MenuItem::Navigate { route, icon, label } => {
                     let aria_label = label.clone();
                     view! {
                         <Tooltip text=label.clone() placement="top">
                             <Button
                                 on:click=move |_| {
-                                    log::debug!("Trigger navigate to: {path}");
-                                    trigger_navigate(
-                                        Some(NavigateRequestPayload {
-                                            path: path.clone(),
-                                        }),
-                                    );
+                                    log::debug!("Trigger navigate to: {route}");
+                                    trigger_navigate(Some(NavigateRequestPayload { route }));
                                 }
                                 round=true
                                 square=true
@@ -157,62 +205,6 @@ fn MenuItemCompactView(
                                 </span>
                             </Button>
                         </Tooltip>
-                    }
-                        .into_any()
-                }
-            }}
-        </div>
-    }
-}
-
-#[component]
-fn MenuItemView(
-    #[prop(into)] item: MenuItem,
-    trigger_navigate: WriteSignal<Option<NavigateRequestPayload>>,
-) -> impl IntoView {
-    view! {
-        <div class="rounded-lg" role="menuitem">
-            {match item {
-                MenuItem::Navigate { path, icon, label } => {
-                    let aria_label = label.clone();
-                    view! {
-                        <Button
-                            on:click=move |_| {
-                                log::debug!("Trigger navigate to: {path}");
-                                trigger_navigate(
-                                    Some(NavigateRequestPayload {
-                                        path: path.clone(),
-                                    }),
-                                );
-                            }
-                            full_width=true
-                            class="relative pl-14"
-                            attr:aria-label=aria_label.clone()
-                        >
-                            <span class="absolute left-4 text-4xl">
-                                <Icon name=icon stroke_width=12.0 />
-                            </span>
-                            {label}
-                        </Button>
-                    }
-                        .into_any()
-                }
-                MenuItem::Action { icon, label, action } => {
-                    let aria_label = label.clone();
-                    view! {
-                        <Button
-                            on:click=move |_| {
-                                log::info!("Action triggered: {}", action);
-                            }
-                            full_width=true
-                            class="relative pl-14"
-                            attr:aria-label=Some(aria_label.clone())
-                        >
-                            <span class="absolute left-4 text-4xl">
-                                <Icon name=icon stroke_width=12.0 />
-                            </span>
-                            {label}
-                        </Button>
                     }
                         .into_any()
                 }

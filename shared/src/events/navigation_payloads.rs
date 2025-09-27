@@ -37,7 +37,6 @@ pub struct NavStartedPayload {
 pub struct NavCommittedPayload {
     pub tx_id: u64,
     pub to: RouteId,
-    pub path: String,
 }
 
 /// Emitted once the transition is fully settled.
@@ -52,44 +51,6 @@ pub struct NavCompletedPayload {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NavCanceledPayload {
-    pub tx_id: u64,
-    pub reason: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PayloadTxTo {
-    pub tx_id: u64,
-    pub to: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PayloadGated {
-    pub tx_id: u64,
-    pub to: String,
-    pub allowed: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PayloadStarted {
-    pub tx_id: u64,
-    pub from: String,
-    pub to: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PayloadCommitted {
-    pub tx_id: u64,
-    pub to: String,
-    pub path: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PayloadCanceled {
     pub tx_id: u64,
     pub reason: String,
 }

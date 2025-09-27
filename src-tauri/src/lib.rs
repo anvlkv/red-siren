@@ -1,4 +1,4 @@
-use crate::navigation::{new_manager, parse_incoming_route_payload};
+use crate::navigation::new_manager;
 use navigation_manager::NavigationManager;
 use shared::RouteId;
 use tauri::Manager;

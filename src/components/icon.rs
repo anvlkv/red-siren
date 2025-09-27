@@ -6,6 +6,9 @@ const TUNE_ICON: &str = include_str!("./icon/tune.svg");
 const BACK_ICON: &str = include_str!("./icon/back.svg");
 const RESUME_ICON: &str = include_str!("./icon/resume.svg");
 const PAUSE_ICON: &str = include_str!("./icon/pause.svg");
+const DONATE_ICON: &str = include_str!("./icon/donate.svg");
+const MIC_ICON: &str = include_str!("./icon/mic.svg");
+const ENTROPY_ICON: &str = include_str!("./icon/entropy.svg");
 
 #[component]
 pub fn Icon(
@@ -24,6 +27,9 @@ pub fn Icon(
                     "back" => BACK_ICON,
                     "resume" => RESUME_ICON,
                     "pause" => PAUSE_ICON,
+                    "donate" => DONATE_ICON,
+                    "mic" => MIC_ICON,
+                    "entropy" => ENTROPY_ICON,
                     _ => "No such icon",
                 };
                 decorate_svg(raw, stroke_width)

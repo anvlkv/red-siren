@@ -6,7 +6,8 @@
       {
         "label": "main",
         "url": "/",
-        "title": "Red Siren"
+        "title": "Red Siren",
+        "visible": true
       }
     ]
   },

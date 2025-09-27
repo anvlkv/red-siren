@@ -1,47 +1,3 @@
-/*!
-Phase 2 Navigation Manager (Async, Gating, Cancellation, Events)
-
-WHY:
-Centralizes navigation orchestration on the backend (Tauri) with:
-- Transaction IDs
-- Async gating (Result<bool, NavGateError>)
-- Immediate cancellation of superseded requests
-- Deterministic phase progression
-- Emission of the new Phase 2 navigation events
-- Logging instrumentation (log crate)
-
-OUT OF SCOPE (Phase 2):
-- Leave/enter animation hooks (Phase 3)
-- Prefetch / data loading orchestration
-- Complex phase timeouts / retries
-
-MAYA DRY KISS:
-Only the minimal logic needed to reliably gate, cancel, and commit navigations.
-
-USAGE (intended integration sketch):
-1. Create a global instance (Arc<NavigationManager>) at startup.
-2. Expose a Tauri command that:
-   - Parses incoming String payload into RouteId (via crate::navigation::parse_incoming_route_payload)
-   - Calls `manager.request(route_id)`
-3. Frontend listens to:
-   - navigation_committed -> performs actual Leptos router navigate()
-   - (Optional diagnostics) requested / gated / started / completed / canceled
-
-EVENT PAYLOAD SHAPES (JSON):
-navigation_requested  { "tx_id": 1, "to": "Home" }
-navigation_gated      { "tx_id": 1, "to": "Home", "allowed": true }
-navigation_started    { "tx_id": 1, "from": "Home", "to": "Play" }
-navigation_committed  { "tx_id": 1, "to": "Play", "path": "/play" }
-navigation_completed  { "tx_id": 1, "to": "Play" }
-navigation_canceled   { "tx_id": 1, "reason": "superseded" }
-
-POLICY:
-- Same-route navigation -> silently ignored (no events).
-- Superseding: old tx emits navigation_canceled(reason="superseded") immediately.
-- Gating deny -> gated(allowed=false) + canceled(reason="denied").
-- Gating error -> gated(allowed=false) + canceled(reason="error").
-*/
-
 use std::{
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -51,7 +7,7 @@ use std::{
 
 use log::{error, info, warn};
 use serde::Serialize;
-use shared::{events::navigation_payloads::{PayloadCanceled, PayloadCommitted, PayloadGated, PayloadStarted, PayloadTxTo}, RouteId};
+use shared::{events::navigation_payloads::{NavCanceledPayload, NavCommittedPayload, NavGatedPayload, NavStartedPayload, NavCompletedPayload}, RouteId};
 use thiserror::Error;
 use tauri::{AppHandle, Emitter};
 
@@ -297,14 +253,13 @@ impl NavigationManager {
         }
 
         // Emit committed, update current
-        let (to, path) = {
+        let to = {
             let mut guard = self.state.lock().unwrap();
             if let Some(active) = guard.active.as_mut() {
                 if active.id == tx_id {
                     let to = active.to;
-                    let path = to.path();
                     guard.current = to;
-                    (to, path)
+                    to
                 } else {
                     return;
                 }
@@ -313,7 +268,7 @@ impl NavigationManager {
             }
         };
 
-        self.emit_committed(tx_id, to, path);
+        self.emit_committed(tx_id, to);
 
         // Defer completion; wait for UI enter_done to finalize.
     }
@@ -362,9 +317,9 @@ impl NavigationManager {
     fn emit_requested(&self, tx_id: u64, to: RouteId) {
         self.emit(
             NAV_REQUESTED,
-            &PayloadTxTo {
+            &NavCompletedPayload {
                 tx_id,
-                to: to.to_string(),
+                to,
             },
         );
         info!("nav requested tx_id={} to={}", tx_id, to);
@@ -373,9 +328,9 @@ impl NavigationManager {
     fn emit_gated(&self, tx_id: u64, to: RouteId, allowed: bool) {
         self.emit(
             NAV_GATED,
-            &PayloadGated {
+            &NavGatedPayload {
                 tx_id,
-                to: to.to_string(),
+                to,
                 allowed,
             },
         );
@@ -397,33 +352,32 @@ impl NavigationManager {
         };
         self.emit(
             NAV_STARTED,
-            &PayloadStarted {
+            &NavStartedPayload {
                 tx_id,
-                from: from.to_string(),
-                to: to.to_string(),
+                from,
+                to,
             },
         );
         info!("nav started tx_id={} from={} to={}", tx_id, from, to);
     }
 
-    fn emit_committed(&self, tx_id: u64, to: RouteId, path: &str) {
+    fn emit_committed(&self, tx_id: u64, to: RouteId) {
         self.emit(
             NAV_COMMITTED,
-            &PayloadCommitted {
+            &NavCommittedPayload {
                 tx_id,
-                to: to.to_string(),
-                path: path.to_string(),
+                to
             },
         );
-        info!("nav committed tx_id={} to={} path={}", tx_id, to, path);
+        info!("nav committed tx_id={tx_id} to={to}");
     }
 
     fn emit_completed(&self, tx_id: u64, to: RouteId) {
         self.emit(
             NAV_COMPLETED,
-            &PayloadTxTo {
+            &NavCompletedPayload {
                 tx_id,
-                to: to.to_string(),
+                to
             },
         );
         info!("nav completed tx_id={} to={}", tx_id, to);
@@ -432,7 +386,7 @@ impl NavigationManager {
     fn emit_canceled(&self, tx_id: u64, reason: CancelReason) {
         self.emit(
             NAV_CANCELED,
-            &PayloadCanceled {
+            &NavCanceledPayload {
                 tx_id,
                 reason: reason.as_str().to_string(),
             },
@@ -457,8 +411,7 @@ impl NavigationManager {
     /// Consumers can listen for `navigation_sync` and align UI state.
     pub fn emit_sync_snapshot(&self) {
         let to = self.current_route();
-        let path = to.path().to_string();
-        self.emit(NAV_SYNC, &shared::events::navigation::NavSyncPayload { to, path });
+        self.emit(NAV_SYNC, &shared::events::navigation::NavSyncPayload { to });
     }
 }
 

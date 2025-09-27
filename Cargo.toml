@@ -7,6 +7,7 @@ edition = "2021"
 members = ["shared", "src-tauri"]
 
 [workspace.dependencies]
+leptos_router = { version = "0.8", features = ["nightly"] }
 log = "0.4"
 mint = { version = "0.5.9", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
@@ -22,7 +23,7 @@ js-sys = "0.3"
 keyframe = "1.1.1"
 keyframe_derive = "1.0.0"
 leptos = { version = "0.8", features = ["csr", "nightly"] }
-leptos_router = { version = "0.8", features = ["nightly"] }
+leptos_router = { workspace = true }
 leptos-use = { version = "0.16.2", default-features = false, features = [
   "use_document",
   "use_preferred_dark",

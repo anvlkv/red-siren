@@ -5337,6 +5337,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shared",
+ "strum",
  "tauri",
  "tauri-build",
  "tauri-plugin-log",

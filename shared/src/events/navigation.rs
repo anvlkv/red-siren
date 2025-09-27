@@ -14,5 +14,4 @@ pub const NAV_SYNC: &str = "navigation_sync";
 #[serde(rename_all = "camelCase")]
 pub struct NavSyncPayload {
     pub to: crate::RouteId,
-    pub path: String,
 }

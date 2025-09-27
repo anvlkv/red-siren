@@ -1,0 +1,7 @@
+[
+  {
+    "label": "Xcode — list devices",
+    "command": "xcrun xctrace list devices",
+    "reveal": "always"
+  }
+]

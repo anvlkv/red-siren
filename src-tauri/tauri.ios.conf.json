@@ -6,14 +6,16 @@
       {
         "label": "main",
         "url": "/",
-        "title": "Red Siren"
+        "title": "Red Siren",
+        "visible": true
       }
     ]
   },
   "bundle": {
     "iOS": {
       "minimumSystemVersion": "15.6",
-      "frameworks": ["CoreAudio.framework", "AVFoundation.framework"]
+      "frameworks": ["CoreAudio.framework", "AVFoundation.framework"],
+      "bundleVersion": "1"
     }
   }
 }

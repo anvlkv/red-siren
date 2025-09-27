@@ -1,14 +1,16 @@
+use std::str::FromStr;
+
 use leptos::prelude::*;
-use leptos_router::NavigateOptions;
 use leptos_router::{
     components::*,
     hooks::{use_location, use_navigate},
-    path,
 };
+use leptos_router::{NavigateOptions, StaticSegment};
+use shared::RouteId;
 use tauri_use::{use_invoke_with_args, use_listen, EventType, UseListenReturn, UseTauriWithReturn};
 
 use crate::components::{AppError, ErrorTemplate};
-use crate::pages::{About, Home};
+use crate::pages::{About, Donate, Home};
 
 #[component]
 pub fn AppRoutes() -> impl IntoView {
@@ -47,7 +49,7 @@ pub fn AppRoutes() -> impl IntoView {
         sync_open();
         let current = location.pathname.get();
         trigger_nav_sync(Some(shared::commands::navigation::NavSyncRequestPayload {
-            path: current,
+            route: RouteId::from_str(&current).unwrap_or(RouteId::Home),
         }));
     });
 
@@ -74,13 +76,13 @@ pub fn AppRoutes() -> impl IntoView {
 
     Effect::new(move |_| {
         if let Some(payload) = committed().as_ref() {
-            navigate(&payload.path, NavigateOptions::default());
+            navigate(payload.to.into(), NavigateOptions::default());
         }
     });
 
     Effect::new(move |_| {
         if let Some(payload) = sync().as_ref() {
-            navigate_from_sync(&payload.path, NavigateOptions::default());
+            navigate_from_sync(payload.to.into(), NavigateOptions::default());
         }
     });
 
@@ -90,10 +92,27 @@ pub fn AppRoutes() -> impl IntoView {
             outside_errors.insert_with_default_key(AppError::NotFound);
             view! { <ErrorTemplate outside_errors /> }.into_view()
         }>
-            <Route path=path!("/") view=move || view! { <Home /> } />
-            <Route path=path!("/about") view=move || view! { <About /> } />
-            <Route path=path!("/play") view=move || view! { <div>"Play"</div> } />
-            <Route path=path!("/permissions") view=move || view! { <div>"Permissions"</div> } />
+            <Route path=(StaticSegment(RouteId::Home.as_ref()),) view=move || view! { <Home /> } />
+            <Route
+                path=(StaticSegment(RouteId::About.as_ref()),)
+                view=move || view! { <About /> }
+            />
+            <Route
+                path=(StaticSegment(RouteId::Donate.as_ref()),)
+                view=move || view! { <Donate /> }
+            />
+            <Route
+                path=(StaticSegment(RouteId::Play.as_ref()),)
+                view=move || view! { <div>"Play"</div> }
+            />
+            <Route
+                path=(StaticSegment(RouteId::Tune.as_ref()),)
+                view=move || view! { <div>"Tune"</div> }
+            />
+            <Route
+                path=(StaticSegment(RouteId::Permissions.as_ref()))
+                view=move || view! { <div>"Permissions"</div> }
+            />
 
         </Routes>
     }

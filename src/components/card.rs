@@ -9,8 +9,6 @@ use leptos_use::{
 };
 
 const PERSPECTIVE_CM: f64 = 60.0;
-const FLIP_ANIMATION_DURATION_MS: f64 = 600.0;
-const APPEAR_ANIMATION_DURATION_MS: f64 = 800.0;
 const APPEAR_PERSPECTIVE_CM: f64 = 60.0;
 
 #[derive(Debug, Default, Clone, Copy, CanTween)]

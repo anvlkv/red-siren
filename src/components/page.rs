@@ -303,7 +303,7 @@ pub fn Page(
         <div class="w-full h-full flex items-center justify-center">
             <Card
                 start_animation=Signal::derive(start_animation)
-                class="max-h-screen overflow-auto"
+                class="max-h-screen"
                 on_animation_done=Callback::new({
                     move |(tx_id, kind)| {
                         match kind {

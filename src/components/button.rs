@@ -26,7 +26,7 @@ pub fn Button(
     // Content inside the button
     children: Children,
 
-    #[prop(optional, into)] disabled: bool,
+    #[prop(optional, into)] disabled: Signal<bool>,
     #[prop(optional, into)] class: String,
 
     // Appearance
@@ -34,7 +34,6 @@ pub fn Button(
     #[prop(optional, into)] size: ButtonSize,
     #[prop(optional, into)] round: bool,
     #[prop(optional, into)] square: bool,
-    #[prop(optional, into)] full_width: bool,
 ) -> impl IntoView {
     // Compose classes (tailwind-like)
     let base = "relative inline-flex items-center justify-center cursor-pointer \
@@ -82,16 +81,15 @@ pub fn Button(
         }
     };
 
-    let width_cls = if full_width { "w-full" } else { "w-auto" };
+    let class = move || {
+        let disabled_cls = if disabled() {
+            "opacity-50 pointer-events-none"
+        } else {
+            ""
+        };
 
-    let disabled_cls = if disabled {
-        "opacity-50 pointer-events-none"
-    } else {
-        ""
+        format!("{base} {rounding} {size_cls} {variant_cls} {disabled_cls} {class}")
     };
-
-    let class =
-        format!("{base} {rounding} {size_cls} {variant_cls} {width_cls} {disabled_cls} {class}");
 
     view! {
         <button type="button" class=class disabled=disabled>

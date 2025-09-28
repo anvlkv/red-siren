@@ -325,7 +325,7 @@ pub fn Page(
                     }
                 })
             >
-                <div class="flex items-center justify-between gap-4 mb-4">
+                <div class="flex items-center justify-between gap-4 mb-6">
                     <Show when=move || route_back.is_some()>
                         <Button
                             size="Md".to_string()

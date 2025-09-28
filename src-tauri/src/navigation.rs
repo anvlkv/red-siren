@@ -1,12 +1,12 @@
 use crate::navigation_manager::NavigationManager;
 use shared::RouteId;
 
-use tauri::State;
+use tauri::{App, Manager, State};
 
-/// Construct a new navigation manager with the given initial route.
-/// Keeping creation here localizes future initialization changes (metrics, spans, etc.).
-pub fn new_manager(app: tauri::AppHandle, initial: RouteId) -> NavigationManager {
-    NavigationManager::new(app, initial)
+pub fn setup(app: &mut App) -> Result<(), String> {
+    let nav_manager = NavigationManager::new(app.handle().clone(), RouteId::Home);
+    app.manage(nav_manager);
+    Ok(())
 }
 
 /// Backend gating policy stub.
@@ -55,7 +55,7 @@ pub async fn navigation_request(
 pub async fn navigation_sync(
     _app: tauri::AppHandle,
     manager: State<'_, NavigationManager>,
-    route: RouteId
+    route: RouteId,
 ) -> Result<(), String> {
     let current = manager.current_route();
     if current != route {
@@ -67,4 +67,15 @@ pub async fn navigation_sync(
         log::info!("navigation_sync aligned: '{route}', no emit");
     }
     Ok(())
+}
+
+
+#[tauri::command]
+pub fn navigation_resume(manager: State<'_, NavigationManager>,) {
+    if let Some(tx) = manager.resume_pending() {
+        log::info!("resume pending navigation, new tx_id={tx}");
+    }
+    else {
+        log::warn!("no pending navigation to resume...")
+    }
 }

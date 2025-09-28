@@ -9,8 +9,11 @@ use leptos_router::{NavigateOptions, StaticSegment};
 use shared::RouteId;
 use tauri_use::{use_invoke_with_args, use_listen, EventType, UseListenReturn, UseTauriWithReturn};
 
-use crate::components::{AppError, ErrorTemplate};
 use crate::pages::{About, Donate, Home};
+use crate::{
+    components::{AppError, ErrorTemplate},
+    pages::Permissions,
+};
 
 #[component]
 pub fn AppRoutes() -> impl IntoView {
@@ -111,7 +114,7 @@ pub fn AppRoutes() -> impl IntoView {
             />
             <Route
                 path=(StaticSegment(RouteId::Permissions.as_ref()),)
-                view=move || view! { <div>"Permissions"</div> }
+                view=move || view! { <Permissions /> }
             />
 
         </Routes>

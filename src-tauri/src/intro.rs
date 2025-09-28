@@ -33,13 +33,19 @@ use std::{
         Mutex,
     },
     thread,
-    time::{Duration},
+    time::Duration,
 };
 
-use tauri::State;
+use tauri::{App, AppHandle, Manager, State};
 
-use fundsp::hacker32::*; // brings in busi, join, U-types, oscillators, dc, etc.
 use ::shared::events::intro::{IntroSnoopBatchPayload, IntroSnoopSample};
+use fundsp::hacker32::*; // brings in busi, join, U-types, oscillators, dc, etc.
+
+pub fn setup(app: &mut App) -> Result<(), String> {
+    app.manage(IntroEngineState::new());
+
+    Ok(())
+}
 
 // -----------------------------------------------------------------------------
 // Control messages & shared state
@@ -60,7 +66,7 @@ struct Inner {
     tx: Option<Sender<Control>>,
     join: Option<thread::JoinHandle<()>>,
     // Front snoops (read side) shared with request command.
-    snoops: Vec<Snoop>
+    snoops: Vec<Snoop>,
 }
 
 impl IntroEngineState {
@@ -100,7 +106,6 @@ const INTRO_MAX_DEPTH: f32 = 0.5;
 const INTRO_AMPLITUDE: f32 = 0.52;
 const INTRO_BUFFER_SIZE: usize = 2800;
 const INTRO_THREAD_SLEEP_US: u64 = 500; // 0.5 ms
-
 
 impl Default for EngineConfig {
     fn default() -> Self {
@@ -163,7 +168,9 @@ impl FundspEngine {
             let amp_line = ((idx + INTRO_NUM_SNOOPS / 3) as f32 / INTRO_NUM_SNOOPS as f32) * amp;
             let snoop_be = backs[idx].clone();
             // (1 + depth * saw) * sine * amplitude >> pre-built snoop backend
-            ((dc(1.0) + saw_hz(mod_freq) * depth) * sine_hz(base_freq) * amp_line) >> declick() >> snoop_be
+            ((dc(1.0) + saw_hz(mod_freq) * depth) * sine_hz(base_freq) * amp_line)
+                >> declick()
+                >> snoop_be
         });
 
         // Collapse multi-channel bus to one mono output (not used, just drives ticking).
@@ -175,10 +182,7 @@ impl FundspEngine {
 
         net.connect_output(node, 0, 0);
 
-        (Self {
-            net,
-            depths,
-        }, fronts)
+        (Self { net, depths }, fronts)
     }
 
     fn tick_frame(&mut self) {
@@ -192,7 +196,12 @@ impl FundspEngine {
 fn spawn_engine(
     paused: bool,
     config: EngineConfig,
-) -> (Sender<Control>, thread::JoinHandle<()>, Vec<Snoop>, Vec<f32>) {
+) -> (
+    Sender<Control>,
+    thread::JoinHandle<()>,
+    Vec<Snoop>,
+    Vec<f32>,
+) {
     // Build engine on this thread so we can extract snoops (fronts) & depths.
     let (engine, snoops) = FundspEngine::new(&config);
     let depths = engine.depths.clone();
@@ -231,15 +240,18 @@ fn run_engine(
 // Tauri Commands
 // -----------------------------------------------------------------------------
 
-
 #[tauri::command]
 pub async fn intro_pause(state: State<'_, IntroEngineState>) -> Result<(), String> {
-    let mut inner = state.inner.lock().map_err(|_| "intro_engine_state_poisoned".to_string())?;
+    let mut inner = state
+        .inner
+        .lock()
+        .map_err(|_| "intro_engine_state_poisoned".to_string())?;
     if inner.paused {
         return Ok(());
     }
     if let Some(tx) = &inner.tx {
-        tx.send(Control::Pause).map_err(|e| format!("pause_send_failed: {e}"))?;
+        tx.send(Control::Pause)
+            .map_err(|e| format!("pause_send_failed: {e}"))?;
         inner.paused = true;
     }
     Ok(())
@@ -247,12 +259,16 @@ pub async fn intro_pause(state: State<'_, IntroEngineState>) -> Result<(), Strin
 
 #[tauri::command]
 pub async fn intro_resume(state: State<'_, IntroEngineState>) -> Result<(), String> {
-    let mut inner = state.inner.lock().map_err(|_| "intro_engine_state_poisoned".to_string())?;
+    let mut inner = state
+        .inner
+        .lock()
+        .map_err(|_| "intro_engine_state_poisoned".to_string())?;
     if !inner.paused {
         return Ok(());
     }
     if let Some(tx) = &inner.tx {
-        tx.send(Control::Resume).map_err(|e| format!("resume_send_failed: {e}"))?;
+        tx.send(Control::Resume)
+            .map_err(|e| format!("resume_send_failed: {e}"))?;
         inner.paused = false;
     }
     Ok(())
@@ -282,7 +298,10 @@ pub async fn intro_next_frame(
 
     // Lazy start engine if not running.
     {
-        let mut inner = state.inner.lock().map_err(|_| "intro_engine_state_poisoned".to_string())?;
+        let mut inner = state
+            .inner
+            .lock()
+            .map_err(|_| "intro_engine_state_poisoned".to_string())?;
         if !inner.started {
             let config = EngineConfig::default();
             let (tx, handle, snoops, _depths) = spawn_engine(inner.paused, config);
@@ -294,7 +313,10 @@ pub async fn intro_next_frame(
     }
 
     // Collect snapshot.
-    let mut inner = state.inner.lock().map_err(|_| "intro_engine_state_poisoned".to_string())?;
+    let mut inner = state
+        .inner
+        .lock()
+        .map_err(|_| "intro_engine_state_poisoned".to_string())?;
     if inner.snoops.is_empty() {
         return Err("intro_engine_not_ready".into());
     }

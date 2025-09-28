@@ -49,7 +49,7 @@ pub fn Menu(#[prop(into, optional)] compact: bool) -> impl IntoView {
 
     let items = RwSignal::new(vec![
         MenuItem::Navigate {
-            route: RouteId::Home,
+            route: RouteId::Play,
             icon: "play".to_string(),
             label: "Play".to_string(),
         },
@@ -120,8 +120,7 @@ fn MenuItemView(
                                 log::debug!("Trigger navigate to: {route}");
                                 trigger_navigate(Some(NavigateRequestPayload { route }));
                             }
-                            full_width=true
-                            class="relative pl-14"
+                            class="relative pl-14 w-full"
                             attr:aria-label=aria_label.clone()
                         >
                             <span class="absolute left-4 text-4xl">
@@ -139,8 +138,7 @@ fn MenuItemView(
                             on:click=move |_| {
                                 log::info!("Action triggered: {}", action);
                             }
-                            full_width=true
-                            class="relative pl-14"
+                            class="relative pl-14 w-full"
                             attr:aria-label=Some(aria_label.clone())
                         >
                             <span class="absolute left-4 text-4xl">

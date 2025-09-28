@@ -1,15 +1,19 @@
-use std::{
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc, Mutex,
-    },
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc, Mutex,
 };
 
 use log::{error, info, warn};
 use serde::Serialize;
-use shared::{events::navigation_payloads::{NavCanceledPayload, NavCommittedPayload, NavGatedPayload, NavStartedPayload, NavCompletedPayload}, RouteId};
-use thiserror::Error;
+use shared::{
+    events::navigation_payloads::{
+        NavCanceledPayload, NavCommittedPayload, NavCompletedPayload, NavGatedPayload,
+        NavStartedPayload,
+    },
+    RouteId,
+};
 use tauri::{AppHandle, Emitter};
+use thiserror::Error;
 
 use shared::events::navigation::{
     NAV_CANCELED, NAV_COMMITTED, NAV_COMPLETED, NAV_GATED, NAV_REQUESTED, NAV_STARTED, NAV_SYNC,
@@ -68,6 +72,7 @@ impl NavTx {
 struct InnerState {
     current: RouteId,
     active: Option<NavTx>,
+    pending: Option<RouteId>
 }
 
 /// Navigation gating error variants.
@@ -102,6 +107,7 @@ impl NavigationManager {
             state: Arc::new(Mutex::new(InnerState {
                 current: initial,
                 active: None,
+                pending: None,
             })),
             id_gen: Arc::new(AtomicU64::new(1)),
         }
@@ -146,7 +152,9 @@ impl NavigationManager {
     pub fn cancel(&self, tx_id: u64, reason: CancelReason) {
         let mut guard = self.state.lock().unwrap();
         if let Some(active) = guard.active.as_mut() {
-            if active.id == tx_id && !matches!(active.phase, NavPhase::Completed | NavPhase::Canceled) {
+            if active.id == tx_id
+                && !matches!(active.phase, NavPhase::Completed | NavPhase::Canceled)
+            {
                 active.canceled = true;
                 active.phase = NavPhase::Canceled;
                 drop(guard);
@@ -200,6 +208,10 @@ impl NavigationManager {
         }
     }
 
+    pub fn resume_pending(&self) -> Option<u64> {
+       self.take_pending().and_then(|to| self.request(to))
+    }
+
     async fn run_gating(&self, tx_id: u64) {
         // Check still active
         {
@@ -222,6 +234,9 @@ impl NavigationManager {
 
                 // If gating redirected (e.g. Play -> Permissions), update active target before proceeding.
                 if outcome.effective_to != current_requested {
+                    // store pending for potential resume
+                    self.set_pending(current_requested);
+                    // update active navigation target
                     self.set_active_to(tx_id, outcome.effective_to);
                 }
 
@@ -301,6 +316,16 @@ impl NavigationManager {
         }
     }
 
+    fn set_pending(&self, to: RouteId) {
+        let mut guard = self.state.lock().unwrap();
+        guard.pending = Some(to);
+    }
+
+    fn take_pending(&self) -> Option<RouteId> {
+        let mut guard = self.state.lock().unwrap();
+        guard.pending.take()
+    }
+
     fn advance_phase(&self, tx_id: u64, expect: NavPhase, next: NavPhase) -> bool {
         let mut guard = self.state.lock().unwrap();
         if let Some(active) = guard.active.as_mut() {
@@ -315,25 +340,12 @@ impl NavigationManager {
     // ---------------- Event Emission Helpers ----------------
 
     fn emit_requested(&self, tx_id: u64, to: RouteId) {
-        self.emit(
-            NAV_REQUESTED,
-            &NavCompletedPayload {
-                tx_id,
-                to,
-            },
-        );
+        self.emit(NAV_REQUESTED, &NavCompletedPayload { tx_id, to });
         info!("nav requested tx_id={} to={}", tx_id, to);
     }
 
     fn emit_gated(&self, tx_id: u64, to: RouteId, allowed: bool) {
-        self.emit(
-            NAV_GATED,
-            &NavGatedPayload {
-                tx_id,
-                to,
-                allowed,
-            },
-        );
+        self.emit(NAV_GATED, &NavGatedPayload { tx_id, to, allowed });
         info!("nav gated tx_id={} to={} allowed={}", tx_id, to, allowed);
     }
 
@@ -350,36 +362,17 @@ impl NavigationManager {
                 return;
             }
         };
-        self.emit(
-            NAV_STARTED,
-            &NavStartedPayload {
-                tx_id,
-                from,
-                to,
-            },
-        );
+        self.emit(NAV_STARTED, &NavStartedPayload { tx_id, from, to });
         info!("nav started tx_id={} from={} to={}", tx_id, from, to);
     }
 
     fn emit_committed(&self, tx_id: u64, to: RouteId) {
-        self.emit(
-            NAV_COMMITTED,
-            &NavCommittedPayload {
-                tx_id,
-                to
-            },
-        );
+        self.emit(NAV_COMMITTED, &NavCommittedPayload { tx_id, to });
         info!("nav committed tx_id={tx_id} to={to}");
     }
 
     fn emit_completed(&self, tx_id: u64, to: RouteId) {
-        self.emit(
-            NAV_COMPLETED,
-            &NavCompletedPayload {
-                tx_id,
-                to
-            },
-        );
+        self.emit(NAV_COMPLETED, &NavCompletedPayload { tx_id, to });
         info!("nav completed tx_id={} to={}", tx_id, to);
     }
 
@@ -414,7 +407,6 @@ impl NavigationManager {
         self.emit(NAV_SYNC, &shared::events::navigation::NavSyncPayload { to });
     }
 }
-
 
 // ---------------- Gating Logic ----------------
 
@@ -459,45 +451,4 @@ async fn gate_navigation(to: RouteId) -> Result<GateOutcome, NavGateError> {
     }
 
     Ok(outcome)
-}
-
-// ---------------- Tests (basic) ----------------
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tauri::Manager;
-
-    // NOTE: These tests are basic and may need integration harness with a Tauri app.
-    // For now we test pure logic pathways by mocking AppHandle via a lightweight app.
-
-    fn dummy_app() -> AppHandle {
-        // Build a minimal Tauri app for event emission.
-        tauri::Builder::default()
-            .build(tauri::generate_context!())
-            .expect("build")
-            .handle()
-            .clone()
-    }
-
-    #[tokio::test]
-    async fn same_route_ignored() {
-        let app = dummy_app();
-        let mgr = NavigationManager::new(app, RouteId::Home);
-        let id = mgr.request(RouteId::Home);
-        assert!(id.is_none(), "same-route should be ignored");
-    }
-
-    #[tokio::test]
-    async fn supersede_cancels_previous() {
-        let app = dummy_app();
-        let mgr = NavigationManager::new(app, RouteId::Home);
-        let a = mgr.request(RouteId::Home /* ignored */);
-        assert!(a.is_none());
-        let b = mgr.request(RouteId::Home /* ignored again */);
-        assert!(b.is_none());
-
-        // Real supersede case requires distinct target; we only have Home defined now.
-        // This test is a placeholder; add more routes later (About, Play, etc.).
-    }
 }

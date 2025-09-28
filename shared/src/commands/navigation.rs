@@ -8,6 +8,8 @@ pub const NAV_ENTER_DONE: &str = "navigation_enter_done";
 pub const NAV_LEAVE_DONE: &str = "navigation_leave_done";
 /// Request synchronization with backend route, typically after UI reloads.
 pub const NAV_SYNC: &str = "navigation_sync";
+/// Continue previously gated navigation (after async gating resolves).
+pub const NAV_RESUME: &str = "navigation_resume";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

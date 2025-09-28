@@ -31,6 +31,19 @@ pub fn About() -> impl IntoView {
                 <p class="text-xl max-w-[42ch] ">
                     "It hums with what you give it — loud, brief, true. A thousand crystal bowls shattering into light, a frequency tuned to the shape of your breath. Strike it, and it strikes back. Call it, and it calls you forward."
                 </p>
+                <p class="text-xl max-w-[42ch] ">
+                    "Red Siren is free and open source under the CC‑BY‑SA license — take the code, remix it, and share what you make. If it speaks to you, show some love:"
+                    <a
+                        class="github-button"
+                        href="https://github.com/anvlkv/red-siren"
+                        data-color-scheme="no-preference: dark; light: light; dark: dark;"
+                        data-icon="octicon-star"
+                        data-size="large"
+                        aria-label="Star anvlkv/red-siren on GitHub"
+                    >
+                        "Star on GitHub"
+                    </a>
+                </p>
                 <Button
                     on:click=move |_| {
                         navigate_trigger(
@@ -39,8 +52,7 @@ pub fn About() -> impl IntoView {
                             }),
                         )
                     }
-                    full_width=true
-                    class="relative pl-14"
+                    class="relative pl-14 w-full"
                     attr:aria-label="Donations"
                 >
                     <span class="absolute left-4 text-4xl">

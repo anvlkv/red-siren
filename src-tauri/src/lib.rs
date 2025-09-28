@@ -1,9 +1,3 @@
-use crate::navigation::new_manager;
-use navigation_manager::NavigationManager;
-use shared::RouteId;
-use tauri::Manager;
-use tokio::sync::Mutex;
-
 mod health;
 mod intro;
 mod navigation;
@@ -16,24 +10,24 @@ mod setup_mac_window;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
-    // Register the setup state
-    builder = builder.manage(Mutex::new(health::SetupState {
-        gui_ready: false,
-        backend_ready: false,
-    }));
-    // Intro engine state
-    builder = builder.manage(intro::IntroEngineState::new());
+
     builder = builder.setup(|app| {
         let config = app.config();
         log::debug!("App starting with config: {config:#?}");
 
         // Existing setup logic
         setup::app_setup(app)?;
-        // Initialize navigation manager with initial route (Home)
-        let nav_manager = new_manager(app.handle().clone(), RouteId::Home);
-        app.manage(nav_manager);
+        navigation::setup(app)?;
+        health::setup(app)?;
+        intro::setup(app)?;
+
         Ok(())
     });
+
+    /*
+     * ---------- Plugins ----------
+     */
+
     #[cfg(not(debug_assertions))]
     {
         builder = builder.plugin(tauri_plugin_prevent_default::init());
@@ -49,19 +43,28 @@ pub fn run() {
                 .build(),
         );
     }
+    builder = builder.plugin(tauri_plugin_store::Builder::new().build());
     builder = builder.plugin(tauri_plugin_log::Builder::new().build());
     builder = builder.plugin(tauri_plugin_opener::init());
+
+    /*
+     * ---------- Handlers ----------
+     */
+
     builder = builder.invoke_handler(tauri::generate_handler![
+        setup::update_window_appearance,
         health::health_on_gui_ready,
+        health::health_grant_mic_premission,
         navigation::navigation_request,
         navigation::navigation_leave_done,
         navigation::navigation_enter_done,
         navigation::navigation_sync,
-        setup::update_window_appearance,
+        navigation::navigation_resume,
         intro::intro_pause,
         intro::intro_resume,
         intro::intro_next_frame,
     ]);
+
     builder
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

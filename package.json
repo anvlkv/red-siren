@@ -19,9 +19,6 @@
   },
   "dependencies": {
     "@tailwindcss/cli": "^4.1.13",
-    "@tauri-apps/plugin-log": "^2.7.0",
-    "@tauri-apps/plugin-store": "^2.4.0",
-    "@tauri-apps/plugin-window-state": "^2.4.0",
     "tailwindcss": "^4.1.13"
   }
 }

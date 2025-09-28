@@ -7,6 +7,7 @@ mod icon;
 mod intro;
 mod menu;
 mod page;
+mod switch;
 mod tooltip;
 mod wavering;
 
@@ -17,6 +18,7 @@ pub use icon::*;
 pub use intro::*;
 pub use menu::*;
 pub use page::*;
+pub use switch::*;
 pub use tooltip::*;
 pub use wavering::*;
 

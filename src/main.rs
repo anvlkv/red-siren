@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+
 mod app;
 mod components;
 mod pages;

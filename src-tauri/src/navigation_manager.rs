@@ -441,14 +441,14 @@ async fn gate_navigation(to: RouteId) -> Result<GateOutcome, NavGateError> {
         effective_to: to,
     };
 
-    // Mic-permission gating policy:
-    // - If target is Play and mic permission is NOT granted, redirect to Permissions.
-    if to == RouteId::Play {
-        let has_mic = mic_permission_granted().unwrap_or(false);
-        if !has_mic {
-            outcome.effective_to = RouteId::Permissions;
-        }
-    }
+    // // Mic-permission gating policy:
+    // // - If target is Play and mic permission is NOT granted, redirect to Permissions.
+    // if to == RouteId::Play {
+    //     let has_mic = mic_permission_granted().unwrap_or(false);
+    //     if !has_mic {
+    //         outcome.effective_to = RouteId::Permissions;
+    //     }
+    // }
 
     Ok(outcome)
 }

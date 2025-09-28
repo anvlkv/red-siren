@@ -1,11 +1,9 @@
 use crate::components::Page;
 use leptos::prelude::*;
-use leptos_use::use_preferred_dark;
 use shared::RouteId;
 
 #[component]
 pub fn Donate() -> impl IntoView {
-    let is_dark = use_preferred_dark();
     view! {
         <Page route_id=RouteId::Donate title="Donate" route_back=RouteId::About>
             <div class="flex flex-col items-center justify-center gap-6">
@@ -18,38 +16,19 @@ pub fn Donate() -> impl IntoView {
                 </p>
 
                 <div class="contents">
-                    {move || {
-                        if is_dark() {
-                            view! {
-                                <a
-                                    href="https://nowpayments.io/donation?api_key=5014fba8-64de-4526-84c1-527cd621d274"
-                                    target="_blank"
-                                    rel="noreferrer noopener"
-                                >
-                                    <img
-                                        src="https://nowpayments.io/images/embeds/donation-button-black.svg"
-                                        alt="Crypto donation button by NOWPayments"
-                                    />
-                                </a>
-                            }
-                        } else {
-                            view! {
-                                <a
-                                    href="https://nowpayments.io/donation?api_key=5014fba8-64de-4526-84c1-527cd621d274"
-                                    target="_blank"
-                                    rel="noreferrer noopener"
-                                >
-                                    <img
-                                        src="https://nowpayments.io/images/embeds/donation-button-white.svg"
-                                        alt="Cryptocurrency & Bitcoin donation button by NOWPayments"
-                                    />
-                                </a>
-                            }
-                        }
-                    }}
+                    <a
+                        href="https://nowpayments.io/donation?api_key=5014fba8-64de-4526-84c1-527cd621d274"
+                        target="_blank"
+                        rel="noreferrer noopener"
+                    >
+                        <img
+                            src="https://nowpayments.io/images/embeds/donation-button-black.svg"
+                            alt="Crypto donation button by NOWPayments"
+                        />
+                    </a>
                 </div>
                 <p class="text-xl max-w-[42ch]">
-                    "Your support helps me keep going. It fuels the time, care, and resources needed to craft each instrument and bring this project to life."
+                    "Your support helps me keep going. It fuels the time, care, and resources bringing this project to life."
                 </p>
             </div>
         </Page>

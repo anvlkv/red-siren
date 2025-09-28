@@ -34,14 +34,12 @@ pub fn About() -> impl IntoView {
                 <p class="text-xl max-w-[42ch] ">
                     "Red Siren is free and open source under the CC‑BY‑SA license — take the code, remix it, and share what you make. If it speaks to you, show some love:"
                     <a
-                        class="github-button"
+                        class="font-bold ml-2 underline"
                         href="https://github.com/anvlkv/red-siren"
-                        data-color-scheme="no-preference: dark; light: light; dark: dark;"
-                        data-icon="octicon-star"
-                        data-size="large"
+                        target="_blank"
                         aria-label="Star anvlkv/red-siren on GitHub"
                     >
-                        "Star on GitHub"
+                        "Star me on GitHub"
                     </a>
                 </p>
                 <Button

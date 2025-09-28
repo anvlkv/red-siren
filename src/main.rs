@@ -1,7 +1,6 @@
-#![feature(generic_const_exprs)]
-
 mod app;
 mod components;
+mod nav_commit_cache;
 mod pages;
 mod routes;
 mod util;

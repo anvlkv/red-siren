@@ -7,7 +7,7 @@ use tauri_use::{
     UseTauriWithReturn,
 };
 
-use crate::{components::Intro, routes};
+use crate::{components::Intro, nav_commit_cache::NavCommitCache, routes};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ActiveWindowContext(pub Option<(f64, f64)>);
@@ -23,6 +23,16 @@ pub fn App() -> impl IntoView {
         ..
     } = use_listen::<()>(EventType::Custom(shared::events::health::APP_READY));
 
+    let UseWindowSizeReturn { width, height } = use_window_size();
+
+    let UseTauriWithReturn {
+        error: nav_bootstrap_error,
+        trigger: bootstrap_trigger,
+        ..
+    } = use_command::<()>(shared::commands::navigation::NAV_BOOTSTRAP);
+
+    let (window, set_window) = signal(ActiveWindowContext(None));
+
     Effect::new(move |_| {
         open();
 
@@ -37,13 +47,17 @@ pub fn App() -> impl IntoView {
                 shared::events::health::APP_READY
             )
         }
+
+        if let Some(err) = nav_bootstrap_error() {
+            log::error!(
+                "Error invoking {}: {err}",
+                shared::commands::navigation::NAV_BOOTSTRAP
+            );
+        }
     });
 
-    let UseWindowSizeReturn { width, height } = use_window_size();
-
-    let (window, set_window) = signal(ActiveWindowContext(None));
-
     provide_context(window);
+    provide_context(NavCommitCache::default());
 
     Effect::new(move |_| {
         if let Some(size) = event_id()
@@ -65,6 +79,8 @@ pub fn App() -> impl IntoView {
                 size.0,
                 size.1
             );
+            // Bootstrap initial navigation transaction (tx_id=0)
+            bootstrap_trigger(Some(()));
         }
     });
 

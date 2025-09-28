@@ -55,6 +55,7 @@ pub fn run() {
         setup::update_window_appearance,
         health::health_on_gui_ready,
         health::health_grant_mic_premission,
+        navigation::navigation_bootstrap,
         navigation::navigation_request,
         navigation::navigation_leave_done,
         navigation::navigation_enter_done,

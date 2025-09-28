@@ -8,6 +8,8 @@ pub const NAV_ENTER_DONE: &str = "navigation_enter_done";
 pub const NAV_LEAVE_DONE: &str = "navigation_leave_done";
 /// Request synchronization with backend route, typically after UI reloads.
 pub const NAV_SYNC: &str = "navigation_sync";
+/// Bootstrap initial navigation transaction (tx_id=0) after listeners are mounted.
+pub const NAV_BOOTSTRAP: &str = "navigation_bootstrap";
 /// Continue previously gated navigation (after async gating resolves).
 pub const NAV_RESUME: &str = "navigation_resume";
 

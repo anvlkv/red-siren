@@ -7,6 +7,7 @@ use std::sync::OnceLock;
 use tauri_use::{use_invoke_with_args, use_listen, EventType, UseListenReturn, UseTauriWithReturn};
 
 use crate::components::{Button, Card, CardAnimation, Icon, UiSize, UiVariant};
+use crate::nav_commit_cache::use_nav_commit_cache;
 
 const BASE_ANIMATION_DURATION_MS: f64 = 600.0;
 
@@ -142,9 +143,11 @@ pub fn Page(
         })
     });
 
+    // Optional cache (None if not provided – then we simply skip fallback enter animation)
+    let nav_commit_cache = use_nav_commit_cache();
     let leave_tx_id = Signal::derive(move || {
         started().as_ref().and_then(|ev| {
-            if ev.from == route_id {
+            if ev.from == route_id && ev.from != ev.to {
                 Some(ev.tx_id)
             } else {
                 None
@@ -179,7 +182,7 @@ pub fn Page(
 
             // Wait for a valid window height before triggering appear (cold mount only)
             let h = height() as f32;
-            if h > 0.0 && committed_tx_id().is_none() {
+            if h > 0.0 {
                 // Scale translation and duration by height (clamped)
                 let y_scale = (h / config.base_height).clamp(0.75, 1.25);
                 let y_from_px = config.base_y_px * y_scale;
@@ -212,6 +215,10 @@ pub fn Page(
     // Queue ENTER animation on commit to this route
     Effect::new(move |_| {
         if let Some(tx) = committed_tx_id() {
+            if tx == 0 {
+                // Bootstrap committed (tx_id=0) -> Appear animation will drive enter_done.
+                return;
+            }
             // Continuous rotation: backward enters from right, forward enters from left
             let from_deg = if is_backward_navigation() {
                 90.0
@@ -235,6 +242,39 @@ pub fn Page(
         }
     });
 
+    // Fallback ENTER animation if this page missed the live NAV_COMMITTED event (commit happened before mount)
+    Effect::new(move |_| {
+        if committed_tx_id().is_none() {
+            if let Some(cache) = nav_commit_cache.clone() {
+                if let Some(payload) = cache.get() {
+                    if payload.to == route_id {
+                        // Avoid overriding an already queued animation & skip bootstrap (tx_id=0 handled by Appear)
+                        if start_animation().is_none() && payload.tx_id != 0 {
+                            let from_deg = if is_backward_navigation() {
+                                90.0
+                            } else {
+                                -90.0
+                            };
+                            set_start_animation(Some((
+                                payload.tx_id,
+                                CardAnimation::EnterY {
+                                    from_deg,
+                                    to_deg: 0.0,
+                                    ms: BASE_ANIMATION_DURATION_MS,
+                                },
+                            )));
+                            log::debug!(
+                                "Page({:?}): fallback ENTER tx_id={} (backward={})",
+                                route_id,
+                                payload.tx_id,
+                                is_backward_navigation()
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    });
     // Queue LEAVE animation on navigation start from this route
     Effect::new(move |_| {
         if let Some(tx) = leave_tx_id() {
@@ -321,7 +361,15 @@ pub fn Page(
                                     }),
                                 );
                             }
-                            CardAnimation::Appear { .. } => {}
+                            CardAnimation::Appear { .. } => {
+                                if tx_id == 0 {
+                                    enter_done_trigger(
+                                        Some(shared::commands::navigation::NavTxPayload {
+                                            tx_id,
+                                        }),
+                                    );
+                                }
+                            }
                         }
                     }
                 })

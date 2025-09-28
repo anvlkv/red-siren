@@ -17,6 +17,18 @@ pub fn can_navigate(_to: RouteId) -> bool {
     true
 }
 
+/// Bootstrap initial navigation transaction (tx_id=0).
+/// Invoke once from the UI after event listeners are mounted so the
+/// initial Home page appear animation can complete the transaction.
+/// Idempotent: subsequent calls short‑circuit and return 0.
+#[tauri::command]
+pub async fn navigation_bootstrap(
+    manager: State<'_, NavigationManager>,
+) -> Result<(), String> {
+    _ = manager.bootstrap_initial_transaction();
+    Ok(())
+}
+
 /// UI signals that the leave animation has completed; proceed to commit.
 #[tauri::command]
 pub async fn navigation_leave_done(

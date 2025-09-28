@@ -7,8 +7,11 @@ use leptos_router::{
 };
 use leptos_router::{NavigateOptions, StaticSegment};
 use shared::RouteId;
-use tauri_use::{use_invoke_with_args, use_listen, EventType, UseListenReturn, UseTauriWithReturn};
+use tauri_use::{
+    use_command, use_invoke_with_args, use_listen, EventType, UseListenReturn, UseTauriWithReturn,
+};
 
+use crate::nav_commit_cache::expect_nav_commit_cache;
 use crate::pages::{About, Donate, Home, Play, Tune};
 use crate::{
     components::{AppError, ErrorTemplate},
@@ -36,6 +39,12 @@ pub fn AppRoutes() -> impl IntoView {
         shared::commands::navigation::NAV_SYNC,
     );
 
+    let UseTauriWithReturn {
+        error: nav_bootstrap_error,
+        trigger: bootstrap_trigger,
+        ..
+    } = use_command::<()>(shared::commands::navigation::NAV_BOOTSTRAP);
+
     // Listen for navigation_sync (UI reload alignment)
     let UseListenReturn {
         data: sync,
@@ -54,6 +63,8 @@ pub fn AppRoutes() -> impl IntoView {
         trigger_nav_sync(Some(shared::commands::navigation::NavSyncRequestPayload {
             route: RouteId::from_str(&current).unwrap_or(RouteId::Home),
         }));
+        // Bootstrap initial navigation transaction (tx_id=0)
+        bootstrap_trigger(Some(()));
     });
 
     Effect::new(move |_| {
@@ -75,10 +86,20 @@ pub fn AppRoutes() -> impl IntoView {
                 shared::commands::navigation::NAV_SYNC
             );
         }
+        if let Some(err) = nav_bootstrap_error() {
+            log::error!(
+                "Error invoking {}: {err}",
+                shared::commands::navigation::NAV_BOOTSTRAP
+            );
+        }
     });
+
+    let ncx_cache = expect_nav_commit_cache();
 
     Effect::new(move |_| {
         if let Some(payload) = committed().as_ref() {
+            // Store payload so target page can synthesize enter animation if it missed live event
+            ncx_cache.set(Some(payload.clone()));
             navigate(payload.to.into(), NavigateOptions::default());
         }
     });

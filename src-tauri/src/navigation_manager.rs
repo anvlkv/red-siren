@@ -212,6 +212,60 @@ impl NavigationManager {
        self.take_pending().and_then(|to| self.request(to))
     }
 
+    /// Bootstrap the initial route as a full navigation transaction (tx_id=0).
+    /// Emits requested -> gated -> started -> committed (from==to) and leaves the tx
+    /// in Committing phase so UI can finish it with enter_done (after appear animation).
+    /// Idempotent: if any tx already started (id_gen advanced) or an active tx id=0 exists,
+    /// it short-circuits and returns 0.
+    pub fn bootstrap_initial_transaction(&self) -> u64 {
+        // Detect prior bootstrap or progressed id space.
+        {
+            let guard = self.state.lock().unwrap();
+            if self.id_gen.load(Ordering::SeqCst) > 1 {
+                if let Some(active) = &guard.active {
+                    if active.id == 0 {
+                        return 0;
+                    }
+                }
+                return 0;
+            }
+        }
+
+        let current = self.current_route();
+        let tx_id = 0;
+
+        {
+            let mut guard = self.state.lock().unwrap();
+            guard.active = Some(NavTx::new(tx_id, current, current));
+        }
+
+        // Synchronous lifecycle (no async gating for bootstrap)
+        self.emit_requested(tx_id, current);
+        self.emit_gated(tx_id, current, true);
+
+        // Advance to Leaving (mirrors post-gating phase)
+        {
+            let mut guard = self.state.lock().unwrap();
+            if let Some(active) = guard.active.as_mut() {
+                if active.id == tx_id {
+                    active.phase = NavPhase::Leaving;
+                }
+            }
+        }
+
+        self.emit_started(tx_id);
+
+        // Immediate commit (no actual "leave" animation for an initial page)
+        self.commit(tx_id);
+
+        info!(
+            "bootstrap initial navigation established tx_id={} route={}",
+            tx_id, current
+        );
+
+        tx_id
+    }
+
     async fn run_gating(&self, tx_id: u64) {
         // Check still active
         {

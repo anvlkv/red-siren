@@ -1,4 +1,4 @@
-use crate::components::{Button, Icon, Page};
+use crate::components::{Button, Icon, Page, UiVariant};
 use leptos::prelude::*;
 use shared::{commands::health::MicPermissionPayload, RouteId};
 use tauri_use::{use_command, use_invoke, UseTauriReturn, UseTauriWithReturn};
@@ -85,7 +85,7 @@ pub fn Permissions() -> impl IntoView {
                         "Allow"
                     </Button>
                     <Button
-                        variant="Outline".to_string()
+                        variant=UiVariant::Outline
                         on:click=move |_| {
                             mic_permission_trigger(
                                 Some((

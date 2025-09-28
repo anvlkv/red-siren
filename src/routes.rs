@@ -9,7 +9,7 @@ use leptos_router::{NavigateOptions, StaticSegment};
 use shared::RouteId;
 use tauri_use::{use_invoke_with_args, use_listen, EventType, UseListenReturn, UseTauriWithReturn};
 
-use crate::pages::{About, Donate, Home};
+use crate::pages::{About, Donate, Home, Play, Tune};
 use crate::{
     components::{AppError, ErrorTemplate},
     pages::Permissions,
@@ -95,28 +95,12 @@ pub fn AppRoutes() -> impl IntoView {
             outside_errors.insert_with_default_key(AppError::NotFound);
             view! { <ErrorTemplate outside_errors /> }.into_view()
         }>
-            <Route path=(StaticSegment(RouteId::Home.as_ref()),) view=move || view! { <Home /> } />
-            <Route
-                path=(StaticSegment(RouteId::About.as_ref()),)
-                view=move || view! { <About /> }
-            />
-            <Route
-                path=(StaticSegment(RouteId::Donate.as_ref()),)
-                view=move || view! { <Donate /> }
-            />
-            <Route
-                path=(StaticSegment(RouteId::Play.as_ref()),)
-                view=move || view! { <div>"Play"</div> }
-            />
-            <Route
-                path=(StaticSegment(RouteId::Tune.as_ref()),)
-                view=move || view! { <div>"Tune"</div> }
-            />
-            <Route
-                path=(StaticSegment(RouteId::Permissions.as_ref()),)
-                view=move || view! { <Permissions /> }
-            />
-
+            <Route path=(StaticSegment(RouteId::Home.as_ref()),) view=Home />
+            <Route path=(StaticSegment(RouteId::Play.as_ref()),) view=Play />
+            <Route path=(StaticSegment(RouteId::Tune.as_ref()),) view=Tune />
+            <Route path=(StaticSegment(RouteId::About.as_ref()),) view=About />
+            <Route path=(StaticSegment(RouteId::Donate.as_ref()),) view=Donate />
+            <Route path=(StaticSegment(RouteId::Permissions.as_ref()),) view=Permissions />
         </Routes>
     }
 }

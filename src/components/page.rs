@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 use tauri_use::{use_invoke_with_args, use_listen, EventType, UseListenReturn, UseTauriWithReturn};
 
-use crate::components::{Button, Card, CardAnimation, Icon};
+use crate::components::{Button, Card, CardAnimation, Icon, UiSize, UiVariant};
 
 const BASE_ANIMATION_DURATION_MS: f64 = 600.0;
 
@@ -328,8 +328,8 @@ pub fn Page(
                 <div class="flex items-center justify-between gap-4 mb-6">
                     <Show when=move || route_back.is_some()>
                         <Button
-                            size="Md".to_string()
-                            variant="Outline".to_string()
+                            size=UiSize::Md
+                            variant=UiVariant::Outline
                             on:click=move |_| {
                                 navigate_trigger(
                                     route_back.map(|route| NavigateRequestPayload { route }),

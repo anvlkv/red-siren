@@ -3,7 +3,7 @@ use leptos::prelude::*;
 use shared::{commands::navigation::NavigateRequestPayload, navigation::RouteId};
 use tauri_use::{use_invoke_with_args, UseTauriWithReturn};
 
-use crate::components::{Button, Icon, Tooltip};
+use crate::components::{Button, Icon, Tooltip, UiSize};
 
 #[derive(Clone, Debug)]
 pub enum MenuItem {
@@ -173,7 +173,7 @@ fn MenuItemCompactView(
                                 }
                                 round=true
                                 square=true
-                                size=crate::components::ButtonSize::Lg
+                                size=UiSize::Lg
                                 attr:aria-label=aria_label.clone()
                             >
                                 <span class="text-4xl leading-none">
@@ -194,7 +194,7 @@ fn MenuItemCompactView(
                                 }
                                 round=true
                                 square=true
-                                size=crate::components::ButtonSize::Lg
+                                size=UiSize::Lg
                                 attr:aria-label=aria_label.clone()
                             >
                                 <span class="text-4xl leading-none">

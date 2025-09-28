@@ -36,7 +36,7 @@ use std::{
     time::Duration,
 };
 
-use tauri::{App, AppHandle, Manager, State};
+use tauri::{App, Manager, State};
 
 use ::shared::events::intro::{IntroSnoopBatchPayload, IntroSnoopSample};
 use fundsp::hacker32::*; // brings in busi, join, U-types, oscillators, dc, etc.

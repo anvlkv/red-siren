@@ -349,6 +349,7 @@ pub fn Card(
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum CardVariant {
     #[default]
     Elevated,
@@ -357,6 +358,7 @@ pub enum CardVariant {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum CardPadding {
     None,
     Sm,

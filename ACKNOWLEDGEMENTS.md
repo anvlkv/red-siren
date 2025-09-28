@@ -1,0 +1,1057 @@
+# Acknowledgements
+
+I hereby express my sincere gratitude and appreciation for the code contributions made by other individuals to my direct dependencies. Without their tireless efforts, my work would not be possible, and I am deeply grateful for their contributions to the advancement of our collective knowledge.
+
+## Thank you 🙏
+
+- **[alexcrichton](https://github.com/alexcrichton)** for their conributions to: `console_error_panic_hook`, `log`, `num-complex`, `serde`, `tokio`, `wasm-bindgen`
+- **[dtolnay](https://github.com/dtolnay)** for their conributions to: `json`, `log`, `serde`, `thiserror`, `tokio`
+- **[frewsxcv](https://github.com/frewsxcv)** for their conributions to: `json`, `log`, `rust-smallvec`, `tokio`, `wasm-bindgen`
+- **[erickt](https://github.com/erickt)** for their conributions to: `json`, `num-complex`, `serde`, `tokio`
+- **[Baptistemontan](https://github.com/Baptistemontan)** for their conributions to: `leptos`, `leptos-use`, `serde`
+- **[Marwes](https://github.com/Marwes)** for their conributions to: `rust-smallvec`, `serde`, `tokio`
+- **[Ralith](https://github.com/Ralith)** for their conributions to: `cpal`, `fundsp`, `tokio`
+- **[Thomasdezeeuw](https://github.com/Thomasdezeeuw)** for their conributions to: `log`, `serde`, `tokio`
+- **[Xaeroxe](https://github.com/Xaeroxe)** for their conributions to: `num-complex`, `rust-smallvec`, `serde`
+- **[c410-f3r](https://github.com/c410-f3r)** for their conributions to: `rust-smallvec`, `serde`, `wasm-bindgen`
+- **[dbrgn](https://github.com/dbrgn)** for their conributions to: `log`, `tokio`, `wasm-bindgen`
+- **[homu](https://github.com/homu)** for their conributions to: `json`, `num-complex`, `serde`
+- **[joshtriplett](https://github.com/joshtriplett)** for their conributions to: `num-complex`, `tokio`, `wasm-bindgen`
+- **[jplatte](https://github.com/jplatte)** for their conributions to: `json`, `serde`, `strum`
+- **[killercup](https://github.com/killercup)** for their conributions to: `json`, `serde`, `wasm-bindgen`
+- **[lnicola](https://github.com/lnicola)** for their conributions to: `json`, `tokio`, `wasm-bindgen`
+- **[maccesch](https://github.com/maccesch)** for their conributions to: `leptos`, `leptos-use`, `wasm-bindgen`
+- **[madsmtm](https://github.com/madsmtm)** for their conributions to: `cpal`, `plugins-workspace`, `tauri`
+- **[mbrubeck](https://github.com/mbrubeck)** for their conributions to: `log`, `num-complex`, `rust-smallvec`
+- **[nox](https://github.com/nox)** for their conributions to: `json`, `rust-smallvec`, `serde`
+- **[richard-uk1](https://github.com/richard-uk1)** for their conributions to: `cpal`, `serde`, `wasm-bindgen`
+- **[sfackler](https://github.com/sfackler)** for their conributions to: `log`, `serde`, `tokio`
+- **[3lpsy](https://github.com/3lpsy)** for their conributions to: `plugins-workspace`, `tauri`
+- **[Beanow](https://github.com/Beanow)** for their conributions to: `plugins-workspace`, `tauri`
+- **[Byron](https://github.com/Byron)** for their conributions to: `serde`, `tokio`
+- **[CorvusPrudens](https://github.com/CorvusPrudens)** for their conributions to: `leptos`, `leptos-use`
+- **[DanikVitek](https://github.com/DanikVitek)** for their conributions to: `leptos`, `leptos-use`
+- **[Darksonn](https://github.com/Darksonn)** for their conributions to: `num-complex`, `tokio`
+- **[Diggsey](https://github.com/Diggsey)** for their conributions to: `json`, `tokio`
+- **[FabianLars](https://github.com/FabianLars)** for their conributions to: `plugins-workspace`, `tauri`
+- **[Jake-Shadle](https://github.com/Jake-Shadle)** for their conributions to: `cpal`, `tokio`
+- **[JonasKruckenberg](https://github.com/JonasKruckenberg)** for their conributions to: `plugins-workspace`, `tauri`
+- **[Legend-Master](https://github.com/Legend-Master)** for their conributions to: `plugins-workspace`, `tauri`
+- **[Liamolucko](https://github.com/Liamolucko)** for their conributions to: `serde-wasm-bindgen`, `wasm-bindgen`
+- **[Manishearth](https://github.com/Manishearth)** for their conributions to: `rust-smallvec`, `serde`
+- **[Osspial](https://github.com/Osspial)** for their conributions to: `mint`, `serde`
+- **[RReverser](https://github.com/RReverser)** for their conributions to: `serde-wasm-bindgen`, `wasm-bindgen`
+- **[SimonSapin](https://github.com/SimonSapin)** for their conributions to: `rust-smallvec`, `serde`
+- **[SleeplessOne1917](https://github.com/SleeplessOne1917)** for their conributions to: `leptos`, `leptos-use`
+- **[TannerRogalsky](https://github.com/TannerRogalsky)** for their conributions to: `serde`, `wasm-bindgen`
+- **[ahqsoftwares](https://github.com/ahqsoftwares)** for their conributions to: `plugins-workspace`, `tauri`
+- **[amrbashir](https://github.com/amrbashir)** for their conributions to: `plugins-workspace`, `tauri`
+- **[arthurprs](https://github.com/arthurprs)** for their conributions to: `rust-smallvec`, `tokio`
+- **[ashleygwilliams](https://github.com/ashleygwilliams)** for their conributions to: `serde-wasm-bindgen`, `wasm-bindgen`
+- **[atouchet](https://github.com/atouchet)** for their conributions to: `log`, `serde`
+- **[aturon](https://github.com/aturon)** for their conributions to: `num-complex`, `tokio`
+- **[betamos](https://github.com/betamos)** for their conributions to: `plugins-workspace`, `tauri`
+- **[bicarlsen](https://github.com/bicarlsen)** for their conributions to: `leptos`, `leptos-use`
+- **[bluss](https://github.com/bluss)** for their conributions to: `num-complex`, `rust-smallvec`
+- **[cijiugechu](https://github.com/cijiugechu)** for their conributions to: `plugins-workspace`, `tauri`
+- **[conradludgate](https://github.com/conradludgate)** for their conributions to: `json`, `tokio`
+- **[cuviper](https://github.com/cuviper)** for their conributions to: `json`, `num-complex`
+- **[danielhenrymantilla](https://github.com/danielhenrymantilla)** for their conributions to: `tokio`, `wasm-bindgen`
+- **[daxpedda](https://github.com/daxpedda)** for their conributions to: `tokio`, `wasm-bindgen`
+- **[debris](https://github.com/debris)** for their conributions to: `serde`, `tokio`
+- **[dekellum](https://github.com/dekellum)** for their conributions to: `log`, `tokio`
+- **[dflemstr](https://github.com/dflemstr)** for their conributions to: `json`, `wasm-bindgen`
+- **[dklassic](https://github.com/dklassic)** for their conributions to: `plugins-workspace`, `tauri`
+- **[dpc](https://github.com/dpc)** for their conributions to: `rust-smallvec`, `tokio`
+- **[est31](https://github.com/est31)** for their conributions to: `cpal`, `num-complex`
+- **[fitzgen](https://github.com/fitzgen)** for their conributions to: `console_error_panic_hook`, `wasm-bindgen`
+- **[halzy](https://github.com/halzy)** for their conributions to: `tokio`, `wasm-bindgen`
+- **[huonw](https://github.com/huonw)** for their conributions to: `log`, `num-complex`
+- **[i-c-b](https://github.com/i-c-b)** for their conributions to: `plugins-workspace`, `tauri`
+- **[ifiokjr](https://github.com/ifiokjr)** for their conributions to: `leptos`, `leptos-use`
+- **[jbolda](https://github.com/jbolda)** for their conributions to: `plugins-workspace`, `tauri`
+- **[jonhoo](https://github.com/jonhoo)** for their conributions to: `serde`, `tokio`
+- **[joshka](https://github.com/joshka)** for their conributions to: `strum`, `tokio`
+- **[jwilm](https://github.com/jwilm)** for their conributions to: `json`, `serde`
+- **[kandrelczyk](https://github.com/kandrelczyk)** for their conributions to: `plugins-workspace`, `tauri`
+- **[kornelski](https://github.com/kornelski)** for their conributions to: `tauri`, `tokio`
+- **[lcnr](https://github.com/lcnr)** for their conributions to: `rust-smallvec`, `wasm-bindgen`
+- **[lpotthast](https://github.com/lpotthast)** for their conributions to: `leptos`, `leptos-use`
+- **[lucasfernog](https://github.com/lucasfernog)** for their conributions to: `plugins-workspace`, `tauri`
+- **[lucasfernog-crabnebula](https://github.com/lucasfernog-crabnebula)** for their conributions to: `plugins-workspace`, `tauri`
+- **[luckynumberke7in](https://github.com/luckynumberke7in)** for their conributions to: `leptos`, `leptos-use`
+- **[mahmoud-eltahawy](https://github.com/mahmoud-eltahawy)** for their conributions to: `leptos`, `leptos-use`
+- **[martinfrances107](https://github.com/martinfrances107)** for their conributions to: `leptos`, `tauri`
+- **[mathstuf](https://github.com/mathstuf)** for their conributions to: `thiserror`, `tokio`
+- **[mitchmindtree](https://github.com/mitchmindtree)** for their conributions to: `cpal`, `num-complex`
+- **[mondeja](https://github.com/mondeja)** for their conributions to: `leptos`, `leptos-use`
+- **[najamelan](https://github.com/najamelan)** for their conributions to: `tokio`, `wasm-bindgen`
+- **[naman-crabnebula](https://github.com/naman-crabnebula)** for their conributions to: `plugins-workspace`, `tauri`
+- **[nivkner](https://github.com/nivkner)** for their conributions to: `log`, `tokio`
+- **[nyurik](https://github.com/nyurik)** for their conributions to: `log`, `thiserror`
+- **[oli-obk](https://github.com/oli-obk)** for their conributions to: `json`, `serde`
+- **[olivierlemasle](https://github.com/olivierlemasle)** for their conributions to: `plugins-workspace`, `tauri`
+- **[osiewicz](https://github.com/osiewicz)** for their conributions to: `json`, `serde`
+- **[paolobarbolini](https://github.com/paolobarbolini)** for their conributions to: `strum`, `tokio`
+- **[paul-hansen](https://github.com/paul-hansen)** for their conributions to: `cpal`, `leptos`
+- **[pewsheen](https://github.com/pewsheen)** for their conributions to: `plugins-workspace`, `tauri`
+- **[rakshith-ravi](https://github.com/rakshith-ravi)** for their conributions to: `leptos`, `leptos-use`
+- **[renato-zannon](https://github.com/renato-zannon)** for their conributions to: `num-complex`, `serde`
+- **[rex4539](https://github.com/rex4539)** for their conributions to: `cpal`, `tauri`
+- **[sabify](https://github.com/sabify)** for their conributions to: `leptos`, `leptos-use`
+- **[saethlin](https://github.com/saethlin)** for their conributions to: `rust-smallvec`, `serde`
+- **[seanaye](https://github.com/seanaye)** for their conributions to: `leptos`, `leptos-use`
+- **[sectore](https://github.com/sectore)** for their conributions to: `leptos`, `leptos-use`
+- **[shepmaster](https://github.com/shepmaster)** for their conributions to: `serde`, `tokio`
+- **[simonhyll](https://github.com/simonhyll)** for their conributions to: `plugins-workspace`, `tauri`
+- **[sjud](https://github.com/sjud)** for their conributions to: `leptos`, `wasm-bindgen`
+- **[srijs](https://github.com/srijs)** for their conributions to: `json`, `tokio`
+- **[steveklabnik](https://github.com/steveklabnik)** for their conributions to: `log`, `num-complex`
+- **[sugar700](https://github.com/sugar700)** for their conributions to: `rust-smallvec`, `serde`
+- **[taiki-e](https://github.com/taiki-e)** for their conributions to: `serde`, `tokio`
+- **[thewh1teagle](https://github.com/thewh1teagle)** for their conributions to: `plugins-workspace`, `tauri`
+- **[tillmann-crabnebula](https://github.com/tillmann-crabnebula)** for their conributions to: `plugins-workspace`, `tauri`
+- **[tomaka](https://github.com/tomaka)** for their conributions to: `cpal`, `rust-smallvec`
+- **[tweidinger](https://github.com/tweidinger)** for their conributions to: `plugins-workspace`, `tauri`
+- **[vdang-crabnebula](https://github.com/vdang-crabnebula)** for their conributions to: `plugins-workspace`, `tauri`
+- **[veigaribo](https://github.com/veigaribo)** for their conributions to: `leptos`, `leptos-use`
+- **[vorot93](https://github.com/vorot93)** for their conributions to: `serde`, `tokio`
+- **[zakstucke](https://github.com/zakstucke)** for their conributions to: `leptos`, `leptos-use`
+- **[0323pin](https://github.com/0323pin)** for their conributions to: `cpal`
+- **[0nkery](https://github.com/0nkery)** for their conributions to: `serde`
+- **[0xPoe](https://github.com/0xPoe)** for their conributions to: `tokio`
+- **[1tgr](https://github.com/1tgr)** for their conributions to: `rust-smallvec`
+- **[39zde](https://github.com/39zde)** for their conributions to: `tauri`
+- **[3Hren](https://github.com/3Hren)** for their conributions to: `tokio`
+- **[46bit](https://github.com/46bit)** for their conributions to: `serde`
+- **[95th](https://github.com/95th)** for their conributions to: `tokio`
+- **[A-kirami](https://github.com/A-kirami)** for their conributions to: `tauri`
+- **[ADD-SP](https://github.com/ADD-SP)** for their conributions to: `tokio`
+- **[AaronChen0](https://github.com/AaronChen0)** for their conributions to: `tokio`
+- **[AlexErrant](https://github.com/AlexErrant)** for their conributions to: `wasm-bindgen`
+- **[AlexTMjugador](https://github.com/AlexTMjugador)** for their conributions to: `tauri`
+- **[Amanieu](https://github.com/Amanieu)** for their conributions to: `log`
+- **[Andreybest](https://github.com/Andreybest)** for their conributions to: `tauri`
+- **[AndyGauge](https://github.com/AndyGauge)** for their conributions to: `log`
+- **[AngelicosPhosphoros](https://github.com/AngelicosPhosphoros)** for their conributions to: `log`
+- **[Ar4ys](https://github.com/Ar4ys)** for their conributions to: `leptos`
+- **[Arian8j2](https://github.com/Arian8j2)** for their conributions to: `strum`
+- **[ArtemGr](https://github.com/ArtemGr)** for their conributions to: `cpal`
+- **[Arzte](https://github.com/Arzte)** for their conributions to: `json`
+- **[AtheMathmo](https://github.com/AtheMathmo)** for their conributions to: `num-complex`
+- **[Atul9](https://github.com/Atul9)** for their conributions to: `rust-smallvec`
+- **[AustinJ235](https://github.com/AustinJ235)** for their conributions to: `cpal`
+- **[BakerNet](https://github.com/BakerNet)** for their conributions to: `leptos-use`
+- **[BenoitRanque](https://github.com/BenoitRanque)** for their conributions to: `tauri`
+- **[BillGoldenWater](https://github.com/BillGoldenWater)** for their conributions to: `tauri`
+- **[Binero](https://github.com/Binero)** for their conributions to: `serde`
+- **[BraulioVM](https://github.com/BraulioVM)** for their conributions to: `tokio`
+- **[Brendonovich](https://github.com/Brendonovich)** for their conributions to: `tauri`
+- **[Brooooooklyn](https://github.com/Brooooooklyn)** for their conributions to: `tokio`
+- **[BurntSushi](https://github.com/BurntSushi)** for their conributions to: `serde`
+- **[Buzzec](https://github.com/Buzzec)** for their conributions to: `leptos`
+- **[Bytekeeper](https://github.com/Bytekeeper)** for their conributions to: `leptos`
+- **[ChristopherBiscardi](https://github.com/ChristopherBiscardi)** for their conributions to: `leptos`
+- **[CrabNejonas](https://github.com/CrabNejonas)** for their conributions to: `tauri`
+- **[CraftSpider](https://github.com/CraftSpider)** for their conributions to: `wasm-bindgen`
+- **[Cyborus04](https://github.com/Cyborus04)** for their conributions to: `wasm-bindgen`
+- **[DDAN-17](https://github.com/DDAN-17)** for their conributions to: `log`
+- **[DIvkov575](https://github.com/DIvkov575)** for their conributions to: `log`
+- **[DSharifi](https://github.com/DSharifi)** for their conributions to: `tokio`
+- **[Daedaluz](https://github.com/Daedaluz)** for their conributions to: `tauri`
+- **[Daksh14](https://github.com/Daksh14)** for their conributions to: `tokio`
+- **[DanielleHuisman](https://github.com/DanielleHuisman)** for their conributions to: `wasm-bindgen`
+- **[Darkspirit](https://github.com/Darkspirit)** for their conributions to: `rust-smallvec`
+- **[David-OConnor](https://github.com/David-OConnor)** for their conributions to: `wasm-bindgen`
+- **[DavidKorczynski](https://github.com/DavidKorczynski)** for their conributions to: `json`
+- **[Davidster](https://github.com/Davidster)** for their conributions to: `wasm-bindgen`
+- **[DerKnerd](https://github.com/DerKnerd)** for their conributions to: `leptos-use`
+- **[Dicklessgreat](https://github.com/Dicklessgreat)** for their conributions to: `cpal`
+- **[DonSheddow](https://github.com/DonSheddow)** for their conributions to: `num-complex`
+- **[DougAnderson444](https://github.com/DougAnderson444)** for their conributions to: `wasm-bindgen`
+- **[DoumanAsh](https://github.com/DoumanAsh)** for their conributions to: `tokio`
+- **[DrSensor](https://github.com/DrSensor)** for their conributions to: `tauri`
+- **[Dreaming-Codes](https://github.com/Dreaming-Codes)** for their conributions to: `plugins-workspace`
+- **[Drevoed](https://github.com/Drevoed)** for their conributions to: `tokio`
+- **[Dushistov](https://github.com/Dushistov)** for their conributions to: `strum`
+- **[EFanZh](https://github.com/EFanZh)** for their conributions to: `log`
+- **[Ekleog](https://github.com/Ekleog)** for their conributions to: `wasm-bindgen`
+- **[Emerentius](https://github.com/Emerentius)** for their conributions to: `num-complex`
+- **[Emilgardis](https://github.com/Emilgardis)** for their conributions to: `fundsp`
+- **[Enet4](https://github.com/Enet4)** for their conributions to: `num-complex`
+- **[EriKWDev](https://github.com/EriKWDev)** for their conributions to: `log`
+- **[EverlastingBugstopper](https://github.com/EverlastingBugstopper)** for their conributions to: `tokio`
+- **[ExpHP](https://github.com/ExpHP)** for their conributions to: `num-complex`
+- **[FSMaxB](https://github.com/FSMaxB)** for their conributions to: `tokio`
+- **[Finomnis](https://github.com/Finomnis)** for their conributions to: `tokio`
+- **[FirelightFlagboy](https://github.com/FirelightFlagboy)** for their conributions to: `wasm-bindgen`
+- **[Flaise](https://github.com/Flaise)** for their conributions to: `serde`
+- **[Fractal-Tess](https://github.com/Fractal-Tess)** for their conributions to: `tauri`
+- **[FrankHassanabad](https://github.com/FrankHassanabad)** for their conributions to: `wasm-bindgen`
+- **[Freax13](https://github.com/Freax13)** for their conributions to: `json`
+- **[FreeMasen](https://github.com/FreeMasen)** for their conributions to: `wasm-bindgen`
+- **[FreezyLemon](https://github.com/FreezyLemon)** for their conributions to: `leptos`
+- **[Freshcobar](https://github.com/Freshcobar)** for their conributions to: `leptos-use`
+- **[GJason88](https://github.com/GJason88)** for their conributions to: `tokio`
+- **[GREsau](https://github.com/GREsau)** for their conributions to: `json`
+- **[Gankra](https://github.com/Gankra)** for their conributions to: `serde`
+- **[Geal](https://github.com/Geal)** for their conributions to: `cpal`
+- **[Gelbpunkt](https://github.com/Gelbpunkt)** for their conributions to: `tokio`
+- **[Gentle](https://github.com/Gentle)** for their conributions to: `leptos`
+- **[GilShoshan94](https://github.com/GilShoshan94)** for their conributions to: `tokio`
+- **[Giovanni-Tably](https://github.com/Giovanni-Tably)** for their conributions to: `leptos`
+- **[Gowee](https://github.com/Gowee)** for their conributions to: `tokio`
+- **[GuillaumeGomez](https://github.com/GuillaumeGomez)** for their conributions to: `log`
+- **[GyrosOfWar](https://github.com/GyrosOfWar)** for their conributions to: `json`
+- **[HEnquist](https://github.com/HEnquist)** for their conributions to: `cpal`
+- **[Hecatron](https://github.com/Hecatron)** for their conributions to: `leptos`
+- **[Hodkinson](https://github.com/Hodkinson)** for their conributions to: `tokio`
+- **[HybridEidolon](https://github.com/HybridEidolon)** for their conributions to: `cpal`
+- **[HyeonuPark](https://github.com/HyeonuPark)** for their conributions to: `tokio`
+- **[Hywan](https://github.com/Hywan)** for their conributions to: `wasm-bindgen`
+- **[Indrazar](https://github.com/Indrazar)** for their conributions to: `leptos`
+- **[Innominus](https://github.com/Innominus)** for their conributions to: `leptos`
+- **[IsaacMarovitz](https://github.com/IsaacMarovitz)** for their conributions to: `fundsp`
+- **[IvanUkhov](https://github.com/IvanUkhov)** for their conributions to: `num-complex`
+- **[JSorngard](https://github.com/JSorngard)** for their conributions to: `const-primes`
+- **[JimChenWYU](https://github.com/JimChenWYU)** for their conributions to: `strum`
+- **[JoelBeicher](https://github.com/JoelBeicher)** for their conributions to: `leptos-use`
+- **[JohnDoneth](https://github.com/JohnDoneth)** for their conributions to: `tokio`
+- **[JohnHeitmann](https://github.com/JohnHeitmann)** for their conributions to: `serde`
+- **[JohnTitor](https://github.com/JohnTitor)** for their conributions to: `log`
+- **[JonathanBrouwer](https://github.com/JonathanBrouwer)** for their conributions to: `json`
+- **[JorisDeRidder](https://github.com/JorisDeRidder)** for their conributions to: `num-complex`
+- **[JoshuaBatty](https://github.com/JoshuaBatty)** for their conributions to: `cpal`
+- **[Jules-Bertholet](https://github.com/Jules-Bertholet)** for their conributions to: `wasm-bindgen`
+- **[Kaszanas](https://github.com/Kaszanas)** for their conributions to: `leptos`
+- **[Keruspe](https://github.com/Keruspe)** for their conributions to: `tokio`
+- **[Kestrer](https://github.com/Kestrer)** for their conributions to: `tokio`
+- **[Kirguir](https://github.com/Kirguir)** for their conributions to: `wasm-bindgen`
+- **[Kleinmarb](https://github.com/Kleinmarb)** for their conributions to: `log`
+- **[Kobzol](https://github.com/Kobzol)** for their conributions to: `tokio`
+- **[KodrAus](https://github.com/KodrAus)** for their conributions to: `log`
+- **[Kroisse](https://github.com/Kroisse)** for their conributions to: `json`
+- **[Krout0n](https://github.com/Krout0n)** for their conributions to: `json`
+- **[KushalMeghani1644](https://github.com/KushalMeghani1644)** for their conributions to: `tauri`
+- **[L0uisc](https://github.com/L0uisc)** for their conributions to: `rust-smallvec`
+- **[LPGhatguy](https://github.com/LPGhatguy)** for their conributions to: `mint`
+- **[LachezarLechev](https://github.com/LachezarLechev)** for their conributions to: `wasm-bindgen`
+- **[Laegel](https://github.com/Laegel)** for their conributions to: `tauri`
+- **[LinkTed](https://github.com/LinkTed)** for their conributions to: `tokio`
+- **[LucioFranco](https://github.com/LucioFranco)** for their conributions to: `tokio`
+- **[Lucretiel](https://github.com/Lucretiel)** for their conributions to: `json`
+- **[Lukazoid](https://github.com/Lukazoid)** for their conributions to: `log`
+- **[Luni-4](https://github.com/Luni-4)** for their conributions to: `cpal`
+- **[Lymia](https://github.com/Lymia)** for their conributions to: `serde`
+- **[MOZGIII](https://github.com/MOZGIII)** for their conributions to: `tokio`
+- **[MarkMcCaskey](https://github.com/MarkMcCaskey)** for their conributions to: `log`
+- **[MartinKavik](https://github.com/MartinKavik)** for their conributions to: `wasm-bindgen`
+- **[MathiasKoch](https://github.com/MathiasKoch)** for their conributions to: `serde`
+- **[Mathspy](https://github.com/Mathspy)** for their conributions to: `tokio`
+- **[Mehrbod2002](https://github.com/Mehrbod2002)** for their conributions to: `tauri`
+- **[MendyBerger](https://github.com/MendyBerger)** for their conributions to: `strum`
+- **[MichaelHills](https://github.com/MichaelHills)** for their conributions to: `cpal`
+- **[MikailBag](https://github.com/MikailBag)** for their conributions to: `tokio`
+- **[Milo123459](https://github.com/Milo123459)** for their conributions to: `tokio`
+- **[Mingun](https://github.com/Mingun)** for their conributions to: `serde`
+- **[ModProg](https://github.com/ModProg)** for their conributions to: `leptos`
+- **[NCura](https://github.com/NCura)** for their conributions to: `leptos`
+- **[NeoLegends](https://github.com/NeoLegends)** for their conributions to: `tokio`
+- **[NiklasEi](https://github.com/NiklasEi)** for their conributions to: `leptos`
+- **[Noah-Kennedy](https://github.com/Noah-Kennedy)** for their conributions to: `tokio`
+- **[NobodyXu](https://github.com/NobodyXu)** for their conributions to: `tokio`
+- **[Norbiros](https://github.com/Norbiros)** for their conributions to: `tauri`
+- **[OccupyMars2025](https://github.com/OccupyMars2025)** for their conributions to: `log`
+- **[Owen-CH-Leung](https://github.com/Owen-CH-Leung)** for their conributions to: `tokio`
+- **[PSteinhaus](https://github.com/PSteinhaus)** for their conributions to: `keyframe`
+- **[Pauan](https://github.com/Pauan)** for their conributions to: `wasm-bindgen`
+- **[PaulWagener](https://github.com/PaulWagener)** for their conributions to: `leptos`
+- **[Peternator7](https://github.com/Peternator7)** for their conributions to: `strum`
+- **[Phaiax](https://github.com/Phaiax)** for their conributions to: `num-complex`
+- **[Pierstoval](https://github.com/Pierstoval)** for their conributions to: `tauri`
+- **[PlasmaPower](https://github.com/PlasmaPower)** for their conributions to: `num-complex`
+- **[PokeJofeJr4th](https://github.com/PokeJofeJr4th)** for their conributions to: `strum`
+- **[PoorlyDefinedBehaviour](https://github.com/PoorlyDefinedBehaviour)** for their conributions to: `tokio`
+- **[Pratyush](https://github.com/Pratyush)** for their conributions to: `serde`
+- **[ProtectedMode](https://github.com/ProtectedMode)** for their conributions to: `serde`
+- **[QuartzLibrary](https://github.com/QuartzLibrary)** for their conributions to: `leptos`
+- **[RSSchermer](https://github.com/RSSchermer)** for their conributions to: `wasm-bindgen`
+- **[RadicalZephyr](https://github.com/RadicalZephyr)** for their conributions to: `tokio`
+- **[RalfJung](https://github.com/RalfJung)** for their conributions to: `rust-smallvec`
+- **[Raphiiko](https://github.com/Raphiiko)** for their conributions to: `tauri`
+- **[RazerM](https://github.com/RazerM)** for their conributions to: `wasm-bindgen`
+- **[RealDrPuc](https://github.com/RealDrPuc)** for their conributions to: `tauri`
+- **[Risto-Stevcev](https://github.com/Risto-Stevcev)** for their conributions to: `tauri`
+- **[Rodrigodd](https://github.com/Rodrigodd)** for their conributions to: `cpal`
+- **[Roguelazer](https://github.com/Roguelazer)** for their conributions to: `serde`
+- **[Rufflewind](https://github.com/Rufflewind)** for their conributions to: `json`
+- **[RunDevelopment](https://github.com/RunDevelopment)** for their conributions to: `wasm-bindgen`
+- **[SabrinaJewson](https://github.com/SabrinaJewson)** for their conributions to: `tokio`
+- **[SamiPerttu](https://github.com/SamiPerttu)** for their conributions to: `fundsp`
+- **[Schultzer](https://github.com/Schultzer)** for their conributions to: `num-complex`
+- **[Serdnad](https://github.com/Serdnad)** for their conributions to: `fundsp`
+- **[SergioBenitez](https://github.com/SergioBenitez)** for their conributions to: `rust-smallvec`
+- **[ShaunSHamilton](https://github.com/ShaunSHamilton)** for their conributions to: `tauri`
+- **[Simon-Laux](https://github.com/Simon-Laux)** for their conributions to: `tauri`
+- **[Sixshaman](https://github.com/Sixshaman)** for their conributions to: `wasm-bindgen`
+- **[Sky-walkerX](https://github.com/Sky-walkerX)** for their conributions to: `tauri`
+- **[Slowki](https://github.com/Slowki)** for their conributions to: `wasm-bindgen`
+- **[SpikeHD](https://github.com/SpikeHD)** for their conributions to: `tauri`
+- **[SpriteOvO](https://github.com/SpriteOvO)** for their conributions to: `log`
+- **[Spxg](https://github.com/Spxg)** for their conributions to: `wasm-bindgen`
+- **[Stefan-Hanke](https://github.com/Stefan-Hanke)** for their conributions to: `wasm-bindgen`
+- **[Steven19Lee](https://github.com/Steven19Lee)** for their conributions to: `wasm-bindgen`
+- **[SuperFluffy](https://github.com/SuperFluffy)** for their conributions to: `num-complex`
+- **[Syndelis](https://github.com/Syndelis)** for their conributions to: `strum`
+- **[Systemcluster](https://github.com/Systemcluster)** for their conributions to: `wasm-bindgen`
+- **[T5uku5hi](https://github.com/T5uku5hi)** for their conributions to: `wasm-bindgen`
+- **[TDecking](https://github.com/TDecking)** for their conributions to: `rust-smallvec`
+- **[TERRORW0LF](https://github.com/TERRORW0LF)** for their conributions to: `leptos`
+- **[Tacklebox](https://github.com/Tacklebox)** for their conributions to: `tokio`
+- **[Tarnadas](https://github.com/Tarnadas)** for their conributions to: `wasm-bindgen`
+- **[TedDriggs](https://github.com/TedDriggs)** for their conributions to: `serde`
+- **[TethysSvensson](https://github.com/TethysSvensson)** for their conributions to: `log`
+- **[ThomasdenH](https://github.com/ThomasdenH)** for their conributions to: `wasm-bindgen`
+- **[Threated](https://github.com/Threated)** for their conributions to: `leptos`
+- **[Tunglies](https://github.com/Tunglies)** for their conributions to: `tauri`
+- **[UebelAndre](https://github.com/UebelAndre)** for their conributions to: `wasm-bindgen`
+- **[UnHumbleBen](https://github.com/UnHumbleBen)** for their conributions to: `wasm-bindgen`
+- **[Upbolt](https://github.com/Upbolt)** for their conributions to: `leptos`
+- **[UserAB1236872](https://github.com/UserAB1236872)** for their conributions to: `serde`
+- **[Veykril](https://github.com/Veykril)** for their conributions to: `tokio`
+- **[VincentJousse](https://github.com/VincentJousse)** for their conributions to: `cpal`
+- **[WAFFO](https://github.com/WAFFO)** for their conributions to: `wasm-bindgen`
+- **[WSH032](https://github.com/WSH032)** for their conributions to: `tauri`
+- **[WaDelma](https://github.com/WaDelma)** for their conributions to: `log`
+- **[Wadu436](https://github.com/Wadu436)** for their conributions to: `leptos`
+- **[WiSaGaN](https://github.com/WiSaGaN)** for their conributions to: `serde`
+- **[WilliamVenner](https://github.com/WilliamVenner)** for their conributions to: `tauri`
+- **[WofWca](https://github.com/WofWca)** for their conributions to: `tauri`
+- **[Xanewok](https://github.com/Xanewok)** for their conributions to: `json`
+- **[Yuyz0112](https://github.com/Yuyz0112)** for their conributions to: `wasm-bindgen`
+- **[ZerothLaw](https://github.com/ZerothLaw)** for their conributions to: `wasm-bindgen`
+- **[a1phyr](https://github.com/a1phyr)** for their conributions to: `tokio`
+- **[a1trl9](https://github.com/a1trl9)** for their conributions to: `wasm-bindgen`
+- **[aatifsyed](https://github.com/aatifsyed)** for their conributions to: `tokio`
+- **[abique](https://github.com/abique)** for their conributions to: `cpal`
+- **[abonander](https://github.com/abonander)** for their conributions to: `tokio`
+- **[adamchalmers](https://github.com/adamchalmers)** for their conributions to: `tokio`
+- **[adamcrume](https://github.com/adamcrume)** for their conributions to: `serde`
+- **[adoyle0](https://github.com/adoyle0)** for their conributions to: `leptos`
+- **[adrieljss](https://github.com/adrieljss)** for their conributions to: `plugins-workspace`
+- **[aergonaut](https://github.com/aergonaut)** for their conributions to: `log`
+- **[afdw](https://github.com/afdw)** for their conributions to: `wasm-bindgen`
+- **[afinch7](https://github.com/afinch7)** for their conributions to: `tokio`
+- **[agilarity](https://github.com/agilarity)** for their conributions to: `leptos`
+- **[agraboso](https://github.com/agraboso)** for their conributions to: `leptos`
+- **[ahkohd](https://github.com/ahkohd)** for their conributions to: `plugins-workspace`
+- **[ahl](https://github.com/ahl)** for their conributions to: `serde`
+- **[akesson](https://github.com/akesson)** for their conributions to: `leptos`
+- **[aknuds1](https://github.com/aknuds1)** for their conributions to: `tokio`
+- **[akonradi-signal](https://github.com/akonradi-signal)** for their conributions to: `tokio`
+- **[akryvomaz](https://github.com/akryvomaz)** for their conributions to: `wasm-bindgen`
+- **[akshayknarayan](https://github.com/akshayknarayan)** for their conributions to: `tokio`
+- **[alce](https://github.com/alce)** for their conributions to: `tokio`
+- **[alex](https://github.com/alex)** for their conributions to: `tokio`
+- **[alexisfontaine](https://github.com/alexisfontaine)** for their conributions to: `leptos`
+- **[alexlapa](https://github.com/alexlapa)** for their conributions to: `wasm-bindgen`
+- **[alexmoon](https://github.com/alexmoon)** for their conributions to: `cpal`
+- **[alfatm](https://github.com/alfatm)** for their conributions to: `leptos`
+- **[aliddell](https://github.com/aliddell)** for their conributions to: `num-complex`
+- **[alistair23](https://github.com/alistair23)** for their conributions to: `log`
+- **[aliu](https://github.com/aliu)** for their conributions to: `tokio`
+- **[allsey87](https://github.com/allsey87)** for their conributions to: `wasm-bindgen`
+- **[alreece45](https://github.com/alreece45)** for their conributions to: `tokio`
+- **[amab8901](https://github.com/amab8901)** for their conributions to: `tokio`
+- **[ameknite](https://github.com/ameknite)** for their conributions to: `cpal`
+- **[anatawa12](https://github.com/anatawa12)** for their conributions to: `tauri`
+- **[andersk](https://github.com/andersk)** for their conributions to: `num-complex`
+- **[andrehjr](https://github.com/andrehjr)** for their conributions to: `wasm-bindgen`
+- **[andrewdavidmackenzie](https://github.com/andrewdavidmackenzie)** for their conributions to: `tokio`
+- **[andrisak](https://github.com/andrisak)** for their conributions to: `json`
+- **[antrik](https://github.com/antrik)** for their conributions to: `serde`
+- **[aoikurokawa](https://github.com/aoikurokawa)** for their conributions to: `tokio`
+- **[aomader](https://github.com/aomader)** for their conributions to: `num-complex`
+- **[aperepel](https://github.com/aperepel)** for their conributions to: `leptos`
+- **[arcnmx](https://github.com/arcnmx)** for their conributions to: `json`
+- **[arielb1](https://github.com/arielb1)** for their conributions to: `tokio`
+- **[aschweig](https://github.com/aschweig)** for their conributions to: `tokio`
+- **[asomers](https://github.com/asomers)** for their conributions to: `tokio`
+- **[asomethings](https://github.com/asomethings)** for their conributions to: `plugins-workspace`
+- **[astraw](https://github.com/astraw)** for their conributions to: `thiserror`
+- **[attila-lin](https://github.com/attila-lin)** for their conributions to: `tokio`
+- **[autodidaddict](https://github.com/autodidaddict)** for their conributions to: `wasm-bindgen`
+- **[awestlake87](https://github.com/awestlake87)** for their conributions to: `serde-wasm-bindgen`
+- **[azdle](https://github.com/azdle)** for their conributions to: `tokio`
+- **[azriel91](https://github.com/azriel91)** for their conributions to: `strum`
+- **[b-naber](https://github.com/b-naber)** for their conributions to: `tokio`
+- **[b4-io](https://github.com/b4-io)** for their conributions to: `leptos`
+- **[bIgBV](https://github.com/bIgBV)** for their conributions to: `tokio`
+- **[bakkot](https://github.com/bakkot)** for their conributions to: `wasm-bindgen`
+- **[barafael](https://github.com/barafael)** for their conributions to: `tokio`
+- **[bbarker](https://github.com/bbarker)** for their conributions to: `cpal`
+- **[bdonlan](https://github.com/bdonlan)** for their conributions to: `tokio`
+- **[bebecue](https://github.com/bebecue)** for their conributions to: `serde`
+- **[belfz](https://github.com/belfz)** for their conributions to: `wasm-bindgen`
+- **[benesch](https://github.com/benesch)** for their conributions to: `tokio`
+- **[bennetthardwick](https://github.com/bennetthardwick)** for their conributions to: `wasm-bindgen`
+- **[bennofs](https://github.com/bennofs)** for their conributions to: `json`
+- **[benwis](https://github.com/benwis)** for their conributions to: `leptos`
+- **[bergey](https://github.com/bergey)** for their conributions to: `wasm-bindgen`
+- **[bhalleycf](https://github.com/bhalleycf)** for their conributions to: `serde-wasm-bindgen`
+- **[bheylin](https://github.com/bheylin)** for their conributions to: `json`
+- **[bikeshedder](https://github.com/bikeshedder)** for their conributions to: `tokio`
+- **[biluohc](https://github.com/biluohc)** for their conributions to: `tokio`
+- **[biryukovmaxim](https://github.com/biryukovmaxim)** for their conributions to: `strum`
+- **[bitcapybara](https://github.com/bitcapybara)** for their conributions to: `tokio`
+- **[bkchr](https://github.com/bkchr)** for their conributions to: `tokio`
+- **[blasrodri](https://github.com/blasrodri)** for their conributions to: `tokio`
+- **[blm768](https://github.com/blm768)** for their conributions to: `wasm-bindgen`
+- **[blorbb](https://github.com/blorbb)** for their conributions to: `leptos`
+- **[bluejekyll](https://github.com/bluejekyll)** for their conributions to: `tokio`
+- **[bobozaur](https://github.com/bobozaur)** for their conributions to: `strum`
+- **[borman](https://github.com/borman)** for their conributions to: `serde`
+- **[bors-servo](https://github.com/bors-servo)** for their conributions to: `rust-smallvec`
+- **[bouk](https://github.com/bouk)** for their conributions to: `json`
+- **[boyswan](https://github.com/boyswan)** for their conributions to: `leptos`
+- **[bradleyharden](https://github.com/bradleyharden)** for their conributions to: `num-complex`
+- **[bram209](https://github.com/bram209)** for their conributions to: `leptos`
+- **[brian14708](https://github.com/brian14708)** for their conributions to: `tauri`
+- **[brisad](https://github.com/brisad)** for their conributions to: `wasm-bindgen`
+- **[brofrain](https://github.com/brofrain)** for their conributions to: `leptos`
+- **[brson](https://github.com/brson)** for their conributions to: `log`
+- **[bspeice](https://github.com/bspeice)** for their conributions to: `wasm-bindgen`
+- **[budziq](https://github.com/budziq)** for their conributions to: `log`
+- **[burrbull](https://github.com/burrbull)** for their conributions to: `num-complex`
+- **[burtonageo](https://github.com/burtonageo)** for their conributions to: `mint`
+- **[byte-sourcerer](https://github.com/byte-sourcerer)** for their conributions to: `tokio`
+- **[c0gent](https://github.com/c0gent)** for their conributions to: `rust-smallvec`
+- **[caesar](https://github.com/caesar)** for their conributions to: `tauri`
+- **[carllerche](https://github.com/carllerche)** for their conributions to: `tokio`
+- **[carloskiki](https://github.com/carloskiki)** for their conributions to: `leptos-use`
+- **[carols10cents](https://github.com/carols10cents)** for their conributions to: `log`
+- **[casimir](https://github.com/casimir)** for their conributions to: `tokio`
+- **[catalinsh](https://github.com/catalinsh)** for their conributions to: `tauri`
+- **[cburgos](https://github.com/cburgos)** for their conributions to: `wasm-bindgen`
+- **[cconstantine](https://github.com/cconstantine)** for their conributions to: `tokio`
+- **[cdisselkoen](https://github.com/cdisselkoen)** for their conributions to: `wasm-bindgen`
+- **[cedmoh](https://github.com/cedmoh)** for their conributions to: `leptos`
+- **[cgwalters](https://github.com/cgwalters)** for their conributions to: `tokio`
+- **[chanced](https://github.com/chanced)** for their conributions to: `json`
+- **[chinedufn](https://github.com/chinedufn)** for their conributions to: `wasm-bindgen`
+- **[chippers](https://github.com/chippers)** for their conributions to: `tauri`
+- **[chrisp60](https://github.com/chrisp60)** for their conributions to: `leptos`
+- **[chrox](https://github.com/chrox)** for their conributions to: `tauri`
+- **[clearloop](https://github.com/clearloop)** for their conributions to: `wasm-bindgen`
+- **[clearlysid](https://github.com/clearlysid)** for their conributions to: `tauri`
+- **[clintfred](https://github.com/clintfred)** for their conributions to: `tokio`
+- **[codehearts](https://github.com/codehearts)** for their conributions to: `wasm-bindgen`
+- **[colrdavidson](https://github.com/colrdavidson)** for their conributions to: `num-complex`
+- **[cormacrelf](https://github.com/cormacrelf)** for their conributions to: `wasm-bindgen`
+- **[cowang4](https://github.com/cowang4)** for their conributions to: `log`
+- **[cramertj](https://github.com/cramertj)** for their conributions to: `tokio`
+- **[crapStone](https://github.com/crapStone)** for their conributions to: `tauri`
+- **[cratelyn](https://github.com/cratelyn)** for their conributions to: `tokio`
+- **[cschramm](https://github.com/cschramm)** for their conributions to: `wasm-bindgen`
+- **[cssivision](https://github.com/cssivision)** for their conributions to: `tokio`
+- **[ctjhoa](https://github.com/ctjhoa)** for their conributions to: `wasm-bindgen`
+- **[cymruu](https://github.com/cymruu)** for their conributions to: `tauri`
+- **[czy-29](https://github.com/czy-29)** for their conributions to: `tokio`
+- **[d-e-s-o](https://github.com/d-e-s-o)** for their conributions to: `tokio`
+- **[daboross](https://github.com/daboross)** for their conributions to: `serde`
+- **[daixiang0](https://github.com/daixiang0)** for their conributions to: `tokio`
+- **[dakom](https://github.com/dakom)** for their conributions to: `wasm-bindgen`
+- **[danburkert](https://github.com/danburkert)** for their conributions to: `tokio`
+- **[danheuck](https://github.com/danheuck)** for their conributions to: `leptos`
+- **[darakshan](https://github.com/darakshan)** for their conributions to: `cpal`
+- **[darthtrevino](https://github.com/darthtrevino)** for their conributions to: `wasm-bindgen`
+- **[data-pup](https://github.com/data-pup)** for their conributions to: `wasm-bindgen`
+- **[dathinaios](https://github.com/dathinaios)** for their conributions to: `fundsp`
+- **[davidbarsky](https://github.com/davidbarsky)** for their conributions to: `tokio`
+- **[davidpdrsn](https://github.com/davidpdrsn)** for their conributions to: `tokio`
+- **[dawnlarsson](https://github.com/dawnlarsson)** for their conributions to: `tauri`
+- **[dbcfd](https://github.com/dbcfd)** for their conributions to: `tokio`
+- **[dbkaplun](https://github.com/dbkaplun)** for their conributions to: `rust-smallvec`
+- **[dcsturman](https://github.com/dcsturman)** for their conributions to: `leptos`
+- **[de-vri-es](https://github.com/de-vri-es)** for their conributions to: `tokio`
+- **[deftsp](https://github.com/deftsp)** for their conributions to: `tauri`
+- **[deid84](https://github.com/deid84)** for their conributions to: `tauri`
+- **[dependabot-support](https://github.com/dependabot-support)** for their conributions to: `wasm-bindgen`
+- **[dereckson](https://github.com/dereckson)** for their conributions to: `log`
+- **[derhaskell](https://github.com/derhaskell)** for their conributions to: `serde`
+- **[devsnek](https://github.com/devsnek)** for their conributions to: `wasm-bindgen`
+- **[dglsparsons](https://github.com/dglsparsons)** for their conributions to: `leptos`
+- **[dgsantana](https://github.com/dgsantana)** for their conributions to: `leptos`
+- **[dheijl](https://github.com/dheijl)** for their conributions to: `cpal`
+- **[diit](https://github.com/diit)** for their conributions to: `tauri`
+- **[diondokter](https://github.com/diondokter)** for their conributions to: `log`
+- **[diversable](https://github.com/diversable)** for their conributions to: `leptos`
+- **[diwic](https://github.com/diwic)** for their conributions to: `cpal`
+- **[djc](https://github.com/djc)** for their conributions to: `tokio`
+- **[djkoloski](https://github.com/djkoloski)** for their conributions to: `tokio`
+- **[djozis](https://github.com/djozis)** for their conributions to: `wasm-bindgen`
+- **[dnsl48](https://github.com/dnsl48)** for their conributions to: `num-complex`
+- **[dolpm](https://github.com/dolpm)** for their conributions to: `leptos`
+- **[domiSchenk](https://github.com/domiSchenk)** for their conributions to: `tauri`
+- **[domna](https://github.com/domna)** for their conributions to: `num-complex`
+- **[domodwyer](https://github.com/domodwyer)** for their conributions to: `tokio`
+- **[domwst](https://github.com/domwst)** for their conributions to: `leptos`
+- **[dorayakikun](https://github.com/dorayakikun)** for their conributions to: `wasm-bindgen`
+- **[dreid](https://github.com/dreid)** for their conributions to: `serde`
+- **[dripton](https://github.com/dripton)** for their conributions to: `num-complex`
+- **[druide](https://github.com/druide)** for their conributions to: `json`
+- **[dsherret](https://github.com/dsherret)** for their conributions to: `wasm-bindgen`
+- **[duarten](https://github.com/duarten)** for their conributions to: `tokio`
+- **[durka](https://github.com/durka)** for their conributions to: `strum`
+- **[duskmoon314](https://github.com/duskmoon314)** for their conributions to: `tokio`
+- **[dvdsk](https://github.com/dvdsk)** for their conributions to: `cpal`
+- **[ealmloff](https://github.com/ealmloff)** for their conributions to: `leptos`
+- **[eb-64-64](https://github.com/eb-64-64)** for their conributions to: `tokio`
+- **[edgex004](https://github.com/edgex004)** for their conributions to: `tauri`
+- **[ehuss](https://github.com/ehuss)** for their conributions to: `rust-smallvec`
+- **[eira-fransham](https://github.com/eira-fransham)** for their conributions to: `rust-smallvec`
+- **[ekzhang](https://github.com/ekzhang)** for their conributions to: `tokio`
+- **[eli-front](https://github.com/eli-front)** for their conributions to: `wasm-bindgen`
+- **[elliottslaughter](https://github.com/elliottslaughter)** for their conributions to: `serde`
+- **[elliotwaite](https://github.com/elliotwaite)** for their conributions to: `leptos`
+- **[elpiel](https://github.com/elpiel)** for their conributions to: `wasm-bindgen`
+- **[eltociear](https://github.com/eltociear)** for their conributions to: `tauri`
+- **[ely-uf](https://github.com/ely-uf)** for their conributions to: `cpal`
+- **[emberian](https://github.com/emberian)** for their conributions to: `serde`
+- **[emilio](https://github.com/emilio)** for their conributions to: `rust-smallvec`
+- **[eminence](https://github.com/eminence)** for their conributions to: `wasm-bindgen`
+- **[endragor](https://github.com/endragor)** for their conributions to: `cpal`
+- **[enfipy](https://github.com/enfipy)** for their conributions to: `cpal`
+- **[ericmcbride](https://github.com/ericmcbride)** for their conributions to: `strum`
+- **[erik-moqvist](https://github.com/erik-moqvist)** for their conributions to: `wasm-bindgen`
+- **[eroman-code](https://github.com/eroman-code)** for their conributions to: `leptos`
+- **[escwxyz](https://github.com/escwxyz)** for their conributions to: `leptos`
+- **[euphbriggs](https://github.com/euphbriggs)** for their conributions to: `tauri`
+- **[eupn](https://github.com/eupn)** for their conributions to: `serde`
+- **[evanrittenhouse](https://github.com/evanrittenhouse)** for their conributions to: `tokio`
+- **[evilpie](https://github.com/evilpie)** for their conributions to: `wasm-bindgen`
+- **[expenses](https://github.com/expenses)** for their conributions to: `wasm-bindgen`
+- **[fa7ca7](https://github.com/fa7ca7)** for their conributions to: `tokio`
+- **[facklambda](https://github.com/facklambda)** for their conributions to: `tauri`
+- **[faern](https://github.com/faern)** for their conributions to: `tokio`
+- **[fafhrd91](https://github.com/fafhrd91)** for their conributions to: `tokio`
+- **[farnz](https://github.com/farnz)** for their conributions to: `tokio`
+- **[feadoor](https://github.com/feadoor)** for their conributions to: `num-complex`
+- **[fenhl](https://github.com/fenhl)** for their conributions to: `tokio`
+- **[feral-dot-io](https://github.com/feral-dot-io)** for their conributions to: `leptos-use`
+- **[ferreira-tb](https://github.com/ferreira-tb)** for their conributions to: `tauri-plugin-prevent-default`
+- **[filipdutescu](https://github.com/filipdutescu)** for their conributions to: `leptos`
+- **[fitztrev](https://github.com/fitztrev)** for their conributions to: `plugins-workspace`
+- **[flisky](https://github.com/flisky)** for their conributions to: `leptos`
+- **[flosse](https://github.com/flosse)** for their conributions to: `leptos`
+- **[fluxxu](https://github.com/fluxxu)** for their conributions to: `tokio`
+- **[flxo](https://github.com/flxo)** for their conributions to: `tokio`
+- **[fmoor](https://github.com/fmoor)** for their conributions to: `json`
+- **[folkertdev](https://github.com/folkertdev)** for their conributions to: `tokio`
+- **[fornwall](https://github.com/fornwall)** for their conributions to: `cpal`
+- **[fosskers](https://github.com/fosskers)** for their conributions to: `serde-wasm-bindgen`
+- **[freesig](https://github.com/freesig)** for their conributions to: `cpal`
+- **[fundon](https://github.com/fundon)** for their conributions to: `leptos`
+- **[g-re-g](https://github.com/g-re-g)** for their conributions to: `leptos`
+- **[g2p](https://github.com/g2p)** for their conributions to: `leptos`
+- **[gabcoh](https://github.com/gabcoh)** for their conributions to: `tauri`
+- **[gabrielgrant](https://github.com/gabrielgrant)** for their conributions to: `wasm-bindgen`
+- **[gardc](https://github.com/gardc)** for their conributions to: `tauri`
+- **[gardnervickers](https://github.com/gardnervickers)** for their conributions to: `tokio`
+- **[gbbosak](https://github.com/gbbosak)** for their conributions to: `log`
+- **[gbj](https://github.com/gbj)** for their conributions to: `leptos`
+- **[generalelectrix](https://github.com/generalelectrix)** for their conributions to: `cpal`
+- **[gentoid](https://github.com/gentoid)** for their conributions to: `cpal`
+- **[geoffreygarrett](https://github.com/geoffreygarrett)** for their conributions to: `leptos`
+- **[geovie](https://github.com/geovie)** for their conributions to: `leptos`
+- **[gftea](https://github.com/gftea)** for their conributions to: `tokio`
+- **[gibbz00](https://github.com/gibbz00)** for their conributions to: `leptos`
+- **[gifnksm](https://github.com/gifnksm)** for their conributions to: `num-complex`
+- **[gjf2a](https://github.com/gjf2a)** for their conributions to: `fundsp`
+- **[gnunicorn](https://github.com/gnunicorn)** for their conributions to: `wasm-bindgen`
+- **[gnzlbg](https://github.com/gnzlbg)** for their conributions to: `wasm-bindgen`
+- **[goenning](https://github.com/goenning)** for their conributions to: `tauri`
+- **[goffrie](https://github.com/goffrie)** for their conributions to: `tokio`
+- **[golddranks](https://github.com/golddranks)** for their conributions to: `log`
+- **[gridbugs](https://github.com/gridbugs)** for their conributions to: `wasm-bindgen`
+- **[grovesNL](https://github.com/grovesNL)** for their conributions to: `wasm-bindgen`
+- **[gsingh93](https://github.com/gsingh93)** for their conributions to: `num-complex`
+- **[gui1117](https://github.com/gui1117)** for their conributions to: `cpal`
+- **[guswynn](https://github.com/guswynn)** for their conributions to: `tokio`
+- **[guybedford](https://github.com/guybedford)** for their conributions to: `wasm-bindgen`
+- **[hajifkd](https://github.com/hajifkd)** for their conributions to: `wasm-bindgen`
+- **[hamirmahal](https://github.com/hamirmahal)** for their conributions to: `tauri`
+- **[hannesmann](https://github.com/hannesmann)** for their conributions to: `keyframe`
+- **[harudagondi](https://github.com/harudagondi)** for their conributions to: `fundsp`
+- **[haslersn](https://github.com/haslersn)** for their conributions to: `leptos`
+- **[hauleth](https://github.com/hauleth)** for their conributions to: `num-complex`
+- **[hawkw](https://github.com/hawkw)** for their conributions to: `tokio`
+- **[hcandelaria](https://github.com/hcandelaria)** for their conributions to: `leptos-use`
+- **[hcpl](https://github.com/hcpl)** for their conributions to: `serde`
+- **[hds](https://github.com/hds)** for their conributions to: `tokio`
+- **[he00741098](https://github.com/he00741098)** for their conributions to: `leptos`
+- **[heftig](https://github.com/heftig)** for their conributions to: `serde`
+- **[hellow554](https://github.com/hellow554)** for their conributions to: `log`
+- **[hgomersall](https://github.com/hgomersall)** for their conributions to: `tokio`
+- **[hidva](https://github.com/hidva)** for their conributions to: `tokio`
+- **[hmaka](https://github.com/hmaka)** for their conributions to: `tokio`
+- **[hntd187](https://github.com/hntd187)** for their conributions to: `tokio`
+- **[hoangph271](https://github.com/hoangph271)** for their conributions to: `leptos`
+- **[hootio](https://github.com/hootio)** for their conributions to: `tokio`
+- **[hugoduncan](https://github.com/hugoduncan)** for their conributions to: `serde`
+- **[huntc](https://github.com/huntc)** for their conributions to: `tokio`
+- **[ibaryshnikov](https://github.com/ibaryshnikov)** for their conributions to: `wasm-bindgen`
+- **[ibraheemdev](https://github.com/ibraheemdev)** for their conributions to: `tokio`
+- **[igor-raits](https://github.com/igor-raits)** for their conributions to: `tokio`
+- **[ilmmatias](https://github.com/ilmmatias)** for their conributions to: `leptos`
+- **[ilyvion](https://github.com/ilyvion)** for their conributions to: `leptos`
+- **[imp](https://github.com/imp)** for their conributions to: `json`
+- **[inokawa](https://github.com/inokawa)** for their conributions to: `wasm-bindgen`
+- **[ipetkov](https://github.com/ipetkov)** for their conributions to: `tokio`
+- **[ishitatsuyuki](https://github.com/ishitatsuyuki)** for their conributions to: `cpal`
+- **[itowlson](https://github.com/itowlson)** for their conributions to: `leptos`
+- **[itsybitesyspider](https://github.com/itsybitesyspider)** for their conributions to: `console_error_panic_hook`
+- **[j-devel](https://github.com/j-devel)** for their conributions to: `wasm-bindgen`
+- **[j0lol](https://github.com/j0lol)** for their conributions to: `leptos`
+- **[jLynx](https://github.com/jLynx)** for their conributions to: `plugins-workspace`
+- **[jakobhellermann](https://github.com/jakobhellermann)** for their conributions to: `wasm-bindgen`
+- **[james7132](https://github.com/james7132)** for their conributions to: `cpal`
+- **[jan-auer](https://github.com/jan-auer)** for their conributions to: `serde`
+- **[jannikkeye](https://github.com/jannikkeye)** for their conributions to: `wasm-bindgen`
+- **[jansol](https://github.com/jansol)** for their conributions to: `cpal`
+- **[japaric](https://github.com/japaric)** for their conributions to: `json`
+- **[jasondavies](https://github.com/jasondavies)** for their conributions to: `tokio`
+- **[jasonrhansen](https://github.com/jasonrhansen)** for their conributions to: `leptos`
+- **[jasta](https://github.com/jasta)** for their conributions to: `tokio`
+- **[jbcrail](https://github.com/jbcrail)** for their conributions to: `num-complex`
+- **[jbeich](https://github.com/jbeich)** for their conributions to: `cpal`
+- **[jbousquie](https://github.com/jbousquie)** for their conributions to: `plugins-workspace`
+- **[jbuckmccready](https://github.com/jbuckmccready)** for their conributions to: `tokio`
+- **[jclmnop](https://github.com/jclmnop)** for their conributions to: `leptos`
+- **[jdisanti](https://github.com/jdisanti)** for their conributions to: `tokio`
+- **[jdm](https://github.com/jdm)** for their conributions to: `rust-smallvec`
+- **[jebrosen](https://github.com/jebrosen)** for their conributions to: `tokio`
+- **[jeehoonkang](https://github.com/jeehoonkang)** for their conributions to: `tokio`
+- **[jehiggs](https://github.com/jehiggs)** for their conributions to: `log`
+- **[jesnor](https://github.com/jesnor)** for their conributions to: `cpal`
+- **[jetli](https://github.com/jetli)** for their conributions to: `tauri`
+- **[jhenninger](https://github.com/jhenninger)** for their conributions to: `wasm-bindgen`
+- **[jheuel](https://github.com/jheuel)** for their conributions to: `leptos-use`
+- **[jhutchins](https://github.com/jhutchins)** for their conributions to: `tauri`
+- **[jim-taylor-business](https://github.com/jim-taylor-business)** for their conributions to: `leptos-use`
+- **[jlizen](https://github.com/jlizen)** for their conributions to: `tokio`
+- **[jmannanc](https://github.com/jmannanc)** for their conributions to: `tauri`
+- **[jneem](https://github.com/jneem)** for their conributions to: `wasm-bindgen`
+- **[joaofreires](https://github.com/joaofreires)** for their conributions to: `wasm-bindgen`
+- **[jofas](https://github.com/jofas)** for their conributions to: `tokio`
+- **[johannhof](https://github.com/johannhof)** for their conributions to: `wasm-bindgen`
+- **[johncf](https://github.com/johncf)** for their conributions to: `tokio`
+- **[johnnynotsolucky](https://github.com/johnnynotsolucky)** for their conributions to: `leptos`
+- **[jojobyte](https://github.com/jojobyte)** for their conributions to: `plugins-workspace`
+- **[jollygreenlaser](https://github.com/jollygreenlaser)** for their conributions to: `leptos`
+- **[jonas-schievink](https://github.com/jonas-schievink)** for their conributions to: `log`
+- **[jonasbb](https://github.com/jonasbb)** for their conributions to: `serde`
+- **[jonathan-s](https://github.com/jonathan-s)** for their conributions to: `wasm-bindgen`
+- **[jonathanKingston](https://github.com/jonathanKingston)** for their conributions to: `wasm-bindgen`
+- **[jordens](https://github.com/jordens)** for their conributions to: `thiserror`
+- **[joriskleiber](https://github.com/joriskleiber)** for their conributions to: `tokio`
+- **[jquesada2016](https://github.com/jquesada2016)** for their conributions to: `leptos`
+- **[jrobsonchase](https://github.com/jrobsonchase)** for their conributions to: `serde`
+- **[jrvidal](https://github.com/jrvidal)** for their conributions to: `wasm-bindgen`
+- **[jsoref](https://github.com/jsoref)** for their conributions to: `tokio`
+- **[jswrenn](https://github.com/jswrenn)** for their conributions to: `tokio`
+- **[jtescher](https://github.com/jtescher)** for their conributions to: `tokio`
+- **[jthemphill](https://github.com/jthemphill)** for their conributions to: `wasm-bindgen`
+- **[juleskers](https://github.com/juleskers)** for their conributions to: `tokio`
+- **[jvdwrf](https://github.com/jvdwrf)** for their conributions to: `leptos`
+- **[jwestfall69](https://github.com/jwestfall69)** for their conributions to: `cpal`
+- **[jwillbold](https://github.com/jwillbold)** for their conributions to: `serde`
+- **[jxs](https://github.com/jxs)** for their conributions to: `tokio`
+- **[jyn514](https://github.com/jyn514)** for their conributions to: `log`
+- **[k-nasa](https://github.com/k-nasa)** for their conributions to: `tokio`
+- **[k4rtik](https://github.com/k4rtik)** for their conributions to: `tokio`
+- **[kalcutter](https://github.com/kalcutter)** for their conributions to: `tokio`
+- **[katis](https://github.com/katis)** for their conributions to: `wasm-bindgen`
+- **[kawaemon](https://github.com/kawaemon)** for their conributions to: `wasm-bindgen`
+- **[kawogi](https://github.com/kawogi)** for their conributions to: `cpal`
+- **[kdwarn](https://github.com/kdwarn)** for their conributions to: `leptos`
+- **[keithw](https://github.com/keithw)** for their conributions to: `wasm-bindgen`
+- **[kellytk](https://github.com/kellytk)** for their conributions to: `tokio`
+- **[kennykerr](https://github.com/kennykerr)** for their conributions to: `tokio`
+- **[kennytm](https://github.com/kennytm)** for their conributions to: `num-complex`
+- **[keraf](https://github.com/keraf)** for their conributions to: `tauri`
+- **[kerkmann](https://github.com/kerkmann)** for their conributions to: `leptos`
+- **[kezhuw](https://github.com/kezhuw)** for their conributions to: `tokio`
+- **[killertux](https://github.com/killertux)** for their conributions to: `leptos`
+- **[king6cong](https://github.com/king6cong)** for their conributions to: `tokio`
+- **[kingsword09](https://github.com/kingsword09)** for their conributions to: `tauri`
+- **[kittuov](https://github.com/kittuov)** for their conributions to: `tauri`
+- **[kleimkuhler](https://github.com/kleimkuhler)** for their conributions to: `tokio`
+- **[konstin](https://github.com/konstin)** for their conributions to: `wasm-bindgen`
+- **[koopa1338](https://github.com/koopa1338)** for their conributions to: `leptos`
+- **[koushiro](https://github.com/koushiro)** for their conributions to: `json`
+- **[koverstreet](https://github.com/koverstreet)** for their conributions to: `num-complex`
+- **[kpp](https://github.com/kpp)** for their conributions to: `tokio`
+- **[kpreid](https://github.com/kpreid)** for their conributions to: `tokio`
+- **[kraai](https://github.com/kraai)** for their conributions to: `wasm-bindgen`
+- **[kris-ava](https://github.com/kris-ava)** for their conributions to: `plugins-workspace`
+- **[krscott](https://github.com/krscott)** for their conributions to: `tauri`
+- **[kvark](https://github.com/kvark)** for their conributions to: `mint`
+- **[kvnvelasco](https://github.com/kvnvelasco)** for their conributions to: `json`
+- **[kw217](https://github.com/kw217)** for their conributions to: `num-complex`
+- **[kylejlin](https://github.com/kylejlin)** for their conributions to: `console_error_panic_hook`
+- **[kzvi](https://github.com/kzvi)** for their conributions to: `wasm-bindgen`
+- **[kzys](https://github.com/kzys)** for their conributions to: `tokio`
+- **[laktak](https://github.com/laktak)** for their conributions to: `json`
+- **[lars-berger](https://github.com/lars-berger)** for their conributions to: `tauri`
+- **[lblack00](https://github.com/lblack00)** for their conributions to: `tokio`
+- **[lemarier](https://github.com/lemarier)** for their conributions to: `tauri`
+- **[leshow](https://github.com/leshow)** for their conributions to: `tokio`
+- **[liigo](https://github.com/liigo)** for their conributions to: `wasm-bindgen`
+- **[limira](https://github.com/limira)** for their conributions to: `wasm-bindgen`
+- **[linclelinkpart5](https://github.com/linclelinkpart5)** for their conributions to: `strum`
+- **[liranringel](https://github.com/liranringel)** for their conributions to: `tokio`
+- **[little-arhat](https://github.com/little-arhat)** for their conributions to: `json`
+- **[liufuyang](https://github.com/liufuyang)** for their conributions to: `tokio`
+- **[lizidev](https://github.com/lizidev)** for their conributions to: `leptos`
+- **[llebout](https://github.com/llebout)** for their conributions to: `tokio`
+- **[llogiq](https://github.com/llogiq)** for their conributions to: `rust-smallvec`
+- **[lo48576](https://github.com/lo48576)** for their conributions to: `strum`
+- **[logist322](https://github.com/logist322)** for their conributions to: `wasm-bindgen`
+- **[lorenzolewis](https://github.com/lorenzolewis)** for their conributions to: `tauri`
+- **[lovebug356](https://github.com/lovebug356)** for their conributions to: `tokio`
+- **[lu-zero](https://github.com/lu-zero)** for their conributions to: `cpal`
+- **[lucab](https://github.com/lucab)** for their conributions to: `tokio`
+- **[lucacasonato](https://github.com/lucacasonato)** for their conributions to: `json`
+- **[lukaslihotzki](https://github.com/lukaslihotzki)** for their conributions to: `wasm-bindgen`
+- **[luoffei](https://github.com/luoffei)** for their conributions to: `tauri`
+- **[luxalpa](https://github.com/luxalpa)** for their conributions to: `leptos`
+- **[lynn](https://github.com/lynn)** for their conributions to: `wasm-bindgen`
+- **[m-ou-se](https://github.com/m-ou-se)** for their conributions to: `log`
+- **[mTsBucy1](https://github.com/mTsBucy1)** for their conributions to: `tokio`
+- **[madadam](https://github.com/madadam)** for their conributions to: `tokio`
+- **[magic-akari](https://github.com/magic-akari)** for their conributions to: `wasm-bindgen`
+- **[mahdi739](https://github.com/mahdi739)** for their conributions to: `leptos`
+- **[maheshbansod](https://github.com/maheshbansod)** for their conributions to: `leptos`
+- **[maminrayej](https://github.com/maminrayej)** for their conributions to: `tokio`
+- **[manuel-woelker](https://github.com/manuel-woelker)** for their conributions to: `tokio`
+- **[mapkts](https://github.com/mapkts)** for their conributions to: `tokio`
+- **[marc2332](https://github.com/marc2332)** for their conributions to: `tauri`
+- **[marceline-cramer](https://github.com/marceline-cramer)** for their conributions to: `keyframe`
+- **[marcospb19](https://github.com/marcospb19)** for their conributions to: `tokio`
+- **[marcuswhybrow](https://github.com/marcuswhybrow)** for their conributions to: `leptos`
+- **[marienz](https://github.com/marienz)** for their conributions to: `wasm-bindgen`
+- **[mariotaku](https://github.com/mariotaku)** for their conributions to: `tauri`
+- **[markcatley](https://github.com/markcatley)** for their conributions to: `leptos`
+- **[martin-g](https://github.com/martin-g)** for their conributions to: `tokio`
+- **[matheus-consoli](https://github.com/matheus-consoli)** for their conributions to: `tokio`
+- **[matildasmeds](https://github.com/matildasmeds)** for their conributions to: `tokio`
+- **[matklad](https://github.com/matklad)** for their conributions to: `tokio`
+- **[mattgathu](https://github.com/mattgathu)** for their conributions to: `tokio`
+- **[mattiloh](https://github.com/mattiloh)** for their conributions to: `plugins-workspace`
+- **[matwork](https://github.com/matwork)** for their conributions to: `cpal`
+- **[matzemathics](https://github.com/matzemathics)** for their conributions to: `rust-smallvec`
+- **[maurer](https://github.com/maurer)** for their conributions to: `log`
+- **[maxded](https://github.com/maxded)** for their conributions to: `cpal`
+- **[mbodmer](https://github.com/mbodmer)** for their conributions to: `cpal`
+- **[mbrobbel](https://github.com/mbrobbel)** for their conributions to: `tokio`
+- **[mental32](https://github.com/mental32)** for their conributions to: `tokio`
+- **[meowtec](https://github.com/meowtec)** for their conributions to: `tauri`
+- **[metatoaster](https://github.com/metatoaster)** for their conributions to: `leptos`
+- **[mexus](https://github.com/mexus)** for their conributions to: `tokio`
+- **[mfish33](https://github.com/mfish33)** for their conributions to: `serde-wasm-bindgen`
+- **[mgeisler](https://github.com/mgeisler)** for their conributions to: `num-complex`
+- **[migerh](https://github.com/migerh)** for their conributions to: `console_error_panic_hook`
+- **[mike-kfed](https://github.com/mike-kfed)** for their conributions to: `wasm-bindgen`
+- **[mikoto2000](https://github.com/mikoto2000)** for their conributions to: `plugins-workspace`
+- **[mina86](https://github.com/mina86)** for their conributions to: `thiserror`
+- **[mitchhentges](https://github.com/mitchhentges)** for their conributions to: `cpal`
+- **[mitsuhiko](https://github.com/mitsuhiko)** for their conributions to: `serde`
+- **[mizuki0629](https://github.com/mizuki0629)** for their conributions to: `cpal`
+- **[mkane0814](https://github.com/mkane0814)** for their conributions to: `leptos`
+- **[mockersf](https://github.com/mockersf)** for their conributions to: `cpal`
+- **[mohe2015](https://github.com/mohe2015)** for their conributions to: `leptos`
+- **[morajabi](https://github.com/morajabi)** for their conributions to: `plugins-workspace`
+- **[morrme](https://github.com/morrme)** for their conributions to: `log`
+- **[mox692](https://github.com/mox692)** for their conributions to: `tokio`
+- **[mriise](https://github.com/mriise)** for their conributions to: `wasm-bindgen`
+- **[mrvillage](https://github.com/mrvillage)** for their conributions to: `leptos`
+- **[mscofield0](https://github.com/mscofield0)** for their conributions to: `leptos`
+- **[msiglreith](https://github.com/msiglreith)** for their conributions to: `cpal`
+- **[mskorkowski](https://github.com/mskorkowski)** for their conributions to: `leptos`
+- **[mstallmo](https://github.com/mstallmo)** for their conributions to: `wasm-bindgen`
+- **[mstange](https://github.com/mstange)** for their conributions to: `wasm-bindgen`
+- **[mtn](https://github.com/mtn)** for their conributions to: `json`
+- **[murarth](https://github.com/murarth)** for their conributions to: `num-complex`
+- **[mvdnes](https://github.com/mvdnes)** for their conributions to: `cpal`
+- **[mxinden](https://github.com/mxinden)** for their conributions to: `tokio`
+- **[name1e5s](https://github.com/name1e5s)** for their conributions to: `tokio`
+- **[namse](https://github.com/namse)** for their conributions to: `wasm-bindgen`
+- **[nanpuyue](https://github.com/nanpuyue)** for their conributions to: `tokio`
+- **[nasso](https://github.com/nasso)** for their conributions to: `wasm-bindgen`
+- **[nchashch](https://github.com/nchashch)** for their conributions to: `cpal`
+- **[ndmitchell](https://github.com/ndmitchell)** for their conributions to: `json`
+- **[nebkor](https://github.com/nebkor)** for their conributions to: `log`
+- **[neriyaco](https://github.com/neriyaco)** for their conributions to: `tauri`
+- **[nicflower](https://github.com/nicflower)** for their conributions to: `tokio`
+- **[nickelc](https://github.com/nickelc)** for their conributions to: `tokio`
+- **[nickkuk](https://github.com/nickkuk)** for their conributions to: `tokio`
+- **[niklasad1](https://github.com/niklasad1)** for their conributions to: `serde`
+- **[niklasf](https://github.com/niklasf)** for their conributions to: `tokio`
+- **[ninevra](https://github.com/ninevra)** for their conributions to: `thiserror`
+- **[nipunn1313](https://github.com/nipunn1313)** for their conributions to: `rust-smallvec`
+- **[nkbai](https://github.com/nkbai)** for their conributions to: `tokio`
+- **[nklayman](https://github.com/nklayman)** for their conributions to: `tauri`
+- **[nnethercote](https://github.com/nnethercote)** for their conributions to: `rust-smallvec`
+- **[nolanderc](https://github.com/nolanderc)** for their conributions to: `wasm-bindgen`
+- **[not-matthias](https://github.com/not-matthias)** for their conributions to: `tauri`
+- **[notgull](https://github.com/notgull)** for their conributions to: `tokio`
+- **[nothingismagick](https://github.com/nothingismagick)** for their conributions to: `tauri`
+- **[novacrazy](https://github.com/novacrazy)** for their conributions to: `leptos`
+- **[nskins](https://github.com/nskins)** for their conributions to: `tokio`
+- **[nurmohammed840](https://github.com/nurmohammed840)** for their conributions to: `tokio`
+- **[nvzqz](https://github.com/nvzqz)** for their conributions to: `tokio`
+- **[nwin](https://github.com/nwin)** for their conributions to: `num-complex`
+- **[nylonicious](https://github.com/nylonicious)** for their conributions to: `tokio`
+- **[oberien](https://github.com/oberien)** for their conributions to: `tokio`
+- **[obi1kenobi](https://github.com/obi1kenobi)** for their conributions to: `tokio`
+- **[oconnor663](https://github.com/oconnor663)** for their conributions to: `tokio`
+- **[ogghead](https://github.com/ogghead)** for their conributions to: `leptos`
+- **[ognevny](https://github.com/ognevny)** for their conributions to: `wasm-bindgen`
+- **[ohanar](https://github.com/ohanar)** for their conributions to: `wasm-bindgen`
+- **[olegdovger](https://github.com/olegdovger)** for their conributions to: `tauri`
+- **[olegnn](https://github.com/olegnn)** for their conributions to: `tokio`
+- **[olegshilov](https://github.com/olegshilov)** for their conributions to: `tauri`
+- **[olix0r](https://github.com/olix0r)** for their conributions to: `tokio`
+- **[ollie27](https://github.com/ollie27)** for their conributions to: `num-complex`
+- **[opilar](https://github.com/opilar)** for their conributions to: `log`
+- **[osa1](https://github.com/osa1)** for their conributions to: `tokio`
+- **[oscartbeaumont](https://github.com/oscartbeaumont)** for their conributions to: `tauri`
+- **[otamam818](https://github.com/otamam818)** for their conributions to: `plugins-workspace`
+- **[ottaviohartman](https://github.com/ottaviohartman)** for their conributions to: `log`
+- **[overdrivenpotato](https://github.com/overdrivenpotato)** for their conributions to: `json`
+- **[owjs3901](https://github.com/owjs3901)** for their conributions to: `tauri`
+- **[pablosichert](https://github.com/pablosichert)** for their conributions to: `wasm-bindgen`
+- **[pashokitsme](https://github.com/pashokitsme)** for their conributions to: `plugins-workspace`
+- **[passcod](https://github.com/passcod)** for their conributions to: `tokio`
+- **[paulgb](https://github.com/paulgb)** for their conributions to: `wasm-bindgen`
+- **[pcwalton](https://github.com/pcwalton)** for their conributions to: `serde`
+- **[pepsighan](https://github.com/pepsighan)** for their conributions to: `wasm-bindgen`
+- **[peter-glotfelty](https://github.com/peter-glotfelty)** for their conributions to: `strum`
+- **[petrstudynka](https://github.com/petrstudynka)** for their conributions to: `wasm-bindgen`
+- **[phungleson](https://github.com/phungleson)** for their conributions to: `tokio`
+- **[piegamesde](https://github.com/piegamesde)** for their conributions to: `log`
+- **[plietar](https://github.com/plietar)** for their conributions to: `cpal`
+- **[pmcgleenon](https://github.com/pmcgleenon)** for their conributions to: `tokio`
+- **[popzxc](https://github.com/popzxc)** for their conributions to: `tokio`
+- **[probablykasper](https://github.com/probablykasper)** for their conributions to: `tauri`
+- **[psych0d0g](https://github.com/psych0d0g)** for their conributions to: `cpal`
+- **[ptosi](https://github.com/ptosi)** for their conributions to: `log`
+- **[purplesyringa](https://github.com/purplesyringa)** for their conributions to: `json`
+- **[purung](https://github.com/purung)** for their conributions to: `leptos`
+- **[qdot](https://github.com/qdot)** for their conributions to: `wasm-bindgen`
+- **[quininer](https://github.com/quininer)** for their conributions to: `tokio`
+- **[rajivshah3](https://github.com/rajivshah3)** for their conributions to: `tauri`
+- **[rambip](https://github.com/rambip)** for their conributions to: `leptos`
+- **[ranile](https://github.com/ranile)** for their conributions to: `wasm-bindgen`
+- **[rap2hpoutre](https://github.com/rap2hpoutre)** for their conributions to: `log`
+- **[rayhem](https://github.com/rayhem)** for their conributions to: `num-complex`
+- **[rcoh](https://github.com/rcoh)** for their conributions to: `tokio`
+- **[rdlabo](https://github.com/rdlabo)** for their conributions to: `tauri`
+- **[regexident](https://github.com/regexident)** for their conributions to: `tauri`
+- **[renovate-bot](https://github.com/renovate-bot)** for their conributions to: `plugins-workspace`
+- **[retep998](https://github.com/retep998)** for their conributions to: `cpal`
+- **[rfwatson](https://github.com/rfwatson)** for their conributions to: `cpal`
+- **[rhizoome](https://github.com/rhizoome)** for their conributions to: `fundsp`
+- **[rhysd](https://github.com/rhysd)** for their conributions to: `wasm-bindgen`
+- **[rich-murphey](https://github.com/rich-murphey)** for their conributions to: `wasm-bindgen`
+- **[rimutaka](https://github.com/rimutaka)** for their conributions to: `wasm-bindgen`
+- **[rjzak](https://github.com/rjzak)** for their conributions to: `tokio`
+- **[robjtede](https://github.com/robjtede)** for their conributions to: `tokio`
+- **[roblabla](https://github.com/roblabla)** for their conributions to: `serde`
+- **[rocallahan](https://github.com/rocallahan)** for their conributions to: `serde`
+- **[rockerBOO](https://github.com/rockerBOO)** for their conributions to: `tauri`
+- **[roderickvd](https://github.com/roderickvd)** for their conributions to: `cpal`
+- **[rodrigocam](https://github.com/rodrigocam)** for their conributions to: `wasm-bindgen`
+- **[rotty](https://github.com/rotty)** for their conributions to: `tokio`
+- **[rozbb](https://github.com/rozbb)** for their conributions to: `wasm-bindgen`
+- **[rpfontana](https://github.com/rpfontana)** for their conributions to: `leptos`
+- **[rrichardson](https://github.com/rrichardson)** for their conributions to: `tokio`
+- **[rstoenescu](https://github.com/rstoenescu)** for their conributions to: `tauri`
+- **[rubdos](https://github.com/rubdos)** for their conributions to: `tokio`
+- **[ruuda](https://github.com/ruuda)** for their conributions to: `cpal`
+- **[ry](https://github.com/ry)** for their conributions to: `tokio`
+- **[ryangoree](https://github.com/ryangoree)** for their conributions to: `wasm-bindgen`
+- **[rych-hysh](https://github.com/rych-hysh)** for their conributions to: `tauri`
+- **[rylev](https://github.com/rylev)** for their conributions to: `wasm-bindgen`
+- **[ryo33](https://github.com/ryo33)** for their conributions to: `leptos`
+- **[s-panferov](https://github.com/s-panferov)** for their conributions to: `json`
+- **[safarir](https://github.com/safarir)** for their conributions to: `serde`
+- **[safx](https://github.com/safx)** for their conributions to: `leptos`
+- **[saikatdas0790](https://github.com/saikatdas0790)** for their conributions to: `leptos`
+- **[samcday](https://github.com/samcday)** for their conributions to: `wasm-bindgen`
+- **[samestep](https://github.com/samestep)** for their conributions to: `wasm-bindgen`
+- **[sanket143](https://github.com/sanket143)** for their conributions to: `tauri`
+- **[satakuma](https://github.com/satakuma)** for their conributions to: `tokio`
+- **[sauloco](https://github.com/sauloco)** for their conributions to: `leptos-use`
+- **[sbking](https://github.com/sbking)** for their conributions to: `leptos-use`
+- **[sbstp](https://github.com/sbstp)** for their conributions to: `tokio`
+- **[sdoering01](https://github.com/sdoering01)** for their conributions to: `tauri`
+- **[sdroege](https://github.com/sdroege)** for their conributions to: `tokio`
+- **[seanmonstar](https://github.com/seanmonstar)** for their conributions to: `tokio`
+- **[sebadob](https://github.com/sebadob)** for their conributions to: `leptos`
+- **[sebpuetz](https://github.com/sebpuetz)** for their conributions to: `tokio`
+- **[seeekr](https://github.com/seeekr)** for their conributions to: `tokio`
+- **[sendilkumarn](https://github.com/sendilkumarn)** for their conributions to: `wasm-bindgen`
+- **[seunghunee](https://github.com/seunghunee)** for their conributions to: `tokio`
+- **[sftse](https://github.com/sftse)** for their conributions to: `tauri`
+- **[sgrif](https://github.com/sgrif)** for their conributions to: `serde`
+- **[sgued](https://github.com/sgued)** for their conributions to: `leptos`
+- **[shadr](https://github.com/shadr)** for their conributions to: `leptos`
+- **[sharnoff](https://github.com/sharnoff)** for their conributions to: `tokio`
+- **[shinglyu](https://github.com/shinglyu)** for their conributions to: `serde`
+- **[shingtaklam1324](https://github.com/shingtaklam1324)** for their conributions to: `num-complex`
+- **[shockham](https://github.com/shockham)** for their conributions to: `cpal`
+- **[silvanshade](https://github.com/silvanshade)** for their conributions to: `wasm-bindgen`
+- **[simlay](https://github.com/simlay)** for their conributions to: `cpal`
+- **[simonlindholm](https://github.com/simonlindholm)** for their conributions to: `tokio`
+- **[sinkuu](https://github.com/sinkuu)** for their conributions to: `tokio`
+- **[situ2001](https://github.com/situ2001)** for their conributions to: `tauri`
+- **[siyou](https://github.com/siyou)** for their conributions to: `tauri`
+- **[smarnach](https://github.com/smarnach)** for their conributions to: `tokio`
+- **[smoelius](https://github.com/smoelius)** for their conributions to: `strum`
+- **[snOm3ad](https://github.com/snOm3ad)** for their conributions to: `wasm-bindgen`
+- **[soerenmeier](https://github.com/soerenmeier)** for their conributions to: `tokio`
+- **[solweo](https://github.com/solweo)** for their conributions to: `leptos`
+- **[sorz](https://github.com/sorz)** for their conributions to: `tokio`
+- **[sosweetham](https://github.com/sosweetham)** for their conributions to: `plugins-workspace`
+- **[spastorino](https://github.com/spastorino)** for their conributions to: `wasm-bindgen`
+- **[spencewenski](https://github.com/spencewenski)** for their conributions to: `leptos`
+- **[spinda](https://github.com/spinda)** for their conributions to: `serde`
+- **[srenatus](https://github.com/srenatus)** for their conributions to: `wasm-bindgen`
+- **[stappersg](https://github.com/stappersg)** for their conributions to: `leptos`
+- **[stbuehler](https://github.com/stbuehler)** for their conributions to: `tokio`
+- **[stefnotch](https://github.com/stefnotch)** for their conributions to: `leptos`
+- **[stepancheg](https://github.com/stepancheg)** for their conributions to: `tokio`
+- **[str4d](https://github.com/str4d)** for their conributions to: `num-complex`
+- **[striezel](https://github.com/striezel)** for their conributions to: `wasm-bindgen`
+- **[suikammd](https://github.com/suikammd)** for their conributions to: `tokio`
+- **[sunfishcode](https://github.com/sunfishcode)** for their conributions to: `log`
+- **[sunjay](https://github.com/sunjay)** for their conributions to: `tokio`
+- **[sunshowers](https://github.com/sunshowers)** for their conributions to: `tokio`
+- **[surban](https://github.com/surban)** for their conributions to: `tokio`
+- **[swlynch99](https://github.com/swlynch99)** for their conributions to: `json`
+- **[swnb](https://github.com/swnb)** for their conributions to: `wasm-bindgen`
+- **[swsnr](https://github.com/swsnr)** for their conributions to: `log`
+- **[tage64](https://github.com/tage64)** for their conributions to: `serde`
+- **[tailhook](https://github.com/tailhook)** for their conributions to: `tokio`
+- **[tbu-](https://github.com/tbu-)** for their conributions to: `serde`
+- **[tcr](https://github.com/tcr)** for their conributions to: `wasm-bindgen`
+- **[teamplayer3](https://github.com/teamplayer3)** for their conributions to: `keyframe`
+- **[tensor-programming](https://github.com/tensor-programming)** for their conributions to: `tauri`
+- **[teor2345](https://github.com/teor2345)** for their conributions to: `tokio`
+- **[teoxoy](https://github.com/teoxoy)** for their conributions to: `mint`
+- **[termoshtt](https://github.com/termoshtt)** for their conributions to: `num-complex`
+- **[tesaguri](https://github.com/tesaguri)** for their conributions to: `tokio`
+- **[tglane](https://github.com/tglane)** for their conributions to: `tokio`
+- **[thadguidry](https://github.com/thadguidry)** for their conributions to: `tauri`
+- **[thatcomputerguy0101](https://github.com/thatcomputerguy0101)** for their conributions to: `wasm-bindgen`
+- **[thekeys93](https://github.com/thekeys93)** for their conributions to: `tokio`
+- **[thep0y](https://github.com/thep0y)** for their conributions to: `tauri`
+- **[thestarmaker](https://github.com/thestarmaker)** for their conributions to: `leptos`
+- **[thomaseizinger](https://github.com/thomaseizinger)** for their conributions to: `wasm-bindgen`
+- **[thomasetter](https://github.com/thomasetter)** for their conributions to: `wasm-bindgen`
+- **[tiif](https://github.com/tiif)** for their conributions to: `tokio`
+- **[tijsvd](https://github.com/tijsvd)** for their conributions to: `tokio`
+- **[tisonkun](https://github.com/tisonkun)** for their conributions to: `log`
+- **[tjardoo](https://github.com/tjardoo)** for their conributions to: `log`
+- **[tkoyasak](https://github.com/tkoyasak)** for their conributions to: `tokio`
+- **[tmccombs](https://github.com/tmccombs)** for their conributions to: `log`
+- **[toVersus](https://github.com/toVersus)** for their conributions to: `wasm-bindgen`
+- **[tobz](https://github.com/tobz)** for their conributions to: `tokio`
+- **[tomara-x](https://github.com/tomara-x)** for their conributions to: `fundsp`
+- **[tomaszkubacki](https://github.com/tomaszkubacki)** for their conributions to: `leptos-use`
+- **[torepettersen](https://github.com/torepettersen)** for their conributions to: `tokio`
+- **[totorigolo](https://github.com/totorigolo)** for their conributions to: `tokio`
+- **[tqwewe](https://github.com/tqwewe)** for their conributions to: `leptos`
+- **[tr3ysmith](https://github.com/tr3ysmith)** for their conributions to: `tauri`
+- **[trevyn](https://github.com/trevyn)** for their conributions to: `wasm-bindgen`
+- **[tsidea](https://github.com/tsidea)** for their conributions to: `tokio`
+- **[tversteeg](https://github.com/tversteeg)** for their conributions to: `leptos`
+- **[tw1t611](https://github.com/tw1t611)** for their conributions to: `wasm-bindgen`
+- **[twilco](https://github.com/twilco)** for their conributions to: `wasm-bindgen`
+- **[twittner](https://github.com/twittner)** for their conributions to: `tokio`
+- **[twlite](https://github.com/twlite)** for their conributions to: `plugins-workspace`
+- **[twmb](https://github.com/twmb)** for their conributions to: `tokio`
+- **[typed-sigterm](https://github.com/typed-sigterm)** for their conributions to: `tauri`
+- **[tytrdev](https://github.com/tytrdev)** for their conributions to: `tauri`
+- **[tzx](https://github.com/tzx)** for their conributions to: `tokio`
+- **[udoprog](https://github.com/udoprog)** for their conributions to: `tokio`
+- **[uklotzde](https://github.com/uklotzde)** for their conributions to: `tokio`
+- **[ultrasaurus](https://github.com/ultrasaurus)** for their conributions to: `leptos`
+- **[unbeauvoyage](https://github.com/unbeauvoyage)** for their conributions to: `plugins-workspace`
+- **[unknovvn](https://github.com/unknovvn)** for their conributions to: `tauri`
+- **[vasfvitor](https://github.com/vasfvitor)** for their conributions to: `tauri`
+- **[vegai](https://github.com/vegai)** for their conributions to: `json`
+- **[velocitysystems](https://github.com/velocitysystems)** for their conributions to: `tauri`
+- **[vi](https://github.com/vi)** for their conributions to: `tokio`
+- **[victor-timofei](https://github.com/victor-timofei)** for their conributions to: `tokio`
+- **[vilgotf](https://github.com/vilgotf)** for their conributions to: `tokio`
+- **[vincascm](https://github.com/vincascm)** for their conributions to: `serde`
+- **[vitalyd](https://github.com/vitalyd)** for their conributions to: `tokio`
+- **[vitorenesduarte](https://github.com/vitorenesduarte)** for their conributions to: `tokio`
+- **[vks](https://github.com/vks)** for their conributions to: `num-complex`
+- **[vlabo](https://github.com/vlabo)** for their conributions to: `tauri`
+- **[vldm](https://github.com/vldm)** for their conributions to: `leptos`
+- **[vojta7](https://github.com/vojta7)** for their conributions to: `wasm-bindgen`
+- **[vojtechkral](https://github.com/vojtechkral)** for their conributions to: `tokio`
+- **[vonPB](https://github.com/vonPB)** for their conributions to: `tauri`
+- **[vorner](https://github.com/vorner)** for their conributions to: `tokio`
+- **[vxzyfx](https://github.com/vxzyfx)** for their conributions to: `tokio`
+- **[washanhanzi](https://github.com/washanhanzi)** for their conributions to: `tauri`
+- **[wathenjiang](https://github.com/wathenjiang)** for their conributions to: `tokio`
+- **[waywardmonkeys](https://github.com/waywardmonkeys)** for their conributions to: `rust-smallvec`
+- **[webbertakken](https://github.com/webbertakken)** for their conributions to: `tauri`
+- **[webmstk](https://github.com/webmstk)** for their conributions to: `leptos`
+- **[wgibbs-rs](https://github.com/wgibbs-rs)** for their conributions to: `cpal`
+- **[whizsid](https://github.com/whizsid)** for their conributions to: `wasm-bindgen`
+- **[wictory](https://github.com/wictory)** for their conributions to: `num-complex`
+- **[wismer](https://github.com/wismer)** for their conributions to: `wasm-bindgen`
+- **[workingjubilee](https://github.com/workingjubilee)** for their conributions to: `rust-smallvec`
+- **[woubuc](https://github.com/woubuc)** for their conributions to: `tauri`
+- **[wravery](https://github.com/wravery)** for their conributions to: `tauri`
+- **[wtetzner](https://github.com/wtetzner)** for their conributions to: `log`
+- **[wtfsck](https://github.com/wtfsck)** for their conributions to: `wasm-bindgen`
+- **[wusyong](https://github.com/wusyong)** for their conributions to: `tauri`
+- **[wutchzone](https://github.com/wutchzone)** for their conributions to: `tokio`
+- **[wyatt-herkamp](https://github.com/wyatt-herkamp)** for their conributions to: `strum`
+- **[xMAC94x](https://github.com/xMAC94x)** for their conributions to: `cpal`
+- **[xd009642](https://github.com/xd009642)** for their conributions to: `tokio`
+- **[xeqlol](https://github.com/xeqlol)** for their conributions to: `wasm-bindgen`
+- **[xnuk](https://github.com/xnuk)** for their conributions to: `wasm-bindgen`
+- **[xtuc](https://github.com/xtuc)** for their conributions to: `wasm-bindgen`
+- **[xuchaoqian](https://github.com/xuchaoqian)** for their conributions to: `tauri`
+- **[yamadapc](https://github.com/yamadapc)** for their conributions to: `cpal`
+- **[yjh0502](https://github.com/yjh0502)** for their conributions to: `json`
+- **[yoanlcq](https://github.com/yoanlcq)** for their conributions to: `num-complex`
+- **[yoshuawuyts](https://github.com/yoshuawuyts)** for their conributions to: `log`
+- **[yotamofek](https://github.com/yotamofek)** for their conributions to: `tokio`
+- **[yuja](https://github.com/yuja)** for their conributions to: `tokio`
+- **[yutotnh](https://github.com/yutotnh)** for their conributions to: `tauri`
+- **[yydcnjjw](https://github.com/yydcnjjw)** for their conributions to: `tauri`
+- **[zachs18](https://github.com/zachs18)** for their conributions to: `rust-smallvec`
+- **[zaharidichev](https://github.com/zaharidichev)** for their conributions to: `tokio`
+- **[zakpatterson](https://github.com/zakpatterson)** for their conributions to: `tauri`
+- **[zeroed](https://github.com/zeroed)** for their conributions to: `tokio`
+- **[zh-jq](https://github.com/zh-jq)** for their conributions to: `tokio`
+- **[zonyitoo](https://github.com/zonyitoo)** for their conributions to: `tokio`
+- **[zoomiti](https://github.com/zoomiti)** for their conributions to: `leptos`
+- **[zsiciarz](https://github.com/zsiciarz)** for their conributions to: `num-complex`
+- **[zyansheep](https://github.com/zyansheep)** for their conributions to: `num-complex`
+- **[zyctree](https://github.com/zyctree)** for their conributions to: `tokio`
+
+And 1451 other cool humans for their contributions, who haven't made it to this list yet.
+
+---
+
+This file was generated using [`acknowldge` CLI](https://crates.io/crates/acknowledgements-rs). Thank you for acknowledging the contributors!

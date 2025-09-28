@@ -12,7 +12,7 @@ use shared::{
     },
     RouteId,
 };
-use tauri::{AppHandle, Emitter};
+use tauri::{async_runtime::spawn, AppHandle, Emitter};
 use thiserror::Error;
 
 use shared::events::navigation::{
@@ -141,7 +141,7 @@ impl NavigationManager {
 
         // Spawn async gating
         let cloned = self.clone();
-        tokio::spawn(async move {
+        spawn(async move {
             cloned.run_gating(id).await;
         });
 

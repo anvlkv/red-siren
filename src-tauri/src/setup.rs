@@ -1,9 +1,6 @@
-use tauri::{async_runtime::spawn, App, Manager};
+use tauri::{App, Manager};
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 use tauri_plugin_window_state::WindowExt;
-use tokio::sync::Mutex;
-
-use crate::health;
 
 pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     let mut main_window = app.get_webview_window("main").ok_or("No main window")?;

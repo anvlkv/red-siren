@@ -1,13 +1,11 @@
 use leptos::prelude::*;
-use leptos_use::{use_window_size, UseWindowSizeReturn};
 use shared::commands::navigation::NavigateRequestPayload;
-use shared::{NavCommittedPayload, NavStartedPayload, RouteId};
+use shared::RouteId;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
-use tauri_use::{use_invoke_with_args, use_listen, EventType, UseListenReturn, UseTauriWithReturn};
+use tauri_use::{use_invoke_with_args, UseTauriWithReturn};
 
 use crate::components::{Button, Card, CardAnimation, Icon, UiSize, UiVariant};
-use crate::nav_commit_cache::use_nav_commit_cache;
 
 const BASE_ANIMATION_DURATION_MS: f64 = 600.0;
 
@@ -15,9 +13,9 @@ const BASE_ANIMATION_DURATION_MS: f64 = 600.0;
 #[derive(Debug, Clone)]
 pub struct AppearAnimationConfig {
     /// Base height for scaling calculations
-    pub base_height: f32,
+    pub base_height: f64,
     /// Base Y translation distance
-    pub base_y_px: f32,
+    pub base_y_px: f64,
     /// Base tilt angle
     pub tilt_x_from_deg: f32,
     /// Base duration in milliseconds
@@ -37,6 +35,12 @@ impl Default for AppearAnimationConfig {
             played_flag: &DEFAULT_APPEAR_PLAYED,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NavigationTx {
+    Enter(u64),
+    Leave(u64),
 }
 
 /// Generic Page component that handles common navigation animation logic.
@@ -72,234 +76,13 @@ pub fn ContentPage(
     #[prop(optional)]
     appear_animation_config: Option<AppearAnimationConfig>,
 ) -> impl IntoView {
+    let nav_tx = expect_context::<Signal<Option<NavigationTx>>>();
+
     let UseTauriWithReturn {
         trigger: navigate_trigger,
         error: navigate_error,
         ..
     } = use_invoke_with_args::<NavigateRequestPayload, ()>(shared::commands::navigation::NAVIGATE);
-
-    Effect::new(move |_| {
-        if let Some(err) = navigate_error() {
-            log::error!(
-                "Error invoking {}: {}",
-                shared::commands::navigation::NAVIGATE,
-                err
-            );
-        }
-    });
-
-    // Listen for the commit event to get tx_id for enter_done
-    let UseListenReturn {
-        data: committed,
-        error: error_committed,
-        open: open_committed,
-        ..
-    } = use_listen::<NavCommittedPayload>(EventType::Custom(
-        shared::events::navigation::NAV_COMMITTED,
-    ));
-
-    Effect::new(move |_| {
-        open_committed();
-    });
-
-    Effect::new(move |_| {
-        if let Some(err) = error_committed() {
-            log::error!(
-                "Error listening to {}: {err}",
-                shared::events::navigation::NAV_COMMITTED
-            );
-        }
-    });
-
-    // Listen for navigation_started to handle leave animations
-    let UseListenReturn {
-        data: started,
-        error: error_started,
-        open: open_started,
-        ..
-    } = use_listen::<NavStartedPayload>(EventType::Custom(shared::events::navigation::NAV_STARTED));
-
-    Effect::new(move |_| {
-        open_started();
-    });
-
-    Effect::new(move |_| {
-        if let Some(err) = error_started() {
-            log::error!(
-                "Error listening to {}: {err}",
-                shared::events::navigation::NAV_STARTED
-            );
-        }
-    });
-
-    // Derive tx_id signals for this specific route
-    let committed_tx_id = Signal::derive(move || {
-        committed().as_ref().and_then(|p| {
-            if p.to == route_id {
-                Some(p.tx_id)
-            } else {
-                None
-            }
-        })
-    });
-
-    // Optional cache (None if not provided – then we simply skip fallback enter animation)
-    let nav_commit_cache = use_nav_commit_cache();
-    let leave_tx_id = Signal::derive(move || {
-        started().as_ref().and_then(|ev| {
-            if ev.from == route_id && ev.from != ev.to {
-                Some(ev.tx_id)
-            } else {
-                None
-            }
-        })
-    });
-
-    // Determine if navigation is backward using route_back prop
-    let is_backward_navigation = Signal::derive(move || {
-        started()
-            .as_ref()
-            .map(|ev| {
-                // If navigating to the route_back, it's backward navigation
-                route_back == Some(ev.to)
-            })
-            .unwrap_or(false)
-    });
-
-    // Unified animation signal driving Card
-    let (start_animation, set_start_animation) = signal(None::<(u64, CardAnimation)>);
-
-    // Handle optional appear animation (Home page special case)
-    if let Some(config) = appear_animation_config {
-        let UseWindowSizeReturn { width: _, height } = use_window_size();
-        let appear_started = RwSignal::new(false);
-        let played = config.played_flag.get_or_init(|| AtomicBool::new(false));
-
-        Effect::new(move |_| {
-            if played.load(Ordering::Relaxed) || appear_started() {
-                return;
-            }
-
-            // Wait for a valid window height before triggering appear (cold mount only)
-            let h = height() as f32;
-            if h > 0.0 {
-                // Scale translation and duration by height (clamped)
-                let y_scale = (h / config.base_height).clamp(0.75, 1.25);
-                let y_from_px = config.base_y_px * y_scale;
-
-                let t_scale = (h / config.base_height).clamp(0.85, 1.15);
-                let ms = config.base_ms * t_scale as f64;
-
-                set_start_animation(Some((
-                    0,
-                    CardAnimation::Appear {
-                        x_from_px: 0.0,
-                        y_from_px,
-                        tilt_x_from_deg: config.tilt_x_from_deg,
-                        ms,
-                    },
-                )));
-                appear_started.set(true);
-                played.store(true, Ordering::Relaxed);
-                log::info!(
-                    "Page({:?}): queued APPEAR (y_from_px={:.1}, ms={:.0}) for height {:.0}",
-                    route_id,
-                    y_from_px,
-                    ms,
-                    h
-                );
-            }
-        });
-    }
-
-    // Queue ENTER animation on commit to this route
-    Effect::new(move |_| {
-        if let Some(tx) = committed_tx_id() {
-            if tx == 0 {
-                // Bootstrap committed (tx_id=0) -> Appear animation will drive enter_done.
-                return;
-            }
-            // Continuous rotation: backward enters from right, forward enters from left
-            let from_deg = if is_backward_navigation() {
-                90.0
-            } else {
-                -90.0
-            };
-            set_start_animation(Some((
-                tx,
-                CardAnimation::EnterY {
-                    from_deg,
-                    to_deg: 0.0,
-                    ms: BASE_ANIMATION_DURATION_MS,
-                },
-            )));
-            log::debug!(
-                "Page({:?}): queued ENTER tx_id={} (backward={})",
-                route_id,
-                tx,
-                is_backward_navigation()
-            );
-        }
-    });
-
-    // Fallback ENTER animation if this page missed the live NAV_COMMITTED event (commit happened before mount)
-    Effect::new(move |_| {
-        if committed_tx_id().is_none() {
-            if let Some(cache) = nav_commit_cache.clone() {
-                if let Some(payload) = cache.get() {
-                    if payload.to == route_id {
-                        // Avoid overriding an already queued animation & skip bootstrap (tx_id=0 handled by Appear)
-                        if start_animation().is_none() && payload.tx_id != 0 {
-                            let from_deg = if is_backward_navigation() {
-                                90.0
-                            } else {
-                                -90.0
-                            };
-                            set_start_animation(Some((
-                                payload.tx_id,
-                                CardAnimation::EnterY {
-                                    from_deg,
-                                    to_deg: 0.0,
-                                    ms: BASE_ANIMATION_DURATION_MS,
-                                },
-                            )));
-                            log::debug!(
-                                "Page({:?}): fallback ENTER tx_id={} (backward={})",
-                                route_id,
-                                payload.tx_id,
-                                is_backward_navigation()
-                            );
-                        }
-                    }
-                }
-            }
-        }
-    });
-    // Queue LEAVE animation on navigation start from this route
-    Effect::new(move |_| {
-        if let Some(tx) = leave_tx_id() {
-            // Continuous rotation: backward leaves left, forward leaves right
-            let to_deg = if is_backward_navigation() {
-                -90.0
-            } else {
-                90.0
-            };
-            set_start_animation(Some((
-                tx,
-                CardAnimation::LeaveY {
-                    from_deg: 0.0,
-                    to_deg,
-                    ms: BASE_ANIMATION_DURATION_MS,
-                },
-            )));
-            log::debug!(
-                "Page({:?}): queued LEAVE tx_id={} (backward={})",
-                route_id,
-                tx,
-                is_backward_navigation()
-            );
-        }
-    });
 
     // Trigger to notify backend that the enter animation has completed
     let UseTauriWithReturn {
@@ -309,16 +92,6 @@ pub fn ContentPage(
     } = use_invoke_with_args::<shared::commands::navigation::NavTxPayload, ()>(
         shared::commands::navigation::NAV_ENTER_DONE,
     );
-
-    Effect::new(move |_| {
-        if let Some(err) = enter_error() {
-            log::error!(
-                "Error invoking {}: {}",
-                shared::commands::navigation::NAV_ENTER_DONE,
-                err
-            );
-        }
-    });
 
     // Trigger to notify backend that the leave animation has completed
     let UseTauriWithReturn {
@@ -330,6 +103,20 @@ pub fn ContentPage(
     );
 
     Effect::new(move |_| {
+        if let Some(err) = navigate_error() {
+            log::error!(
+                "Error invoking {}: {}",
+                shared::commands::navigation::NAVIGATE,
+                err
+            );
+        }
+        if let Some(err) = enter_error() {
+            log::error!(
+                "Error invoking {}: {}",
+                shared::commands::navigation::NAV_ENTER_DONE,
+                err
+            );
+        }
         if let Some(err) = leave_error() {
             log::error!(
                 "Error invoking {}: {}",
@@ -339,40 +126,68 @@ pub fn ContentPage(
         }
     });
 
+    // Unified animation signal driving Card
+    let (card_animation, set_card_animation) = signal({
+        if let Some((config, played)) = appear_animation_config
+            .iter()
+            .filter_map(|c| {
+                let played = c.played_flag.get_or_init(|| AtomicBool::new(false));
+                if !played.load(Ordering::Relaxed) {
+                    Some((c, played))
+                } else {
+                    None
+                }
+            })
+            .next()
+        {
+            played.store(true, Ordering::Relaxed);
+            Some(CardAnimation::Appear {
+                x_from_px: 0.0,
+                y_from_px: config.base_y_px as f32,
+                tilt_x_from_deg: config.tilt_x_from_deg,
+                ms: config.base_ms,
+            })
+        } else {
+            Some(CardAnimation::EnterY {
+                from_deg: 90.0,
+                to_deg: 0.0,
+                ms: BASE_ANIMATION_DURATION_MS,
+            })
+        }
+    });
+
+    // Queue LEAVE animation on navigation start from this route
+    Effect::new(move |_| {
+        if matches!(nav_tx(), Some(NavigationTx::Leave(_))) {
+            set_card_animation(Some(CardAnimation::LeaveY {
+                from_deg: 0.0,
+                to_deg: 90.0,
+                ms: BASE_ANIMATION_DURATION_MS,
+            }));
+            log::debug!("Page({route_id:?}): queued LEAVE tx_id={:?}", nav_tx());
+        }
+    });
+
+    let animation_done_cb = Callback::new(move |_| {
+        match nav_tx() {
+            Some(NavigationTx::Enter(tx_id)) => {
+                enter_done_trigger(Some(shared::commands::navigation::NavTxPayload { tx_id }));
+            }
+            Some(NavigationTx::Leave(tx_id)) => {
+                leave_done_trigger(Some(shared::commands::navigation::NavTxPayload { tx_id }));
+            }
+            None => {}
+        }
+
+        set_card_animation(None);
+    });
+
     view! {
         <div class="w-full h-full flex items-center justify-center">
             <Card
-                start_animation=Signal::derive(start_animation)
+                start_animation=Signal::derive(card_animation)
                 class="max-h-screen"
-                on_animation_done=Callback::new({
-                    move |(tx_id, kind)| {
-                        match kind {
-                            CardAnimation::EnterY { .. } => {
-                                enter_done_trigger(
-                                    Some(shared::commands::navigation::NavTxPayload {
-                                        tx_id,
-                                    }),
-                                );
-                            }
-                            CardAnimation::LeaveY { .. } => {
-                                leave_done_trigger(
-                                    Some(shared::commands::navigation::NavTxPayload {
-                                        tx_id,
-                                    }),
-                                );
-                            }
-                            CardAnimation::Appear { .. } => {
-                                if tx_id == 0 {
-                                    enter_done_trigger(
-                                        Some(shared::commands::navigation::NavTxPayload {
-                                            tx_id,
-                                        }),
-                                    );
-                                }
-                            }
-                        }
-                    }
-                })
+                on_animation_done=animation_done_cb
             >
                 <div class="flex items-center justify-between gap-4 mb-6">
                     <Show when=move || route_back.is_some()>

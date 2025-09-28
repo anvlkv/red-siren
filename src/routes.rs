@@ -6,11 +6,13 @@ use leptos_router::{
     hooks::{use_location, use_navigate},
 };
 use leptos_router::{NavigateOptions, StaticSegment};
-use shared::RouteId;
+use shared::{NavCommittedPayload, NavStartedPayload, RouteId};
 use tauri_use::{use_invoke_with_args, use_listen, EventType, UseListenReturn, UseTauriWithReturn};
 
-use crate::nav_commit_cache::expect_nav_commit_cache;
-use crate::pages::{About, Donate, Home, Play, Tune};
+use crate::{
+    components::NavigationTx,
+    pages::{About, Donate, Home, Play, Tune},
+};
 use crate::{
     components::{AppError, ErrorTemplate},
     pages::Permissions,
@@ -18,15 +20,6 @@ use crate::{
 
 #[component]
 pub fn AppRoutes() -> impl IntoView {
-    // Listen for committed navigation events; perform actual client-side route change here.
-    let UseListenReturn {
-        data: committed,
-        error,
-        open,
-        ..
-    } = use_listen::<shared::NavCommittedPayload>(EventType::Custom(
-        shared::events::navigation::NAV_COMMITTED,
-    ));
     let navigate = use_navigate();
     let location = use_location();
     let UseTauriWithReturn {
@@ -46,11 +39,49 @@ pub fn AppRoutes() -> impl IntoView {
     } = use_listen::<shared::NavSyncPayload>(EventType::Custom(
         shared::events::navigation::NAV_SYNC,
     ));
-    let navigate_from_sync = navigate.clone();
+    // Listen for the commit event to get tx_id for enter_done
+    let UseListenReturn {
+        data: committed,
+        error: error_committed,
+        open: open_committed,
+        ..
+    } = use_listen::<NavCommittedPayload>(EventType::Custom(
+        shared::events::navigation::NAV_COMMITTED,
+    ));
+
+    // Listen for navigation_started to handle leave animations
+    let UseListenReturn {
+        data: started,
+        error: error_started,
+        open: open_started,
+        ..
+    } = use_listen::<NavStartedPayload>(EventType::Custom(shared::events::navigation::NAV_STARTED));
+
+    let nav_tx = Signal::derive(move || {
+        let started = started();
+        let committed = committed();
+        log::debug!("Navigation. Started: {started:?}. Commited: {committed:?}");
+
+        match (started, committed) {
+            (None, None) => None,
+            (None, Some(tx)) => Some(NavigationTx::Enter(tx.tx_id)),
+            (Some(tx), None) => Some(NavigationTx::Leave(tx.tx_id)),
+            (Some(tx_started), Some(tx_commited)) => {
+                if tx_started.tx_id > tx_commited.tx_id {
+                    Some(NavigationTx::Leave(tx_started.tx_id))
+                } else {
+                    Some(NavigationTx::Enter(tx_commited.tx_id))
+                }
+            }
+        }
+    });
+
+    provide_context(nav_tx);
 
     Effect::new(move |_| {
-        open();
         sync_open();
+        open_started();
+        open_committed();
         // this effect supposed to only run once, therefore we get pathname untracked.
         let current = location.pathname.get_untracked();
         trigger_nav_sync(Some(shared::commands::navigation::NavSyncRequestPayload {
@@ -59,12 +90,6 @@ pub fn AppRoutes() -> impl IntoView {
     });
 
     Effect::new(move |_| {
-        if let Some(err) = error() {
-            log::error!(
-                "Error listening to {}: {err}",
-                shared::events::navigation::NAV_COMMITTED
-            );
-        }
         if let Some(err) = sync_error() {
             log::error!(
                 "Error listening to {}: {err}",
@@ -77,21 +102,35 @@ pub fn AppRoutes() -> impl IntoView {
                 shared::commands::navigation::NAV_SYNC
             );
         }
-    });
-
-    let ncx_cache = expect_nav_commit_cache();
-
-    Effect::new(move |_| {
-        if let Some(payload) = committed().as_ref() {
-            // Store payload so target page can synthesize enter animation if it missed live event
-            ncx_cache.set(Some(payload.clone()));
-            navigate(payload.to.into(), NavigateOptions::default());
+        if let Some(err) = error_committed() {
+            log::error!(
+                "Error listening to {}: {err}",
+                shared::events::navigation::NAV_COMMITTED
+            );
+        }
+        if let Some(err) = error_started() {
+            log::error!(
+                "Error listening to {}: {err}",
+                shared::events::navigation::NAV_STARTED
+            );
         }
     });
 
-    Effect::new(move |_| {
-        if let Some(payload) = sync().as_ref() {
-            navigate_from_sync(payload.to.into(), NavigateOptions::default());
+    Effect::new({
+        let navigate = navigate.clone();
+        move |_| {
+            if let Some(payload) = committed().as_ref() {
+                navigate(payload.to.into(), NavigateOptions::default());
+            }
+        }
+    });
+
+    Effect::new({
+        let navigate = navigate.clone();
+        move |_| {
+            if let Some(payload) = sync().as_ref() {
+                navigate(payload.to.into(), NavigateOptions::default());
+            }
         }
     });
 

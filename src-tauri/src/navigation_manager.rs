@@ -253,7 +253,8 @@ impl NavigationManager {
             }
         }
 
-        self.emit_started(tx_id);
+        // NOT EMITTING started as there's no page to leave...
+        // self.emit_started(tx_id);
 
         // Immediate commit (no actual "leave" animation for an initial page)
         self.commit(tx_id);

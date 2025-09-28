@@ -14,7 +14,10 @@ pub struct ActiveWindowContext(pub Option<(f64, f64)>);
 
 #[component]
 pub fn App() -> impl IntoView {
-    let UseTauriWithReturn { trigger, .. } = use_command::<()>(shared::commands::health::GUI_READY);
+    let UseTauriWithReturn {
+        trigger: trigger_gui_ready,
+        ..
+    } = use_command::<()>(shared::commands::health::GUI_READY);
 
     let UseListenReturn {
         event_id,
@@ -31,13 +34,22 @@ pub fn App() -> impl IntoView {
         ..
     } = use_command::<()>(shared::commands::navigation::NAV_BOOTSTRAP);
 
+    let UseTauriReturn {
+        trigger: trigger_update_window_appearance,
+        ..
+    } = use_invoke::<UpdateWindowAppearancePayload, (), ()>(
+        shared::commands::setup::UPDATE_WINDOW_APPEARANCE,
+    );
+
+    let preferred_dark = use_preferred_dark();
+
     let (window, set_window) = signal(ActiveWindowContext(None));
 
     Effect::new(move |_| {
         open();
 
         log::info!("App mounted, reporting GUI ready");
-        trigger(Some(()));
+        trigger_gui_ready(Some(()));
     });
 
     Effect::new(move |_| {
@@ -102,15 +114,10 @@ pub fn App() -> impl IntoView {
         }
     });
 
-    let preferred_dark = use_preferred_dark();
-    let UseTauriReturn { trigger, .. } = use_invoke::<UpdateWindowAppearancePayload, (), ()>(
-        shared::commands::setup::UPDATE_WINDOW_APPEARANCE,
-    );
-
     Effect::new(move |_| {
         let dark = preferred_dark();
         log::info!("Preferred dark mode: {}", dark);
-        trigger(Some((UpdateWindowAppearancePayload { dark }, ())));
+        trigger_update_window_appearance(Some((UpdateWindowAppearancePayload { dark }, ())));
     });
 
     view! {

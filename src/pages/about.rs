@@ -1,4 +1,4 @@
-use crate::components::{Button, Icon, Page};
+use crate::components::{Button, ContentPage, Icon};
 use leptos::prelude::*;
 use shared::{commands::navigation::NavigateRequestPayload, RouteId};
 use tauri_use::{use_invoke_with_args, UseTauriWithReturn};
@@ -22,7 +22,7 @@ pub fn About() -> impl IntoView {
     });
 
     view! {
-        <Page route_id=RouteId::About title="About" route_back=RouteId::Home>
+        <ContentPage route_id=RouteId::About title="About" route_back=RouteId::Home>
             <div class="flex flex-col items-center justify-center gap-6">
                 <h2 class="text-2xl text-bold max-w-[42ch] italic">"Red Siren is a noise chime"</h2>
                 <p class="text-xl max-w-[42ch] ">
@@ -59,6 +59,6 @@ pub fn About() -> impl IntoView {
                     "Donate"
                 </Button>
             </div>
-        </Page>
+        </ContentPage>
     }
 }

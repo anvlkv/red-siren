@@ -1,11 +1,11 @@
-use crate::components::Page;
+use crate::components::ContentPage;
 use leptos::prelude::*;
 use shared::RouteId;
 
 #[component]
 pub fn Donate() -> impl IntoView {
     view! {
-        <Page route_id=RouteId::Donate title="Donate" route_back=RouteId::About>
+        <ContentPage route_id=RouteId::Donate title="Donate" route_back=RouteId::About>
             <div class="flex flex-col items-center justify-center gap-6">
                 <h2 class="text-2xl italic">"Support the Creator of Red Siren"</h2>
                 <p class="text-xl max-w-[42ch] ">
@@ -31,6 +31,6 @@ pub fn Donate() -> impl IntoView {
                     "Your support helps me keep going. It fuels the time, care, and resources bringing this project to life."
                 </p>
             </div>
-        </Page>
+        </ContentPage>
     }
 }

@@ -53,7 +53,7 @@ impl Default for AppearAnimationConfig {
 /// - Route-specific filtering
 /// - Window-size scaling for appear animations
 #[component]
-pub fn Page(
+pub fn ContentPage(
     /// The RouteId this page represents (for event filtering)
     route_id: RouteId,
 

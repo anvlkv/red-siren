@@ -1,4 +1,4 @@
-use crate::components::{Button, Icon, Page, UiVariant};
+use crate::components::{Button, ContentPage, Icon, UiVariant};
 use leptos::prelude::*;
 use shared::{commands::health::MicPermissionPayload, RouteId};
 use tauri_use::{use_command, use_invoke, UseTauriReturn, UseTauriWithReturn};
@@ -50,7 +50,7 @@ pub fn Permissions() -> impl IntoView {
     });
 
     view! {
-        <Page route_id=RouteId::Permissions title="Permissions" route_back=RouteId::Home>
+        <ContentPage route_id=RouteId::Permissions title="Permissions" route_back=RouteId::Home>
             <div class="flex flex-col items-center justify-center gap-6">
                 <h2 class="text-2xl text-bold max-w-[42ch] italic">
                     "Why grant microphone access"
@@ -105,6 +105,6 @@ pub fn Permissions() -> impl IntoView {
                     </Button>
                 </div>
             </div>
-        </Page>
+        </ContentPage>
     }
 }

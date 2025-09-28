@@ -164,7 +164,6 @@ pub fn Card(
                     let delta = delta.min(32.0);
                     seq.advance_by(delta);
                 }
-                log::trace!("Card: anim advanced by {delta}ms");
             });
         },
         UseRafFnOptions::default().immediate(false),

@@ -337,10 +337,10 @@ pub async fn intro_next_frame(
         let cap = snoop.capacity();
         let mut samples = Vec::with_capacity(cap);
         // Reverse chronological (latest first) -> make chronological oldest→newest as before.
-                let step = std::cmp::Ord::max(cap / INTRO_TARGET_POINTS_PER_WAVE, 1);
-                for rev in (0..cap).rev().step_by(step) {
-                    samples.push(snoop.at(rev));
-                }
+        let step = std::cmp::Ord::max(cap / INTRO_TARGET_POINTS_PER_WAVE, 1);
+        for rev in (0..cap).rev().step_by(step) {
+            samples.push(snoop.at(rev));
+        }
         let depth = if num > 1 {
             max_depth * (i as f32) / (num as f32 - 1.0)
         } else {

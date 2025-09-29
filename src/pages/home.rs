@@ -61,6 +61,7 @@ pub fn Home() -> impl IntoView {
                         route_id=RouteId::Home
                         appear_animation_config=appear_animation()
                         title="Red Siren"
+                        no_back_button=true
                     >
                         <Menu />
                     </ContentPage>

@@ -78,3 +78,17 @@ pub fn navigation_resume(manager: State<'_, NavigationManager>,) {
         log::warn!("no pending navigation to resume...")
     }
 }
+
+
+#[tauri::command]
+pub fn navigation_back(manager: State<'_, NavigationManager>) -> shared::error::Result<()> {
+    match manager.back() {
+        Some(tx_id) => {
+            log::info!("navigation_back started tx_id={tx_id}");
+        }
+        None => {
+            log::warn!("navigation_back: history empty");
+        }
+    }
+    Ok(())
+}

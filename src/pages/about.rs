@@ -22,7 +22,7 @@ pub fn About() -> impl IntoView {
     });
 
     view! {
-        <ContentPage route_id=RouteId::About title="About" route_back=RouteId::Home>
+        <ContentPage route_id=RouteId::About title="About">
             <div class="flex flex-col items-center justify-center gap-6">
                 <h2 class="text-2xl text-bold max-w-[42ch] italic">"Red Siren is a noise chime"</h2>
                 <p class="text-xl max-w-[42ch] ">

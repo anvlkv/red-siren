@@ -50,7 +50,7 @@ pub fn Permissions() -> impl IntoView {
     });
 
     view! {
-        <ContentPage route_id=RouteId::Permissions title="Permissions" route_back=RouteId::Home>
+        <ContentPage route_id=RouteId::Permissions title="Permissions">
             <div class="flex flex-col items-center justify-center gap-6">
                 <h2 class="text-2xl text-bold max-w-[42ch] italic">
                     "Why grant microphone access"

@@ -5,7 +5,7 @@ use shared::RouteId;
 #[component]
 pub fn Donate() -> impl IntoView {
     view! {
-        <ContentPage route_id=RouteId::Donate title="Donate" route_back=RouteId::About>
+        <ContentPage route_id=RouteId::Donate title="Donate">
             <div class="flex flex-col items-center justify-center gap-6">
                 <h2 class="text-2xl italic">"Support the Creator of Red Siren"</h2>
                 <p class="text-xl max-w-[42ch] ">

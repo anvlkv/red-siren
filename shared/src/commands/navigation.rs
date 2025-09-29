@@ -12,6 +12,8 @@ pub const NAV_SYNC: &str = "navigation_sync";
 pub const NAV_BOOTSTRAP: &str = "navigation_bootstrap";
 /// Continue previously gated navigation (after async gating resolves).
 pub const NAV_RESUME: &str = "navigation_resume";
+/// Navigate back in history (if available).
+pub const NAV_BACK: &str = "navigation_back";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -71,7 +71,12 @@ impl NavTx {
 struct InnerState {
     current: RouteId,
     active: Option<NavTx>,
-    pending: Option<RouteId>
+    pending: Option<RouteId>,
+    /// Stack of previously visited (committed) routes for back navigation.
+    history: Vec<RouteId>,
+    /// When true, the next navigation commit will NOT push the current route
+    /// onto history (used for back navigations to prevent forward-looping).
+    suppress_history_push: bool,
 }
 
 /// Public handle (Arc) to the manager.
@@ -90,6 +95,8 @@ impl NavigationManager {
                 current: initial,
                 active: None,
                 pending: None,
+                history: Vec::new(),
+                suppress_history_push: false,
             })),
             id_gen: Arc::new(AtomicU64::new(1)),
         }
@@ -145,6 +152,22 @@ impl NavigationManager {
                 guard.active = None;
             }
         }
+    }
+
+    /// Initiate a back navigation if possible.
+    /// Returns Some(tx_id) of the new navigation transaction, or None if history empty.
+    pub fn back(&self) -> Option<u64> {
+        let target = {
+            let mut guard = self.state.lock().unwrap();
+            if let Some(route) = guard.history.pop() {
+                // Suppress history push for this backward nav to avoid looping.
+                guard.suppress_history_push = true;
+                route
+            } else {
+                return None;
+            }
+        };
+        self.request(target)
     }
 
     /// Called by UI when leave animation has completed; advances to commit.
@@ -307,14 +330,23 @@ impl NavigationManager {
         // Emit committed, update current
         let to = {
             let mut guard = self.state.lock().unwrap();
-            if let Some(active) = guard.active.as_mut() {
-                if active.id == tx_id {
-                    let to = active.to;
-                    guard.current = to;
-                    to
-                } else {
-                    return;
+            if let Some((from, to, id)) = guard
+                .active
+                .as_ref()
+                .filter(|a| a.id == tx_id)
+                .map(|a| (a.from, a.to, a.id))
+            {
+                // Push prior route onto history only for successful forward navigations:
+                // - Not suppressed (i.e., not a back navigation)
+                // - Different route
+                // - Not the bootstrap (tx_id != 0)
+                if !guard.suppress_history_push && from != to && id != 0 {
+                    guard.history.push(from);
                 }
+                // Always clear suppression flag after a commit cycle.
+                guard.suppress_history_push = false;
+                guard.current = to;
+                to
             } else {
                 return;
             }

@@ -1,5 +1,4 @@
 use leptos::prelude::*;
-use shared::commands::navigation::NavigateRequestPayload;
 use shared::RouteId;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
@@ -71,10 +70,6 @@ pub fn ContentPage(
     /// The RouteId this page represents (for event filtering)
     route_id: RouteId,
 
-    /// The RouteId to go back to when leaving the page
-    #[prop(into, optional)]
-    route_back: Option<RouteId>,
-
     /// Page title
     #[prop(into, optional)]
     title: String,
@@ -85,14 +80,17 @@ pub fn ContentPage(
     /// Optional appear animation config (for Home page first-time animation)
     #[prop(optional)]
     appear_animation_config: Option<AppearAnimationConfig>,
+
+    #[prop(optional, into)] no_back_button: bool,
 ) -> impl IntoView {
     let nav_tx = expect_context::<Signal<Option<NavigationTx>>>();
 
+    // Back navigation (history) command (no payload)
     let UseTauriWithReturn {
-        trigger: navigate_trigger,
-        error: navigate_error,
+        trigger: back_trigger,
+        error: back_error,
         ..
-    } = use_invoke_with_args::<NavigateRequestPayload, ()>(shared::commands::navigation::NAVIGATE);
+    } = use_invoke_with_args::<(), ()>(shared::commands::navigation::NAV_BACK);
 
     // Trigger to notify backend that the enter animation has completed
     let UseTauriWithReturn {
@@ -113,13 +111,6 @@ pub fn ContentPage(
     );
 
     Effect::new(move |_| {
-        if let Some(err) = navigate_error() {
-            log::error!(
-                "Error invoking {}: {}",
-                shared::commands::navigation::NAVIGATE,
-                err
-            );
-        }
         if let Some(err) = enter_error() {
             log::error!(
                 "Error invoking {}: {}",
@@ -131,6 +122,13 @@ pub fn ContentPage(
             log::error!(
                 "Error invoking {}: {}",
                 shared::commands::navigation::NAV_LEAVE_DONE,
+                err
+            );
+        }
+        if let Some(err) = back_error() {
+            log::error!(
+                "Error invoking {}: {}",
+                shared::commands::navigation::NAV_BACK,
                 err
             );
         }
@@ -203,14 +201,12 @@ pub fn ContentPage(
                 on_animation_done=animation_done_cb
             >
                 <div class="flex items-center justify-between gap-4 mb-6">
-                    <Show when=move || route_back.is_some()>
+                    <Show when=move || !no_back_button>
                         <Button
                             size=UiSize::Md
                             variant=UiVariant::Outline
                             on:click=move |_| {
-                                navigate_trigger(
-                                    route_back.map(|route| NavigateRequestPayload { route }),
-                                );
+                                back_trigger(Some(()));
                             }
                             class="relative pl-14"
                         >

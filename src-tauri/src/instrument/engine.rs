@@ -16,11 +16,11 @@ impl From<u8> for ActivationSource {
     }
 }
 
-impl Into<u8> for ActivationSource {
-    fn into(self) -> u8 {
-        match self {
-            Self::Entropy => 0,
-            Self::Mic => 1,
+impl From<ActivationSource> for u8 {
+    fn from(value: ActivationSource) -> u8 {
+        match value {
+            ActivationSource::Entropy => 0,
+            ActivationSource::Mic => 1,
         }
     }
 }

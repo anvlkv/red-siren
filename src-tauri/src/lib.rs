@@ -1,4 +1,5 @@
 mod health;
+mod instrument;
 mod intro;
 mod navigation;
 mod setup;
@@ -16,6 +17,7 @@ pub fn run() {
         navigation::setup(app)?;
         health::setup(app)?;
         intro::setup(app)?;
+        instrument::setup(app)?;
 
         Ok(())
     });
@@ -60,6 +62,11 @@ pub fn run() {
         intro::intro_pause,
         intro::intro_resume,
         intro::intro_next_frame,
+        instrument::instrument_playback_start,
+        instrument::instrument_playback_stop,
+        instrument::instrument_playback_state,
+        instrument::instrument_playback_pause,
+        instrument::instrument_playback_resume,
     ]);
 
     builder

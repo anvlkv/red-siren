@@ -17,7 +17,7 @@ pub fn App() -> impl IntoView {
     } = use_command::<()>(shared::commands::health::GUI_READY);
 
     let UseListenReturn {
-        event_id,
+        event_id: app_ready,
         open,
         error,
         ..
@@ -62,7 +62,7 @@ pub fn App() -> impl IntoView {
     });
 
     Effect::new(move |_| {
-        if event_id().is_some() {
+        if app_ready().is_some() {
             bootstrap_trigger(Some(()));
         }
     });

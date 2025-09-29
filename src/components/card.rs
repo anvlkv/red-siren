@@ -294,6 +294,7 @@ pub fn Card(
 
     let transform_style = move || {
         let s = transform_seq().now();
+        log::trace!("card animation state: {s:?}");
         // Ensure a stable baseline: translateZ(0) and scale(1) explicitly set.
         format!(
             "rotate3d(1, 0, 0, {}deg) rotate3d(0, 1, 0, {}deg) translate3d({}px, {}px, 0) translateZ(0) scale(1)",
@@ -311,6 +312,9 @@ pub fn Card(
         format!("blur({}px)", s.blur)
     };
 
+    let thick_edge_class =
+        move |pos: &str| format!("absolute {pos} bg-cinnabar/25 dark:bg-gray/25 blur-xs ");
+
     // Completion notifications
     Effect::new(move |_| {
         if transform_seq().finished() && anim_active() {
@@ -320,9 +324,6 @@ pub fn Card(
             }
         }
     });
-
-    let thick_edge_class =
-        move |pos: &str| format!("absolute {pos} bg-cinnabar/25 dark:bg-gray/25 blur-xs ");
 
     view! {
         <div

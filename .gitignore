@@ -34,3 +34,5 @@ iOS/Pods/
 _*
 
 node_modules/
+
+*.log

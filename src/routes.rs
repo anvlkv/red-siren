@@ -140,6 +140,7 @@ pub fn AppRoutes() -> impl IntoView {
             outside_errors.insert_with_default_key(AppError::NotFound);
             view! { <ErrorTemplate outside_errors /> }.into_view()
         }>
+            <Route path=(StaticSegment(RouteId::None.as_ref()),) view=|| view! { <></> } />
             <Route path=(StaticSegment(RouteId::Home.as_ref()),) view=Home />
             <Route path=(StaticSegment(RouteId::Play.as_ref()),) view=Play />
             <Route path=(StaticSegment(RouteId::Tune.as_ref()),) view=Tune />

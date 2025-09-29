@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 
 use leptos::prelude::*;
-use leptos_use::{signal_debounced, use_window_size, UseWindowSizeReturn};
+use leptos_use::{use_window_size, UseWindowSizeReturn};
 use shared::RouteId;
 
 use crate::{
@@ -16,7 +16,6 @@ const APPEAR_ANIMATION_DURATION_MS: f64 = 800.0;
 #[component]
 pub fn Home() -> impl IntoView {
     let UseWindowSizeReturn { height, .. } = use_window_size();
-    let height = signal_debounced(height, 100.0);
 
     _ = HOME_APPEAR_PLAYED.get_or_init(|| AtomicBool::new(false));
 
@@ -29,7 +28,7 @@ pub fn Home() -> impl IntoView {
             let h = height.get_untracked();
             AppearAnimationConfig {
                 base_height: h,
-                base_y_px: h * 3.0,
+                base_y_px: h * 1.5,
                 tilt_x_from_deg: -60.0,
                 base_ms: APPEAR_ANIMATION_DURATION_MS,
                 played_flag: &HOME_APPEAR_PLAYED,
@@ -45,7 +44,7 @@ pub fn Home() -> impl IntoView {
         let h = height();
         set_source(AppearAnimationConfig {
             base_height: h,
-            base_y_px: h * 3.0,
+            base_y_px: h * 1.5,
             tilt_x_from_deg: -60.0,
             base_ms: APPEAR_ANIMATION_DURATION_MS,
             played_flag: &HOME_APPEAR_PLAYED,

@@ -191,6 +191,7 @@ fn maybe_toggle_windows(
                 .show()
                 .map_err(|e| format!("Failed to show main window: {}", e))?;
 
+            #[cfg(not(debug_assertions))]
             main_window
                 .set_focus()
                 .map_err(|e| format!("Failed to focus main window: {}", e))?;

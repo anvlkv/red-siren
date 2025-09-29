@@ -10,7 +10,7 @@ use crate::components::{Button, Card, CardAnimation, Icon, UiSize, UiVariant};
 const BASE_ANIMATION_DURATION_MS: f64 = 600.0;
 
 /// Configuration for one-time appear animation (used by Home page)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct AppearAnimationConfig {
     /// Base height for scaling calculations
     pub base_height: f64,
@@ -22,6 +22,16 @@ pub struct AppearAnimationConfig {
     pub base_ms: f64,
     /// Static flag to track if animation has been played
     pub played_flag: &'static OnceLock<AtomicBool>,
+}
+
+impl PartialEq for AppearAnimationConfig {
+    fn eq(&self, other: &Self) -> bool {
+        self.base_height == other.base_height
+            && self.base_y_px == other.base_y_px
+            && self.tilt_x_from_deg == other.tilt_x_from_deg
+            && self.base_ms == other.base_ms
+            && std::ptr::eq(self.played_flag, other.played_flag)
+    }
 }
 
 impl Default for AppearAnimationConfig {
@@ -128,19 +138,10 @@ pub fn ContentPage(
 
     // Unified animation signal driving Card
     let (card_animation, set_card_animation) = signal({
-        if let Some((config, played)) = appear_animation_config
-            .iter()
-            .filter_map(|c| {
-                let played = c.played_flag.get_or_init(|| AtomicBool::new(false));
-                if !played.load(Ordering::Relaxed) {
-                    Some((c, played))
-                } else {
-                    None
-                }
-            })
-            .next()
-        {
-            played.store(true, Ordering::Relaxed);
+        if let Some(config) = appear_animation_config.filter(|c| {
+            let played = c.played_flag.get().unwrap();
+            !played.load(Ordering::Relaxed)
+        }) {
             Some(CardAnimation::Appear {
                 x_from_px: 0.0,
                 y_from_px: config.base_y_px as f32,
@@ -177,6 +178,14 @@ pub fn ContentPage(
                 leave_done_trigger(Some(shared::commands::navigation::NavTxPayload { tx_id }));
             }
             None => {}
+        }
+
+        if let Some(c) = card_animation()
+            .filter(|a| matches!(a, CardAnimation::Appear { .. }))
+            .and(appear_animation_config)
+        {
+            let played = c.played_flag.get().unwrap();
+            played.store(true, Ordering::Relaxed);
         }
 
         set_card_animation(None);

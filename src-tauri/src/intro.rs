@@ -96,19 +96,18 @@ struct EngineConfig {
     buffer_size: usize,
 }
 
-// Corresponds to components::wavering
 const INTRO_NUM_SNOOPS: usize = 11;
-// Tweakable parameters
-const INTRO_SAMPLE_RATE_HZ: f32 = 1800.0;
-const INTRO_BASE_FREQ_HZ: f32 = 1.0;
-const INTRO_MOD_FREQ_HZ: f32 = 0.005;
+const INTRO_SAMPLE_RATE_HZ: f32 = 96.0;    // rebalanced
+const INTRO_BASE_FREQ_HZ: f32 = 0.33;
+const INTRO_MOD_FREQ_HZ: f32 = 0.00165;    // scaled (optional)
 const INTRO_MAX_DEPTH: f32 = 0.5;
 const INTRO_AMPLITUDE: f32 = 0.52;
-const INTRO_BUFFER_SIZE: usize = 2800;
-const INTRO_THREAD_SLEEP_US: u64 = 500; // 0.5 ms
+const INTRO_BUFFER_SIZE: usize = 480;      // ~96 * 1.6 / 0.33
+const INTRO_THREAD_SLEEP_US: u64 = 2000;   // coarse pacing; reduce if phase jitter noticeable
 
-// Frontend dynamic decimation target
-const INTRO_TARGET_POINTS_PER_WAVE: usize = 128;
+
+
+
 
 impl Default for EngineConfig {
     fn default() -> Self {
@@ -232,7 +231,9 @@ fn run_engine(
             thread::sleep(Duration::from_millis(20));
             continue;
         }
-        engine.tick_frame();
+        for _ in 0..3 {
+            engine.tick_frame();
+        }
         if INTRO_THREAD_SLEEP_US > 0 {
             std::thread::sleep(std::time::Duration::from_micros(INTRO_THREAD_SLEEP_US));
         }
@@ -337,8 +338,7 @@ pub async fn intro_next_frame(
         let cap = snoop.capacity();
         let mut samples = Vec::with_capacity(cap);
         // Reverse chronological (latest first) -> make chronological oldest→newest as before.
-        let step = std::cmp::Ord::max(cap / INTRO_TARGET_POINTS_PER_WAVE, 1);
-        for rev in (0..cap).rev().step_by(step) {
+        for rev in (0..cap){
             samples.push(snoop.at(rev));
         }
         let depth = if num > 1 {

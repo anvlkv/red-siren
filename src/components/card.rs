@@ -8,7 +8,7 @@ use leptos_use::{
     UseRafFnOptions,
 };
 
-const PERSPECTIVE_CM: f64 = 60.0;
+const PERSPECTIVE_CM: f64 = 80.0;
 const APPEAR_PERSPECTIVE_CM: f64 = 60.0;
 
 #[derive(Debug, Default, Clone, Copy, CanTween)]
@@ -17,6 +17,7 @@ struct Transform {
     y_px: f32,
     tilt_x_deg: f32,
     rot_y_deg: f32,
+    perspective: f64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -141,7 +142,8 @@ pub fn Card(
             x_px: 0.0,
             y_px: 0.0,
             tilt_x_deg: 0.0,
-            rot_y_deg: 0.0
+            rot_y_deg: 0.0,
+            perspective: 0.0,
         },
         0.0
     )]);
@@ -158,8 +160,8 @@ pub fn Card(
                 if reduced {
                     seq.advance_to(anim_ms_sig());
                 } else {
-                    let delta = delta.min(32.0);
-                    seq.advance_by(delta);
+                    let rem = seq.duration() - seq.time();
+                    seq.advance_by(delta.min(rem));
                 }
             });
         },
@@ -182,7 +184,8 @@ pub fn Card(
                                 x_px: 0.0,
                                 y_px: 0.0,
                                 tilt_x_deg: 0.0,
-                                rot_y_deg: from_deg
+                                rot_y_deg: from_deg,
+                                perspective: PERSPECTIVE_CM,
                             },
                             0.0
                         ),
@@ -191,7 +194,8 @@ pub fn Card(
                                 x_px: 0.0,
                                 y_px: 0.0,
                                 tilt_x_deg: 0.0,
-                                rot_y_deg: to_deg
+                                rot_y_deg: to_deg,
+                                perspective: PERSPECTIVE_CM,
                             },
                             ms,
                             EaseInCubic
@@ -212,7 +216,8 @@ pub fn Card(
                                 x_px: 0.0,
                                 y_px: 0.0,
                                 tilt_x_deg: 0.0,
-                                rot_y_deg: from_deg
+                                rot_y_deg: from_deg,
+                                perspective: PERSPECTIVE_CM,
                             },
                             0.0
                         ),
@@ -221,7 +226,8 @@ pub fn Card(
                                 x_px: 0.0,
                                 y_px: 0.0,
                                 tilt_x_deg: 0.0,
-                                rot_y_deg: to_deg
+                                rot_y_deg: to_deg,
+                                perspective: PERSPECTIVE_CM,
                             },
                             ms,
                             EaseInCubic
@@ -243,7 +249,8 @@ pub fn Card(
                                 x_px: x_from_px,
                                 y_px: y_from_px,
                                 tilt_x_deg: tilt_x_from_deg,
-                                rot_y_deg: 0.0
+                                rot_y_deg: 0.0,
+                                perspective: APPEAR_PERSPECTIVE_CM,
                             },
                             0.0
                         ),
@@ -252,7 +259,8 @@ pub fn Card(
                                 x_px: 0.0,
                                 y_px: 0.0,
                                 tilt_x_deg: 0.0,
-                                rot_y_deg: 0.0
+                                rot_y_deg: 0.0,
+                                perspective: PERSPECTIVE_CM,
                             },
                             ms,
                             EaseInCubic
@@ -273,17 +281,10 @@ pub fn Card(
 
     let transform_style = move || {
         let s = transform_seq.get().now();
-        let perspective = if s.x_px != 0.0 || s.y_px != 0.0 || s.tilt_x_deg != 0.0 {
-            APPEAR_PERSPECTIVE_CM
-        } else {
-            PERSPECTIVE_CM
-        };
-        // Clamp X tilt to avoid exaggerated foreshortening which reads like scale.
-        let tilt_x = s.tilt_x_deg.clamp(-75.0, 0.0);
         // Ensure a stable baseline: translateZ(0) and scale(1) explicitly set.
         format!(
             "perspective({}cm) rotate3d(1, 0, 0, {}deg) rotate3d(0, 1, 0, {}deg) translate3d({}px, {}px, 0) translateZ(0) scale(1)",
-            perspective, tilt_x, s.rot_y_deg, s.x_px, s.y_px
+            s.perspective, s.tilt_x_deg, s.rot_y_deg, s.x_px, s.y_px
         )
     };
 

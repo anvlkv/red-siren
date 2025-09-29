@@ -94,7 +94,8 @@ pub fn Intro(
                     None
                 }
             } else {
-                let remainder = state.advance_by(delta);
+                let rem = state.duration() - state.time();
+                let remainder = state.advance_by(delta.min(rem));
                 animation_state.set(state);
                 Some(remainder)
             };

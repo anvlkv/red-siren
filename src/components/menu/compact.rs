@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use shared::commands::navigation::NavigateRequestPayload;
+use shared::{commands::navigation::NavigateRequestPayload, RouteId};
 use tauri_use::{use_invoke_with_args, UseTauriWithReturn};
 
 use crate::components::Card;
@@ -28,9 +28,19 @@ pub fn CompactMenu(
     });
 
     view! {
-        <Card padding="Sm".to_string() class="rounded-b-none">
-            <div class="flex gap-2">
-                <h1 class="block text-3xl italic">"Red Siren"</h1>
+        <Card padding="Md".to_string() class="rounded-b-none">
+            <div class="flex items-center gap-4">
+                <button on:click=move |_| {
+                    trigger_navigate(
+                        Some(NavigateRequestPayload {
+                            route: RouteId::Home,
+                        }),
+                    );
+                }>
+                    <h1 class="block text-3xl italic cursor-pointer hover:underline focus:underline">
+                        "Red Siren"
+                    </h1>
+                </button>
                 {children()}
                 {move || {
                     items()

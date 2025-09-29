@@ -19,9 +19,9 @@ pub async fn instrument_playback_stop(state: State<'_, InstrumentEngine>) -> Res
 
 #[tauri::command]
 /// Returns true if playback is active
-pub async fn instrument_playback_state(state: State<'_, InstrumentEngine>) -> Result<bool> {
+pub async fn instrument_playback_state(state: State<'_, InstrumentEngine>) -> Result<PlaybackStatePayload> {
     let playing = state.inner.playing.lock().await;
-    Ok(*playing)
+    Ok(PlaybackStatePayload { playing: *playing })
 }
 
 #[tauri::command]

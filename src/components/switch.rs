@@ -36,10 +36,10 @@ pub fn Switch(
     #[prop(optional)] tooltips: Option<Vec<String>>,
 
     // Current state (0 to labels.len()-1)
-    #[prop(optional)] current_state: RwSignal<usize>,
+    #[prop(into)] current_state: Signal<usize>,
 
     // Callback when state changes
-    #[prop(optional)] on_change: Option<Callback<usize>>,
+    #[prop(into)] on_change: Callback<usize>,
 
     // Styling props
     #[prop(optional, into)] disabled: Signal<bool>,
@@ -63,10 +63,7 @@ pub fn Switch(
     let handle_segment_click = move |segment_index: usize| {
         move |_| {
             if !disabled.get_untracked() {
-                current_state.set(segment_index);
-                if let Some(callback) = on_change {
-                    callback.run(segment_index);
-                }
+                on_change.run(segment_index);
             }
         }
     };

@@ -165,14 +165,11 @@ pub fn ContentPage(
     });
 
     // Re-query on entering a new route (after commit & enter animation begins).
-    {
-        let can_go_back_trigger = can_go_back_trigger.clone();
-        Effect::new(move |_| {
-            if matches!(nav_tx(), Some(NavigationTx::Enter(_))) {
-                can_go_back_trigger(Some(()));
-            }
-        });
-    }
+    Effect::new(move |_| {
+        if matches!(nav_tx(), Some(NavigationTx::Enter(_))) {
+            can_go_back_trigger(Some(()));
+        }
+    });
 
     // Unified animation signal driving Card
     let (card_animation, set_card_animation) = signal({

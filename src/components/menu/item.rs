@@ -51,6 +51,7 @@ pub fn MenuItemView(
     trigger_navigate: WriteSignal<Option<NavigateRequestPayload>>,
     #[prop(into, optional)] compact: bool,
 ) -> impl IntoView {
+    let size = if compact { UiSize::Sm } else { UiSize::Lg };
     view! {
         <div class=move || if compact { "rounded-full" } else { "rounded-lg" } role="menuitem">
             {match item {
@@ -66,11 +67,11 @@ pub fn MenuItemView(
                                     }
                                     round=true
                                     square=true
-                                    size=UiSize::Lg
+                                    size
                                     attr:aria-label=aria_label
                                 >
                                     <span class="text-4xl leading-none">
-                                        <Icon name=icon />
+                                        <Icon name=icon size />
                                     </span>
                                 </Button>
                             </Tooltip>
@@ -85,9 +86,10 @@ pub fn MenuItemView(
                                 }
                                 class="relative pl-14 w-full"
                                 attr:aria-label=aria_label
+                                size
                             >
                                 <span class="absolute left-4 text-4xl">
-                                    <Icon name=icon />
+                                    <Icon name=icon size />
                                 </span>
                                 {label}
                             </Button>
@@ -107,11 +109,11 @@ pub fn MenuItemView(
                                     }
                                     round=true
                                     square=true
-                                    size=UiSize::Lg
+                                    size
                                     attr:aria-label=aria_label
                                 >
                                     <span class="text-4xl leading-none">
-                                        <Icon name=icon />
+                                        <Icon name=icon size />
                                     </span>
                                 </Button>
                             </Tooltip>

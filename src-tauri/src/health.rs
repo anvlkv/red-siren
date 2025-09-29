@@ -13,6 +13,8 @@ pub struct SetupState {
 const HEALTH_STORE_NAME:&str = "health.json";
 const MIC_PEMISSION_KEY:&str = "mic_permission";
 
+pub type HealthSetupState = Mutex<SetupState>;
+
 pub fn setup(app: &mut App) -> tauri_plugin_store::Result<()> {
     let store = app.store(HEALTH_STORE_NAME)?;
 

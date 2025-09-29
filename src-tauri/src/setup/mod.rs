@@ -1,3 +1,6 @@
+#[cfg(target_os = "macos")]
+mod setup_mac_window;
+
 use tauri::{App, Manager};
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 use tauri_plugin_window_state::WindowExt;
@@ -8,7 +11,7 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     // Set background color only when building for macOS
     #[cfg(target_os = "macos")]
     {
-        crate::setup_mac_window::setup(&mut main_window)?;
+        setup_mac_window::setup(&mut main_window)?;
     }
 
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
@@ -26,7 +29,7 @@ pub fn update_window_appearance(app: tauri::AppHandle, dark: bool) -> Result<(),
 
     #[cfg(target_os = "macos")]
     {
-        crate::setup_mac_window::update_appearance(&mut main_window, dark)
+        setup_mac_window::update_appearance(&mut main_window, dark)
             .map_err(|e| format!("Failed to update appearance: {}", e))?;
     }
 

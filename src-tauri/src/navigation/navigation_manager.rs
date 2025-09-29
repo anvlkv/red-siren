@@ -12,7 +12,7 @@ use shared::{
     },
     RouteId,
 };
-use tauri::{async_runtime::spawn, AppHandle, Emitter};
+use tauri::{async_runtime::spawn, AppHandle, Emitter, Manager};
 use thiserror::Error;
 
 use shared::events::navigation::{
@@ -73,23 +73,6 @@ struct InnerState {
     current: RouteId,
     active: Option<NavTx>,
     pending: Option<RouteId>
-}
-
-/// Navigation gating error variants.
-#[derive(Error, Debug)]
-pub enum NavGateError {
-    #[error("permission denied")]
-    PermissionDenied,
-    #[error("system busy")]
-    Busy,
-    #[error("unexpected: {0}")]
-    Other(String),
-}
-
-impl NavGateError {
-    fn is_deny(&self) -> bool {
-        matches!(self, NavGateError::PermissionDenied | NavGateError::Busy)
-    }
 }
 
 /// Public handle (Arc) to the manager.
@@ -276,7 +259,7 @@ impl NavigationManager {
         }
 
         let current_requested = self.active_to_route(tx_id);
-        let outcome_result = gate_navigation(current_requested).await;
+        let outcome_result = super::gates::gate_navigation(current_requested, &self.app).await;
 
         match outcome_result {
             Ok(outcome) => {
@@ -461,49 +444,4 @@ impl NavigationManager {
         let to = self.current_route();
         self.emit(NAV_SYNC, &shared::events::navigation::NavSyncPayload { to });
     }
-}
-
-// ---------------- Gating Logic ----------------
-
-/// Async gating wrapper. For now this delegates to the synchronous
-/// `crate::navigation::can_navigate` and wraps result. Extend here
-/// with real permission / unsaved-work / concurrency checks.
-#[derive(Debug, Clone, Copy)]
-struct GateOutcome {
-    allowed: bool,
-    effective_to: RouteId,
-}
-
-/// Determine if microphone permission is granted.
-/// TODO: replace with real OS permission check (e.g., via a Tauri plugin or platform API).
-fn mic_permission_granted() -> Option<bool> {
-    // Returning None -> treated as "unknown", defaulting to false (deny Play -> redirect).
-    None
-}
-
-async fn gate_navigation(to: RouteId) -> Result<GateOutcome, NavGateError> {
-    // Base policy gate (global app-level check)
-    if !crate::navigation::can_navigate(to) {
-        return Ok(GateOutcome {
-            allowed: false,
-            effective_to: to,
-        });
-    }
-
-    // Default outcome: allowed, no redirection
-    let mut outcome = GateOutcome {
-        allowed: true,
-        effective_to: to,
-    };
-
-    // // Mic-permission gating policy:
-    // // - If target is Play and mic permission is NOT granted, redirect to Permissions.
-    // if to == RouteId::Play {
-    //     let has_mic = mic_permission_granted().unwrap_or(false);
-    //     if !has_mic {
-    //         outcome.effective_to = RouteId::Permissions;
-    //     }
-    // }
-
-    Ok(outcome)
 }

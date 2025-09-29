@@ -6,6 +6,7 @@ use leptos::prelude::*;
 use shared::commands::navigation::NavigateRequestPayload;
 use tauri_use::{use_invoke_with_args, UseTauriWithReturn};
 
+pub use compact::*;
 pub use item::*;
 
 #[component]
@@ -31,8 +32,9 @@ pub fn Menu() -> impl IntoView {
             <nav class="contents text-3xl">
                 {DEFAULT_MENU_ITEMS
                     .iter()
+                    .copied()
                     .map(|item| {
-                        view! { <MenuItemView item=item.clone() trigger_navigate /> }
+                        view! { <MenuItemView item trigger_navigate /> }
                     })
                     .collect_view()}
             </nav>

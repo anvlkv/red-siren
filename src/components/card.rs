@@ -11,6 +11,8 @@ use leptos_use::{
     UseRafFnOptions,
 };
 
+use crate::components::{UiPadding, UiVariant};
+
 const PERSPECTIVE_CM: f64 = 80.0;
 const APPEAR_PERSPECTIVE_CM: f64 = 60.0;
 const THICKNESS_PX: f64 = 8.0;
@@ -73,10 +75,10 @@ pub fn Card(
     children: Children,
 
     // Appearance
-    #[prop(optional)] variant: CardVariant,
-    #[prop(optional)] padding: CardPadding,
-    #[prop(optional)] rounded: bool,
-    #[prop(optional)] full_width: bool,
+    #[prop(optional, into)] variant: UiVariant,
+    #[prop(optional, into)] padding: UiPadding,
+    #[prop(optional, into)] rounded: bool,
+    #[prop(optional, into)] full_width: bool,
     #[prop(optional, into)] class: String,
 
     // Behavior
@@ -99,17 +101,17 @@ pub fn Card(
                 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 transform-3d will-change-transform";
 
     let bg_and_border = match variant {
-        CardVariant::Elevated => {
+        UiVariant::Solid => {
             "\
             bg-red dark:bg-black \
             shadow-xl shadow-gray dark:shadow-cinnabar"
         }
-        CardVariant::Outline => {
+        UiVariant::Outline => {
             "\
             bg-transparent border-2 border-black dark:border-red \
             hover:shadow-sm hover:shadow-gray dark:hover:shadow-cinnabar"
         }
-        CardVariant::Ghost => {
+        UiVariant::Ghost => {
             "\
             bg-transparent"
         }
@@ -117,12 +119,7 @@ pub fn Card(
 
     let rounding = if rounded { "rounded-xl" } else { "rounded-lg" };
 
-    let padding_cls = match padding {
-        CardPadding::None => "p-0",
-        CardPadding::Sm => "p-3",
-        CardPadding::Md => "p-6",
-        CardPadding::Lg => "p-8",
-    };
+    let padding_cls = padding.tw_class();
 
     let width_cls = if full_width { "w-full" } else { "w-max" };
 
@@ -371,23 +368,4 @@ pub fn Card(
             </div>
         </div>
     }
-}
-
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
-pub enum CardVariant {
-    #[default]
-    Elevated,
-    Outline,
-    Ghost,
-}
-
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
-pub enum CardPadding {
-    None,
-    Sm,
-    Md,
-    #[default]
-    Lg,
 }

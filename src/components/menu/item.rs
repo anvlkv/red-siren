@@ -3,7 +3,7 @@ use shared::{commands::navigation::NavigateRequestPayload, RouteId};
 
 use crate::components::{Button, Icon, Tooltip, UiSize};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub enum MenuItem {
     Navigate {
         route: RouteId,

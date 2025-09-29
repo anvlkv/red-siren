@@ -32,7 +32,7 @@ pub enum UiVariant {
 
 impl From<String> for UiVariant {
     fn from(value: String) -> Self {
-        Self::from_str(&value).expect("invalid button variant")
+        Self::from_str(&value).expect("invalid variant")
     }
 }
 
@@ -46,6 +46,33 @@ pub enum UiSize {
 
 impl From<String> for UiSize {
     fn from(value: String) -> Self {
-        Self::from_str(&value).expect("invalid button size")
+        Self::from_str(&value).expect("invalid size")
+    }
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, strum::EnumString)]
+#[allow(dead_code)]
+pub enum UiPadding {
+    None,
+    Sm,
+    Md,
+    #[default]
+    Lg,
+}
+
+impl From<String> for UiPadding {
+    fn from(value: String) -> Self {
+        Self::from_str(&value).expect("invalid padding")
+    }
+}
+
+impl UiPadding {
+    pub fn tw_class(&self) -> &'static str {
+        match self {
+            Self::None => "p-0",
+            Self::Sm => "p-3",
+            Self::Md => "p-6",
+            Self::Lg => "p-8",
+        }
     }
 }

@@ -1,11 +1,7 @@
 mod health;
 mod intro;
 mod navigation;
-mod navigation_manager;
 mod setup;
-
-#[cfg(target_os = "macos")]
-mod setup_mac_window;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

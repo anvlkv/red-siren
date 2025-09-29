@@ -1,21 +1,8 @@
-use crate::navigation_manager::NavigationManager;
 use shared::RouteId;
+use tauri::State;
 
-use tauri::{App, Manager, State};
+use super::navigation_manager::NavigationManager;
 
-pub fn setup(app: &mut App) -> Result<(), String> {
-    let nav_manager = NavigationManager::new(app.handle().clone(), RouteId::Home);
-    app.manage(nav_manager);
-    Ok(())
-}
-
-/// Backend gating policy stub.
-/// Return `true` to allow, `false` to soft-deny (emits gated allowed=false + canceled),
-/// or evolve into richer logic using external state. For *hard* internal errors,
-/// adjust the manager's gating wrapper (it currently treats non-deny errors distinctly).
-pub fn can_navigate(_to: RouteId) -> bool {
-    true
-}
 
 /// Bootstrap initial navigation transaction (tx_id=0).
 /// Invoke once from the UI after event listeners are mounted so the
@@ -32,7 +19,7 @@ pub async fn navigation_bootstrap(
 /// UI signals that the leave animation has completed; proceed to commit.
 #[tauri::command]
 pub async fn navigation_leave_done(
-    manager: State<'_, crate::navigation_manager::NavigationManager>,
+    manager: State<'_, NavigationManager>,
     tx_id: u64,
 ) -> Result<(), String> {
     manager.leave_done(tx_id);
@@ -42,7 +29,7 @@ pub async fn navigation_leave_done(
 /// UI signals that the enter animation has completed; finalize and complete.
 #[tauri::command]
 pub async fn navigation_enter_done(
-    manager: State<'_, crate::navigation_manager::NavigationManager>,
+    manager: State<'_, NavigationManager>,
     tx_id: u64,
 ) -> Result<(), String> {
     manager.enter_done(tx_id);

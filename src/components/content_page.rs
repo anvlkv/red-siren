@@ -138,7 +138,7 @@ pub fn ContentPage(
 
     // Unified animation signal driving Card
     let (card_animation, set_card_animation) = signal({
-        if let Some(config) = appear_animation_config.filter(|c| {
+        let initial = if let Some(config) = appear_animation_config.filter(|c| {
             let played = c.played_flag.get().unwrap();
             !played.load(Ordering::Relaxed)
         }) {
@@ -154,7 +154,11 @@ pub fn ContentPage(
                 to_deg: 0.0,
                 ms: BASE_ANIMATION_DURATION_MS,
             })
-        }
+        };
+
+        log::debug!("Initial animation: {initial:?}");
+
+        initial
     });
 
     // Queue LEAVE animation on navigation start from this route

@@ -98,9 +98,9 @@ struct EngineConfig {
 
 // Slow base, preserved 0.53 cycles shape via longer duration
 const INTRO_NUM_SNOOPS: usize = 11;
-const INTRO_BASE_FREQ_HZ: f32 = 0.0733;
+const INTRO_BASE_FREQ_HZ: f32 = 0.085;
 const INTRO_SAMPLE_RATE_HZ: f32 = 120.0;
-const INTRO_MOD_FREQ_HZ: f32 = 0.00037; // or keep 0.005 if you like faster breathing
+const INTRO_MOD_FREQ_HZ: f32 = 0.005;
 const INTRO_MAX_DEPTH: f32 = 0.5;
 const INTRO_AMPLITUDE: f32 = 0.85;
 
@@ -112,10 +112,6 @@ const INTRO_THREAD_SLEEP_US: u64 = 2000;
 
 // Decimation stride used when harvesting samples:
 const INTRO_DECIMATION_STRIDE: usize = 6;
-
-
-
-
 
 impl Default for EngineConfig {
     fn default() -> Self {

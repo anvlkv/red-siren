@@ -21,14 +21,19 @@ pub fn Home() -> impl IntoView {
     _ = HOME_APPEAR_PLAYED.get_or_init(|| AtomicBool::new(false));
 
     let UseSelectiveSignalReturn {
-        value, set_source, ..
+        value: appear_animation,
+        set_source,
+        ..
     } = use_selective_signal(
-        AppearAnimationConfig {
-            base_height: 600.0,
-            base_y_px: 600.0 * 1.5,
-            tilt_x_from_deg: -60.0,
-            base_ms: APPEAR_ANIMATION_DURATION_MS,
-            played_flag: &HOME_APPEAR_PLAYED,
+        {
+            let h = height.get_untracked();
+            AppearAnimationConfig {
+                base_height: h,
+                base_y_px: h * 3.0,
+                tilt_x_from_deg: -60.0,
+                base_ms: APPEAR_ANIMATION_DURATION_MS,
+                played_flag: &HOME_APPEAR_PLAYED,
+            }
         },
         |cfg| {
             let played = cfg.played_flag.get().unwrap();
@@ -40,7 +45,7 @@ pub fn Home() -> impl IntoView {
         let h = height();
         set_source(AppearAnimationConfig {
             base_height: h,
-            base_y_px: h * 1.5,
+            base_y_px: h * 3.0,
             tilt_x_from_deg: -60.0,
             base_ms: APPEAR_ANIMATION_DURATION_MS,
             played_flag: &HOME_APPEAR_PLAYED,
@@ -48,18 +53,20 @@ pub fn Home() -> impl IntoView {
     });
 
     view! {
-        <>
+        <Show when=move || {
+            appear_animation().base_height > 0.0
+        }>
             {move || {
                 view! {
                     <ContentPage
                         route_id=RouteId::Home
-                        appear_animation_config=value()
+                        appear_animation_config=appear_animation()
                         title="Red Siren"
                     >
                         <Menu />
                     </ContentPage>
                 }
             }}
-        </>
+        </Show>
     }
 }

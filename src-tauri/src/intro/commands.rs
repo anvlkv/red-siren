@@ -1,37 +1,38 @@
 use shared::events::intro::{IntroSnoopBatchPayload, IntroSnoopSample};
+use shared::error::{Result, IntroError};
 use tauri::State;
 
 use super::engine::{IntroEngineState, Control};
 
 #[tauri::command]
-pub async fn intro_pause(state: State<'_, IntroEngineState>) -> Result<(), String> {
+pub async fn intro_pause(state: State<'_, IntroEngineState>) -> Result<()> {
     let mut inner = state
         .inner
         .lock()
-        .map_err(|_| "intro_engine_state_poisoned".to_string())?;
+        .map_err(|_| IntroError::StatePoisoned)?;
     if inner.paused {
         return Ok(());
     }
     if let Some(tx) = &inner.tx {
         tx.send(Control::Pause)
-            .map_err(|e| format!("pause_send_failed: {e}"))?;
+            .map_err(|e| IntroError::PauseFailed { detail: Some(e.to_string()) })?;
         inner.paused = true;
     }
     Ok(())
 }
 
 #[tauri::command]
-pub async fn intro_resume(state: State<'_, IntroEngineState>) -> Result<(), String> {
+pub async fn intro_resume(state: State<'_, IntroEngineState>) -> Result<()> {
     let mut inner = state
         .inner
         .lock()
-        .map_err(|_| "intro_engine_state_poisoned".to_string())?;
+        .map_err(|_| IntroError::StatePoisoned)?;
     if !inner.paused {
         return Ok(());
     }
     if let Some(tx) = &inner.tx {
         tx.send(Control::Resume)
-            .map_err(|e| format!("resume_send_failed: {e}"))?;
+            .map_err(|e| IntroError::ResumeFailed { detail: Some(e.to_string()) })?;
         inner.paused = false;
     }
     Ok(())
@@ -45,7 +46,7 @@ pub async fn intro_resume(state: State<'_, IntroEngineState>) -> Result<(), Stri
 #[tauri::command]
 pub async fn intro_next_frame(
     state: State<'_, IntroEngineState>,
-) -> Result<IntroSnoopBatchPayload, String> {
+) -> Result<IntroSnoopBatchPayload> {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     // Lazy start engine if not running.
@@ -53,7 +54,7 @@ pub async fn intro_next_frame(
         let mut inner = state
             .inner
             .lock()
-            .map_err(|_| "intro_engine_state_poisoned".to_string())?;
+            .map_err(|_| IntroError::StatePoisoned)?;
         if !inner.started {
             let config = super::engine::EngineConfig::default();
             let (tx, handle, snoops, _depths) = super::engine::spawn_engine(inner.paused, config);
@@ -68,15 +69,15 @@ pub async fn intro_next_frame(
     let mut inner = state
         .inner
         .lock()
-        .map_err(|_| "intro_engine_state_poisoned".to_string())?;
+        .map_err(|_| IntroError::StatePoisoned)?;
     if inner.snoops.is_empty() {
-        return Err("intro_engine_not_ready".into());
+        return Err(IntroError::EngineNotReady.into());
     }
 
     let num = inner.snoops.len();
     let t_unix_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|_| "time_error".to_string())?
+        .map_err(|_| IntroError::FrameTimeError)?
         .as_millis() as u64;
 
     let mut snoop_payloads = Vec::with_capacity(num);

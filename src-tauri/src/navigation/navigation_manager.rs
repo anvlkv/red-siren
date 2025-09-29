@@ -12,8 +12,7 @@ use shared::{
     },
     RouteId,
 };
-use tauri::{async_runtime::spawn, AppHandle, Emitter, Manager};
-use thiserror::Error;
+use tauri::{async_runtime::spawn, AppHandle, Emitter};
 
 use shared::events::navigation::{
     NAV_CANCELED, NAV_COMMITTED, NAV_COMPLETED, NAV_GATED, NAV_REQUESTED, NAV_STARTED, NAV_SYNC,

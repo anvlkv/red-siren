@@ -4716,6 +4716,8 @@ dependencies = [
  "serde_json",
  "smallvec",
  "strum",
+ "tauri",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -5345,7 +5347,6 @@ dependencies = [
  "tauri-plugin-prevent-default",
  "tauri-plugin-store",
  "tauri-plugin-window-state",
- "thiserror 2.0.16",
  "tokio",
 ]
 

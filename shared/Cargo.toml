@@ -3,6 +3,9 @@ name = "shared"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+tauri = ["dep:tauri"]
+
 [dependencies]
 const-primes = "0.10.4"
 log.workspace = true
@@ -12,3 +15,5 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 smallvec = "1.15.1"
 strum = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+tauri = {workspace = true, optional = true}

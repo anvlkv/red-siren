@@ -1,24 +1,9 @@
 use shared::RouteId;
 use tauri::{AppHandle, Manager};
-use thiserror::Error;
+use shared::error::NavGateError;
 
 
-/// Navigation gating error variants.
-#[derive(Error, Debug)]
-pub enum NavGateError {
-    #[error("permission denied")]
-    PermissionDenied,
-    #[error("system busy")]
-    Busy,
-    #[error("unexpected: {0}")]
-    Other(String),
-}
-
-impl NavGateError {
-    pub fn is_deny(&self) -> bool {
-        matches!(self, NavGateError::PermissionDenied | NavGateError::Busy)
-    }
-}
+// NavGateError moved to shared::error (phase 1 centralization).
 
 /// Async gating wrapper. For now this delegates to the synchronous
 /// `crate::navigation::can_navigate` and wraps result. Extend here

@@ -60,6 +60,7 @@ pub fn run() {
         navigation::navigation_sync,
         navigation::navigation_resume,
         navigation::navigation_back,
+        navigation::navigation_can_go_back,
         intro::intro_pause,
         intro::intro_resume,
         intro::intro_next_frame,

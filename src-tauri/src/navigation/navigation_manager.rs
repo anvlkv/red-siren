@@ -475,4 +475,10 @@ impl NavigationManager {
         let to = self.current_route();
         self.emit(NAV_SYNC, &shared::events::navigation::NavSyncPayload { to });
     }
+
+    /// Returns true if a back navigation is currently possible.
+    pub fn can_go_back(&self) -> bool {
+        let guard = self.state.lock().unwrap();
+        !guard.history.is_empty()
+    }
 }

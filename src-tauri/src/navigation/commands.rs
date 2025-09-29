@@ -92,3 +92,8 @@ pub fn navigation_back(manager: State<'_, NavigationManager>) -> shared::error::
     }
     Ok(())
 }
+
+#[tauri::command]
+pub fn navigation_can_go_back(manager: State<'_, NavigationManager>) -> bool {
+    manager.can_go_back()
+}

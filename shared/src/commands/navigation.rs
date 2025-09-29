@@ -14,6 +14,8 @@ pub const NAV_BOOTSTRAP: &str = "navigation_bootstrap";
 pub const NAV_RESUME: &str = "navigation_resume";
 /// Navigate back in history (if available).
 pub const NAV_BACK: &str = "navigation_back";
+/// Query if back navigation is possible.
+pub const NAV_CAN_GO_BACK: &str = "navigation_can_go_back";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,4 +33,9 @@ pub struct NavigateRequestPayload {
 #[serde(rename_all = "camelCase")]
 pub struct NavTxPayload {
     pub tx_id: u64,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NavCanGoBackPayload {
+    pub can_go_back: bool,
 }

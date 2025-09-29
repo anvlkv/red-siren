@@ -85,6 +85,17 @@ pub fn ContentPage(
 ) -> impl IntoView {
     let nav_tx = expect_context::<Signal<Option<NavigationTx>>>();
 
+    // Track whether a back navigation is currently possible.
+    let (can_go_back, set_can_go_back) = signal(false);
+
+    // Query: can we go back? (returns bool)
+    let UseTauriWithReturn {
+        trigger: can_go_back_trigger,
+        data: can_go_back_data,
+        error: can_go_back_error,
+        ..
+    } = use_invoke_with_args::<(), bool>(shared::commands::navigation::NAV_CAN_GO_BACK);
+
     // Back navigation (history) command (no payload)
     let UseTauriWithReturn {
         trigger: back_trigger,
@@ -132,7 +143,36 @@ pub fn ContentPage(
                 err
             );
         }
+        if let Some(err) = can_go_back_error() {
+            log::error!(
+                "Error invoking {}: {}",
+                shared::commands::navigation::NAV_CAN_GO_BACK,
+                err
+            );
+        }
     });
+
+    // Update local signal when query result arrives.
+    Effect::new(move |_| {
+        if let Some(v) = can_go_back_data() {
+            set_can_go_back(v);
+        }
+    });
+
+    // Initial query on mount.
+    Effect::new(move |_| {
+        can_go_back_trigger(Some(()));
+    });
+
+    // Re-query on entering a new route (after commit & enter animation begins).
+    {
+        let can_go_back_trigger = can_go_back_trigger.clone();
+        Effect::new(move |_| {
+            if matches!(nav_tx(), Some(NavigationTx::Enter(_))) {
+                can_go_back_trigger(Some(()));
+            }
+        });
+    }
 
     // Unified animation signal driving Card
     let (card_animation, set_card_animation) = signal({
@@ -201,7 +241,7 @@ pub fn ContentPage(
                 on_animation_done=animation_done_cb
             >
                 <div class="flex items-center justify-between gap-4 mb-6">
-                    <Show when=move || !no_back_button>
+                    <Show when=move || !no_back_button && can_go_back()>
                         <Button
                             size=UiSize::Md
                             variant=UiVariant::Outline

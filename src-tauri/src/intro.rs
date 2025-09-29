@@ -96,14 +96,22 @@ struct EngineConfig {
     buffer_size: usize,
 }
 
+// Slow base, preserved 0.53 cycles shape via longer duration
 const INTRO_NUM_SNOOPS: usize = 11;
-const INTRO_SAMPLE_RATE_HZ: f32 = 96.0;    // rebalanced
-const INTRO_BASE_FREQ_HZ: f32 = 0.33;
-const INTRO_MOD_FREQ_HZ: f32 = 0.00165;    // scaled (optional)
+const INTRO_BASE_FREQ_HZ: f32 = 0.0733;
+const INTRO_SAMPLE_RATE_HZ: f32 = 120.0;
+const INTRO_MOD_FREQ_HZ: f32 = 0.00037; // or keep 0.005 if you like faster breathing
 const INTRO_MAX_DEPTH: f32 = 0.5;
-const INTRO_AMPLITUDE: f32 = 0.52;
-const INTRO_BUFFER_SIZE: usize = 480;      // ~96 * 1.6 / 0.33
-const INTRO_THREAD_SLEEP_US: u64 = 2000;   // coarse pacing; reduce if phase jitter noticeable
+const INTRO_AMPLITUDE: f32 = 0.85;
+
+// Duration ≈ 7.2 s -> matches shape of 0.33 Hz @ 1.6 s
+const INTRO_BUFFER_SIZE: usize = 864;
+
+// Engine pacing (tweak if jitter): ~2 ms sleep
+const INTRO_THREAD_SLEEP_US: u64 = 2000;
+
+// Decimation stride used when harvesting samples:
+const INTRO_DECIMATION_STRIDE: usize = 6;
 
 
 
@@ -148,14 +156,15 @@ impl FundspEngine {
         // Precompute depths (linear ramp)
         let depths: Vec<f32> = (0..cfg.num_snoops)
             .map(|i| {
-                if cfg.num_snoops <= 1 {
+                (if cfg.num_snoops <= 1 {
                     0.0
                 } else {
                     cfg.max_depth * (i as f32) / (cfg.num_snoops as f32 - 1.0)
-                }
+                }) + cfg.max_depth
             })
-            .rev()
             .collect();
+
+        log::debug!("nodes depth: {depths:?}");
 
         // Copy data for closure capture.
         let mod_freq = cfg.mod_freq;
@@ -163,14 +172,17 @@ impl FundspEngine {
         let amp = cfg.amplitude;
         let depths_for_closure = depths.clone();
 
+        let gen = pink() | (dc(1.0) + saw_hz(mod_freq)) | sine_hz(base_freq);// | pink();
+
         // Build parallel bus (11 branches).
         let bus = busi::<U11, _, _>(move |k| {
             let idx = k as usize;
             let depth = depths_for_closure[idx];
-            let amp_line = ((idx + INTRO_NUM_SNOOPS / 3) as f32 / INTRO_NUM_SNOOPS as f32) * amp;
             let snoop_be = backs[idx].clone();
-            // (1 + depth * saw) * sine * amplitude >> pre-built snoop backend
-            ((dc(1.0) + saw_hz(mod_freq) * depth) * sine_hz(base_freq) * amp_line)
+            // Apply branch-specific depth and amplitude modulation
+            //(((pass() * depth) * (pass() * amp)) * pass())
+
+            ((pass() + ((pass() * depth) * pass())) * (amp * depth))
                 >> declick()
                 >> snoop_be
         });
@@ -180,7 +192,8 @@ impl FundspEngine {
 
         net.set_sample_rate(cfg.sample_rate as f64);
 
-        let node = net.push(Box::new(bus));
+        let complete_network = gen >> bus;
+        let node = net.push(Box::new(complete_network));
 
         net.connect_output(node, 0, 0);
 
@@ -335,10 +348,10 @@ pub async fn intro_next_frame(
     let mut snoop_payloads = Vec::with_capacity(num);
     for (i, snoop) in inner.snoops.iter_mut().enumerate() {
         snoop.update();
-        let cap = snoop.capacity();
-        let mut samples = Vec::with_capacity(cap);
-        // Reverse chronological (latest first) -> make chronological oldest→newest as before.
-        for rev in (0..cap){
+        let cap = snoop.capacity(); // 864
+        let stride = INTRO_DECIMATION_STRIDE;
+        let mut samples = Vec::with_capacity(cap / stride + 2);
+        for rev in (0..cap).rev().step_by(stride) {
             samples.push(snoop.at(rev));
         }
         let depth = if num > 1 {

@@ -1,6 +1,9 @@
 use leptos::prelude::*;
-use leptos_use::{use_raf_fn_with_options, UseRafFnCallbackArgs, UseRafFnOptions};
 use tauri_use::{use_command, UseTauriWithReturn};
+
+use crate::util::raf_fn_fps::{
+    use_raf_fn_with_fps_and_options, UseRafFnCallbackArgs, UseRafFnWithFpsOptions,
+};
 
 // Wave geometry (tiled, taller, centered under sun)
 // Sun center (107,164), radius 39 => bottom ≈ 203 -> start just below.
@@ -55,7 +58,7 @@ pub fn Wavering() -> impl IntoView {
             .collect(),
     );
 
-    let _wave_raf = use_raf_fn_with_options(
+    let _wave_raf = use_raf_fn_with_fps_and_options(
         {
             move |UseRafFnCallbackArgs {
                       delta: _,
@@ -83,10 +86,12 @@ pub fn Wavering() -> impl IntoView {
                         }
                     });
                 }
+
                 fetch_frame(Some(()));
             }
         },
-        UseRafFnOptions::default().immediate(true),
+        20.0,
+        UseRafFnWithFpsOptions { immediate: true },
     );
 
     view! {

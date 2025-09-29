@@ -1,6 +1,9 @@
 use std::time::Duration;
 
-use keyframe::{functions::EaseInCubic, keyframes, AnimationSequence};
+use keyframe::{
+    functions::{EaseInCubic, EaseOutCubic},
+    keyframes, AnimationSequence,
+};
 use keyframe_derive::CanTween;
 use leptos::prelude::*;
 use leptos_use::{
@@ -10,14 +13,17 @@ use leptos_use::{
 
 const PERSPECTIVE_CM: f64 = 80.0;
 const APPEAR_PERSPECTIVE_CM: f64 = 60.0;
+const THICKNESS_PX: f64 = 8.0;
+const MAX_BLUR: f32 = 1.0;
 
 #[derive(Debug, Default, Clone, Copy, CanTween)]
-struct Transform {
+struct CardEffects {
     x_px: f32,
     y_px: f32,
     tilt_x_deg: f32,
     rot_y_deg: f32,
     perspective: f64,
+    blur: f32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -90,7 +96,7 @@ pub fn Card(
     // Base layout and typography colors tuned to the existing theme
     let base = "text-black dark:text-red \
                 transition-all duration-200 \
-                focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2";
+                focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 transform-3d will-change-transform";
 
     let bg_and_border = match variant {
         CardVariant::Elevated => {
@@ -138,12 +144,13 @@ pub fn Card(
 
     let anim_ms_sig = RwSignal::new(0.0_f64);
     let transform_seq = RwSignal::new(keyframes![(
-        Transform {
+        CardEffects {
             x_px: 0.0,
             y_px: 0.0,
             tilt_x_deg: 0.0,
             rot_y_deg: 0.0,
             perspective: 0.0,
+            blur: 0.0
         },
         0.0
     )]);
@@ -180,25 +187,27 @@ pub fn Card(
                     anim_ms_sig.set(ms);
                     transform_seq.set(keyframes![
                         (
-                            Transform {
+                            CardEffects {
                                 x_px: 0.0,
                                 y_px: 0.0,
                                 tilt_x_deg: 0.0,
                                 rot_y_deg: from_deg,
                                 perspective: PERSPECTIVE_CM,
+                                blur: MAX_BLUR,
                             },
                             0.0
                         ),
                         (
-                            Transform {
+                            CardEffects {
                                 x_px: 0.0,
                                 y_px: 0.0,
                                 tilt_x_deg: 0.0,
                                 rot_y_deg: to_deg,
                                 perspective: PERSPECTIVE_CM,
+                                blur: 0.0,
                             },
                             ms,
-                            EaseInCubic
+                            EaseOutCubic
                         )
                     ]);
                     anim_resume();
@@ -212,22 +221,24 @@ pub fn Card(
                     anim_ms_sig.set(ms);
                     transform_seq.set(keyframes![
                         (
-                            Transform {
+                            CardEffects {
                                 x_px: 0.0,
                                 y_px: 0.0,
                                 tilt_x_deg: 0.0,
                                 rot_y_deg: from_deg,
                                 perspective: PERSPECTIVE_CM,
+                                blur: 0.0,
                             },
                             0.0
                         ),
                         (
-                            Transform {
+                            CardEffects {
                                 x_px: 0.0,
                                 y_px: 0.0,
                                 tilt_x_deg: 0.0,
                                 rot_y_deg: to_deg,
                                 perspective: PERSPECTIVE_CM,
+                                blur: MAX_BLUR,
                             },
                             ms,
                             EaseInCubic
@@ -245,25 +256,27 @@ pub fn Card(
                     anim_ms_sig.set(ms);
                     transform_seq.set(keyframes![
                         (
-                            Transform {
+                            CardEffects {
                                 x_px: x_from_px,
                                 y_px: y_from_px,
                                 tilt_x_deg: tilt_x_from_deg,
                                 rot_y_deg: 0.0,
                                 perspective: APPEAR_PERSPECTIVE_CM,
+                                blur: MAX_BLUR,
                             },
                             0.0
                         ),
                         (
-                            Transform {
+                            CardEffects {
                                 x_px: 0.0,
                                 y_px: 0.0,
                                 tilt_x_deg: 0.0,
                                 rot_y_deg: 0.0,
                                 perspective: PERSPECTIVE_CM,
+                                blur: 0.0,
                             },
                             ms,
-                            EaseInCubic
+                            EaseOutCubic
                         )
                     ]);
                     anim_resume();
@@ -280,12 +293,22 @@ pub fn Card(
     });
 
     let transform_style = move || {
-        let s = transform_seq.get().now();
+        let s = transform_seq().now();
         // Ensure a stable baseline: translateZ(0) and scale(1) explicitly set.
         format!(
-            "perspective({}cm) rotate3d(1, 0, 0, {}deg) rotate3d(0, 1, 0, {}deg) translate3d({}px, {}px, 0) translateZ(0) scale(1)",
-            s.perspective, s.tilt_x_deg, s.rot_y_deg, s.x_px, s.y_px
+            "rotate3d(1, 0, 0, {}deg) rotate3d(0, 1, 0, {}deg) translate3d({}px, {}px, 0) translateZ(0) scale(1)",
+             s.tilt_x_deg, s.rot_y_deg, s.x_px, s.y_px
         )
+    };
+
+    let perspective = move || {
+        let s = transform_seq().now();
+        format!("perspective({}cm)", s.perspective)
+    };
+
+    let blur = move || {
+        let s = transform_seq().now();
+        format!("blur({}px)", s.blur)
     };
 
     // Completion notifications
@@ -298,18 +321,53 @@ pub fn Card(
         }
     });
 
+    let thick_edge_class =
+        move |pos: &str| format!("absolute {pos} bg-cinnabar/25 dark:bg-gray/25 blur-xs ");
+
     view! {
         <div
-            class=class
+            style:transform=perspective
+            style:filter=blur
             role=if interactive { "button" } else { "group" }
             tabindex=if interactive { Some("0") } else { None }
-            class:will-change-transform=true
-            style:transform=transform_style
-            style:transform-origin="50% 100%"
-            style:backface-visibility="hidden"
-            style:contain="layout paint"
         >
-            <div class="card-body contents">{children()}</div>
+            <div
+                class=format!("{} relative", class)
+                style:transform=transform_style
+                style:transform-origin="50% 100%"
+            >
+                <div
+                    class="relative backface-hidden"
+                    style:transform=format!("translateZ({THICKNESS_PX}px)")
+                >
+                    <div class="card-body contents">{children()}</div>
+                </div>
+
+                <div
+                    class=move || thick_edge_class("inset-x-0 top-0 h-2")
+                    style:transform=format!("rotateX(90deg) translateZ({}px)", THICKNESS_PX / 2.0)
+                    aria-hidden="true"
+                    role="presentation"
+                />
+                <div
+                    class=move || thick_edge_class("inset-x-0 bottom-0 h-2")
+                    style:transform=format!("rotateX(-90deg) translateZ({}px)", THICKNESS_PX / 2.0)
+                    aria-hidden="true"
+                    role="presentation"
+                />
+                <div
+                    class=move || thick_edge_class("inset-y-0 left-0 w-2")
+                    style:transform=format!("rotateY(-90deg) translateZ({}px)", THICKNESS_PX / 2.0)
+                    aria-hidden="true"
+                    role="presentation"
+                />
+                <div
+                    class=move || thick_edge_class("inset-y-0 right-0 w-2")
+                    style:transform=format!("rotateY(90deg) translateZ({}px)", THICKNESS_PX / 2.0)
+                    aria-hidden="true"
+                    role="presentation"
+                />
+            </div>
         </div>
     }
 }

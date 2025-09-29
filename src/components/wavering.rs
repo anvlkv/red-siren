@@ -23,6 +23,7 @@ const WAVES_LENGHT: [f32; 11] = [
 ];
 const FIRST_WAVE_SCALE_X: f32 = 0.75;
 const LAST_WAVE_SCALE_X: f32 = 0.95;
+const STROKE_WIDTH: f32 = 3.5;
 
 #[component]
 pub fn Wavering() -> impl IntoView {
@@ -39,7 +40,7 @@ pub fn Wavering() -> impl IntoView {
     } = use_command::<IntroSnoopBatchPayload>(INTRO_NEXT_FRAME);
 
     // Cache of 11 SVG path strings for the animated wave lines.
-    let wave_paths = RwSignal::<Vec<(String, String)>>::new(
+    let wave_paths = RwSignal::<Vec<(String, String, String)>>::new(
         (0..11)
             .map(|i| {
                 // Prepopulate with straight lines (flat at y=0)
@@ -53,6 +54,7 @@ pub fn Wavering() -> impl IntoView {
                         WAVE_AMPLITUDE_PX,
                     ),
                     wave_scale(i),
+                    wave_stroke(i),
                 )
             })
             .collect(),
@@ -66,7 +68,7 @@ pub fn Wavering() -> impl IntoView {
                   }| {
                 if let Some(batch) = batch.get() {
                     wave_paths.update(|paths| {
-                        for (i, (snoop, (p, _))) in
+                        for (i, (snoop, (p, _, _))) in
                             batch.snoops.iter().zip(paths.iter_mut()).enumerate()
                         {
                             if i >= 11 {
@@ -104,13 +106,8 @@ pub fn Wavering() -> impl IntoView {
             {move || {
                 wave_paths()
                     .into_iter()
-                    .map(|(p, t)| {
-                        view! {
-                            <g transform=t>
-                                <path d=p stroke-width="1.5" />
-                            </g>
-                        }
-                            .into_any()
+                    .map(|(p, t, s)| {
+                        view! { <path d=p transform=t stroke-width=s /> }.into_any()
                     })
                     .collect_view()
             }}
@@ -121,7 +118,7 @@ pub fn Wavering() -> impl IntoView {
                 {move || {
                     wave_paths()
                         .into_iter()
-                        .map(|(p, _)| view! { <path d=p stroke-width="1.5" /> }.into_any())
+                        .map(|(p, _, s)| view! { <path d=p stroke-width=s /> }.into_any())
                         .collect_view()
                 }}
             </g>
@@ -173,4 +170,10 @@ fn wave_scale(i: usize) -> String {
         -WAVE_CENTER_X,
         -(WAVE_TOP_Y + WAVE_Y_OFFSET + (i as f32) * WAVE_VERTICAL_SPACING),
     )
+}
+
+fn wave_stroke(i: usize) -> String {
+    let max_idx = WAVES_LENGHT.len() as f32;
+    let width = (STROKE_WIDTH / max_idx) * (i as f32 + 1.0);
+    format!("{width}")
 }

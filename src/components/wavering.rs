@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use leptos_use::{use_raf_fn_with_options, UseRafFnOptions};
+use leptos_use::{use_raf_fn_with_options, UseRafFnCallbackArgs, UseRafFnOptions};
 use tauri_use::{use_command, UseTauriWithReturn};
 
 // Wave geometry (tiled, taller, centered under sun)

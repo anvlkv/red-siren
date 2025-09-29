@@ -107,6 +107,9 @@ const INTRO_AMPLITUDE: f32 = 0.52;
 const INTRO_BUFFER_SIZE: usize = 2800;
 const INTRO_THREAD_SLEEP_US: u64 = 500; // 0.5 ms
 
+// Frontend dynamic decimation target
+const INTRO_TARGET_POINTS_PER_WAVE: usize = 128;
+
 impl Default for EngineConfig {
     fn default() -> Self {
         Self {
@@ -334,9 +337,10 @@ pub async fn intro_next_frame(
         let cap = snoop.capacity();
         let mut samples = Vec::with_capacity(cap);
         // Reverse chronological (latest first) -> make chronological oldest→newest as before.
-        for rev in (0..cap).rev().filter(|r| r.is_multiple_of(4)) {
-            samples.push(snoop.at(rev));
-        }
+                let step = std::cmp::Ord::max(cap / INTRO_TARGET_POINTS_PER_WAVE, 1);
+                for rev in (0..cap).rev().step_by(step) {
+                    samples.push(snoop.at(rev));
+                }
         let depth = if num > 1 {
             max_depth * (i as f32) / (num as f32 - 1.0)
         } else {

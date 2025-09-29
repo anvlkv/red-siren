@@ -57,7 +57,10 @@ pub fn Wavering() -> impl IntoView {
 
     let _wave_raf = use_raf_fn_with_options(
         {
-            move |_| {
+            move |UseRafFnCallbackArgs {
+                      delta: _,
+                      timestamp: _,
+                  }| {
                 if let Some(batch) = batch.get() {
                     wave_paths.update(|paths| {
                         for (i, (snoop, (p, _))) in

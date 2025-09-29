@@ -202,7 +202,7 @@ pub fn ContentPage(
                             class="relative pl-14"
                         >
                             <span class="absolute left-4 text-4xl">
-                                <Icon name="back" stroke_width=12.0 />
+                                <Icon name="back" />
                             </span>
                             Back
                         </Button>

@@ -80,7 +80,7 @@ pub fn Permissions() -> impl IntoView {
                         disabled=prompted
                     >
                         <span class="absolute left-4 text-4xl">
-                            <Icon name="mic" stroke_width=12.0 />
+                            <Icon name="mic" />
                         </span>
                         "Allow"
                     </Button>

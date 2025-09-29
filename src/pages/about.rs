@@ -54,7 +54,7 @@ pub fn About() -> impl IntoView {
                     attr:aria-label="Donations"
                 >
                     <span class="absolute left-4 text-4xl">
-                        <Icon name="donate" stroke_width=12.0 />
+                        <Icon name="donate" />
                     </span>
                     "Donate"
                 </Button>

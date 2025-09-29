@@ -18,7 +18,7 @@ use crate::components::{UiSize, UiVariant};
 ///     "Secondary"
 ///   </Button>
 ///   <Button round square size=ButtonSize::Lg aria_label=Some("Info".into())>
-///     <crate::components::Icon name="info" stroke_width=12.0 />
+///     <crate::components::Icon name="info" />
 ///   </Button>
 /// }
 #[component]

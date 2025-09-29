@@ -124,7 +124,7 @@ fn MenuItemView(
                             attr:aria-label=aria_label.clone()
                         >
                             <span class="absolute left-4 text-4xl">
-                                <Icon name=icon stroke_width=12.0 />
+                                <Icon name=icon />
                             </span>
                             {label}
                         </Button>
@@ -142,7 +142,7 @@ fn MenuItemView(
                             attr:aria-label=Some(aria_label.clone())
                         >
                             <span class="absolute left-4 text-4xl">
-                                <Icon name=icon stroke_width=12.0 />
+                                <Icon name=icon />
                             </span>
                             {label}
                         </Button>
@@ -177,7 +177,7 @@ fn MenuItemCompactView(
                                 attr:aria-label=aria_label.clone()
                             >
                                 <span class="text-4xl leading-none">
-                                    <Icon name=icon stroke_width=12.0 />
+                                    <Icon name=icon />
                                 </span>
                             </Button>
                         </Tooltip>
@@ -198,7 +198,7 @@ fn MenuItemCompactView(
                                 attr:aria-label=aria_label.clone()
                             >
                                 <span class="text-4xl leading-none">
-                                    <Icon name=icon stroke_width=12.0 />
+                                    <Icon name=icon />
                                 </span>
                             </Button>
                         </Tooltip>

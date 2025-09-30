@@ -7,7 +7,7 @@ use tauri_use::{
     UseTauriWithReturn,
 };
 
-use crate::{components::Intro, routes};
+use crate::routes::AppRoutes;
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -102,14 +102,9 @@ pub fn App() -> impl IntoView {
 
     view! {
         <main class="bg-red dark:bg-black font-serif text-black dark:text-red relative h-screen w-screen">
-            <div class="absolute h-full w-full overflow-hidden">
-                <Intro />
-            </div>
-            <div class="absolute h-full w-full overflow-hidden">
-                <Router>
-                    <routes::AppRoutes />
-                </Router>
-            </div>
+            <Router>
+                <AppRoutes />
+            </Router>
         </main>
     }
 }

@@ -10,12 +10,12 @@ use shared::{NavCommittedPayload, NavStartedPayload, RouteId};
 use tauri_use::{use_invoke_with_args, use_listen, EventType, UseListenReturn, UseTauriWithReturn};
 
 use crate::{
-    components::NavigationTx,
-    pages::{About, Donate, Home, Play, Tune},
-};
-use crate::{
     components::{AppError, ErrorTemplate},
     pages::Permissions,
+};
+use crate::{
+    components::{Intro, NavigationTx},
+    pages::{About, Donate, Home, Play, Tune},
 };
 
 #[component]
@@ -135,18 +135,25 @@ pub fn AppRoutes() -> impl IntoView {
     });
 
     view! {
-        <Routes fallback=|| {
-            let mut outside_errors = Errors::default();
-            outside_errors.insert_with_default_key(AppError::NotFound);
-            view! { <ErrorTemplate outside_errors /> }.into_view()
-        }>
-            <Route path=(StaticSegment(RouteId::None.as_ref()),) view=|| view! { <></> } />
-            <Route path=(StaticSegment(RouteId::Home.as_ref()),) view=Home />
-            <Route path=(StaticSegment(RouteId::Play.as_ref()),) view=Play />
-            <Route path=(StaticSegment(RouteId::Tune.as_ref()),) view=Tune />
-            <Route path=(StaticSegment(RouteId::About.as_ref()),) view=About />
-            <Route path=(StaticSegment(RouteId::Donate.as_ref()),) view=Donate />
-            <Route path=(StaticSegment(RouteId::Permissions.as_ref()),) view=Permissions />
-        </Routes>
+        <>
+            <div class="absolute h-full w-full overflow-hidden">
+                <Intro />
+            </div>
+            <div class="absolute h-full w-full overflow-hidden">
+                <Routes fallback=|| {
+                    let mut outside_errors = Errors::default();
+                    outside_errors.insert_with_default_key(AppError::NotFound);
+                    view! { <ErrorTemplate outside_errors /> }.into_view()
+                }>
+                    <Route path=(StaticSegment(RouteId::None.as_ref()),) view=|| view! { <></> } />
+                    <Route path=(StaticSegment(RouteId::Home.as_ref()),) view=Home />
+                    <Route path=(StaticSegment(RouteId::Play.as_ref()),) view=Play />
+                    <Route path=(StaticSegment(RouteId::Tune.as_ref()),) view=Tune />
+                    <Route path=(StaticSegment(RouteId::About.as_ref()),) view=About />
+                    <Route path=(StaticSegment(RouteId::Donate.as_ref()),) view=Donate />
+                    <Route path=(StaticSegment(RouteId::Permissions.as_ref()),) view=Permissions />
+                </Routes>
+            </div>
+        </>
     }
 }

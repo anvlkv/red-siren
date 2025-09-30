@@ -7,6 +7,7 @@
   {
     "label": "Start Tauri [dev server]",
     "command": "cargo tauri dev",
-    "reveal": "always"
+    "reveal": "always",
+    "use_new_terminal": true
   }
 ]

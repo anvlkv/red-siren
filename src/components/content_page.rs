@@ -53,18 +53,6 @@ pub enum NavigationTx {
 }
 
 /// Generic Page component that handles common navigation animation logic.
-///
-/// Extracts the shared patterns from Home, About, and Donate pages:
-/// - Event listening (NAV_COMMITTED, NAV_STARTED)
-/// - Animation state management
-/// - Tauri invoke setup for enter/leave done callbacks
-/// - Error handling
-/// - Card wrapper with animation coordination
-///
-/// Special features:
-/// - Optional one-time appear animation (for Home page)
-/// - Route-specific filtering
-/// - Window-size scaling for appear animations
 #[component]
 pub fn ContentPage(
     /// The RouteId this page represents (for event filtering)

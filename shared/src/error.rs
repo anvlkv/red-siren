@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Shared error definitions for the application.
 //!
 //! Design notes:
@@ -18,6 +19,10 @@ pub type Result<T> = std::result::Result<T, AppError>;
 // Consider a tagged representation if you want more explicit wire shape:
 // #[serde(tag = "kind", content = "data")]
 pub enum AppError {
+    /// Errors originating from app/window setup / initialization.
+    #[error("{0}")]
+    Setup(#[from] SetupError),
+
     /// Errors originating from navigation orchestration (manager state / logic).
     #[error("{0}")]
     Navigation(#[from] NavigationError),
@@ -56,7 +61,54 @@ impl AppError {
     }
 }
 
-/// Navigation manager domain errors.
+// -------- Domain: Setup (window & initial app wiring) --------
+/// Errors arising during early application setup (window acquisition, sizing,
+/// appearance updates, event emission, etc.). This separates one‑time
+/// initialization issues from longer‑lived health/runtime domains.
+#[derive(Debug, Error, Serialize, Deserialize)]
+pub enum SetupError {
+    #[error("main window not found")]
+    MainWindowMissing,
+
+    #[error("window query failed: {message}")]
+    WindowQuery { message: String },
+
+    #[error("window state operation failed (op={op}): {message}")]
+    WindowStateOp { op: String, message: String },
+
+    #[error("appearance update failed: {message}")]
+    Appearance { message: String },
+
+    #[error("emit failed (event={event}): {message}")]
+    Emit { event: String, message: String },
+}
+
+impl SetupError {
+    pub fn window_query<E: ToString>(e: E) -> Self {
+        SetupError::WindowQuery {
+            message: e.to_string(),
+        }
+    }
+    pub fn window_state_op<S: Into<String>, E: ToString>(op: S, e: E) -> Self {
+        SetupError::WindowStateOp {
+            op: op.into(),
+            message: e.to_string(),
+        }
+    }
+    pub fn appearance<E: ToString>(e: E) -> Self {
+        SetupError::Appearance {
+            message: e.to_string(),
+        }
+    }
+    pub fn emit<S: Into<String>, E: ToString>(event: S, e: E) -> Self {
+        SetupError::Emit {
+            event: event.into(),
+            message: e.to_string(),
+        }
+    }
+}
+
+// -------- Domain: Navigation Manager --------
 #[derive(Debug, Error, Serialize, Deserialize)]
 pub enum NavigationError {
     #[error("navigation manager poisoned")]
@@ -134,7 +186,6 @@ pub enum InstrumentError {
 }
 
 // -------- Feature-gated conversions --------
-
 #[cfg(feature = "tauri")]
 impl From<tauri::Error> for AppError {
     fn from(value: tauri::Error) -> Self {
@@ -152,5 +203,17 @@ mod tests {
         let err = AppError::from(NavGateError::PermissionDenied);
         let s = serde_json::to_string(&err).unwrap();
         assert!(s.contains("permission denied"));
+    }
+
+    #[test]
+    fn setup_error_roundtrip() {
+        let err = AppError::from(SetupError::emit("evt", "boom"));
+        let json = serde_json::to_string(&err).unwrap();
+        assert!(json.contains("emit failed"));
+        let de: AppError = serde_json::from_str(&json).unwrap();
+        match de {
+            AppError::Setup(SetupError::Emit { event, .. }) => assert_eq!(event, "evt"),
+            _ => panic!("unexpected variant"),
+        }
     }
 }

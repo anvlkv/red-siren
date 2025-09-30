@@ -46,6 +46,29 @@ pub struct Layout {
     pub scale: super::Scale,
 }
 
+impl Default for Layout {
+    fn default() -> Self {
+        let default_pt = Point2 { x: 0.0, y: 0.0 };
+        Self {
+            key_radius: Default::default(),
+            key_band_length: Default::default(),
+            key_band_breadth: Default::default(),
+            safe_area_padding: Default::default(),
+            key_bands_gap: Default::default(),
+            groups_gap: Default::default(),
+            scale: Default::default(),
+            // zero defaults
+            space: Vector2 { x: 0.0, y: 0.0 },
+            orientation: LayoutOrientation::Horizontal,
+            left_string_position: (default_pt, default_pt),
+            right_string_position: (default_pt, default_pt),
+            num_keys_per_group: NonZero::new(1).unwrap(),
+            num_groups: NonZero::new(1).unwrap(),
+            first_group_channel: GroupChanel::Right,
+        }
+    }
+}
+
 impl Eq for Layout {}
 
 const LAYOUT_PRIMES: const_primes::Primes<54> = const_primes::Primes::new();

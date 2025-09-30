@@ -48,9 +48,9 @@ pub fn Switch(
     #[prop(optional, into)] size: Signal<UiSize>,
     #[prop(optional, into)] round: Signal<bool>,
 ) -> impl IntoView {
-    // Ensure at least 1 state
-    if labels.is_empty() {
-        panic!("Switch must have at least 1 label");
+    // Ensure at least 2 state
+    if labels.len() < 2 {
+        panic!("Switch must have at least 2 labels");
     }
 
     // Validate tooltips length if provided
@@ -60,10 +60,20 @@ pub fn Switch(
         }
     }
 
+    // Precompute total for cycling logic.
+    let total = labels.len();
+
     let handle_segment_click = move |segment_index: usize| {
         move |_| {
             if !disabled.get_untracked() {
-                on_change.run(segment_index);
+                let current = current_state.get_untracked();
+                let target = if current == segment_index {
+                    // Clicking the already-selected segment cycles to next (wrap)
+                    (current + 1) % total
+                } else {
+                    segment_index
+                };
+                on_change.run(target);
             }
         }
     };

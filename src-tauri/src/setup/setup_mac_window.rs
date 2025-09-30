@@ -5,9 +5,10 @@ use objc2_app_kit::{
 use objc2_app_kit::{NSColor, NSWindow};
 use objc2_foundation::NSArray;
 use raw_window_handle::HasWindowHandle;
+use shared::error::{Result, SetupError};
 use tauri::WebviewWindow;
 
-pub fn setup(window: &mut WebviewWindow) -> Result<(), Box<dyn std::error::Error>> {
+pub fn setup(window: &mut WebviewWindow) -> Result<()> {
     if let Ok(handle) = window.window_handle() {
         if let raw_window_handle::RawWindowHandle::AppKit(appkit_handle) = handle.as_raw() {
             let ns_view_ptr = appkit_handle.ns_view.as_ptr();
@@ -15,13 +16,13 @@ pub fn setup(window: &mut WebviewWindow) -> Result<(), Box<dyn std::error::Error
             unsafe {
                 // Get NSView from the pointer
 
-                let ns_view: Retained<NSView> =
-                    Retained::retain(ns_view_ptr.cast()).ok_or("Failed to retain NSView")?;
+                let ns_view: Retained<NSView> = Retained::retain(ns_view_ptr.cast())
+                    .ok_or_else(|| SetupError::appearance("Failed to retain NSView"))?;
 
                 // Get NSWindow from NSView
-                let ns_window = ns_view
-                    .window()
-                    .ok_or("NSView was not installed in a window")?;
+                let ns_window = ns_view.window().ok_or_else(|| {
+                    SetupError::appearance("NSView was not installed in a window")
+                })?;
 
                 // Detect if we're in dark mode
                 let is_dark_mode = detect_dark_mode(&ns_window)?;
@@ -59,23 +60,20 @@ pub fn setup(window: &mut WebviewWindow) -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
-pub fn update_appearance(
-    window: &mut WebviewWindow,
-    dark: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn update_appearance(window: &mut WebviewWindow, dark: bool) -> Result<()> {
     if let Ok(handle) = window.window_handle() {
         if let raw_window_handle::RawWindowHandle::AppKit(appkit_handle) = handle.as_raw() {
             let ns_view_ptr = appkit_handle.ns_view.as_ptr();
 
             unsafe {
                 // Get NSView from the pointer
-                let ns_view: Retained<NSView> =
-                    Retained::retain(ns_view_ptr.cast()).ok_or("Failed to retain NSView")?;
+                let ns_view: Retained<NSView> = Retained::retain(ns_view_ptr.cast())
+                    .ok_or_else(|| SetupError::appearance("Failed to retain NSView"))?;
 
                 // Get NSWindow from NSView
-                let ns_window = ns_view
-                    .window()
-                    .ok_or("NSView was not installed in a window")?;
+                let ns_window = ns_view.window().ok_or_else(|| {
+                    SetupError::appearance("NSView was not installed in a window")
+                })?;
 
                 // Set custom background color based on theme
                 let background_color = if dark {
@@ -104,7 +102,7 @@ pub fn update_appearance(
     Ok(())
 }
 
-unsafe fn detect_dark_mode(ns_window: &NSWindow) -> Result<bool, Box<dyn std::error::Error>> {
+unsafe fn detect_dark_mode(ns_window: &NSWindow) -> Result<bool> {
     // Get the effective appearance of the window
     let effective_appearance = ns_window.effectiveAppearance();
 

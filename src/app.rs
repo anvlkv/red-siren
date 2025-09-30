@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use leptos_router::components::*;
-use leptos_use::use_preferred_dark;
-use shared::commands::setup::UpdateWindowAppearancePayload;
+use leptos_use::{use_preferred_dark, use_window_size};
+use shared::commands::setup::{UpdateWindowAppearancePayload, UpdateWindowSizePayload};
 use tauri_use::{
     use_command, use_invoke, use_listen, EventType, UseListenReturn, UseTauriReturn,
     UseTauriWithReturn,
@@ -31,11 +31,19 @@ pub fn App() -> impl IntoView {
 
     let UseTauriReturn {
         trigger: trigger_update_window_appearance,
+        error: error_update_window_appearance,
         ..
     } = use_invoke::<UpdateWindowAppearancePayload, (), ()>(
         shared::commands::setup::UPDATE_WINDOW_APPEARANCE,
     );
 
+    let UseTauriReturn {
+        trigger: trigger_update_window_size,
+        error: error_update_window_size,
+        ..
+    } = use_invoke::<UpdateWindowSizePayload, (), ()>(shared::commands::setup::UPDATE_WINDOW_SIZE);
+
+    let size = use_window_size();
     let preferred_dark = use_preferred_dark();
 
     Effect::new(move |_| {
@@ -59,6 +67,18 @@ pub fn App() -> impl IntoView {
                 shared::commands::navigation::NAV_BOOTSTRAP
             );
         }
+        if let Some(err) = error_update_window_appearance() {
+            log::error!(
+                "Error invoking {}: {err}",
+                shared::commands::setup::UPDATE_WINDOW_APPEARANCE
+            );
+        }
+        if let Some(err) = error_update_window_size() {
+            log::error!(
+                "Error invoking {}: {err}",
+                shared::commands::setup::UPDATE_WINDOW_SIZE
+            );
+        }
     });
 
     Effect::new(move |_| {
@@ -69,8 +89,15 @@ pub fn App() -> impl IntoView {
 
     Effect::new(move |_| {
         let dark = preferred_dark();
-        log::info!("Preferred dark mode: {}", dark);
+        log::info!("Preferred dark mode: {dark}",);
         trigger_update_window_appearance(Some((UpdateWindowAppearancePayload { dark }, ())));
+    });
+
+    Effect::new(move |_| {
+        let width = size.width.get();
+        let height = size.height.get();
+        log::info!("Window size: {width}, {height}");
+        trigger_update_window_size(Some((UpdateWindowSizePayload { width, height }, ())));
     });
 
     view! {

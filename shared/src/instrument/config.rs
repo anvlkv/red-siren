@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{consts::*, Layout};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 /// Instrument configuartion for audio generation
 pub struct Config(pub Vec<GroupConfig>);
 

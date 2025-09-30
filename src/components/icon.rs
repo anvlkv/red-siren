@@ -11,6 +11,7 @@ const PAUSE_ICON: &str = include_str!("./icon/pause.svg");
 const DONATE_ICON: &str = include_str!("./icon/donate.svg");
 const MIC_ICON: &str = include_str!("./icon/mic.svg");
 const ENTROPY_ICON: &str = include_str!("./icon/entropy.svg");
+const RESET_ICON: &str = include_str!("./icon/reset.svg");
 
 #[component]
 pub fn Icon(
@@ -49,6 +50,7 @@ pub fn Icon(
                     "donate" => DONATE_ICON,
                     "mic" => MIC_ICON,
                     "entropy" => ENTROPY_ICON,
+                    "reset" => RESET_ICON,
                     _ => "No such icon",
                 };
                 decorate_svg(raw, size())

@@ -79,7 +79,7 @@ pub fn Switch(
     };
 
     // Base styles for the container
-    let container_base = "inline-flex overflow-hidden";
+    let container_base = "inline-flex overflow-visible";
     let container_rounding = move || {
         if round() {
             "rounded-full"
@@ -94,8 +94,7 @@ pub fn Switch(
 
     let container_class = move || {
         format!(
-            "{} {} {} {}",
-            container_base,
+            "{container_base} {} {} {}",
             container_rounding(),
             container_variant(),
             class()
@@ -180,7 +179,7 @@ pub fn Switch(
                         </button>
                     };
                     match &tooltips {
-                        Some(tooltip_array) if segment_index < tooltip_array.len() => {
+                        Some(tooltip_array) => {
                             let tooltip_text = tooltip_array[segment_index].clone();
 
                             // Wrap with tooltip if tooltips are provided

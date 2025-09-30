@@ -53,6 +53,24 @@ pub fn Play() -> impl IntoView {
         shared::instrument::commands::SET_ACTIVATION_SRC,
     );
 
+    let tooltips = move || {
+        let active = activation_source()
+            .map(|s| s.source as usize)
+            .unwrap_or_default();
+
+        ["Random", "Mic"]
+            .iter()
+            .enumerate()
+            .map(|(i, l)| {
+                if i == active {
+                    format!("{l} (active)")
+                } else {
+                    l.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+    };
+
     let (menu_items, set_menu_items) = signal(vec![
         MenuItem::Action {
             icon: "pause",
@@ -151,18 +169,22 @@ pub fn Play() -> impl IntoView {
 
     view! {
         <CompactMenu items=menu_items>
-            <Switch
-                labels=vec![
-                    view! { <Icon name="entropy" size=UiSize::Sm /> }.into_any(),
-                    view! { <Icon name="mic" size=UiSize::Sm /> }.into_any(),
-                ]
-                tooltips=vec!["Random".to_string(), "Mic".to_string()]
-                current_state=Signal::derive(move || {
-                    activation_source().map(|s| s.source).unwrap_or_default() as usize
-                })
-                on_change=on_activation_source_change
-                size=UiSize::Sm
-            />
+            {move || {
+                view! {
+                    <Switch
+                        labels=vec![
+                            view! { <Icon name="entropy" size=UiSize::Sm /> }.into_any(),
+                            view! { <Icon name="mic" size=UiSize::Sm /> }.into_any(),
+                        ]
+                        tooltips=tooltips()
+                        current_state=Signal::derive(move || {
+                            activation_source().map(|s| s.source).unwrap_or_default() as usize
+                        })
+                        on_change=on_activation_source_change
+                        size=UiSize::Sm
+                    />
+                }
+            }}
         </CompactMenu>
     }
 }

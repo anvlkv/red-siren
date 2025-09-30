@@ -322,13 +322,15 @@ impl From<Layout> for Config {
 
             let (group_f_base, group_n_base) = g_channel.compute_fundamentals(l, n);
 
-            let mut nodes = build_group_nodes(group_f_base, group_n_base, scale, equal_divisions);
+            let f_base = group_f_base * 2usize.pow(g_x as u32) as f64;
+
+            let mut nodes = build_group_nodes(f_base, group_n_base, scale, equal_divisions);
 
             // 1) Phase spreading
             assign_node_phases(&mut nodes, g_x, g_channel);
 
             // 2) a_coef increases with pitch
-            let a_coef = a_coef_from_frequency(group_f_base);
+            let a_coef = a_coef_from_frequency(f_base);
 
             groups.push(GroupConfig {
                 channel: g_channel,

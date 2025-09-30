@@ -46,6 +46,16 @@ pub enum CardAnimation {
         to_deg: f32,
         ms: f64,
     },
+    EnterTiltX {
+        from_deg: f32,
+        to_deg: f32,
+        ms: f64,
+    },
+    LeaveTiltX {
+        from_deg: f32,
+        to_deg: f32,
+        ms: f64,
+    },
 }
 
 /// Generic Card component (MAYA DRY KISS).
@@ -79,7 +89,7 @@ pub fn Card(
     #[prop(optional, into)] padding: UiPadding,
     #[prop(optional, into)] rounded: bool,
     #[prop(optional, into)] full_width: bool,
-    #[prop(optional, into)] class: String,
+    #[prop(optional, into)] class: Signal<String>,
 
     // Behavior
     #[prop(optional)] interactive: bool,
@@ -98,7 +108,7 @@ pub fn Card(
     // Base layout and typography colors tuned to the existing theme
     let base = "text-black dark:text-red \
                 transition-all duration-200 \
-                focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 transform-3d will-change-transform";
+                focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 transform-3d will-change-transform relative";
 
     let bg_and_border = match variant {
         UiVariant::Solid => {
@@ -132,9 +142,12 @@ pub fn Card(
         "cursor-default"
     };
 
-    let class = format!(
-        "{base} {bg_and_border} {rounding} {padding_cls} {width_cls} {interactive_cls} {class}"
-    );
+    let class = Signal::derive(move || {
+        format!(
+            "{base} {bg_and_border} {rounding} {padding_cls} {width_cls} {interactive_cls} {}",
+            class()
+        )
+    });
 
     // Built-in rotateY animation plumbing (imperative)
     let reduced_motion = use_prefers_reduced_motion();
@@ -244,6 +257,74 @@ pub fn Card(
                     anim_resume();
                     log::debug!("Card: LEAVE start {from_deg} -> {to_deg}ms={ms}");
                 }
+                CardAnimation::EnterTiltX {
+                    from_deg,
+                    to_deg,
+                    ms,
+                } => {
+                    anim_ms_sig.set(ms);
+                    transform_seq.set(keyframes![
+                        (
+                            CardEffects {
+                                x_px: 0.0,
+                                y_px: 0.0,
+                                tilt_x_deg: from_deg,
+                                rot_y_deg: 0.0,
+                                perspective: PERSPECTIVE_CM,
+                                blur: MAX_BLUR,
+                            },
+                            0.0
+                        ),
+                        (
+                            CardEffects {
+                                x_px: 0.0,
+                                y_px: 0.0,
+                                tilt_x_deg: to_deg,
+                                rot_y_deg: 0.0,
+                                perspective: PERSPECTIVE_CM,
+                                blur: 0.0,
+                            },
+                            ms,
+                            EaseOutCubic
+                        )
+                    ]);
+                    anim_resume();
+                    log::debug!("Card: ENTER_TILTX start {from_deg} -> {to_deg}ms={ms}");
+                }
+                CardAnimation::LeaveTiltX {
+                    from_deg,
+                    to_deg,
+                    ms,
+                } => {
+                    anim_ms_sig.set(ms);
+                    transform_seq.set(keyframes![
+                        (
+                            CardEffects {
+                                x_px: 0.0,
+                                y_px: 0.0,
+                                tilt_x_deg: from_deg,
+                                rot_y_deg: 0.0,
+                                perspective: PERSPECTIVE_CM,
+                                blur: 0.0,
+                            },
+                            0.0
+                        ),
+                        (
+                            CardEffects {
+                                x_px: 0.0,
+                                y_px: 0.0,
+                                tilt_x_deg: to_deg,
+                                rot_y_deg: 0.0,
+                                perspective: PERSPECTIVE_CM,
+                                blur: MAX_BLUR,
+                            },
+                            ms,
+                            EaseInCubic
+                        )
+                    ]);
+                    anim_resume();
+                    log::debug!("Card: LEAVE_TILTX start {from_deg} -> {to_deg}ms={ms}");
+                }
                 CardAnimation::Appear {
                     x_from_px,
                     y_from_px,
@@ -329,11 +410,7 @@ pub fn Card(
             role=if interactive { "button" } else { "group" }
             tabindex=if interactive { Some("0") } else { None }
         >
-            <div
-                class=format!("{} relative", class)
-                style:transform=transform_style
-                style:transform-origin="50% 100%"
-            >
+            <div class=class style:transform=transform_style style:transform-origin="50% 100%">
                 <div
                     class="relative backface-hidden"
                     style:transform=format!("translateZ({THICKNESS_PX}px)")

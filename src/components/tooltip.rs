@@ -11,20 +11,20 @@ pub fn Tooltip(
     // Compute positioning for tooltip and its callout arrow based on placement.
     let (pos_classes, arrow_pos) = match placement.as_str() {
         "bottom" => (
-            "left-1/2 top-full mt-2 -translate-x-1/2",
-            "left-1/2 -translate-x-1/2 -top-1.5",
+            "left-1/2 top-full mt-3 -translate-x-1/2",
+            "left-1/2 -translate-x-1/2 -top-2",
         ),
         "left" => (
-            "right-full top-1/2 -translate-y-1/2 mr-2",
-            "top-1/2 -translate-y-1/2 -right-1.5",
+            "right-full top-1/2 -translate-y-1/2 mr-3",
+            "top-1/2 -translate-y-1/2 -right-2",
         ),
         "right" => (
-            "left-full top-1/2 -translate-y-1/2 ml-2",
-            "top-1/2 -translate-y-1/2 -left-1.5",
+            "left-full top-1/2 -translate-y-1/2 ml-3",
+            "top-1/2 -translate-y-1/2 -left-2",
         ),
         _ => (
-            "left-1/2 bottom-full mb-2 -translate-x-1/2",
-            "left-1/2 -translate-x-1/2 -bottom-1.5",
+            "left-1/2 bottom-full mb-3 -translate-x-1/2",
+            "left-1/2 -translate-x-1/2 -bottom-2",
         ),
     };
 

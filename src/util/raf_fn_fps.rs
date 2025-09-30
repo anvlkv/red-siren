@@ -1,8 +1,8 @@
-use leptos::prelude::*;
 use leptos_use::utils::Pausable;
 use std::cell::Cell;
 use std::rc::Rc;
 
+#[allow(dead_code)]
 pub fn use_raf_fn_with_fps<F>(
     callback: F,
     fps: f64,
@@ -54,8 +54,7 @@ where
     // Use the standard use_raf_fn with our throttled callback
     leptos_use::use_raf_fn_with_options(
         throttled_callback,
-        leptos_use::UseRafFnOptions::default()
-            .immediate(options.immediate),
+        leptos_use::UseRafFnOptions::default().immediate(options.immediate),
     )
 }
 

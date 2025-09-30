@@ -1,6 +1,7 @@
 use leptos::prelude::*;
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct UseSelectiveSignalReturn<T>
 where
     T: Clone + PartialEq + Sync + Send + 'static,

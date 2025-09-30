@@ -9,6 +9,7 @@ use super::item::{MenuItem, MenuItemView};
 
 /// Edge placement for the compact menu bar.
 #[derive(Clone, Copy, Default)]
+#[allow(dead_code)]
 pub enum CompactMenuPlacement {
     #[default]
     Bottom,

@@ -23,6 +23,7 @@ impl Default for UseInvokeEventOptions {
 
 /// Return type for the combined hook
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct UseTauriResourceReturn<T, F, R>
 where
     T: Clone + 'static,

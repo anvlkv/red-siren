@@ -70,8 +70,8 @@ impl UiPadding {
     pub fn tw_class(&self) -> &'static str {
         match self {
             Self::None => "p-0",
-            Self::Sm => "p-3",
-            Self::Md => "p-6",
+            Self::Sm => "p-1",
+            Self::Md => "p-4",
             Self::Lg => "p-8",
         }
     }

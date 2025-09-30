@@ -10,3 +10,11 @@ pub const PLAYBACK_PAUSE: &str = "instrument_playback_pause";
 pub const PLAYBACK_RESUME: &str = "instrument_playback_resume";
 /// Checks instrument activation source
 pub const GET_ACTIVATION_SRC: &str = "instrument_activation_source";
+/// Sets instrument activation source
+pub const SET_ACTIVATION_SRC: &str = "instrument_set_activation_source";
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivationSourcePayload {
+    pub source: u8,
+}

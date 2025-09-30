@@ -2,32 +2,6 @@ use leptos::prelude::*;
 
 use crate::components::UiSize;
 
-/*
-    Icon Component (MAYA DRY KISS)
-
-    Goals:
-    - Centralize inline SVG icon rendering.
-    - Normalize sizing via UiSize (Sm | Md | Lg) to align with the design system.
-    - Strip any width/height/fill/stroke coming from raw SVG assets and replace with scalable, currentColor-driven styling.
-    - Remove the previously exposed stroke_width prop (requirement).
-    - Keep SVGs scalable via 1em so surrounding font-size (Tailwind text-* utilities) controls visual size.
-
-    Why <i> tag?
-    - Semantically neutral and traditionally used for icons.
-    - Keeps layout inline by default.
-
-    Size Mapping Rationale:
-    - We keep the underlying <svg> at width/height = 1em.
-    - We apply a Tailwind text-* utility to the wrapper to control actual pixel size.
-    - Mapping chosen to mirror the visual rhythm used in buttons and other components:
-        Sm => text-base
-        Md => text-2xl
-        Lg => text-4xl  (default)
-
-    Future:
-    - If we later want pixel-exact sizing independent of font context, we could add a `pixel` mode.
-*/
-
 const INFO_ICON: &str = include_str!("./icon/info.svg");
 const PLAY_ICON: &str = include_str!("./icon/play.svg");
 const TUNE_ICON: &str = include_str!("./icon/tune.svg");
@@ -46,16 +20,16 @@ pub fn Icon(
 ) -> impl IntoView {
     // Tailwind size class derived from UiSize
     let size_class = move || match size() {
-        UiSize::Sm => "text-base",
-        UiSize::Md => "text-2xl",
-        UiSize::Lg => "text-4xl",
+        UiSize::Sm => "text-3xl",
+        UiSize::Md => "text-4xl",
+        UiSize::Lg => "text-5xl",
     };
 
     view! {
         <i
             class=move || {
                 format!(
-                    "inline-block align-middle leading-none {}",
+                    "inline-flex items-center leading-none {}",
                     {
                         let sc = size_class();
                         let extra = class();
@@ -77,7 +51,7 @@ pub fn Icon(
                     "entropy" => ENTROPY_ICON,
                     _ => "No such icon",
                 };
-                decorate_svg(raw)
+                decorate_svg(raw, size())
             }
         />
     }
@@ -135,11 +109,18 @@ fn remove_attr(tag: &str, name: &str) -> String {
     s
 }
 
-fn decorate_svg(svg: &str) -> String {
+fn decorate_svg(svg: &str, size: UiSize) -> String {
     debug_assert!(
         svg.contains(r#"viewBox="0 0 1024 1024""#),
         "incorrect svg viewBox"
     );
+
+    // Determine stroke width based on size - thicker for smaller icons
+    let stroke_width = match size {
+        UiSize::Sm => "11",
+        UiSize::Md => "8",
+        UiSize::Lg => "5",
+    };
 
     if let Some(start) = svg.find("<svg") {
         if let Some(rel_end) = svg[start..].find('>') {
@@ -158,10 +139,13 @@ fn decorate_svg(svg: &str) -> String {
                 tag = remove_attr(&tag, attr);
             }
 
-            let insertion = r#" width="1em" height="1em" fill="currentColor" stroke="currentColor" style="display:inline-block;vertical-align:-0.125em;line-height:1;color:currentColor""#;
+            let insertion = format!(
+                r#" width="1em" height="1em" fill="currentColor" stroke="currentColor" stroke-width="{}" style="display:inline-block;line-height:1;color:currentColor""#,
+                stroke_width
+            );
             if let Some(open_pos) = tag.find("<svg") {
                 let insert_pos = open_pos + 4;
-                tag.insert_str(insert_pos, insertion);
+                tag.insert_str(insert_pos, &insertion);
                 return format!("{}{}{}", &svg[..start], tag, &svg[end + 1..]);
             }
         }

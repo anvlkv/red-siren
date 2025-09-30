@@ -7,14 +7,32 @@ use crate::{health::HealthSetupState, instrument::engine::{ActivationSource, Ins
 
 #[tauri::command]
 /// Creates instrument engine and starts streaming
-pub async fn instrument_playback_start(state: State<'_, InstrumentEngine>) -> Result<()> {
-    todo!()
+pub async fn instrument_playback_start(state: State<'_, InstrumentEngine>, app: AppHandle) -> Result<()> {
+    // TODO: implement engine start/stop
+    let mut playing = state.inner.playing.lock().await;
+    if !*playing {
+        // Here you would add the logic to resume the playback in your engine
+        *playing = true;
+        app.emit(shared::instrument::events::PLAYBACK_STATE, PlaybackStatePayload{playing: *playing})
+            .map_err(|e| InstrumentError::ResumeFailed { detail: Some(e.to_string()) })?;
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
 /// Stops stream and destroys instrument engine
-pub async fn instrument_playback_stop(state: State<'_, InstrumentEngine>) -> Result<()> {
-    todo!()
+pub async fn instrument_playback_stop(state: State<'_, InstrumentEngine>, app: AppHandle) -> Result<()> {
+    // TODO: implement engine start/stop
+    let mut playing = state.inner.playing.lock().await;
+    if !*playing {
+        // Here you would add the logic to resume the playback in your engine
+        *playing = false;
+        app.emit(shared::instrument::events::PLAYBACK_STATE, PlaybackStatePayload{playing: *playing})
+            .map_err(|e| InstrumentError::ResumeFailed { detail: Some(e.to_string()) })?;
+    }
+
+    Ok(())
 }
 
 #[tauri::command]

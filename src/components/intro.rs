@@ -5,7 +5,7 @@ mod wavering;
 
 use keyframe::{keyframes, AnimationSequence};
 use leptos::prelude::*;
-
+use leptos_router::hooks::use_location;
 use leptos_use::{
     use_prefers_reduced_motion, use_raf_fn_with_options, utils::Pausable, UseRafFnCallbackArgs,
     UseRafFnOptions,
@@ -19,6 +19,7 @@ use crate::util::{
     tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
 };
 use shared::{NavStartedPayload, RouteId};
+use std::str::FromStr;
 
 pub use animation::*;
 
@@ -28,66 +29,51 @@ pub use animation::*;
 /// - Tuner path intentionally skipped (todo!())
 #[component]
 pub fn Intro() -> impl IntoView {
-    let reduced_motion = use_prefers_reduced_motion();
-    log::debug!(
-        "Intro component mounted; reduced_motion initial = {}",
-        reduced_motion.get_untracked()
-    );
+    // ========== User Preferences ==========
 
-    // Internal animation driving signal (None until we detect a route transition Play<->Content)
+    let reduced_motion = use_prefers_reduced_motion();
+
+    // ========== Animation State Management ==========
+
+    // Animation driving signal (tracks current transition: None | Some(from, to))
     let (animation_pair, set_animation_pair) =
         signal::<Option<(IntroAnimationTarget, IntroAnimationTarget)>>(None);
-    log::debug!(
-        "animation_pair initialized = {:?}",
-        animation_pair.get_untracked()
-    );
 
-    // determine initial animation state on component launch (default Intro state)
+    // Animation timeline state
     let animation_state = RwSignal::new({
         let state = IntroAnimationState::default();
         keyframes![(state, 0.0)]
     });
-    log::debug!(
-        "animation_state initialized; total_keyframes = {}",
-        animation_state.get_untracked().keyframes()
-    );
 
-    // Reduced motion state bookkeeping
+    // Reduced motion tracking
     let reduced_motion_state = RwSignal::new(ReducedMotionState {
         total_keyframes: animation_state.get_untracked().keyframes(),
         current_keyframe: 0,
         accumulated_time: 0.0,
     });
-    log::debug!(
-        "reduced_motion_state initialized = {:?}",
-        reduced_motion_state.get_untracked()
-    );
 
+    // Animation completion flag
     let completed = RwSignal::new(false);
-    log::debug!("completed initialized = {}", completed.get_untracked());
 
-    // Whether decorative SVGs are currently hidden (after reaching Instrument view)
+    // SVG visibility state (hidden when showing instrument/tuner)
     let hidden_svgs = RwSignal::new(false);
-    log::debug!("hidden_svgs initialized = {}", hidden_svgs.get_untracked());
 
-    // Navigation context (nav_tx + early started payload)
+    // ========== External Context & Resources ==========
+
+    // Navigation context
     let nav_tx = expect_context::<Signal<Option<crate::components::NavigationTx>>>();
     let nav_started = expect_context::<Signal<Option<NavStartedPayload>>>();
-    log::debug!(
-        "navigation contexts obtained; nav_tx = {:?}, nav_started = {:?}",
-        nav_tx.get_untracked(),
-        nav_started.get_untracked()
-    );
 
-    // Instrument layout resource (invoke/event share the same name)
+    // Current location for initial state
+    let location = use_location();
+
+    // Instrument layout resource (fetched via invoke/event)
     let UseTauriResourceReturn {
         data: instrument_layout,
         ..
     } = use_tauri_resource::<shared::instrument::Layout>(shared::instrument::events::LAYOUT);
-    log::debug!(
-        "instrument_layout resource hook initialized; current = {:?}",
-        instrument_layout.get_untracked()
-    );
+
+    // ========== Helper Functions ==========
 
     fn is_content(r: RouteId) -> bool {
         matches!(
@@ -96,39 +82,69 @@ pub fn Intro() -> impl IntoView {
         )
     }
 
+    // ========== Initial State Setup ==========
+
+    // Initialize correct animation state based on current route
+    // Track instrument_layout so we update when it arrives
+    Effect::new(move |_| {
+        let current_path = location.pathname.get_untracked();
+        let current_route = RouteId::from_str(&current_path).unwrap_or(RouteId::Home);
+        let layout = instrument_layout(); // Track this signal
+
+        log::debug!(
+            "Intro state check: route = {:?}, layout available = {}",
+            current_route,
+            layout.is_some()
+        );
+
+        // Only initialize if we haven't already animated to this state
+        if current_route == RouteId::Play {
+            if let Some(layout) = layout {
+                // Check if we're already in the correct state
+                if animation_pair.get_untracked().is_none() && !completed.get_untracked() {
+                    log::debug!("Initializing Intro in Instrument state for Play route");
+                    let target_state =
+                        IntroAnimationState::from(IntroAnimationTarget::Instrument(layout));
+                    animation_state.set(keyframes![(target_state, 0.0)]);
+                    hidden_svgs.set(true);
+                    completed.set(true);
+                }
+            } else {
+                log::debug!("On Play route but instrument layout not yet available");
+            }
+        } else if current_route == RouteId::Tune {
+            // TODO: Handle Tune route once backend is ready
+            log::debug!("Tune route initialization not yet implemented");
+        } else if is_content(current_route) {
+            // Only set if not already in correct state
+            if animation_pair.get_untracked().is_none() && !completed.get_untracked() {
+                hidden_svgs.set(false);
+                completed.set(true);
+            }
+        }
+    });
+
+    // ========== Animation Loop (RAF) ==========
+
     let Pausable { pause, resume, .. } = use_raf_fn_with_options(
         move |UseRafFnCallbackArgs { delta, .. }| {
-            log::trace!("RAF callback tick; delta = {}", delta);
             let mut state = animation_state.get_untracked();
             // Variables to track final state for completion check
             let mut final_time = state.time();
             let mut final_duration = state.duration();
-            log::trace!(
-                "RAF state before tick: time = {}, duration = {}, keyframes = {}",
-                state.time(),
-                state.duration(),
-                state.keyframes()
-            );
 
             // Skip processing if delta is 0 (first frame or paused)
             if delta == 0.0 {
-                log::trace!("Skipping RAF tick with delta=0");
                 return;
             }
 
             let _remainder = if reduced_motion.get_untracked() {
-                log::trace!("Reduced motion path taken in RAF");
                 let mut rm_state = reduced_motion_state.get_untracked();
                 rm_state.accumulated_time += delta;
-                log::trace!(
-                    "Reduced motion accumulated_time updated = {}",
-                    rm_state.accumulated_time
-                );
 
                 // Get the current keyframe pair (current, next)
                 let (_, next_kf) = state.pair();
                 if let Some(next_kf) = next_kf {
-                    log::trace!("Next keyframe present with time = {}", next_kf.time());
                     // If we've accumulated enough time to reach the next keyframe
                     if rm_state.accumulated_time >= next_kf.time() {
                         // Jump directly to the next keyframe time
@@ -148,10 +164,6 @@ pub fn Intro() -> impl IntoView {
                     } else {
                         // Not enough time accumulated yet, just update state
                         reduced_motion_state.set(rm_state);
-                        log::trace!(
-                            "Not enough accumulated time for next keyframe; accumulated = {}",
-                            rm_state.accumulated_time
-                        );
                         None
                     }
                 } else {
@@ -161,18 +173,12 @@ pub fn Intro() -> impl IntoView {
                     None
                 }
             } else {
-                log::trace!("Normal motion path taken in RAF");
                 let rem = state.duration() - state.time();
                 let remainder = state.advance_by(delta.min(rem));
                 // Store values before moving state
                 final_time = state.time();
                 final_duration = state.duration();
                 animation_state.set(state);
-                log::debug!(
-                    "Advanced by {}; remainder = {:?}",
-                    delta.min(rem),
-                    remainder
-                );
                 Some(remainder)
             };
 
@@ -189,6 +195,8 @@ pub fn Intro() -> impl IntoView {
         UseRafFnOptions::default().immediate(false),
     );
 
+    // ========== Navigation Transition Logic ==========
+
     // Combine navigation state into a derived signal
     let nav_transition = Signal::derive(move || {
         let started = nav_started();
@@ -199,19 +207,13 @@ pub fn Intro() -> impl IntoView {
         }
     });
 
-    // Decide when to trigger Intro ↔ Instrument animations
+    // Effect: Trigger animations based on navigation transitions
     Effect::new(move |_| {
         // Only track the memo, not individual signals
         let transition_data = nav_transition();
 
         // Cache the instrument layout to avoid multiple reactive accesses
         let cached_layout = instrument_layout.get_untracked();
-
-        log::trace!(
-            "Nav effect triggered; transition = {:?}, animation_pair = {:?}",
-            transition_data,
-            animation_pair.get_untracked()
-        );
 
         let _interrupted = animation_pair.get_untracked().is_some();
         if _interrupted {
@@ -295,19 +297,16 @@ pub fn Intro() -> impl IntoView {
                     }
                 }
                 _ => {
-                    log::trace!(
-                        "Nav effect: no matching transition detected (nav_state = {:?})",
-                        nav_state
-                    );
+                    // No matching transition for this navigation state
                 }
             }
-        } else {
-            log::trace!("Nav effect: no transition data available");
         }
         // TODO: Tuner transitions (Content <-> Tune) once tuner backend exists
     });
 
-    // Start/stop animation loop based on internal pair
+    // ========== Animation Lifecycle Effects ==========
+
+    // Effect: Start/stop animation loop based on animation pair
     // Use a derived signal for cleaner reactivity
     let should_animate = Signal::derive(move || animation_pair().is_some());
 
@@ -317,12 +316,6 @@ pub fn Intro() -> impl IntoView {
         move |_| {
             let is_animating = should_animate();
 
-            log::trace!(
-                "Start/stop effect triggered; should_animate = {}, animation_pair = {:?}",
-                is_animating,
-                animation_pair.get_untracked()
-            );
-
             if is_animating {
                 // reset reduced motion tracker each time we start a fresh sequence
                 log::debug!("Starting animation sequence; resetting reduced_motion_state");
@@ -331,10 +324,6 @@ pub fn Intro() -> impl IntoView {
                     current_keyframe: 0,
                     accumulated_time: 0.0,
                 });
-                log::trace!(
-                    "reduced_motion_state after reset = {:?}",
-                    reduced_motion_state.get_untracked()
-                );
                 resume();
             } else {
                 log::debug!("No animation_pair present; pausing RAF");
@@ -343,7 +332,7 @@ pub fn Intro() -> impl IntoView {
         }
     });
 
-    // Stop RAF when sequence finished, hide / show SVGs appropriately
+    // Effect: Handle animation completion
     Effect::new(move |_| {
         let is_completed = completed();
 
@@ -382,9 +371,10 @@ pub fn Intro() -> impl IntoView {
 
             // Clear driving pair so we don't re-trigger
             set_animation_pair.set(None);
-            log::trace!("Cleared animation_pair after completion");
         }
     });
+
+    // ========== View Helpers & Rendering ==========
 
     let now_state = move || animation_state().now();
 

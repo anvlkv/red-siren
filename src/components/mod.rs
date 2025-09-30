@@ -9,7 +9,6 @@ mod intro;
 mod menu;
 mod switch;
 mod tooltip;
-mod wavering;
 
 pub use button::*;
 pub use card::*;
@@ -20,7 +19,6 @@ pub use intro::*;
 pub use menu::*;
 pub use switch::*;
 pub use tooltip::*;
-pub use wavering::*;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, strum::EnumString)]
 pub enum UiVariant {

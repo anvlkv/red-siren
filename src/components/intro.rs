@@ -1,6 +1,7 @@
 mod animation;
 mod static_path;
 mod suns;
+mod wavering;
 
 use keyframe::{keyframes, AnimationSequence};
 use leptos::prelude::*;
@@ -10,8 +11,9 @@ use leptos_use::{
 };
 use static_path::*;
 use suns::*;
+use wavering::*;
 
-use crate::{components::Wavering, util::animation::ReducedMotionState};
+use crate::util::animation::ReducedMotionState;
 
 pub use animation::*;
 

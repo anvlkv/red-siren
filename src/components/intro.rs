@@ -1,4 +1,5 @@
 mod animation;
+mod animation_keyframes;
 mod static_path;
 mod suns;
 mod wavering;
@@ -23,10 +24,6 @@ use std::str::FromStr;
 
 pub use animation::*;
 
-/// Refactored Intro:
-/// - Removed external props (`animation`, `on_animation_ended`)
-/// - Introduces internal animation pair signal (future: driven by navigation context)
-/// - Tuner path intentionally skipped (todo!())
 #[component]
 pub fn Intro() -> impl IntoView {
     // ========== User Preferences ==========
@@ -40,10 +37,7 @@ pub fn Intro() -> impl IntoView {
         signal::<Option<(IntroAnimationTarget, IntroAnimationTarget)>>(None);
 
     // Animation timeline state
-    let animation_state = RwSignal::new({
-        let state = IntroAnimationState::default();
-        keyframes![(state, 0.0)]
-    });
+    let animation_state = RwSignal::new(animation_keyframes::default_static());
 
     // Reduced motion tracking
     let reduced_motion_state = RwSignal::new(ReducedMotionState {
@@ -242,10 +236,9 @@ pub fn Intro() -> impl IntoView {
                         let from_state = animation_state.get_untracked().now();
                         let to_state =
                             IntroAnimationState::from(IntroAnimationTarget::Instrument(layout));
-                        animation_state.set(keyframes![
-                            (from_state, 0.0),
-                            (to_state, INTRO_TO_INSTRUMENT_MS)
-                        ]);
+                        animation_state.set(animation_keyframes::intro_to_instrument(
+                            from_state, to_state,
+                        ));
                         set_animation_pair.set(Some((
                             IntroAnimationTarget::Intro,
                             IntroAnimationTarget::Instrument(layout),
@@ -277,10 +270,9 @@ pub fn Intro() -> impl IntoView {
                         let from_state =
                             IntroAnimationState::from(IntroAnimationTarget::Instrument(layout));
                         let to_state = IntroAnimationState::from(IntroAnimationTarget::Intro);
-                        animation_state.set(keyframes![
-                            (from_state, 0.0),
-                            (to_state, INSTRUMENT_TO_INTRO_MS)
-                        ]);
+                        animation_state.set(animation_keyframes::instrument_to_intro(
+                            from_state, to_state,
+                        ));
                         set_animation_pair.set(Some((
                             IntroAnimationTarget::Instrument(layout),
                             IntroAnimationTarget::Intro,
@@ -393,7 +385,7 @@ pub fn Intro() -> impl IntoView {
                     <svg
                         viewBox=view_box_value
                         fill="none"
-                        class="stroke-black dark:stroke-red"
+                        class="absolute stroke-black dark:stroke-red"
                         xmlns="http://www.w3.org/2000/svg"
                     >
                         <g
@@ -428,7 +420,50 @@ pub fn Intro() -> impl IntoView {
                     <svg
                         viewBox=view_box_value
                         fill="none"
-                        class="fill-black dark:fill-red"
+                        class="absolute stroke-black dark:stroke-red"
+                        xmlns="http://www.w3.org/2000/svg"
+                    >
+                        {move || {
+                            let state = now_state();
+                            let keybands = state.keybands_positions;
+                            let view_box = state.view_box;
+                            if !keybands.is_empty() {
+                                log::debug!(
+                                    "Rendering {} keybands in viewbox ({},{}) to ({},{})",
+                                    keybands.len(),
+                                    view_box.0.x, view_box.0.y,
+                                    view_box.1.x, view_box.1.y
+                                );
+                                log::debug!("First keyband: {:?}", keybands[0]);
+                                if keybands.len() > 1 {
+                                    log::debug!("Last keyband: {:?}", keybands[keybands.len() - 1]);
+                                }
+                            }
+                            keybands
+                                .into_iter()
+                                .map(|(start, end)| {
+                                    let width = (end.x - start.x).abs();
+                                    let height = (end.y - start.y).abs();
+                                    let rx = height.min(width) / 2.0;
+                                    view! {
+                                        <rect
+                                            x=start.x
+                                            y=start.y
+                                            width=width
+                                            height=height
+                                            rx=rx
+                                            fill="none"
+                                            stroke-width=now_state().strings_stroke.to_string()
+                                        />
+                                    }
+                                })
+                                .collect_view()
+                        }}
+                    </svg>
+                    <svg
+                        viewBox=view_box_value
+                        fill="none"
+                        class="absolute fill-black dark:fill-red"
                         xmlns="http://www.w3.org/2000/svg"
                     >
                         {move || {

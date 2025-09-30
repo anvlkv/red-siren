@@ -1,14 +1,14 @@
 pub mod commands;
 pub mod error;
 pub mod events;
+pub mod geometry;
 pub mod instrument;
-pub mod line;
 pub mod navigation;
 pub mod orientation;
 pub mod safe_area;
 pub mod tuner;
 
-pub use line::*;
+pub use geometry::*;
 
 #[cfg(any(test, feature = "test"))]
 pub mod test_util;

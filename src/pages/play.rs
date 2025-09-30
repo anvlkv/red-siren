@@ -3,7 +3,7 @@ use shared::RouteId;
 use tauri_use::{use_command, use_invoke, UseTauriReturn, UseTauriWithReturn};
 
 use crate::{
-    components::{CompactMenu, Icon, MenuItem, Switch, UiSize},
+    components::{CompactMenu, Icon, Instrument, MenuItem, Switch, UiSize},
     util::tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
 };
 
@@ -170,23 +170,26 @@ pub fn Play() -> impl IntoView {
     });
 
     view! {
-        <CompactMenu items=menu_items>
-            {move || {
-                view! {
-                    <Switch
-                        labels=vec![
-                            view! { <Icon name="entropy" size=UiSize::Sm /> }.into_any(),
-                            view! { <Icon name="mic" size=UiSize::Sm /> }.into_any(),
-                        ]
-                        tooltips=tooltips()
-                        current_state=Signal::derive(move || {
-                            activation_source().map(|s| s.source).unwrap_or_default() as usize
-                        })
-                        on_change=on_activation_source_change
-                        size=UiSize::Sm
-                    />
-                }
-            }}
-        </CompactMenu>
+        <div>
+            <Instrument />
+            <CompactMenu items=menu_items>
+                {move || {
+                    view! {
+                        <Switch
+                            labels=vec![
+                                view! { <Icon name="entropy" size=UiSize::Sm /> }.into_any(),
+                                view! { <Icon name="mic" size=UiSize::Sm /> }.into_any(),
+                            ]
+                            tooltips=tooltips()
+                            current_state=Signal::derive(move || {
+                                activation_source().map(|s| s.source).unwrap_or_default() as usize
+                            })
+                            on_change=on_activation_source_change
+                            size=UiSize::Sm
+                        />
+                    }
+                }}
+            </CompactMenu>
+        </div>
     }
 }

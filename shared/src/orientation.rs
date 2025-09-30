@@ -1,4 +1,4 @@
-use mint::Vector2;
+use mint::{Point2, Vector2};
 use serde::{Deserialize, Serialize};
 
 use crate::safe_area::SafeArea;
@@ -43,6 +43,58 @@ impl LayoutOrientation {
         match self {
             LayoutOrientation::Horizontal => space.y - safe_area[1] - safe_area[3],
             LayoutOrientation::Vertical => space.x - safe_area[1] - safe_area[3],
+        }
+    }
+
+    pub fn safe_length_start_point(&self, point: Point2<f32>, safe_area: SafeArea) -> Point2<f32> {
+        match self {
+            LayoutOrientation::Vertical => Point2 {
+                x: point.x,
+                y: point.y + safe_area[0],
+            },
+            LayoutOrientation::Horizontal => Point2 {
+                x: point.x + safe_area[0],
+                y: point.y,
+            },
+        }
+    }
+
+    pub fn safe_length_end_point(&self, point: Point2<f32>, safe_area: SafeArea) -> Point2<f32> {
+        match self {
+            LayoutOrientation::Vertical => Point2 {
+                x: point.x,
+                y: point.y - safe_area[2],
+            },
+            LayoutOrientation::Horizontal => Point2 {
+                x: point.x - safe_area[2],
+                y: point.y,
+            },
+        }
+    }
+
+    pub fn safe_breadth_start_point(&self, point: Point2<f32>, safe_area: SafeArea) -> Point2<f32> {
+        match self {
+            LayoutOrientation::Vertical => Point2 {
+                x: point.x + safe_area[1],
+                y: point.y,
+            },
+            LayoutOrientation::Horizontal => Point2 {
+                x: point.x,
+                y: point.y + safe_area[1],
+            },
+        }
+    }
+
+    pub fn safe_breadth_end_point(&self, point: Point2<f32>, safe_area: SafeArea) -> Point2<f32> {
+        match self {
+            LayoutOrientation::Vertical => Point2 {
+                x: point.x - safe_area[3],
+                y: point.y,
+            },
+            LayoutOrientation::Horizontal => Point2 {
+                x: point.x,
+                y: point.y - safe_area[3],
+            },
         }
     }
 }

@@ -4,15 +4,6 @@ use shared::orientation::LayoutOrientation;
 
 use crate::util::animation::{tween_tuple_vectors, tween_vectors};
 
-pub const INTRO_TO_INSTRUMENT_MS: f64 = 1500.0;
-pub const INTRO_TO_TUNER_MS: f64 = 1000.0;
-
-pub const INSTRUMENT_TO_INTRO_MS: f64 = 700.0;
-pub const TUNER_TO_INTRO_MS: f64 = 500.0;
-
-pub const INSTRUMENT_TO_TUNER_MS: f64 = 400.0;
-pub const TUNER_TO_INSTRUMENT_MS: f64 = 300.0;
-
 #[derive(Debug, Clone, PartialEq)]
 /// Desired background animation
 pub enum IntroAnimationTarget {
@@ -88,10 +79,20 @@ impl From<IntroAnimationTarget> for IntroAnimationState {
             IntroAnimationTarget::Intro => Self::default(),
             IntroAnimationTarget::Tuner { .. } => todo!(),
             IntroAnimationTarget::Instrument(layout) => {
+                log::debug!("Converting IntroAnimationTarget::Instrument to IntroAnimationState");
+                log::debug!("Layout: {:?}", layout);
+
                 let total_keys =
                     layout.num_groups.get() as usize * layout.num_keys_per_group.get() as usize;
                 let num_groups = layout.num_groups.get() as usize;
                 let keys_per_group = layout.num_keys_per_group.get() as usize;
+
+                log::debug!(
+                    "Total keys: {}, Groups: {}, Keys per group: {}",
+                    total_keys,
+                    num_groups,
+                    keys_per_group
+                );
 
                 // Calculate sun positions (keys) and keyband positions
                 let mut suns_positions = Vec::with_capacity(total_keys);
@@ -151,6 +152,41 @@ impl From<IntroAnimationTarget> for IntroAnimationState {
                         keybands_positions.push((band_start, band_end));
                     }
                 }
+
+                log::debug!("Generated {} sun positions", suns_positions.len());
+                log::debug!("Generated {} keyband positions", keybands_positions.len());
+                if !keybands_positions.is_empty() {
+                    log::debug!("First keyband: {:?}", keybands_positions[0]);
+                    if keybands_positions.len() > 1 {
+                        log::debug!(
+                            "Last keyband: {:?}",
+                            keybands_positions[keybands_positions.len() - 1]
+                        );
+                    }
+                }
+                log::debug!(
+                    "View box: ({}, {}) to ({}, {})",
+                    0.0,
+                    0.0,
+                    layout.space.x,
+                    layout.space.y
+                );
+                log::debug!(
+                    "String 1 (left) position: {:?}",
+                    layout.left_string_position
+                );
+                log::debug!(
+                    "String 2 (right) position: {:?}",
+                    layout.right_string_position
+                );
+                log::debug!(
+                    "Default string 1 position: {:?}",
+                    Self::default().string_1_position
+                );
+                log::debug!(
+                    "Default string 2 position: {:?}",
+                    Self::default().string_2_position
+                );
 
                 Self {
                     view_box: (

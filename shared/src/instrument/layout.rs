@@ -162,34 +162,36 @@ fn string_positions(
 ) -> Line {
     match orientation {
         LayoutOrientation::Vertical => {
-            // Strings run along Y
-            let x_base = space.x / 3.0;
-            let (x, x2) = if left {
-                (x_base, x_base)
-            } else {
-                (x_base + instrument_breadth, x_base + instrument_breadth)
-            };
+            // Strings run along Y: two vertical lines that outline the instrument_breadth
+            // and are centered in the available width (space.x).
+            let center_x = space.x / 2.0;
+            let half_b = instrument_breadth / 2.0;
+            let left_x = (center_x - half_b).clamp(0.0, space.x);
+            let right_x = (center_x + half_b).clamp(0.0, space.x);
+
+            let x = if left { left_x } else { right_x };
             (
                 Point2 { x, y: 0.0 },
                 Point2 {
-                    x: x2,
+                    x,
                     y: orientation.length(space),
                 },
             )
         }
         LayoutOrientation::Horizontal => {
-            // Strings run along X
-            let y_base = space.y / 3.0;
-            let (y, y2) = if left {
-                (y_base + instrument_breadth, y_base + instrument_breadth)
-            } else {
-                (y_base, y_base)
-            };
+            // Strings run along X: two horizontal lines that outline the instrument_breadth
+            // and are centered in the available height (space.y).
+            let center_y = space.y / 2.0;
+            let half_b = instrument_breadth / 2.0;
+            let top_y = (center_y - half_b).clamp(0.0, space.y);
+            let bottom_y = (center_y + half_b).clamp(0.0, space.y);
+
+            let y = if left { top_y } else { bottom_y };
             (
                 Point2 { x: 0.0, y },
                 Point2 {
                     x: orientation.length(space),
-                    y: y2,
+                    y,
                 },
             )
         }

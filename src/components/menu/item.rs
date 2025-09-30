@@ -86,7 +86,7 @@ pub fn MenuItemView(
             {if compact {
                 view! {
                     <Tooltip text=label placement="top">
-                        <Button on:click=on_click round=true square=true size>
+                        <Button on:click=on_click square=true size>
                             <Icon name=icon size />
                         </Button>
                     </Tooltip>

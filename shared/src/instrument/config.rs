@@ -32,7 +32,7 @@ impl GroupChanel {
         }
     }
 
-    fn nth_channel_from_first(&self, n: usize) -> Self {
+    pub fn nth_channel_from_first(&self, n: usize) -> Self {
         if n.is_multiple_of(2) {
             *self
         } else {

@@ -99,16 +99,26 @@ pub fn Intro() -> impl IntoView {
     let Pausable { pause, resume, .. } = use_raf_fn_with_options(
         move |UseRafFnCallbackArgs { delta, .. }| {
             log::trace!("RAF callback tick; delta = {}", delta);
-            let mut state = animation_state();
+            let mut state = animation_state.get_untracked();
+            // Variables to track final state for completion check
+            let mut final_time = state.time();
+            let mut final_duration = state.duration();
             log::trace!(
                 "RAF state before tick: time = {}, duration = {}, keyframes = {}",
                 state.time(),
                 state.duration(),
                 state.keyframes()
             );
-            let remainder = if reduced_motion() {
+
+            // Skip processing if delta is 0 (first frame or paused)
+            if delta == 0.0 {
+                log::trace!("Skipping RAF tick with delta=0");
+                return;
+            }
+
+            let _remainder = if reduced_motion.get_untracked() {
                 log::trace!("Reduced motion path taken in RAF");
-                let mut rm_state = reduced_motion_state();
+                let mut rm_state = reduced_motion_state.get_untracked();
                 rm_state.accumulated_time += delta;
                 log::trace!(
                     "Reduced motion accumulated_time updated = {}",
@@ -117,7 +127,6 @@ pub fn Intro() -> impl IntoView {
 
                 // Get the current keyframe pair (current, next)
                 let (_, next_kf) = state.pair();
-
                 if let Some(next_kf) = next_kf {
                     log::trace!("Next keyframe present with time = {}", next_kf.time());
                     // If we've accumulated enough time to reach the next keyframe
@@ -125,11 +134,14 @@ pub fn Intro() -> impl IntoView {
                         // Jump directly to the next keyframe time
                         let remainder = state.advance_to(next_kf.time());
                         rm_state.current_keyframe += 1;
+                        // Store values before moving state
+                        final_time = state.time();
+                        final_duration = state.duration();
                         animation_state.set(state);
                         reduced_motion_state.set(rm_state);
                         log::debug!(
                             "Advanced to keyframe; current_keyframe = {}, remainder = {:?}",
-                            reduced_motion_state.get_untracked().current_keyframe,
+                            rm_state.current_keyframe,
                             remainder
                         );
                         Some(remainder)
@@ -138,7 +150,7 @@ pub fn Intro() -> impl IntoView {
                         reduced_motion_state.set(rm_state);
                         log::trace!(
                             "Not enough accumulated time for next keyframe; accumulated = {}",
-                            reduced_motion_state.get_untracked().accumulated_time
+                            rm_state.accumulated_time
                         );
                         None
                     }
@@ -152,6 +164,9 @@ pub fn Intro() -> impl IntoView {
                 log::trace!("Normal motion path taken in RAF");
                 let rem = state.duration() - state.time();
                 let remainder = state.advance_by(delta.min(rem));
+                // Store values before moving state
+                final_time = state.time();
+                final_duration = state.duration();
                 animation_state.set(state);
                 log::debug!(
                     "Advanced by {}; remainder = {:?}",
@@ -161,127 +176,154 @@ pub fn Intro() -> impl IntoView {
                 Some(remainder)
             };
 
-            if remainder.is_some_and(|r| r <= 0.0) {
+            // Mark completed only if animation truly finished (reached duration with actual progress)
+            if final_time >= final_duration && final_duration > 0.0 && delta > 0.0 {
                 completed.set(true);
-                log::debug!("Animation marked completed (remainder <= 0)");
+                log::debug!(
+                    "Animation marked completed (time {} >= duration {})",
+                    final_time,
+                    final_duration
+                );
             }
         },
         UseRafFnOptions::default().immediate(false),
     );
 
-    // Decide when to trigger Intro ↔ Instrument animations (using nav_tx + started payload)
-    Effect::new({
-        let resume = resume.clone();
-        move |_| {
-            let started_opt = nav_started();
-            let nav_state = nav_tx();
-
-            log::trace!(
-                "Nav effect triggered; nav_started = {:?}, nav_tx = {:?}, animation_pair = {:?}",
-                nav_started.get_untracked(),
-                nav_tx.get_untracked(),
-                animation_pair.get_untracked()
-            );
-
-            let _interrupted = animation_pair().is_some();
-            if _interrupted {
-                log::debug!(
-                    "Animation was interrupted; current pair = {:?}",
-                    animation_pair.get_untracked()
-                );
-            }
-
-            if let Some(started) = started_opt {
-                log::debug!("Navigation started payload = {:?}", started);
-                match nav_state {
-                    Some(crate::components::NavigationTx::Leave(_))
-                        if is_content(started.from) && started.to == RouteId::Play =>
-                    {
-                        log::debug!(
-                                "Detected Leave transition from content -> Play (from = {:?}, to = {:?})",
-                                started.from,
-                                started.to
-                            );
-                        if let Some(layout) = instrument_layout() {
-                            log::debug!("Instrument layout available; scheduling Intro -> Instrument animation");
-                            let from_state = animation_state().now();
-                            let to_state =
-                                IntroAnimationState::from(IntroAnimationTarget::Instrument(layout));
-                            animation_state.set(keyframes![
-                                (from_state, 0.0),
-                                (to_state, INTRO_TO_INSTRUMENT_MS)
-                            ]);
-                            set_animation_pair.set(Some((
-                                IntroAnimationTarget::Intro,
-                                IntroAnimationTarget::Instrument(layout),
-                            )));
-                            completed.set(false);
-                            hidden_svgs.set(false);
-                            log::debug!(
-                                    "Animation pair set to Intro -> Instrument; animation_state keyframes = {}",
-                                    animation_state.get_untracked().keyframes()
-                                );
-                            resume();
-                        } else {
-                            log::debug!("Instrument layout not available; cannot start Intro -> Instrument animation");
-                        }
-                    }
-                    Some(crate::components::NavigationTx::Enter(_))
-                        if started.from == RouteId::Play && is_content(started.to) =>
-                    {
-                        log::debug!(
-                                "Detected Enter transition from Play -> content (from = {:?}, to = {:?})",
-                                started.from,
-                                started.to
-                            );
-                        if let Some(layout) = instrument_layout() {
-                            log::debug!("Instrument layout available; scheduling Instrument -> Intro animation");
-                            let from_state =
-                                IntroAnimationState::from(IntroAnimationTarget::Instrument(layout));
-                            let to_state = IntroAnimationState::from(IntroAnimationTarget::Intro);
-                            animation_state.set(keyframes![
-                                (from_state, 0.0),
-                                (to_state, INSTRUMENT_TO_INTRO_MS)
-                            ]);
-                            set_animation_pair.set(Some((
-                                IntroAnimationTarget::Instrument(layout),
-                                IntroAnimationTarget::Intro,
-                            )));
-                            completed.set(false);
-                            hidden_svgs.set(false);
-                            log::debug!(
-                                    "Animation pair set to Instrument -> Intro; animation_state keyframes = {}",
-                                    animation_state.get_untracked().keyframes()
-                                );
-                            resume();
-                        } else {
-                            log::debug!("Instrument layout not available; cannot start Instrument -> Intro animation");
-                        }
-                    }
-                    _ => {
-                        log::trace!(
-                            "Nav effect: no matching transition detected (nav_state = {:?})",
-                            nav_state
-                        );
-                    }
-                }
-            } else {
-                log::trace!("Nav effect: nav_started is None");
-            }
-            // TODO: Tuner transitions (Content <-> Tune) once tuner backend exists
+    // Combine navigation state into a derived signal
+    let nav_transition = Signal::derive(move || {
+        let started = nav_started();
+        let tx = nav_tx();
+        match (started, tx) {
+            (Some(s), Some(t)) => Some((s, t)),
+            _ => None,
         }
     });
 
+    // Decide when to trigger Intro ↔ Instrument animations
+    Effect::new(move |_| {
+        // Only track the memo, not individual signals
+        let transition_data = nav_transition();
+
+        // Cache the instrument layout to avoid multiple reactive accesses
+        let cached_layout = instrument_layout.get_untracked();
+
+        log::trace!(
+            "Nav effect triggered; transition = {:?}, animation_pair = {:?}",
+            transition_data,
+            animation_pair.get_untracked()
+        );
+
+        let _interrupted = animation_pair.get_untracked().is_some();
+        if _interrupted {
+            log::debug!(
+                "Animation was interrupted; current pair = {:?}",
+                animation_pair.get_untracked()
+            );
+        }
+
+        if let Some((started, nav_state)) = transition_data {
+            log::debug!("Navigation started payload = {:?}", started);
+            match nav_state {
+                crate::components::NavigationTx::Leave(_)
+                    if is_content(started.from) && started.to == RouteId::Play =>
+                {
+                    log::debug!(
+                        "Detected Leave transition from content -> Play (from = {:?}, to = {:?})",
+                        started.from,
+                        started.to
+                    );
+                    // Use cached layout to avoid reactive dependency
+                    if let Some(layout) = cached_layout {
+                        log::debug!(
+                            "Instrument layout available; scheduling Intro -> Instrument animation"
+                        );
+                        let from_state = animation_state.get_untracked().now();
+                        let to_state =
+                            IntroAnimationState::from(IntroAnimationTarget::Instrument(layout));
+                        animation_state.set(keyframes![
+                            (from_state, 0.0),
+                            (to_state, INTRO_TO_INSTRUMENT_MS)
+                        ]);
+                        set_animation_pair.set(Some((
+                            IntroAnimationTarget::Intro,
+                            IntroAnimationTarget::Instrument(layout),
+                        )));
+                        completed.set(false);
+                        hidden_svgs.set(false);
+                        log::debug!(
+                            "Animation pair set to Intro -> Instrument; animation_state keyframes = {}",
+                            animation_state.get_untracked().keyframes()
+                        );
+                        // Let the should_animate effect handle resume
+                    } else {
+                        log::debug!("Instrument layout not available; cannot start Intro -> Instrument animation");
+                    }
+                }
+                crate::components::NavigationTx::Enter(_)
+                    if started.from == RouteId::Play && is_content(started.to) =>
+                {
+                    log::debug!(
+                        "Detected Enter transition from Play -> content (from = {:?}, to = {:?})",
+                        started.from,
+                        started.to
+                    );
+                    // Use cached layout to avoid reactive dependency
+                    if let Some(layout) = cached_layout {
+                        log::debug!(
+                            "Instrument layout available; scheduling Instrument -> Intro animation"
+                        );
+                        let from_state =
+                            IntroAnimationState::from(IntroAnimationTarget::Instrument(layout));
+                        let to_state = IntroAnimationState::from(IntroAnimationTarget::Intro);
+                        animation_state.set(keyframes![
+                            (from_state, 0.0),
+                            (to_state, INSTRUMENT_TO_INTRO_MS)
+                        ]);
+                        set_animation_pair.set(Some((
+                            IntroAnimationTarget::Instrument(layout),
+                            IntroAnimationTarget::Intro,
+                        )));
+                        completed.set(false);
+                        hidden_svgs.set(false);
+                        log::debug!(
+                            "Animation pair set to Instrument -> Intro; animation_state keyframes = {}",
+                            animation_state.get_untracked().keyframes()
+                        );
+                        // Let the should_animate effect handle resume
+                    } else {
+                        log::debug!("Instrument layout not available; cannot start Instrument -> Intro animation");
+                    }
+                }
+                _ => {
+                    log::trace!(
+                        "Nav effect: no matching transition detected (nav_state = {:?})",
+                        nav_state
+                    );
+                }
+            }
+        } else {
+            log::trace!("Nav effect: no transition data available");
+        }
+        // TODO: Tuner transitions (Content <-> Tune) once tuner backend exists
+    });
+
     // Start/stop animation loop based on internal pair
+    // Use a derived signal for cleaner reactivity
+    let should_animate = Signal::derive(move || animation_pair().is_some());
+
     Effect::new({
         let pause = pause.clone();
 
         move |_| {
+            let is_animating = should_animate();
+
             log::trace!(
-                "Start/stop effect triggered; animation_pair = {:?}",
+                "Start/stop effect triggered; should_animate = {}, animation_pair = {:?}",
+                is_animating,
                 animation_pair.get_untracked()
             );
-            if animation_pair().is_some() {
+
+            if is_animating {
                 // reset reduced motion tracker each time we start a fresh sequence
                 log::debug!("Starting animation sequence; resetting reduced_motion_state");
                 reduced_motion_state.set(ReducedMotionState {
@@ -303,12 +345,18 @@ pub fn Intro() -> impl IntoView {
 
     // Stop RAF when sequence finished, hide / show SVGs appropriately
     Effect::new(move |_| {
-        if completed() {
+        let is_completed = completed();
+
+        if is_completed {
             log::debug!("Completed flag observed true; pausing RAF and finalizing state");
             pause();
+
+            // Use get_untracked to avoid reactive dependency on animation_pair
+            let pair = animation_pair.get_untracked();
+
             // Decide final visibility. Simple heuristic:
             // If last target was Instrument -> hide else show.
-            if let Some((_, to)) = animation_pair() {
+            if let Some((_, to)) = pair {
                 log::debug!("Final animation target = {:?}", to);
                 match to {
                     IntroAnimationTarget::Instrument(_) => {
@@ -331,6 +379,7 @@ pub fn Intro() -> impl IntoView {
                     "No animation_pair present on completion; leaving SVG visibility unchanged"
                 );
             }
+
             // Clear driving pair so we don't re-trigger
             set_animation_pair.set(None);
             log::trace!("Cleared animation_pair after completion");

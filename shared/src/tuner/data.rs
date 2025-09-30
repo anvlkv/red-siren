@@ -40,8 +40,8 @@ use crate::{
 };
 
 /// Represents the full tuner data set (layout + sensors + FFT mapping).
-#[derive(Debug)]
-pub struct TunerData {
+#[derive(Debug, PartialEq, Clone)]
+pub struct Data {
     layout: Layout,
     sample_rate: f32,
     fft_size: usize,
@@ -50,7 +50,7 @@ pub struct TunerData {
     global_bin_span: (usize, usize),
 }
 
-impl TunerData {
+impl Data {
     /// Create a new tuner data instance.
     ///
     /// `fft_size` must match the size used with the real FFT.
@@ -250,7 +250,7 @@ mod tests {
         // Take first few instrument layouts and ensure tuner data builds & processes
         for layout in layout_test_cases().take(3) {
             let tuner_layout: crate::tuner::layout::Layout = layout.into();
-            let mut data = TunerData::new(tuner_layout, 48_000.0, 2048);
+            let mut data = Data::new(tuner_layout, 48_000.0, 2048);
 
             assert!(data.sensor_count() > 0);
 
@@ -276,7 +276,7 @@ mod tests {
     fn average_gain_non_zero() {
         let layout = layout_test_cases().next().unwrap();
         let tuner_layout: crate::tuner::layout::Layout = layout.into();
-        let data = TunerData::new(tuner_layout, 44_100.0, 1024);
+        let data = Data::new(tuner_layout, 44_100.0, 1024);
         for s in data.sensors() {
             assert!(s.avg_gain_linear > 0.0);
             assert!(s.avg_gain_linear.is_finite());

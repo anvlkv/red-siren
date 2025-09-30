@@ -35,6 +35,7 @@ pub fn AppRoutes() -> impl IntoView {
         data: sync,
         error: sync_error,
         open: sync_open,
+        close: close_sync,
         ..
     } = use_listen::<shared::NavSyncPayload>(EventType::Custom(
         shared::events::navigation::NAV_SYNC,
@@ -44,6 +45,7 @@ pub fn AppRoutes() -> impl IntoView {
         data: committed,
         error: error_committed,
         open: open_committed,
+        close: close_committed,
         ..
     } = use_listen::<NavCommittedPayload>(EventType::Custom(
         shared::events::navigation::NAV_COMMITTED,
@@ -54,6 +56,7 @@ pub fn AppRoutes() -> impl IntoView {
         data: started,
         error: error_started,
         open: open_started,
+        close: close_started,
         ..
     } = use_listen::<NavStartedPayload>(EventType::Custom(shared::events::navigation::NAV_STARTED));
 
@@ -134,12 +137,21 @@ pub fn AppRoutes() -> impl IntoView {
         }
     });
 
+    on_cleanup(move || {
+        close_sync();
+        close_committed();
+        close_started();
+    });
+
     view! {
         <>
-            <div class="absolute h-full w-full overflow-hidden">
+            <div
+                class="absolute h-full w-full overflow-hidden pointer-events-none z-0"
+                role="presentation"
+            >
                 <Intro />
             </div>
-            <div class="absolute h-full w-full overflow-hidden">
+            <div class="absolute h-full w-full overflow-hidden pointer-events-auto z-1" role="main">
                 <Routes fallback=|| {
                     let mut outside_errors = Errors::default();
                     outside_errors.insert_with_default_key(AppError::NotFound);

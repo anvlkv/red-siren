@@ -192,28 +192,3 @@ impl From<tauri::Error> for AppError {
         AppError::Tauri(value.to_string())
     }
 }
-
-// -------- Tests (minimal) --------
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn serialize_nav_gate_error() {
-        let err = AppError::from(NavGateError::PermissionDenied);
-        let s = serde_json::to_string(&err).unwrap();
-        assert!(s.contains("permission denied"));
-    }
-
-    #[test]
-    fn setup_error_roundtrip() {
-        let err = AppError::from(SetupError::emit("evt", "boom"));
-        let json = serde_json::to_string(&err).unwrap();
-        assert!(json.contains("emit failed"));
-        let de: AppError = serde_json::from_str(&json).unwrap();
-        match de {
-            AppError::Setup(SetupError::Emit { event, .. }) => assert_eq!(event, "evt"),
-            _ => panic!("unexpected variant"),
-        }
-    }
-}

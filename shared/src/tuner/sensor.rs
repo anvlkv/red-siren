@@ -44,7 +44,7 @@ const FLOOR_DB: f32 = -60.0;
 const CEIL_DB: f32 = 0.0;
 
 /// Represents one layout + spectral sensor.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Sensor {
     /// Zero-based sensor index
     pub index: u32,

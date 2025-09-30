@@ -137,6 +137,8 @@ pub fn Play() -> impl IntoView {
 
     Effect::new(move |_| {
         if let Some(shared::instrument::events::PlaybackStatePayload { playing }) = playback() {
+            log::debug!("Updating menu items, the playback is [{playing}]");
+
             if playing {
                 set_menu_items.update(|m| {
                     m[0] = MenuItem::Action {

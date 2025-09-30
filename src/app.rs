@@ -20,6 +20,7 @@ pub fn App() -> impl IntoView {
         event_id: app_ready,
         open,
         error,
+        close: close_app_ready,
         ..
     } = use_listen::<()>(EventType::Custom(shared::events::health::APP_READY));
 
@@ -98,6 +99,10 @@ pub fn App() -> impl IntoView {
         let height = size.height.get();
         log::info!("Window size: {width}, {height}");
         trigger_update_window_size(Some((UpdateWindowSizePayload { width, height }, ())));
+    });
+
+    on_cleanup(move || {
+        close_app_ready();
     });
 
     view! {

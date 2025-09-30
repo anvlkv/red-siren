@@ -3,5 +3,10 @@
     "label": "Xcode — list devices",
     "command": "xcrun xctrace list devices",
     "reveal": "always"
+  },
+  {
+    "label": "Start Tauri [dev server]",
+    "command": "cargo tauri dev",
+    "reveal": "always"
   }
 ]

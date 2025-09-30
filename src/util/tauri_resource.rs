@@ -26,7 +26,7 @@ impl Default for UseInvokeEventOptions {
 #[allow(dead_code)]
 pub struct UseTauriResourceReturn<T, F, R>
 where
-    T: Clone + 'static,
+    T: std::fmt::Debug + Clone + 'static,
     F: Fn() + Clone + Send + Sync + 'static,
     R: Fn() + Clone + Send + Sync + 'static,
 {
@@ -48,7 +48,14 @@ pub fn use_tauri_resource_with_args<T, Args, A>(
     impl Fn() + Clone + Send + Sync + 'static,
 >
 where
-    T: PartialEq + Clone + for<'de> Deserialize<'de> + Serialize + Send + Sync + 'static,
+    T: std::fmt::Debug
+        + PartialEq
+        + Clone
+        + for<'de> Deserialize<'de>
+        + Serialize
+        + Send
+        + Sync
+        + 'static,
     Args: PartialEq + Serialize + Clone + Send + Sync + 'static,
     A: Into<Signal<Args>>,
 {
@@ -72,7 +79,14 @@ pub fn use_tauri_resource<T>(
     impl Fn() + Clone + Send + Sync + 'static,
 >
 where
-    T: PartialEq + Clone + for<'de> Deserialize<'de> + Serialize + Send + Sync + 'static,
+    T: std::fmt::Debug
+        + PartialEq
+        + Clone
+        + for<'de> Deserialize<'de>
+        + Serialize
+        + Send
+        + Sync
+        + 'static,
 {
     // No-args convenience: provide a unit Signal so generic inference succeeds.
     use_tauri_resource_with_args_opts::<T, (), Signal<()>>(
@@ -96,7 +110,14 @@ pub fn use_tauri_resource_with_opts<T>(
     impl Fn() + Clone + Send + Sync + 'static,
 >
 where
-    T: PartialEq + Clone + for<'de> Deserialize<'de> + Serialize + Send + Sync + 'static,
+    T: std::fmt::Debug
+        + PartialEq
+        + Clone
+        + for<'de> Deserialize<'de>
+        + Serialize
+        + Send
+        + Sync
+        + 'static,
 {
     // No-args + custom options variant.
     use_tauri_resource_with_args_opts::<T, (), Signal<()>>(
@@ -118,7 +139,14 @@ pub fn use_tauri_resource_with_args_opts<T, Args, A>(
     impl Fn() + Clone + Send + Sync + 'static,
 >
 where
-    T: PartialEq + Clone + for<'de> Deserialize<'de> + Serialize + Send + Sync + 'static,
+    T: std::fmt::Debug
+        + PartialEq
+        + Clone
+        + for<'de> Deserialize<'de>
+        + Serialize
+        + Send
+        + Sync
+        + 'static,
     Args: PartialEq + Serialize + Clone + Send + Sync + 'static,
     A: Into<Signal<Args>>,
 {
@@ -184,20 +212,16 @@ where
         set_error.set(None);
     };
 
-    on_cleanup(move || {
-        event_close();
-    });
-
     Effect::new(move || {
-        if let Some(data_value) = invoke_data() {
-            update_data(data_value);
-        }
-    });
+        let data_value = invoke_data();
+        let event_data = event_data();
 
-    // Update data when events are received
-    Effect::new(move || {
-        if let Some(event_data) = event_data() {
-            update_data(event_data);
+        if let Some(data) = event_data {
+            log::debug!("Event data received for `{common_name}`: {data:?}");
+            update_data(data);
+        } else if let Some(data) = data_value {
+            log::debug!("Invoke data received for `{common_name}`: {data:?}");
+            update_data(data);
         }
     });
 
@@ -223,13 +247,17 @@ where
 
     Effect::new(move || {
         if let Some(err) = invoke_error() {
-            log::error!("{err}");
+            log::error!("invoke error: {err}");
             handle_error(err.to_string());
         }
         if let Some(err) = event_error() {
-            log::error!("{err}");
+            log::error!("event error: {err}");
             handle_error(err.to_string());
         }
+    });
+
+    on_cleanup(move || {
+        event_close();
     });
 
     UseTauriResourceReturn {

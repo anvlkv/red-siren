@@ -4,10 +4,17 @@ use shared::orientation::LayoutOrientation;
 
 use crate::util::animation::{tween_tuple_vectors, tween_vectors};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
+/// Desired background animation
 pub enum IntroAnimationTarget {
+    /// All content pages (Home, About, Donate, Permissions)
     Intro,
-    Tuner,
+    /// Tuner page
+    Tuner {
+        layout: shared::tuner::Layout,
+        data: shared::tuner::Data,
+    },
+    /// Play page
     Instrument(shared::instrument::Layout),
 }
 
@@ -70,7 +77,7 @@ impl From<IntroAnimationTarget> for IntroAnimationState {
     fn from(value: IntroAnimationTarget) -> Self {
         match value {
             IntroAnimationTarget::Intro => Self::default(),
-            IntroAnimationTarget::Tuner => todo!(),
+            IntroAnimationTarget::Tuner { .. } => todo!(),
             IntroAnimationTarget::Instrument(layout) => {
                 let total_keys =
                     layout.num_groups.get() as usize * layout.num_keys_per_group.get() as usize;

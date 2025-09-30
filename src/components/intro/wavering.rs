@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use shared::events::intro::IntroSnoopBatchPayload;
 use tauri_use::{use_command, UseTauriWithReturn};
 
 use crate::util::raf_fn_fps::{
@@ -27,17 +28,55 @@ const STROKE_WIDTH: f32 = 3.5;
 
 #[component]
 pub fn Wavering() -> impl IntoView {
-    // Pull-model intro DSP wave integration (MAYA DRY KISS) ---
-    // Each RAF tick invokes backend command returning latest batch.
-    use shared::commands::intro::INTRO_NEXT_FRAME;
-    use shared::events::intro::IntroSnoopBatchPayload;
+    let UseTauriWithReturn {
+        trigger: trigger_resume,
+        error: resume_error,
+        ..
+    } = use_command::<()>(shared::commands::intro::INTRO_RESUME);
 
-    // Invoke handle for next-frame command (no args).
+    let UseTauriWithReturn {
+        trigger: trigger_pause,
+        error: pause_error,
+        ..
+    } = use_command::<()>(shared::commands::intro::INTRO_PAUSE);
+
     let UseTauriWithReturn {
         trigger: fetch_frame,
-        data: batch,
+        data: frame_data,
+        error: frame_error,
         ..
-    } = use_command::<IntroSnoopBatchPayload>(INTRO_NEXT_FRAME);
+    } = use_command::<IntroSnoopBatchPayload>(shared::commands::intro::INTRO_NEXT_FRAME);
+
+    Effect::new(move |_| {
+        if let Some(err) = frame_error() {
+            log::error!(
+                "Error invoking {}: {err}",
+                shared::commands::intro::INTRO_NEXT_FRAME
+            );
+        }
+
+        if let Some(err) = resume_error() {
+            log::error!(
+                "Error invoking {}: {err}",
+                shared::commands::intro::INTRO_RESUME
+            );
+        }
+
+        if let Some(err) = pause_error() {
+            log::error!(
+                "Error invoking {}: {err}",
+                shared::commands::intro::INTRO_PAUSE
+            );
+        }
+    });
+
+    Effect::new(move |_| {
+        trigger_resume(Some(()));
+    });
+
+    on_cleanup(move || {
+        trigger_pause(Some(()));
+    });
 
     // Cache of 11 SVG path strings for the animated wave lines.
     let wave_paths = RwSignal::<Vec<(String, String, String)>>::new(
@@ -66,7 +105,7 @@ pub fn Wavering() -> impl IntoView {
                       delta: _,
                       timestamp: _,
                   }| {
-                if let Some(batch) = batch.get() {
+                if let Some(batch) = frame_data.get() {
                     wave_paths.update(|paths| {
                         for (i, (snoop, (p, _, _))) in
                             batch.snoops.iter().zip(paths.iter_mut()).enumerate()

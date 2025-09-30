@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 use leptos_router::components::*;
-use leptos_use::{use_preferred_dark, use_window_size};
+use leptos_use::{signal_debounced, use_preferred_dark, use_window_size, UseWindowSizeReturn};
 use shared::commands::setup::{UpdateWindowAppearancePayload, UpdateWindowSizePayload};
 use tauri_use::{
     use_command, use_invoke, use_listen, EventType, UseListenReturn, UseTauriReturn,
@@ -44,8 +44,10 @@ pub fn App() -> impl IntoView {
         ..
     } = use_invoke::<UpdateWindowSizePayload, (), ()>(shared::commands::setup::UPDATE_WINDOW_SIZE);
 
-    let size = use_window_size();
     let preferred_dark = use_preferred_dark();
+    let UseWindowSizeReturn { width, height } = use_window_size();
+    let width = signal_debounced(width, 70.0);
+    let height = signal_debounced(height, 70.0);
 
     Effect::new(move |_| {
         open();
@@ -95,8 +97,8 @@ pub fn App() -> impl IntoView {
     });
 
     Effect::new(move |_| {
-        let width = size.width.get();
-        let height = size.height.get();
+        let width = width();
+        let height = height();
         log::info!("Window size: {width}, {height}");
         trigger_update_window_size(Some((UpdateWindowSizePayload { width, height }, ())));
     });

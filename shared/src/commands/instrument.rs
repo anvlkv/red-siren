@@ -12,6 +12,8 @@ pub const PLAYBACK_RESUME: &str = "instrument_playback_resume";
 pub const GET_ACTIVATION_SRC: &str = "instrument_activation_source";
 /// Sets instrument activation source
 pub const SET_ACTIVATION_SRC: &str = "instrument_set_activation_source";
+/// Get current instrument layout (same string as event so `use_tauri_resource` can bind both)
+pub const GET_LAYOUT: &str = "instrument_layout";
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

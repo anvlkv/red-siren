@@ -2,7 +2,7 @@ mod commands;
 mod engine;
 
 use shared::error::Result;
-use tauri::{async_runtime::spawn, App, Listener, Manager};
+use tauri::{async_runtime::spawn, App, Emitter, Listener, Manager};
 
 pub use commands::*;
 
@@ -20,7 +20,9 @@ pub fn setup(app: &mut App) -> Result<()> {
             let state = handle.state::<engine::InstrumentEngine>();
             let win_state = handle.state::<WindowState>();
             let is_dark = win_state.lock().await.dark;
-            state.set_is_dark(is_dark).await;
+            if let Err(e) = state.set_is_dark(is_dark).await {
+                log::error!("error updating `{}`: {e}", shared::events::setup::UPDATE_WINDOW_APPEARANCE)
+            }
         });
     });
 
@@ -32,7 +34,17 @@ pub fn setup(app: &mut App) -> Result<()> {
             let state = handle.state::<engine::InstrumentEngine>();
             let win_state = handle.state::<WindowState>();
             let window_state = win_state.lock().await;
-            state.set_size(window_state.width, window_state.height).await;
+            match state.set_size(window_state.width, window_state.height).await {
+                Ok(_) => {
+                    let layout = state.inner.layout.lock().await;
+                    if let Err(e) = handle.emit(shared::instrument::events::LAYOUT, *layout) {
+                        log::error!("Failed emitting instrument layout: {e}");
+                    }
+                }
+                Err(e) => {
+                    log::error!("error updating `{}`: {e}", shared::events::setup::UPDATE_WINDOW_SIZE)
+                }
+            }
         });
     });
 

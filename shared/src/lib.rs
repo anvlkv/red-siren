@@ -10,7 +10,7 @@ pub mod tuner;
 
 pub use line::*;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test"))]
 pub mod test_util;
 
 pub use events::navigation::NavSyncPayload;

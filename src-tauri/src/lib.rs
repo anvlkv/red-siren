@@ -72,6 +72,7 @@ pub fn run() {
         instrument::instrument_playback_resume,
         instrument::instrument_activation_source,
         instrument::instrument_set_activation_source,
+        instrument::instrument_layout,
     ]);
 
     builder

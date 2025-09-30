@@ -1,4 +1,4 @@
-use shared::instrument::events::{ActivationSourcePayload, PlaybackStatePayload};
+use shared::instrument::{events::{ActivationSourcePayload, PlaybackStatePayload}, Layout};
 use shared::error::{Result, InstrumentError};
 use tauri::{AppHandle, Emitter, State};
 
@@ -142,3 +142,9 @@ pub async fn instrument_playback_resume(state: State<'_, InstrumentEngine>, app:
     Ok(())
 }
 
+#[tauri::command]
+/// Returns current instrument layout (invoke/event: instrument_layout)
+pub async fn instrument_layout(state: State<'_, InstrumentEngine>) -> Result<Layout> {
+    log::debug!("instrument_layout called");
+    Ok(*state.inner.layout.lock().await)
+}

@@ -4,6 +4,15 @@ use shared::orientation::LayoutOrientation;
 
 use crate::util::animation::{tween_tuple_vectors, tween_vectors};
 
+pub const INTRO_TO_INSTRUMENT_MS: f64 = 1500.0;
+pub const INTRO_TO_TUNER_MS: f64 = 1000.0;
+
+pub const INSTRUMENT_TO_INTRO_MS: f64 = 700.0;
+pub const TUNER_TO_INTRO_MS: f64 = 500.0;
+
+pub const INSTRUMENT_TO_TUNER_MS: f64 = 400.0;
+pub const TUNER_TO_INSTRUMENT_MS: f64 = 300.0;
+
 #[derive(Debug, Clone, PartialEq)]
 /// Desired background animation
 pub enum IntroAnimationTarget {
@@ -199,5 +208,57 @@ impl CanTween for IntroAnimationState {
             ),
             strings_stroke: CanTween::ease(from.strings_stroke, to.strings_stroke, time),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use keyframe::{keyframes, AnimationSequence};
+    use shared::instrument::layout::layout_test_cases;
+
+    #[test]
+    fn standard_instrument_layouts() {
+        let initial = IntroAnimationState::default();
+
+        for l in layout_test_cases() {
+            let target = IntroAnimationTarget::Instrument(l);
+            let state: IntroAnimationState = target.into();
+            println!("created state for layout: {}x{}", l.space.x, l.space.y);
+
+            let mut sequence = keyframes![(initial.clone(), 0.0), (state, 1.0)];
+            println!("created keyframes");
+
+            _ = sequence.advance_to(0.5);
+            println!("advance sequence, 50%");
+
+            let result = sequence.now();
+            println!("data at 50%: {result:?}");
+        }
+    }
+
+    #[test]
+    fn regression_intro_keybands_transition_midway() {
+        // Simulate a transition from default (no keybands_positions) to a state with keybands
+        let from_state = IntroAnimationState {
+            keybands_positions: vec![],
+            ..IntroAnimationState::default()
+        };
+        let to_state = IntroAnimationState {
+            keybands_positions: vec![
+                (Point2 { x: 0.0, y: 0.0 }, Point2 { x: 10.0, y: 10.0 }),
+                (Point2 { x: 20.0, y: 20.0 }, Point2 { x: 30.0, y: 30.0 }),
+            ],
+            ..IntroAnimationState::default()
+        };
+
+        let mid = IntroAnimationState::ease(from_state.clone(), to_state.clone(), 0.5f32);
+
+        assert!(
+            mid.keybands_positions.len() <= to_state.keybands_positions.len(),
+            "Mid animation keybands count should not exceed target ({:?} vs {:?})",
+            mid.keybands_positions.len(),
+            to_state.keybands_positions.len()
+        );
     }
 }

@@ -40,7 +40,7 @@ pub(super) struct Inner {
 }
 
 impl InstrumentEngine {
-    pub async fn set_is_dark(&self, is_dark: bool) {
+    pub async fn set_is_dark(&self, is_dark: bool)-> shared::error::Result<()> {
         let mut layout = self.inner.layout.lock().await;
         layout.scale = if is_dark {
             shared::instrument::Scale::In
@@ -50,10 +50,12 @@ impl InstrumentEngine {
 
         let mut config = self.inner.config.lock().await;
 
-        *config = shared::instrument::Config::from(*layout);
+        *config = shared::instrument::Config::try_from(*layout)?;
         log::info!("Created new config for [dark: {is_dark}]: {:#?}", *config);
+
+        Ok(())
     }
-    pub async fn set_size(&self, width: f64, height: f64) {
+    pub async fn set_size(&self, width: f64, height: f64) -> shared::error::Result<()> {
         let mut layout = self.inner.layout.lock().await;
         *layout = shared::instrument::Layout{
             scale: layout.scale,
@@ -62,7 +64,8 @@ impl InstrumentEngine {
 
         let mut config = self.inner.config.lock().await;
 
-        *config = shared::instrument::Config::from(*layout);
+        *config = shared::instrument::Config::try_from(*layout)?;
         log::info!("Created new config for [width: {width}, height: {height}]: {:#?}", *config);
+        Ok(())
     }
 }

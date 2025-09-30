@@ -2,6 +2,8 @@ use std::ops::Range;
 
 use serde::{Deserialize, Serialize};
 
+use crate::error::InstrumentConfigError;
+
 use super::{consts::*, Layout};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -125,34 +127,114 @@ pub struct NodeConfig {
 }
 
 impl NodeConfig {
-    /// Validate whether node resonates in safe frequency range
-    fn valid(&self) -> bool {
-        self.base_frequency >= MIN_FREQ_HZ
-            && self.base_frequency <= MAX_FREQ_HZ
-            && self.band_range.start >= MIN_FREQ_HZ
-            && self.band_range.end <= MAX_FREQ_HZ
-            && self.band_range.start < self.band_range.end
-    }
+    /// Unified node validation.
+    /// Order:
+    /// 1. Structural (range shape)
+    /// 2. Recommended (soft) bounds (emit *recommended* errors)
+    /// 3. Safe (hard) bounds (emit *safe* errors)
+    fn validate(&self, idx: usize) -> Result<(), InstrumentConfigError> {
+        // 1. Structural
+        if self.band_range.start >= self.band_range.end {
+            return Err(InstrumentConfigError::NodeBandRangeInvalid {
+                node: idx,
+                start: self.band_range.start as f32,
+                end: self.band_range.end as f32,
+            });
+        }
 
-    /// Validate whether node resonates in recommended frequency range
-    fn strict_valid(&self) -> bool {
-        self.base_frequency >= SOFT_MIN_FREQ_HZ
-            && self.base_frequency <= SOFT_MAX_FREQ_HZ
-            && self.band_range.start >= SOFT_MIN_FREQ_HZ
-            && self.band_range.end <= SOFT_MAX_FREQ_HZ
-            && self.band_range.start < self.band_range.end
+        // 2. Recommended bounds (soft limits)
+        if self.base_frequency < SOFT_MIN_FREQ_HZ {
+            return Err(InstrumentConfigError::NodeFreqencyBelowRecomended {
+                node: idx,
+                freq: self.base_frequency as f32,
+            });
+        }
+        if self.base_frequency > SOFT_MAX_FREQ_HZ {
+            return Err(InstrumentConfigError::NodeFreqencyAboveRecomended {
+                node: idx,
+                freq: self.base_frequency as f32,
+            });
+        }
+        if self.band_range.start < SOFT_MIN_FREQ_HZ {
+            return Err(InstrumentConfigError::NodeBandStartBelowRecomended {
+                node: idx,
+                freq: self.band_range.start as f32,
+            });
+        }
+        if self.band_range.start > SOFT_MAX_FREQ_HZ {
+            return Err(InstrumentConfigError::NodeBandStartAboveRecomended {
+                node: idx,
+                freq: self.band_range.start as f32,
+            });
+        }
+        if self.band_range.end < SOFT_MIN_FREQ_HZ {
+            return Err(InstrumentConfigError::NodeBandEndBelowRecomended {
+                node: idx,
+                freq: self.band_range.end as f32,
+            });
+        }
+        if self.band_range.end > SOFT_MAX_FREQ_HZ {
+            return Err(InstrumentConfigError::NodeBandEndAboveRecomended {
+                node: idx,
+                freq: self.band_range.end as f32,
+            });
+        }
+
+        // 3. Safe bounds (hard limits) - only reached if recommended passed.
+        if self.base_frequency < MIN_FREQ_HZ {
+            return Err(InstrumentConfigError::NodeFreqencyBelowSafe {
+                node: idx,
+                freq: self.base_frequency as f32,
+            });
+        }
+        if self.base_frequency > MAX_FREQ_HZ {
+            return Err(InstrumentConfigError::NodeFreqencyAboveSafe {
+                node: idx,
+                freq: self.base_frequency as f32,
+            });
+        }
+        if self.band_range.start < MIN_FREQ_HZ {
+            return Err(InstrumentConfigError::NodeBandStartBelowSafe {
+                node: idx,
+                freq: self.band_range.start as f32,
+            });
+        }
+        if self.band_range.start > MAX_FREQ_HZ {
+            return Err(InstrumentConfigError::NodeBandStartAboveSafe {
+                node: idx,
+                freq: self.band_range.start as f32,
+            });
+        }
+        if self.band_range.end < MIN_FREQ_HZ {
+            return Err(InstrumentConfigError::NodeBandEndBelowSafe {
+                node: idx,
+                freq: self.band_range.end as f32,
+            });
+        }
+        if self.band_range.end > MAX_FREQ_HZ {
+            return Err(InstrumentConfigError::NodeBandEndAboveSafe {
+                node: idx,
+                freq: self.band_range.end as f32,
+            });
+        }
+
+        Ok(())
     }
 }
 
 impl GroupConfig {
-    /// Validate whether group configuration is valid
-    fn valid(&self) -> bool {
-        (0.0..1.0).contains(&self.a_coef) && self.nodes.iter().all(|n| n.valid())
-    }
-
-    /// Strict validation of group configuration
-    fn strict_valid(&self) -> bool {
-        (0.0..1.0).contains(&self.a_coef) && self.nodes.iter().all(|n| n.strict_valid())
+    /// Unified group validation (safe constraints only).
+    fn validate(&self, _group_idx: usize) -> Result<(), InstrumentConfigError> {
+        if !(0.0..1.0).contains(&self.a_coef) {
+            return Err(InstrumentConfigError::InvalidACoef(self.a_coef));
+        }
+        if self.nodes.is_empty() {
+            return Err(InstrumentConfigError::EmptyGroup);
+        }
+        for (i, n) in self.nodes.iter().enumerate() {
+            n.validate(i)?;
+        }
+        Ok(())
     }
 }
 
@@ -169,35 +251,36 @@ impl Config {
     ///
     /// - Resonate in safe frequencies
     /// - Total volume does not exceed max dB
-    fn valid(&self) -> bool {
-        self.0.iter().all(|g| g.valid()) && self.max_event_volume_ok() && self.valid_channels()
+    fn validate(&self) -> Result<(), InstrumentConfigError> {
+        if self.0.is_empty() {
+            return Err(InstrumentConfigError::Empty);
+        }
+        for (gi, g) in self.0.iter().enumerate() {
+            g.validate(gi)?;
+        }
+        if !self.max_event_volume_ok() {
+            let total_nodes: usize = self.0.iter().map(|g| g.nodes.len()).sum();
+            return Err(InstrumentConfigError::MaxCumulativeGainAboveSafe(
+                total_nodes as f32,
+            ));
+        }
+        self.validate_channels()?;
+        Ok(())
     }
 
-    /// Strict validation of all nodes in all groups
+    /// Validation of all nodes in all groups
     ///
     /// - Resonate in recommended frequencies
     /// - Total volume does not exceed max dB
-    fn strict_valid(&self) -> bool {
-        self.0.iter().all(|g| g.strict_valid())
-            && self.max_event_volume_ok()
-            && self.valid_channels()
-    }
-
-    fn valid_channels(&self) -> bool {
-        self.0
-            .iter()
-            .try_fold(Option::<GroupChanel>::None, |prev, current| {
-                if let Some(ch) = prev {
-                    if ch != current.channel {
-                        Ok(Some(current.channel))
-                    } else {
-                        Err(())
-                    }
-                } else {
-                    Ok(Some(current.channel))
-                }
-            })
-            .is_ok()
+    fn validate_channels(&self) -> Result<(), InstrumentConfigError> {
+        let mut prev: Option<GroupChanel> = None;
+        for g in &self.0 {
+            if prev == Some(g.channel) {
+                return Err(InstrumentConfigError::ChannelsConfigurationInvalid);
+            }
+            prev = Some(g.channel);
+        }
+        Ok(())
     }
 }
 
@@ -305,8 +388,10 @@ fn a_coef_from_frequency(f: f64) -> f32 {
     (0.2 + 0.8 * norm) as f32
 }
 
-impl From<Layout> for Config {
-    fn from(value: Layout) -> Self {
+impl TryFrom<Layout> for Config {
+    type Error = InstrumentConfigError;
+
+    fn try_from(value: Layout) -> Result<Self, Self::Error> {
         let a = value.left_string_position.0;
         let b = value.left_string_position.1;
 
@@ -341,15 +426,13 @@ impl From<Layout> for Config {
 
         let config = Config(groups);
 
-        if !config.strict_valid() {
-            log::warn!("Config is not strictly valid!")
-        }
+        // Single-pass validation (recommended + safe)
+        // Caller can decide how to surface any error.
+        config.validate()?;
 
-        if !config.valid() {
-            panic!("Unsafe config")
-        }
+        // (previous panic on unsafe config removed in favor of Result error propagation)
 
-        config
+        Ok(config)
     }
 }
 #[cfg(test)]
@@ -360,11 +443,11 @@ mod tests {
     #[test]
     fn test_config_from_layout_validity() {
         for layout in layout_test_cases() {
-            let config = Config::from(layout);
-            assert!(config.valid(), "Config from layout should be valid");
+            let config = Config::try_from(layout).expect("Config from layout should be valid");
+            // validate() already ran in try_from, but call again defensively
             assert!(
-                config.strict_valid(),
-                "Config from layout should be strictly valid"
+                config.validate().is_ok(),
+                "Config from layout should pass unified validation"
             );
         }
     }
@@ -408,40 +491,40 @@ mod tests {
     #[test]
     fn test_node_config_validity() {
         let valid_node = NodeConfig {
-            base_frequency: (super::MIN_FREQ_HZ + super::MAX_FREQ_HZ) / 2.0,
+            base_frequency: (super::SOFT_MIN_FREQ_HZ + super::SOFT_MAX_FREQ_HZ) / 2.0,
             phase: 0.0,
-            band_range: super::MIN_FREQ_HZ..super::MAX_FREQ_HZ,
+            band_range: super::SOFT_MIN_FREQ_HZ..super::SOFT_MAX_FREQ_HZ,
         };
-        assert!(valid_node.valid());
-        assert!(!NodeConfig {
+        assert!(valid_node.validate(0).is_ok());
+        assert!(NodeConfig {
             base_frequency: super::MIN_FREQ_HZ - 1.0,
             phase: 0.0,
             band_range: super::MIN_FREQ_HZ..super::MAX_FREQ_HZ,
         }
-        .valid());
+        .validate(0)
+        .is_err());
     }
 
     #[test]
     fn test_group_config_validity() {
         let node = NodeConfig {
-            base_frequency: (super::MIN_FREQ_HZ + super::MAX_FREQ_HZ) / 2.0,
+            base_frequency: (super::SOFT_MIN_FREQ_HZ + super::SOFT_MAX_FREQ_HZ) / 2.0,
             phase: 0.0,
-            band_range: super::MIN_FREQ_HZ..super::MAX_FREQ_HZ,
+            band_range: super::SOFT_MIN_FREQ_HZ..super::SOFT_MAX_FREQ_HZ,
         };
         let group = GroupConfig {
             channel: GroupChanel::Left,
             nodes: vec![node],
             a_coef: 0.5,
         };
-        assert!(group.valid());
-        assert!(group.strict_valid() || !group.strict_valid()); // just check it runs
+        assert!(group.validate(0).is_ok());
     }
 
     #[test]
     fn test_phase_spreading_uniform() {
         // Use first layout to build a config
         let layout = layout_test_cases().next().expect("at least one layout");
-        let config = Config::from(layout);
+        let config = Config::try_from(layout).expect("layout should yield a valid config");
 
         // Pick the first group that has >= 3 nodes so differences are meaningful
         let group = config
@@ -496,7 +579,7 @@ mod tests {
     #[test]
     fn test_a_coef_non_decreasing_with_frequency() {
         let layout = layout_test_cases().next().expect("at least one layout");
-        let config = Config::from(layout);
+        let config = Config::try_from(layout).expect("layout should yield a valid config");
 
         // Build a vector of (min_group_frequency, a_coef)
         // Use min base frequency of each group's nodes as representative
@@ -537,9 +620,9 @@ mod tests {
         // MAX_DBS is treated as the hard cap on total simultaneous nodes.
         let excessive_nodes = MAX_DBS + 1;
         let dummy_node = NodeConfig {
-            base_frequency: (MIN_FREQ_HZ + MAX_FREQ_HZ) / 2.0,
+            base_frequency: (SOFT_MIN_FREQ_HZ + SOFT_MAX_FREQ_HZ) / 2.0,
             phase: 0.0,
-            band_range: MIN_FREQ_HZ..MAX_FREQ_HZ,
+            band_range: SOFT_MIN_FREQ_HZ..SOFT_MAX_FREQ_HZ,
         };
         let group = GroupConfig {
             channel: GroupChanel::Left,
@@ -552,7 +635,7 @@ mod tests {
             "Excessive node count should fail volume check"
         );
         assert!(
-            !cfg_excess.valid(),
+            cfg_excess.validate().is_err(),
             "Config with excessive nodes should be invalid"
         );
 
@@ -568,7 +651,10 @@ mod tests {
             cfg_ok.max_event_volume_ok(),
             "Node count at limit should pass"
         );
-        // Channel alternation fails (only one group so still fine), valid() should be true.
-        assert!(cfg_ok.valid(), "Config at volume limit should remain valid");
+        // Single group: channel alternation not applicable. Uses recommended band; validate() should succeed.
+        assert!(
+            cfg_ok.validate().is_ok(),
+            "Config at volume limit should remain valid"
+        );
     }
 }

@@ -634,7 +634,7 @@ impl Layout {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test"))]
 pub fn layout_test_cases() -> impl Iterator<Item = Layout> {
     crate::test_util::test_cases().map(|(space, safe_area)| {
         let v = Vector2 {

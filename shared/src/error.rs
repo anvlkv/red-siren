@@ -27,10 +27,6 @@ pub enum AppError {
     #[error("{0}")]
     Navigation(#[from] NavigationError),
 
-    /// Errors from navigation gating logic.
-    #[error("{0}")]
-    NavGate(#[from] NavGateError),
-
     /// Health / setup domain errors.
     #[error("{0}")]
     Health(#[from] HealthError),
@@ -140,6 +136,12 @@ impl NavGateError {
     }
 }
 
+impl From<NavGateError> for AppError {
+    fn from(value: NavGateError) -> Self {
+        AppError::Navigation(value.into())
+    }
+}
+
 // -------- Domain: Health --------
 #[derive(Debug, Error, Serialize, Deserialize)]
 pub enum HealthError {
@@ -183,6 +185,87 @@ pub enum InstrumentError {
     PauseFailed { detail: Option<String> },
     #[error("instrument resume failed")]
     ResumeFailed { detail: Option<String> },
+    #[error("instrument config error: {0}")]
+    ConfigError(#[from] InstrumentConfigError),
+}
+
+#[derive(Debug, Error, Serialize, Deserialize)]
+pub enum InstrumentConfigError {
+    #[error("node {node} frequency {freq} above recommended")]
+    NodeFreqencyAboveRecomended { node: usize, freq: f32 },
+
+    #[error("node {node} frequency {freq} below recommended")]
+    NodeFreqencyBelowRecomended { node: usize, freq: f32 },
+
+    #[error("node {node} frequency {freq} above safe")]
+    NodeFreqencyAboveSafe { node: usize, freq: f32 },
+
+    #[error("node {node} frequency {freq} below safe")]
+    NodeFreqencyBelowSafe { node: usize, freq: f32 },
+
+    #[error("node {node} band start {freq} above recommended")]
+    NodeBandStartAboveRecomended { node: usize, freq: f32 },
+
+    #[error("node {node} band start {freq} below recommended")]
+    NodeBandStartBelowRecomended { node: usize, freq: f32 },
+
+    #[error("node {node} band start {freq} above safe")]
+    NodeBandStartAboveSafe { node: usize, freq: f32 },
+
+    #[error("node {node} band start {freq} below safe")]
+    NodeBandStartBelowSafe { node: usize, freq: f32 },
+
+    #[error("node {node} band end {freq} above recommended")]
+    NodeBandEndAboveRecomended { node: usize, freq: f32 },
+
+    #[error("node {node} band end {freq} below recommended")]
+    NodeBandEndBelowRecomended { node: usize, freq: f32 },
+
+    #[error("node {node} band end {freq} above safe")]
+    NodeBandEndAboveSafe { node: usize, freq: f32 },
+
+    #[error("node {node} band end {freq} below safe")]
+    NodeBandEndBelowSafe { node: usize, freq: f32 },
+
+    #[error("max cumulative gain above safe: {0}")]
+    MaxCumulativeGainAboveSafe(f32),
+
+    #[error("channels configuration invalid")]
+    ChannelsConfigurationInvalid,
+
+    #[error("empty config")]
+    Empty,
+
+    #[error("empty group")]
+    EmptyGroup,
+
+    #[error("invalid a_coef: {0}")]
+    InvalidACoef(f32),
+
+    #[error("node {node} band range invalid: start {start} end {end}")]
+    NodeBandRangeInvalid { node: usize, start: f32, end: f32 },
+}
+
+impl From<InstrumentConfigError> for AppError {
+    fn from(value: InstrumentConfigError) -> Self {
+        AppError::Instrument(value.into())
+    }
+}
+
+impl InstrumentConfigError {
+    /// Returns true if the error indicates an unsafe configuration.
+    pub fn is_unsafe(&self) -> bool {
+        matches!(
+            self,
+            InstrumentConfigError::NodeFreqencyAboveSafe { .. }
+                | InstrumentConfigError::NodeFreqencyBelowSafe { .. }
+                | InstrumentConfigError::NodeBandStartAboveSafe { .. }
+                | InstrumentConfigError::NodeBandStartBelowSafe { .. }
+                | InstrumentConfigError::NodeBandEndAboveSafe { .. }
+                | InstrumentConfigError::NodeBandEndBelowSafe { .. }
+                | InstrumentConfigError::MaxCumulativeGainAboveSafe(_)
+        )
+    }
 }
 
 // -------- Feature-gated conversions --------

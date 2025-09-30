@@ -80,6 +80,8 @@ pub fn AppRoutes() -> impl IntoView {
     });
 
     provide_context(nav_tx);
+    // Provide full NavStartedPayload signal so Intro (special background) can derive from/to routes early
+    provide_context(started);
 
     Effect::new(move |_| {
         sync_open();

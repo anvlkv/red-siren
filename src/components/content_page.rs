@@ -245,12 +245,9 @@ pub fn ContentPage(
                             on:click=move |_| {
                                 back_trigger(Some(()));
                             }
-                            class="relative pl-14"
                         >
-                            <span class="absolute left-4 text-4xl">
-                                <Icon name="back" />
-                            </span>
-                            Back
+                            <Icon name="back" size=UiSize::Md />
+                            <span class="inline-block ml-2 flex-grow text-center">Back</span>
                         </Button>
                     </Show>
                     <h1 class="block text-5xl text-center italic">{title}</h1>

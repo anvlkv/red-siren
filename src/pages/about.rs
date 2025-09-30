@@ -1,4 +1,4 @@
-use crate::components::{Button, ContentPage, Icon};
+use crate::components::{Button, ContentPage, Icon, UiSize};
 use leptos::prelude::*;
 use shared::{commands::navigation::NavigateRequestPayload, RouteId};
 use tauri_use::{use_invoke_with_args, UseTauriWithReturn};
@@ -50,13 +50,12 @@ pub fn About() -> impl IntoView {
                             }),
                         )
                     }
-                    class="relative pl-14 w-full"
                     attr:aria-label="Donations"
+                    size=UiSize::Lg
+                    class="w-full"
                 >
-                    <span class="absolute left-4 text-4xl">
-                        <Icon name="donate" />
-                    </span>
-                    "Donate"
+                    <Icon name="donate" size=UiSize::Lg />
+                    <span class="inline-block flex-grow text-center">"Donate"</span>
                 </Button>
             </div>
         </ContentPage>

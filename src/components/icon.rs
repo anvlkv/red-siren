@@ -140,7 +140,7 @@ fn decorate_svg(svg: &str, size: UiSize) -> String {
             }
 
             let insertion = format!(
-                r#" width="1em" height="1em" fill="currentColor" stroke="currentColor" stroke-width="{}" style="display:inline-block;line-height:1;color:currentColor""#,
+                r#" width="1em" height="1em" fill="currentColor" stroke="currentColor" stroke-width="{}" style="display:block;color:currentColor""#,
                 stroke_width
             );
             if let Some(open_pos) = tag.find("<svg") {

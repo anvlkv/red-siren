@@ -17,6 +17,22 @@ pub enum MenuItem {
     },
 }
 
+impl MenuItem {
+    pub fn icon(&self) -> &'static str {
+        match self {
+            MenuItem::Navigate { icon, .. } => icon,
+            MenuItem::Action { icon, .. } => icon,
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            MenuItem::Navigate { label, .. } => label,
+            MenuItem::Action { label, .. } => label,
+        }
+    }
+}
+
 impl Default for MenuItem {
     fn default() -> Self {
         MenuItem::Navigate {
@@ -52,92 +68,38 @@ pub fn MenuItemView(
     #[prop(into, optional)] compact: bool,
 ) -> impl IntoView {
     let size = if compact { UiSize::Sm } else { UiSize::Lg };
+    let label = item.label();
+    let icon = item.icon();
+    let on_click = move |_| match item {
+        MenuItem::Navigate { route, .. } => {
+            log::debug!("Trigger navigate to: {route}");
+            trigger_navigate(Some(NavigateRequestPayload { route }));
+        }
+        MenuItem::Action { action, .. } => {
+            log::info!("Action triggered: {label}");
+            action.run(())
+        }
+    };
+
     view! {
         <div class=move || if compact { "rounded-full" } else { "rounded-lg" } role="menuitem">
-            {match item {
-                MenuItem::Navigate { route, icon, label } => {
-                    let aria_label = label;
-                    if compact {
-                        view! {
-                            <Tooltip text=label placement="top">
-                                <Button
-                                    on:click=move |_| {
-                                        log::debug!("Trigger navigate to: {route}");
-                                        trigger_navigate(Some(NavigateRequestPayload { route }));
-                                    }
-                                    round=true
-                                    square=true
-                                    size
-                                    attr:aria-label=aria_label
-                                >
-                                    <span class="text-4xl leading-none">
-                                        <Icon name=icon size />
-                                    </span>
-                                </Button>
-                            </Tooltip>
-                        }
-                            .into_any()
-                    } else {
-                        view! {
-                            <Button
-                                on:click=move |_| {
-                                    log::debug!("Trigger navigate to: {route}");
-                                    trigger_navigate(Some(NavigateRequestPayload { route }));
-                                }
-                                class="relative pl-14 w-full"
-                                attr:aria-label=aria_label
-                                size
-                            >
-                                <span class="absolute left-4 text-4xl">
-                                    <Icon name=icon size />
-                                </span>
-                                {label}
-                            </Button>
-                        }
-                            .into_any()
-                    }
+            {if compact {
+                view! {
+                    <Tooltip text=label placement="top">
+                        <Button on:click=on_click round=true square=true size>
+                            <Icon name=icon size />
+                        </Button>
+                    </Tooltip>
                 }
-                MenuItem::Action { icon, label, action } => {
-                    let aria_label = label;
-                    if compact {
-                        view! {
-                            <Tooltip text=label placement="top">
-                                <Button
-                                    on:click=move |_| {
-                                        log::info!("Action triggered: {label}");
-                                        action.run(())
-                                    }
-                                    round=true
-                                    square=true
-                                    size
-                                    attr:aria-label=aria_label
-                                >
-                                    <span class="text-4xl leading-none">
-                                        <Icon name=icon size />
-                                    </span>
-                                </Button>
-                            </Tooltip>
-                        }
-                            .into_any()
-                    } else {
-                        view! {
-                            <Button
-                                on:click=move |_| {
-                                    log::info!("Action triggered: {label}");
-                                    action.run(())
-                                }
-                                class="relative pl-14 w-full"
-                                attr:aria-label=Some(aria_label)
-                            >
-                                <span class="absolute left-4 text-4xl">
-                                    <Icon name=icon />
-                                </span>
-                                {label}
-                            </Button>
-                        }
-                            .into_any()
-                    }
+                    .into_any()
+            } else {
+                view! {
+                    <Button on:click=on_click class="w-full justify-between" size>
+                        <Icon name=icon size />
+                        <span class="inline-block flex-grow text-center">{label}</span>
+                    </Button>
                 }
+                    .into_any()
             }}
         </div>
     }

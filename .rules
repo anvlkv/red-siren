@@ -73,7 +73,7 @@ on_cleanup(move || {
 
 ```rust
 fn feature_do_something(
-    state_lock: &MutexGuard<'_, SetupState>,
+    state_lock: &MutexGuard<'_, FeatureState>,
     app: &AppHandle,
 ) -> shared::error::Result<()> {
     app.emit(shared::events::feature::EVENT_NAME, FeaturePayloadStruct)
@@ -82,4 +82,34 @@ fn feature_do_something(
     Ok(())
 }
 
+```
+
+### using `parking_lot::Mutex` for feature state management
+
+```rust
+// Narrow lock scopes; derive outside second lock
+let new_cfg = {
+    let mut layout = self.inner.layout.lock();
+    layout.scale = new_scale;
+    shared::instrument::Config::try_from(*layout)?
+};
+{
+    let mut cfg = self.inner.config.lock();
+    *cfg = new_cfg;
+}
+
+// Extract before awaiting
+let value = {
+    let s = shared.lock();
+    s.value
+};
+// some_async_op(value).await;
+
+// Share across tasks
+let shared = std::sync::Arc::new(parking_lot::Mutex::new(State { value: 0 }));
+
+fn bump(state: &parking_lot::Mutex<State>) {
+    let mut s = state.lock();
+    s.value += 1;
+}
 ```

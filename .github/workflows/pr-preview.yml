@@ -66,11 +66,12 @@ jobs:
         with:
           name: preview-${{ matrix.artifact_name }}-${{ github.event.pull_request.number }}
           path: |
+            src-tauri/target/release/bundle/
             src-tauri/target/*/release/bundle/
-            src-tauri/target/*/release/*.exe
-            src-tauri/target/*/release/*.app
+            src-tauri/target/release/*.exe
+            src-tauri/target/release/*.app
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 3
 
   build-mobile-preview:
     strategy:
@@ -164,7 +165,7 @@ jobs:
             src-tauri/gen/android/app/build/outputs/apk/**/*.apk
             src-tauri/gen/apple/**/*.app
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 3
 
   comment-on-pr:
     needs: [build-preview, build-mobile-preview]

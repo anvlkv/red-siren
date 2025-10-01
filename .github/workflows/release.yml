@@ -80,6 +80,11 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
       - name: Install frontend dependencies
         run: npm ci
 
@@ -121,6 +126,11 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
 
       - name: Install frontend dependencies
         run: npm ci
@@ -192,6 +202,11 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
 
       - name: Install frontend dependencies
         run: npm ci

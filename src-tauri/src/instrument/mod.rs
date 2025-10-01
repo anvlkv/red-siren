@@ -1,8 +1,8 @@
 mod commands;
 mod engine;
 
-use shared::{error::Result, events::setup::SafeAreaInstestUiIncrementPayload};
-use tauri::{async_runtime::spawn, App, Emitter, Event, Listener, Manager};
+use shared::error::Result;
+use tauri::{async_runtime::spawn, App, Emitter, Listener, Manager};
 
 pub use commands::*;
 

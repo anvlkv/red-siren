@@ -1,6 +1,8 @@
 use leptos::prelude::*;
 use shared::RouteId;
-use tauri_use::{use_command, use_invoke, UseTauriReturn, UseTauriWithReturn};
+use tauri_use::{
+    use_command, use_invoke, use_invoke_with_args, UseTauriReturn, UseTauriWithReturn,
+};
 
 use crate::{
     components::{CompactMenu, Icon, Instrument, MenuItem, Switch, UiSize},
@@ -9,6 +11,32 @@ use crate::{
 
 #[component]
 pub fn Play() -> impl IntoView {
+    let UseTauriResourceReturn {
+        data: dark_override,
+        ..
+    } = use_tauri_resource::<shared::commands::setup::UpdateWindowAppearanceOverridePayload>(
+        shared::commands::setup::GET_WINDOW_APPEARANCE_OVERRIDE,
+    );
+
+    let dark_override_value = Signal::derive(move || {
+        dark_override
+            .get()
+            .map(|d| match d.dark {
+                Some(true) => 2_usize,
+                Some(false) => 1_usize,
+                None => 0_usize,
+            })
+            .unwrap_or(0)
+    });
+
+    let UseTauriWithReturn {
+        error: appearance_override_error,
+        trigger: trigger_appearance_override,
+        ..
+    } = use_invoke_with_args::<shared::commands::setup::UpdateWindowAppearanceOverridePayload, ()>(
+        shared::commands::setup::WINDOW_APPEARANCE_OVERRIDE,
+    );
+
     let UseTauriResourceReturn {
         data: activation_source,
         ..
@@ -53,24 +81,6 @@ pub fn Play() -> impl IntoView {
         shared::instrument::commands::SET_ACTIVATION_SRC,
     );
 
-    let tooltips = move || {
-        let active = activation_source()
-            .map(|s| s.source as usize)
-            .unwrap_or_default();
-
-        ["Random", "Mic"]
-            .iter()
-            .enumerate()
-            .map(|(i, l)| {
-                if i == active {
-                    format!("{l} (active)")
-                } else {
-                    l.to_string()
-                }
-            })
-            .collect::<Vec<_>>()
-    };
-
     let (menu_items, set_menu_items) = signal(vec![
         MenuItem::Action {
             icon: "pause",
@@ -96,6 +106,21 @@ pub fn Play() -> impl IntoView {
             },
             (),
         )));
+    });
+
+    let on_appearance_override_change = Callback::new(move |source: usize| {
+        let dark = match source {
+            0 => None,
+            1 => Some(false),
+            2 => Some(true),
+            _ => None,
+        };
+
+        log::debug!("Setting appearance override to: {:?}", dark);
+
+        trigger_appearance_override(Some(
+            shared::commands::setup::UpdateWindowAppearanceOverridePayload { dark },
+        ));
     });
 
     Effect::new(move |_| {
@@ -131,6 +156,13 @@ pub fn Play() -> impl IntoView {
             log::error!(
                 "Error invoking {}: {err}",
                 shared::instrument::commands::SET_ACTIVATION_SRC
+            );
+        }
+
+        if let Some(err) = appearance_override_error() {
+            log::error!(
+                "Error invoking {}: {err}",
+                shared::commands::setup::WINDOW_APPEARANCE_OVERRIDE
             );
         }
     });
@@ -173,22 +205,33 @@ pub fn Play() -> impl IntoView {
         <div>
             <Instrument />
             <CompactMenu items=menu_items>
-                {move || {
-                    view! {
-                        <Switch
-                            labels=vec![
-                                view! { <Icon name="entropy" size=UiSize::Sm /> }.into_any(),
-                                view! { <Icon name="mic" size=UiSize::Sm /> }.into_any(),
-                            ]
-                            tooltips=tooltips()
-                            current_state=Signal::derive(move || {
-                                activation_source().map(|s| s.source).unwrap_or_default() as usize
-                            })
-                            on_change=on_activation_source_change
-                            size=UiSize::Sm
-                        />
-                    }
-                }}
+                <Switch
+                    labels=vec![
+                        view! { <Icon name="entropy" size=UiSize::Sm /> }.into_any(),
+                        view! { <Icon name="mic" size=UiSize::Sm /> }.into_any(),
+                    ]
+                    tooltips=vec!["Random".to_string(), "Mic".to_string()]
+                    current_state=Signal::derive(move || {
+                        activation_source().map(|s| s.source).unwrap_or_default() as usize
+                    })
+                    on_change=on_activation_source_change
+                    size=UiSize::Sm
+                />
+                <Switch
+                    labels=vec![
+                        view! { <Icon name="system" size=UiSize::Sm /> }.into_any(),
+                        view! { <Icon name="bright" size=UiSize::Sm /> }.into_any(),
+                        view! { <Icon name="dark" size=UiSize::Sm /> }.into_any(),
+                    ]
+                    tooltips=vec![
+                        "System theme (auto)".to_string(),
+                        "Yo (dark)".to_string(),
+                        "In (bright)".to_string(),
+                    ]
+                    current_state=dark_override_value
+                    on_change=on_appearance_override_change
+                    size=UiSize::Sm
+                />
             </CompactMenu>
         </div>
     }

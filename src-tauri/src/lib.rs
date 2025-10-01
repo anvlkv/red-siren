@@ -52,6 +52,8 @@ pub fn run() {
     builder = builder.invoke_handler(tauri::generate_handler![
         setup::update_window_appearance,
         setup::update_window_size,
+        setup::update_window_appearance_dark_override,
+        setup::window_appearance_override,
         health::health_on_gui_ready,
         health::health_grant_mic_premission,
         navigation::navigation_bootstrap,

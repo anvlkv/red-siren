@@ -8,7 +8,8 @@ use raw_window_handle::HasWindowHandle;
 use shared::error::{Result, SetupError};
 use tauri::WebviewWindow;
 
-pub fn setup(window: &mut WebviewWindow) -> Result<()> {
+pub fn setup(window: &mut WebviewWindow, override_dark: Option<bool>) -> Result<bool> {
+    let mut is_dark_mode = false;
     if let Ok(handle) = window.window_handle() {
         if let raw_window_handle::RawWindowHandle::AppKit(appkit_handle) = handle.as_raw() {
             let ns_view_ptr = appkit_handle.ns_view.as_ptr();
@@ -25,7 +26,7 @@ pub fn setup(window: &mut WebviewWindow) -> Result<()> {
                 })?;
 
                 // Detect if we're in dark mode
-                let is_dark_mode = detect_dark_mode(&ns_window)?;
+                is_dark_mode = override_dark.unwrap_or(detect_dark_mode(&ns_window)?);
 
                 // Set custom background color based on theme
                 let background_color = if is_dark_mode {
@@ -57,7 +58,7 @@ pub fn setup(window: &mut WebviewWindow) -> Result<()> {
         }
     }
 
-    Ok(())
+    Ok(is_dark_mode)
 }
 
 pub fn update_appearance(window: &mut WebviewWindow, dark: bool) -> Result<()> {
@@ -102,7 +103,7 @@ pub fn update_appearance(window: &mut WebviewWindow, dark: bool) -> Result<()> {
     Ok(())
 }
 
-unsafe fn detect_dark_mode(ns_window: &NSWindow) -> Result<bool> {
+pub unsafe fn detect_dark_mode(ns_window: &NSWindow) -> Result<bool> {
     // Get the effective appearance of the window
     let effective_appearance = ns_window.effectiveAppearance();
 

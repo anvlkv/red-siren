@@ -7,7 +7,10 @@ use tauri_use::{
     UseTauriWithReturn,
 };
 
-use crate::routes::AppRoutes;
+use crate::{
+    routes::AppRoutes,
+    util::tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
+};
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -44,10 +47,29 @@ pub fn App() -> impl IntoView {
         ..
     } = use_invoke::<UpdateWindowSizePayload, (), ()>(shared::commands::setup::UPDATE_WINDOW_SIZE);
 
+    let UseTauriResourceReturn {
+        data: window_appearance_override,
+        ..
+    } = use_tauri_resource::<shared::commands::setup::UpdateWindowAppearanceOverridePayload>(
+        shared::commands::setup::GET_WINDOW_APPEARANCE_OVERRIDE,
+    );
+
     let preferred_dark = use_preferred_dark();
     let UseWindowSizeReturn { width, height } = use_window_size();
     let width = signal_debounced(width, 70.0);
     let height = signal_debounced(height, 70.0);
+
+    let window_appearance_class = Signal::derive(move || {
+        let os_theme = preferred_dark();
+        let user_theme = window_appearance_override().and_then(|t| t.dark);
+        let is_dark = user_theme.unwrap_or(os_theme);
+
+        if is_dark {
+            "dark"
+        } else {
+            "light"
+        }
+    });
 
     Effect::new(move |_| {
         open();
@@ -108,7 +130,10 @@ pub fn App() -> impl IntoView {
     });
 
     view! {
-        <main class="bg-red dark:bg-black font-serif text-black dark:text-red relative h-screen w-screen">
+        <main class=format!(
+            "bg-red dark:bg-black font-serif text-black dark:text-red relative h-screen w-screen {}",
+            window_appearance_class(),
+        )>
             <Router>
                 <AppRoutes />
             </Router>

@@ -77,6 +77,9 @@ pub enum SetupError {
 
     #[error("emit failed (event={event}): {message}")]
     Emit { event: String, message: String },
+
+    #[error("store setup error: {message}")]
+    StoreSetupErr { message: String },
 }
 
 impl SetupError {

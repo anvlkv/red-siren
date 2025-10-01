@@ -1,0 +1,85 @@
+### using `tauri_use::use_invoke` and `tauri_use::use_command`
+
+
+#### in leptos front-end
+
+The correct pattern is to send `Some(())` or `Some((FeaturePayloadStruct{ field_a, field_b }, ()))` when triggering invoke.
+
+#### in tauri backend
+
+The correct pattern is to expect payload struct field to be mapped to command arguments.
+
+```rust
+#[tauri::command]
+fn my_command(
+    field_a: String, // OR serializable from string prop
+    field_b: String, // OR serializable from string prop
+) ->  shared::error::Result<()> {
+    if let Some(payload) = feature_payload {
+        let FeaturePayloadStruct { field_a, field_b } = payload;
+        // Use field_a and field_b as needed
+        Ok(())
+    } else {
+        Err("No payload provided".into())
+    }
+}
+```
+
+
+### using `tauri_use::use_listen`
+
+#### in leptos front-end
+
+```rust
+// Listen for navigation_sync (UI reload alignment)
+let UseListenReturn {
+    data: feature,
+    error: feature_error,
+    open: feature_open,
+    close: close_feature,
+    ..
+} = use_listen::<shared::FeaturePayloadStruct>(EventType::Custom(
+    shared::events::feature::EVENT_NAME,
+));
+
+Effect::new(move |_| {
+    if let Some(err) = feature_error() {
+        log::error!(
+            "Error listening to {}: {err}",
+            shared::events::feature::EVENT_NAME,
+        );
+    }
+    if let Some(err) = other_feature_invoke_error() {
+        log::error!(
+            "Error invoking {}: {err}",
+            shared::commands::feature::COMMAND_NAME
+        );
+    }
+
+    // ... effects of other listeners and invoke errors
+});
+
+
+on_cleanup(move || {
+    close_feature();
+
+    // ... close all other listeners
+});
+
+```
+
+
+#### in tauri backend
+
+```rust
+fn feature_do_something(
+    state_lock: &MutexGuard<'_, SetupState>,
+    app: &AppHandle,
+) -> shared::error::Result<()> {
+    app.emit(shared::events::feature::EVENT_NAME, FeaturePayloadStruct)
+            .map_err(|e| FeatureError::Emit { event: shared::events::feature::EVENT_NAME.to_string(), message: e.to_string() })?;
+
+    Ok(())
+}
+
+```

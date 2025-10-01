@@ -11,7 +11,7 @@ The correct pattern is to expect payload struct field to be mapped to command ar
 
 ```rust
 #[tauri::command]
-fn my_command(
+fn module_feature_command(
     field_a: String, // OR serializable from string prop
     field_b: String, // OR serializable from string prop
 ) ->  shared::error::Result<()> {
@@ -22,6 +22,21 @@ fn my_command(
     } else {
         Err("No payload provided".into())
     }
+}
+```
+
+#### in `shared::kind::feature`
+
+
+```rust
+/// What it does
+pub const COMMAND_NAME: &str = "module_feature_command";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FeaturePayloadStruct {
+    pub field_a: String,
+    pub field_b: String,
 }
 ```
 

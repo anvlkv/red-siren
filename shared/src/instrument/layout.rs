@@ -86,7 +86,7 @@ const KEY_GAP_RATIO_BASE: f32 = 0.25;
 const KEY_GAP_MAX_RATIO: f32 = 0.90;
 const GROUP_GAP_RATIO_MULTI: f32 = 1.20;
 const GROUP_GAP_MAX_RATIO: f32 = 1.40;
-const STRING_TO_BAND_MIN_GAP_RATIO: f32 = 0.07;
+const STRING_TO_BAND_MIN_GAP_RATIO: f32 = 0.13;
 
 // Packing target parameters
 const BASE_PACK_TARGET: f32 = 0.42;
@@ -135,13 +135,25 @@ impl Candidate {
         }
 
         let first_group_channel = GroupChanel::from_keys_groups(self.k, self.g)
-            .nth_channel_from_first((orientation.safe_length(space, safe_area_padding).round() as usize) % 2);
+            .nth_channel_from_first(
+                (orientation.safe_length(space, safe_area_padding).round() as usize) % 2,
+            );
 
         Some(Layout {
             space,
             orientation,
-            left_string_position: string_positions(orientation, space, true, self.band_breadth),
-            right_string_position: string_positions(orientation, space, false, self.band_breadth),
+            left_string_position: string_positions(
+                orientation,
+                space,
+                true,
+                self.band_breadth * (1.0 + 2.0 * STRING_TO_BAND_MIN_GAP_RATIO),
+            ),
+            right_string_position: string_positions(
+                orientation,
+                space,
+                false,
+                self.band_breadth * (1.0 + 2.0 * STRING_TO_BAND_MIN_GAP_RATIO),
+            ),
             key_radius: self.r,
             key_band_length: self.band_breadth * 2.0,
             key_band_breadth: self.band_breadth,
@@ -500,8 +512,18 @@ fn fallback(
     Layout {
         space,
         orientation,
-        left_string_position: string_positions(orientation, space, true, band_breadth),
-        right_string_position: string_positions(orientation, space, false, band_breadth),
+        left_string_position: string_positions(
+            orientation,
+            space,
+            true,
+            band_breadth * (1.0 + 2.0 * STRING_TO_BAND_MIN_GAP_RATIO),
+        ),
+        right_string_position: string_positions(
+            orientation,
+            space,
+            false,
+            band_breadth * (1.0 + 2.0 * STRING_TO_BAND_MIN_GAP_RATIO),
+        ),
         key_radius: r,
         key_band_length: band_breadth * 2.0,
         key_band_breadth: band_breadth,

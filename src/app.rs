@@ -65,9 +65,9 @@ pub fn App() -> impl IntoView {
         let is_dark = user_theme.unwrap_or(os_theme);
 
         if is_dark {
-            "dark"
+            "contents dark"
         } else {
-            "light"
+            "contents light"
         }
     });
 
@@ -130,13 +130,12 @@ pub fn App() -> impl IntoView {
     });
 
     view! {
-        <main class=format!(
-            "bg-red dark:bg-black font-serif text-black dark:text-red relative h-screen w-screen {}",
-            window_appearance_class(),
-        )>
-            <Router>
-                <AppRoutes />
-            </Router>
-        </main>
+        <div class=window_appearance_class>
+            <main class="bg-red dark:bg-black font-serif text-black dark:text-red relative h-screen w-screen">
+                <Router>
+                    <AppRoutes />
+                </Router>
+            </main>
+        </div>
     }
 }

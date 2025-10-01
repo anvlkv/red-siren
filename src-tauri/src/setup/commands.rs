@@ -54,23 +54,34 @@ pub fn update_window_appearance_dark_override(
     app: AppHandle,
     state: State<'_, WindowState>,
 ) -> Result<()> {
-    // Update override flag (short lock scope)
+    // 1. Update override flag (short lock scope)
     {
         let mut guard = state.lock();
         guard.override_dark = dark;
     }
 
     let store = app.store(super::SETUP_STORE_NAME).unwrap();
+    // Persist the override (Option<bool>)
     store.set(super::DARK_OVERRIDE_KEY, dark);
 
-    app.emit(
-        shared::events::setup::GET_WINDOW_APPEARANCE_OVERRIDE,
-        UpdateWindowAppearanceOverridePayload { dark },
-    )
-    .map_err(|e| SetupError::emit(shared::events::setup::GET_WINDOW_APPEARANCE_OVERRIDE, e))?;
-
-    if dark.is_none() {
-        // Re-evaluate system appearance since override removed
+    // Will hold the resolved effective dark value after applying logic
+    let effective_dark: bool = if let Some(forced) = dark {
+        // 2a. Override present: apply immediately
+        let mut main_window = app
+            .get_webview_window("main")
+            .ok_or(SetupError::MainWindowMissing)?;
+        #[cfg(target_os = "macos")]
+        {
+            super::setup_mac_window::update_appearance(&mut main_window, forced)
+                .map_err(SetupError::appearance)?;
+        }
+        {
+            let mut guard = state.lock();
+            guard.dark = forced;
+        }
+        forced
+    } else {
+        // 2b. Override removed: recompute system appearance
         let mut main_window = app
             .get_webview_window("main")
             .ok_or(SetupError::MainWindowMissing)?;
@@ -91,10 +102,22 @@ pub fn update_window_appearance_dark_override(
             let mut guard = state.lock();
             guard.dark = system_dark;
         }
+        system_dark
+    };
 
-        app.emit(shared::events::setup::UPDATE_WINDOW_APPEARANCE, ())
-            .map_err(|e| SetupError::emit(shared::events::setup::UPDATE_WINDOW_APPEARANCE, e))?;
-    }
+    // 3. Persist resolved (effective) dark value separately
+    store.set("dark", Some(effective_dark));
+
+    // 4. Emit override state payload (consumer can know if override active)
+    app.emit(
+        shared::events::setup::GET_WINDOW_APPEARANCE_OVERRIDE,
+        UpdateWindowAppearanceOverridePayload { dark },
+    )
+    .map_err(|e| SetupError::emit(shared::events::setup::GET_WINDOW_APPEARANCE_OVERRIDE, e))?;
+
+    // 5. Always emit appearance update so listeners react uniformly
+    app.emit(shared::events::setup::UPDATE_WINDOW_APPEARANCE, ())
+        .map_err(|e| SetupError::emit(shared::events::setup::UPDATE_WINDOW_APPEARANCE, e))?;
 
     Ok(())
 }

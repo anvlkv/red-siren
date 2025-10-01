@@ -84,4 +84,34 @@ impl InstrumentEngine {
         }
         Ok(())
     }
+
+    pub fn set_safe_area(
+        &self,
+        top: f32,
+        right: f32,
+        bottom: f32,
+        left: f32,
+    ) -> shared::error::Result<()> {
+        // Rebuild layout for same space with new safe area, preserving current scale
+        let new_config = {
+            let mut layout = self.inner.layout.lock();
+            let space = layout.space;
+            let scale = layout.scale;
+            *layout = shared::instrument::Layout::from_screen_estate_with_safe_area(
+                space, top, right, bottom, left,
+            );
+            // Preserve the previously selected scale (appearance-based)
+            layout.scale = scale;
+            shared::instrument::Config::try_from(*layout)?
+        };
+        {
+            let mut config = self.inner.config.lock();
+            *config = new_config;
+            log::info!(
+                "Updated config after safe area change [top: {top}, right: {right}, bottom: {bottom}, left: {left}]: {:#?}",
+                *config
+            );
+        }
+        Ok(())
+    }
 }

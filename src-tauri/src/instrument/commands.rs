@@ -1,3 +1,4 @@
+use shared::commands::setup::SafeAreaInstestUiIncrementPayload;
 use shared::error::{InstrumentError, Result};
 use shared::instrument::{
     events::{ActivationSourcePayload, PlaybackStatePayload},
@@ -201,17 +202,40 @@ pub fn instrument_layout(state: State<'_, InstrumentEngine>) -> Result<Layout> {
 }
 
 #[tauri::command]
-pub async fn ui_safe_area_insets_increment(top: f32, left: f32, right: f32, bottom: f32, state: State<'_, InstrumentEngine>, app: AppHandle) -> Result<()> {
-    // state.set_safe_area(SafeAreaInstestUiIncrementPayload{ top, right, bottom, left }).await?;
-    // let layout = state.inner.layout.lock().await;
+pub fn ui_safe_area_insets_increment(
+    payload: SafeAreaInstestUiIncrementPayload,
+    state: State<'_, InstrumentEngine>,
+    app: AppHandle,
+) -> Result<()> {
+    log::debug!(
+        "ui_safe_area_insets_increment called: top={}, right={}, bottom={}, left={}",
+        payload.top,
+        payload.right,
+        payload.bottom,
+        payload.left
+    );
 
-    // let mut config = state.inner.config.lock().await;
-    // *config = shared::instrument::Config::try_from(*layout)?;
+    state
+        .set_safe_area(payload.top, payload.right, payload.bottom, payload.left)
+        .map_err(|e| InstrumentError::Emit {
+            event: "set_safe_area".to_string(),
+            message: e.to_string(),
+        })?;
 
-    // log::info!("Updated layout with new safe area [top: {top}, right: {right}, bottom: {bottom}, left: {left}]: {:#?}", *layout);
+    let layout = *state.inner.layout.lock();
+    log::info!(
+        "Updated layout with new safe area [top: {}, right: {}, bottom: {}, left: {}]",
+        payload.top,
+        payload.right,
+        payload.bottom,
+        payload.left
+    );
 
-    // app.emit(shared::instrument::events::LAYOUT, *layout)?;
-
+    app.emit(shared::instrument::events::LAYOUT, layout)
+        .map_err(|e| InstrumentError::Emit {
+            event: shared::instrument::events::LAYOUT.to_string(),
+            message: e.to_string(),
+        })?;
 
     Ok(())
 }

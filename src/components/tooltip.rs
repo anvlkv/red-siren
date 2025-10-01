@@ -41,7 +41,10 @@ pub fn Tooltip(
                 {text}
                 <span
                     aria-hidden="true"
-                    class=format!("absolute w-3 h-3 rotate-45 bg-black dark:bg-red {}", arrow_pos)
+                    class=format!(
+                        "absolute w-3 h-3 rotate-45 border-[8px] border-black dark:border-red {}",
+                        arrow_pos,
+                    )
                 ></span>
             </div>
         </div>

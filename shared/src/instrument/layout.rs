@@ -135,38 +135,13 @@ impl Candidate {
         }
 
         let first_group_channel = GroupChanel::from_keys_groups(self.k, self.g)
-            .nth_channel_from_first({
-                if (orientation.safe_length(space, safe_area_padding).round() as usize)
-                    .is_multiple_of(2)
-                {
-                    0
-                } else {
-                    1
-                }
-            });
+            .nth_channel_from_first((orientation.safe_length(space, safe_area_padding).round() as usize) % 2);
 
-        // Enforce a minimum gap between each outer band edge and the string lines.
-        // We expand the effective instrument breadth (distance between strings)
-        // by adding STRING_TO_BAND_MIN_GAP_RATIO * band_breadth on both sides.
-        let string_to_band_gap = self.band_breadth * STRING_TO_BAND_MIN_GAP_RATIO;
-        let instrument_breadth_with_gap = self.band_breadth + 2.0 * string_to_band_gap;
         Some(Layout {
             space,
             orientation,
-            left_string_position: string_positions(
-                orientation,
-                space,
-                safe_area_padding,
-                true,
-                instrument_breadth_with_gap,
-            ),
-            right_string_position: string_positions(
-                orientation,
-                space,
-                safe_area_padding,
-                false,
-                instrument_breadth_with_gap,
-            ),
+            left_string_position: string_positions(orientation, space, true, self.band_breadth),
+            right_string_position: string_positions(orientation, space, false, self.band_breadth),
             key_radius: self.r,
             key_band_length: self.band_breadth * 2.0,
             key_band_breadth: self.band_breadth,
@@ -184,21 +159,17 @@ impl Candidate {
 fn string_positions(
     orientation: LayoutOrientation,
     space: Vector2<f32>,
-    safe_area: SafeArea,
     left: bool,
     instrument_breadth: f32,
 ) -> Line {
     match orientation {
         LayoutOrientation::Vertical => {
-            // Respect safe area along breadth (X) axis: safe_area[1] = left, safe_area[3] = right (vertical mapping).
-            let safe_left = safe_area[1];
-            let safe_right = safe_area[3];
-            let safe_width = (space.x - safe_left - safe_right).max(0.0);
-            // Center inside the safe breadth region.
-            let center_x = safe_left + safe_width / 2.0;
+            // Strings run along Y: two vertical lines that outline the instrument_breadth
+            // and are centered in the available width (space.x).
+            let center_x = space.x / 2.0;
             let half_b = instrument_breadth / 2.0;
-            let left_x = (center_x - half_b).clamp(safe_left, space.x - safe_right);
-            let right_x = (center_x + half_b).clamp(safe_left, space.x - safe_right);
+            let left_x = (center_x - half_b).clamp(0.0, space.x);
+            let right_x = (center_x + half_b).clamp(0.0, space.x);
 
             let x = if left { left_x } else { right_x };
             (
@@ -210,14 +181,12 @@ fn string_positions(
             )
         }
         LayoutOrientation::Horizontal => {
-            // Respect safe area along breadth (Y) axis: safe_area[1] = top, safe_area[3] = bottom (horizontal mapping).
-            let safe_top = safe_area[1];
-            let safe_bottom = safe_area[3];
-            let safe_height = (space.y - safe_top - safe_bottom).max(0.0);
-            let center_y = safe_top + safe_height / 2.0;
+            // Strings run along X: two horizontal lines that outline the instrument_breadth
+            // and are centered in the available height (space.y).
+            let center_y = space.y / 2.0;
             let half_b = instrument_breadth / 2.0;
-            let top_y = (center_y - half_b).clamp(safe_top, space.y - safe_bottom);
-            let bottom_y = (center_y + half_b).clamp(safe_top, space.y - safe_bottom);
+            let top_y = (center_y - half_b).clamp(0.0, space.y);
+            let bottom_y = (center_y + half_b).clamp(0.0, space.y);
 
             let y = if left { top_y } else { bottom_y };
             (
@@ -528,26 +497,11 @@ fn fallback(
     let group_gap = 0.0;
     let band_breadth = (2.0 * r + MIN_BAND_PADDING).max(instrument_breadth / 4.0);
 
-    // Apply the same string-to-band minimum gap logic as in main candidate path.
-    let string_to_band_gap = band_breadth * STRING_TO_BAND_MIN_GAP_RATIO;
-    let instrument_breadth_with_gap = band_breadth + 2.0 * string_to_band_gap;
     Layout {
         space,
         orientation,
-        left_string_position: string_positions(
-            orientation,
-            space,
-            safe_area_padding,
-            true,
-            instrument_breadth_with_gap,
-        ),
-        right_string_position: string_positions(
-            orientation,
-            space,
-            safe_area_padding,
-            false,
-            instrument_breadth_with_gap,
-        ),
+        left_string_position: string_positions(orientation, space, true, band_breadth),
+        right_string_position: string_positions(orientation, space, false, band_breadth),
         key_radius: r,
         key_band_length: band_breadth * 2.0,
         key_band_breadth: band_breadth,

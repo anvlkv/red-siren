@@ -151,15 +151,15 @@ pub async fn instrument_layout(state: State<'_, InstrumentEngine>) -> Result<Lay
 
 #[tauri::command]
 pub async fn ui_safe_area_insets_increment(top: f32, left: f32, right: f32, bottom: f32, state: State<'_, InstrumentEngine>, app: AppHandle) -> Result<()> {
-    state.set_safe_area(SafeAreaInstestUiIncrementPayload{ top, right, bottom, left }).await?;
-    let layout = state.inner.layout.lock().await;
+    // state.set_safe_area(SafeAreaInstestUiIncrementPayload{ top, right, bottom, left }).await?;
+    // let layout = state.inner.layout.lock().await;
 
-    let mut config = state.inner.config.lock().await;
-    *config = shared::instrument::Config::try_from(*layout)?;
+    // let mut config = state.inner.config.lock().await;
+    // *config = shared::instrument::Config::try_from(*layout)?;
 
-    log::info!("Updated layout with new safe area [top: {top}, right: {right}, bottom: {bottom}, left: {left}]: {:#?}", *layout);
+    // log::info!("Updated layout with new safe area [top: {top}, right: {right}, bottom: {bottom}, left: {left}]: {:#?}", *layout);
 
-    app.emit(shared::instrument::events::LAYOUT, *layout)?;
+    // app.emit(shared::instrument::events::LAYOUT, *layout)?;
 
 
     Ok(())

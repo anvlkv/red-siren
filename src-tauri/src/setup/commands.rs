@@ -98,6 +98,8 @@ pub async fn update_window_size(
     state_lock.width = width;
     state_lock.height = height;
 
+    log::debug!("Updating window size to {}x{}", width, height);
+
     app.emit(shared::events::setup::UPDATE_WINDOW_SIZE, ())
         .map_err(|e| SetupError::emit(shared::events::setup::UPDATE_WINDOW_SIZE, e))?;
 

@@ -60,7 +60,6 @@ impl InstrumentEngine {
         let mut layout = self.inner.layout.lock().await;
         *layout = shared::instrument::Layout{
             scale: layout.scale,
-            safe_area_padding: layout.safe_area_padding,
             ..shared::instrument::Layout::from_screen_estate(Vector2 {x: width as f32, y: height as f32})
         };
 
@@ -68,28 +67,6 @@ impl InstrumentEngine {
 
         *config = shared::instrument::Config::try_from(*layout)?;
         log::info!("Created new config for [width: {width}, height: {height}]: {:#?}", *config);
-        Ok(())
-    }
-
-    pub async fn set_safe_area(&self, safe_area: SafeAreaInstestUiIncrementPayload) -> shared::error::Result<()> {
-        let mut layout = self.inner.layout.lock().await;
-
-        let SafeAreaInstestUiIncrementPayload {
-            top,
-            right,
-            bottom,
-            left,
-        } = safe_area;
-
-        *layout = Layout {
-            scale: layout.scale,
-            ..layout.with_safe_area(top, right, bottom, left)
-        };
-
-        let mut config = self.inner.config.lock().await;
-
-        *config = shared::instrument::Config::try_from(*layout)?;
-        log::info!("Created new config for [safe_area: {:?}]: {:#?}", safe_area, *config);
         Ok(())
     }
 }

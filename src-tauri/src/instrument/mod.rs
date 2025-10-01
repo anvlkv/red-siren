@@ -20,7 +20,6 @@ pub fn setup(app: &mut App) -> Result<()> {
             let state = handle.state::<engine::InstrumentEngine>();
             let win_state = handle.state::<WindowState>();
             let is_dark = win_state.lock().await.dark;
-            // Update instrument engine appearance
             if let Err(e) = state.set_is_dark(is_dark).await {
                 log::error!("error updating `{}`: {e}", shared::events::setup::UPDATE_WINDOW_APPEARANCE)
             }
@@ -31,13 +30,16 @@ pub fn setup(app: &mut App) -> Result<()> {
     app.listen(shared::events::setup::UPDATE_WINDOW_SIZE, move |_| {
         let handle = base_handle_size.clone();
         // Acquire state objects inside spawned task so they have 'static lifetime relative to task.
+        log::debug!("Received UPDATE_WINDOW_SIZE event");
         spawn(async move {
             let state = handle.state::<engine::InstrumentEngine>();
             let win_state = handle.state::<WindowState>();
             let window_state = win_state.lock().await;
-            // Update instrument engine size
+            log::trace!("updating engine state with `set_size`: [{}x{}]", window_state.width, window_state.height);
+
             match state.set_size(window_state.width, window_state.height).await {
                 Ok(_) => {
+                    log::debug!("Updated instrument layout for new window size: {}x{}", window_state.width, window_state.height);
                     let layout = state.inner.layout.lock().await;
                     if let Err(e) = handle.emit(shared::instrument::events::LAYOUT, *layout) {
                         log::error!("Failed emitting instrument layout: {e}");

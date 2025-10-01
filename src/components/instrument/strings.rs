@@ -26,9 +26,7 @@ pub fn InstrumentStrings(
                             .map(move |k: u8| {
                                 let k = k as usize;
                                 let g = g as usize;
-                                let ch = layout
-                                    .first_group_channel
-                                    .nth_channel_from_first(k + (g * k));
+                                let ch = layout.first_group_channel.nth_channel_from_first(g);
                                 let orientation = layout.orientation;
                                 let line = match ch {
                                     shared::instrument::GroupChanel::Left => {
@@ -58,7 +56,7 @@ pub fn StringView(
 ) -> impl IntoView {
     let (start, end) = line;
 
-    let path_def = Signal::derive(move || format!("M{} {} L{} {}", start.x, start.y, end.x, end.y));
+    let path_def = Signal::derive(move || format!("M{},{} L{},{}", start.x, start.y, end.x, end.y));
 
     let UseTauriReturn {
         data,
@@ -93,5 +91,5 @@ pub fn StringView(
 
     // }, 30);
 
-    view! { <path d=path_def /> }
+    view! { <path d=path_def stroke-width="2" /> }
 }

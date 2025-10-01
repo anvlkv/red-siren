@@ -23,12 +23,11 @@ fn fundamental_frequency(n: usize, v: f64, l: f64) -> f64 {
 
 impl GroupChanel {
     pub(crate) fn from_keys_groups(k: u32, g: u32) -> Self {
-        match (g % 2, k % 2) {
-            (0, 0) => Self::Left,  // even-even: start Left
-            (0, 1) => Self::Right, // even-odd: start Right
-            (1, 0) => Self::Right, // odd-even: start Right
-            (1, 1) => Self::Left,  // odd-odd: start Left
-            _ => Self::Left,       // fallback (should not occur)
+        match (g.is_multiple_of(2), k.is_multiple_of(2)) {
+            (false, false) => Self::Left,
+            (false, true) => Self::Right,
+            (true, false) => Self::Right,
+            (true, true) => Self::Left,
         }
     }
 

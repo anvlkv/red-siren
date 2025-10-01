@@ -16,12 +16,14 @@ pub fn Instrument() -> impl IntoView {
     let layout = Signal::derive(move || data().unwrap_or_default());
 
     view! {
-        <div class="relative">
+        <div class="relative w-screen h-screen">
             <InstrumentStrings
                 layout
-                attr:class="absolute w-full h-full stroke-black dark:stroke-red"
+                attr:class="absolute w-full h-full stroke-black dark:stroke-red bg-none"
+                attr:width=move || format!("{}px", layout().space.x)
+                attr:height=move || format!("{}px", layout().space.y)
             />
-            <Keyboard layout attr:class="absolute w-full h-full" />
+            <Keyboard layout attr:class="w-full h-full" />
         </div>
     }
 }

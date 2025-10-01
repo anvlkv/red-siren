@@ -1,4 +1,4 @@
-use shared::instrument::{events::{ActivationSourcePayload, PlaybackStatePayload}, Layout};
+use shared::{events::setup::SafeAreaInstestUiIncrementPayload, instrument::{events::{ActivationSourcePayload, PlaybackStatePayload}, Layout}};
 use shared::error::{Result, InstrumentError};
 use tauri::{AppHandle, Emitter, State};
 
@@ -147,4 +147,20 @@ pub async fn instrument_playback_resume(state: State<'_, InstrumentEngine>, app:
 pub async fn instrument_layout(state: State<'_, InstrumentEngine>) -> Result<Layout> {
     log::debug!("instrument_layout called");
     Ok(*state.inner.layout.lock().await)
+}
+
+#[tauri::command]
+pub async fn ui_safe_area_insets_increment(top: f32, left: f32, right: f32, bottom: f32, state: State<'_, InstrumentEngine>, app: AppHandle) -> Result<()> {
+    state.set_safe_area(SafeAreaInstestUiIncrementPayload{ top, right, bottom, left }).await?;
+    let layout = state.inner.layout.lock().await;
+
+    let mut config = state.inner.config.lock().await;
+    *config = shared::instrument::Config::try_from(*layout)?;
+
+    log::info!("Updated layout with new safe area [top: {top}, right: {right}, bottom: {bottom}, left: {left}]: {:#?}", *layout);
+
+    app.emit(shared::instrument::events::LAYOUT, *layout)?;
+
+
+    Ok(())
 }

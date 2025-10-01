@@ -1,7 +1,11 @@
-use leptos::prelude::*;
-use shared::{commands::navigation::NavigateRequestPayload, RouteId};
+use leptos::{html, prelude::*};
+use leptos_use::{use_element_size, UseElementSizeReturn};
+use shared::{
+    commands::navigation::NavigateRequestPayload, events::setup::SafeAreaInstestUiIncrementPayload,
+    RouteId,
+};
 
-use tauri_use::{use_invoke_with_args, UseTauriWithReturn};
+use tauri_use::{use_command, use_invoke_with_args, UseTauriReturn, UseTauriWithReturn};
 
 use crate::components::{Card, CardAnimation, NavigationTx};
 
@@ -31,6 +35,21 @@ pub fn CompactMenu(
     // Materialize children once; avoids re-calling a possibly FnMut closure in reactive nodes.
     let child_view = children();
 
+    let el = NodeRef::<html::Div>::new();
+
+    let UseElementSizeReturn {
+        width: menu_width,
+        height: menu_height,
+    } = use_element_size(el);
+
+    let UseTauriWithReturn {
+        trigger: trigger_inset_update,
+        error: inset_error,
+        ..
+    } = use_invoke_with_args::<shared::commands::setup::SafeAreaInstestUiIncrementPayload, ()>(
+        shared::commands::setup::UI_SAFE_AREA_INSETS_INCREMENT,
+    );
+
     let UseTauriWithReturn {
         trigger: trigger_navigate,
         error,
@@ -54,6 +73,38 @@ pub fn CompactMenu(
     } = use_invoke_with_args::<shared::commands::navigation::NavTxPayload, ()>(
         shared::commands::navigation::NAV_LEAVE_DONE,
     );
+
+    // Update safe area insets when menu height changes
+    Effect::new(move || {
+        let menu_height = menu_height() as f32;
+        let menu_width = menu_width() as f32;
+        trigger_inset_update(Some(match placement {
+            CompactMenuPlacement::Bottom => SafeAreaInstestUiIncrementPayload {
+                top: 0_f32,
+                right: 0_f32,
+                bottom: menu_height,
+                left: 0_f32,
+            },
+            CompactMenuPlacement::Top => SafeAreaInstestUiIncrementPayload {
+                top: menu_height,
+                right: 0_f32,
+                bottom: 0_f32,
+                left: 0_f32,
+            },
+            CompactMenuPlacement::Left => SafeAreaInstestUiIncrementPayload {
+                top: 0_f32,
+                right: 0_f32,
+                bottom: 0_f32,
+                left: menu_width,
+            },
+            CompactMenuPlacement::Right => SafeAreaInstestUiIncrementPayload {
+                top: 0_f32,
+                right: menu_width,
+                bottom: 0_f32,
+                left: 0_f32,
+            },
+        }))
+    });
 
     // Animation state
     let (menu_anim, set_menu_anim) = signal(None::<CardAnimation>);
@@ -143,6 +194,14 @@ pub fn CompactMenu(
                 err
             );
         }
+
+        if let Some(err) = inset_error() {
+            log::error!(
+                "Error invoking {}: {}",
+                shared::commands::setup::UI_SAFE_AREA_INSETS_INCREMENT,
+                err
+            );
+        }
     });
 
     // Edge positioning container (self-contained so outer wrapper on page not needed)
@@ -176,7 +235,7 @@ pub fn CompactMenu(
     });
 
     view! {
-        <div class=edge_container_cls>
+        <div class=edge_container_cls node_ref=el>
             <Card
                 padding="Md".to_string()
                 class=card_variant

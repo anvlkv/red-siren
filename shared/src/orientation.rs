@@ -1,7 +1,7 @@
 use mint::{Point2, Vector2};
 use serde::{Deserialize, Serialize};
 
-use crate::safe_area::SafeArea;
+use crate::{safe_area::SafeArea, Line};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LayoutOrientation {
@@ -94,6 +94,31 @@ impl LayoutOrientation {
             LayoutOrientation::Horizontal => Point2 {
                 x: point.x,
                 y: point.y - safe_area[3],
+            },
+        }
+    }
+
+    pub fn n_nth_along_line(
+        &self,
+        (start, end): Line,
+        at: usize,
+        num_divisions: usize,
+    ) -> Point2<f32> {
+        if num_divisions == 0 {
+            return start;
+        }
+        let mut t = at as f32 / num_divisions as f32;
+        if t > 1.0 {
+            t = 1.0;
+        }
+        match self {
+            LayoutOrientation::Horizontal => Point2 {
+                x: start.x + (end.x - start.x) * t,
+                y: start.y,
+            },
+            LayoutOrientation::Vertical => Point2 {
+                x: start.x,
+                y: start.y + (end.y - start.y) * t,
             },
         }
     }

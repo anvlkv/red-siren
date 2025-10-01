@@ -65,6 +65,11 @@ jobs:
         if: matrix.target == 'android'
         uses: android-actions/setup-android@v3
 
+      - name: Install Android NDK
+        if: matrix.target == 'android'
+        run: |
+          ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "ndk;25.1.8937393"
+
       - name: Setup Android environment
         if: matrix.target == 'android'
         run: |

@@ -73,9 +73,10 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Setup Tailwind CSS CLI
+      - name: Process Tailwind CSS v4
         run: |
-          npx tailwindcss --help || echo "Tailwind CSS CLI installed"
+          npx @tailwindcss/cli@latest -i styles.css -o styles-processed.css
+          mv styles-processed.css styles.css
 
       - name: Install Trunk
         uses: jetli/trunk-action@v0.5.0
@@ -134,9 +135,10 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Setup Tailwind CSS CLI
+      - name: Process Tailwind CSS v4
         run: |
-          npx tailwindcss --help || echo "Tailwind CSS CLI installed"
+          npx @tailwindcss/cli@latest -i styles.css -o styles-processed.css
+          mv styles-processed.css styles.css
 
       - name: Install Trunk
         uses: jetli/trunk-action@v0.5.0
@@ -178,9 +180,10 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Setup Tailwind CSS CLI
+      - name: Process Tailwind CSS v4
         run: |
-          npx tailwindcss --help || echo "Tailwind CSS CLI installed"
+          npx @tailwindcss/cli@latest -i styles.css -o styles-processed.css
+          mv styles-processed.css styles.css
 
       - name: Install Trunk
         uses: jetli/trunk-action@v0.5.0

@@ -7,6 +7,9 @@
   {
     "label": "Start Tauri [dev server]",
     "command": "cargo tauri dev",
+    "env": {
+      "RUST_BACKTRACE": "1"
+    },
     "reveal": "always",
     "use_new_terminal": true
   }

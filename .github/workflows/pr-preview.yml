@@ -31,63 +31,48 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 'lts/*'
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          targets: wasm32-unknown-unknown,${{ matrix.target }}
-
       - name: Install dependencies (Ubuntu only)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
+          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown,${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
 
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Process Tailwind CSS v4
-        run: |
-          npx @tailwindcss/cli@latest -i styles.css -o styles-processed.css
-          mv styles-processed.css styles.css
-
       - name: Install Trunk
-        uses: jetli/trunk-action@v0.5.0
+        uses: jetli/trunk-action@v0.4.0
         with:
           version: 'latest'
 
-      - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v2
+      - name: Install Tauri CLI
+        uses: baptiste0928/cargo-install@v3
         with:
-          workspaces: './src-tauri -> target'
+          crate: tauri-cli
+          version: '^2.0'
+          cache-key: tauri-cli-v2
 
-      - name: Build desktop app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          args: ${{ matrix.args }}
-
-      - name: Create preview artifacts
-        run: |
-          mkdir -p preview-artifacts
-          if [ -d "src-tauri/target/release/bundle" ]; then
-            cp -r src-tauri/target/release/bundle/* preview-artifacts/ || true
-          fi
-          if [ -d "src-tauri/target/${{ matrix.target }}/release/bundle" ]; then
-            cp -r src-tauri/target/${{ matrix.target }}/release/bundle/* preview-artifacts/ || true
-          fi
-        shell: bash
+      - name: Build Tauri app
+        run: cargo tauri build ${{ matrix.args }}
 
       - name: Upload preview artifacts
         uses: actions/upload-artifact@v4
         with:
           name: preview-${{ matrix.artifact_name }}-${{ github.event.pull_request.number }}
-          path: preview-artifacts/**/*
+          path: |
+            src-tauri/target/*/release/bundle/
+            src-tauri/target/*/release/*.exe
+            src-tauri/target/*/release/*.app
           if-no-files-found: warn
           retention-days: 30
 
@@ -96,33 +81,41 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: 'ubuntu-22.04'
+          - platform: 'ubuntu-latest'
             target: 'android'
-            artifact_name: 'android'
+            mobile-targets: 'aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android'
           - platform: 'macos-latest'
             target: 'ios'
-            artifact_name: 'ios'
+            mobile-targets: 'aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim'
 
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          node-version: 'lts/*'
+          targets: wasm32-unknown-unknown,${{ matrix.mobile-targets }}
 
-      - name: Install Rust (Android)
-        if: matrix.target == 'android'
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
         with:
-          targets: wasm32-unknown-unknown,aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          workspaces: './src-tauri -> target'
 
-      - name: Install Rust (iOS)
-        if: matrix.target == 'ios'
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.4.0
         with:
-          targets: wasm32-unknown-unknown,aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+          version: 'latest'
+
+      - name: Install Tauri CLI
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: tauri-cli
+          version: '^2.0'
+          cache-key: tauri-cli-v2
 
       - name: Setup Java (Android only)
         if: matrix.target == 'android'
@@ -135,44 +128,35 @@ jobs:
         if: matrix.target == 'android'
         uses: android-actions/setup-android@v3
 
-      - name: Install NDK (Android only)
+      - name: Setup Android environment
         if: matrix.target == 'android'
         run: |
-          ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.0.12077973"
-          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/27.0.12077973" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.1.8937393" >> $GITHUB_ENV
 
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Process Tailwind CSS v4
+      - name: Initialize mobile platform
         run: |
-          npx @tailwindcss/cli@latest -i styles.css -o styles-processed.css
-          mv styles-processed.css styles.css
-
-      - name: Install Trunk
-        uses: jetli/trunk-action@v0.5.0
-        with:
-          version: 'latest'
-
-      - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
+          if [ "${{ matrix.target }}" = "android" ]; then
+            cargo tauri android init
+          elif [ "${{ matrix.target }}" = "ios" ]; then
+            cargo tauri ios init
+          fi
 
       - name: Build mobile app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          args: ${{ matrix.target }} build
+        run: |
+          if [ "${{ matrix.target }}" = "android" ]; then
+            cargo tauri android build --apk
+          elif [ "${{ matrix.target }}" = "ios" ]; then
+            cargo tauri ios build
+          fi
 
       - name: Upload mobile preview artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: preview-${{ matrix.artifact_name }}-${{ github.event.pull_request.number }}
+          name: preview-${{ matrix.target }}-${{ github.event.pull_request.number }}
           path: |
-            src-tauri/gen/android/app/build/outputs/**/*.apk
-            src-tauri/gen/apple/build/**/*.app
+            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+            src-tauri/gen/apple/**/*.app
           if-no-files-found: warn
           retention-days: 30
 

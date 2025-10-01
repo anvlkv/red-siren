@@ -8,12 +8,20 @@ on:
 
 jobs:
   create-release:
-    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
     outputs:
       release_id: ${{ steps.create-release.outputs.result }}
-      release_upload_url: ${{ steps.create-release.outputs.upload_url }}
+
     steps:
       - uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Create release
         id: create-release
@@ -26,13 +34,15 @@ jobs:
               tag_name: context.ref.replace('refs/tags/', ''),
               name: `Release ${context.ref.replace('refs/tags/', '')}`,
               body: 'Red Siren release artifacts',
-              draft: false,
+              draft: true,
               prerelease: false
             })
             return data.id
 
-  build-desktop-release:
+  build-desktop:
     needs: create-release
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -54,41 +64,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 'lts/*'
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          targets: wasm32-unknown-unknown,${{ matrix.target }}
-
       - name: Install dependencies (Ubuntu only)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
+          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown,${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
 
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Process Tailwind CSS v4
-        run: |
-          npx @tailwindcss/cli@latest -i styles.css -o styles-processed.css
-          mv styles-processed.css styles.css
-
       - name: Install Trunk
-        uses: jetli/trunk-action@v0.5.0
+        uses: jetli/trunk-action@v0.4.0
         with:
           version: 'latest'
 
-      - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v2
+      - name: Install Tauri CLI
+        uses: baptiste0928/cargo-install@v3
         with:
-          workspaces: './src-tauri -> target'
+          crate: tauri-cli
+          version: '^2.0'
+          cache-key: tauri-cli-v2
 
-      - name: Build and release desktop app
+      - name: Build Tauri app
+        run: cargo tauri build ${{ matrix.args }}
+
+      - name: Upload to release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -96,21 +106,36 @@ jobs:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
 
-  build-android-release:
+  build-android:
     needs: create-release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 'lts/*'
-
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown,aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.4.0
+        with:
+          version: 'latest'
+
+      - name: Install Tauri CLI
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: tauri-cli
+          version: '^2.0'
+          cache-key: tauri-cli-v2
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -121,10 +146,10 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install NDK
+      - name: Setup Android environment
         run: |
-          ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.0.12077973"
-          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/27.0.12077973" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.1.8937393" >> $GITHUB_ENV
 
       - name: Setup Android signing keystore
         if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
@@ -132,68 +157,56 @@ jobs:
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > ${{ runner.temp }}/keystore.jks
           echo "ANDROID_KEYSTORE_PATH=${{ runner.temp }}/keystore.jks" >> $GITHUB_ENV
 
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Process Tailwind CSS v4
-        run: |
-          npx @tailwindcss/cli@latest -i styles.css -o styles-processed.css
-          mv styles-processed.css styles.css
-
-      - name: Install Trunk
-        uses: jetli/trunk-action@v0.5.0
-        with:
-          version: 'latest'
-
-      - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
+      - name: Initialize Android platform
+        run: cargo tauri android init
 
       - name: Build Android release
-        uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
-          args: android build --release
+        run: cargo tauri android build --apk --release
 
-  build-ios-release:
+      - name: Upload Android APK to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.release_id }}
+          asset_path: src-tauri/gen/android/app/build/outputs/apk/release/*.apk
+          asset_name: red-siren-android.apk
+          asset_content_type: application/vnd.android.package-archive
+
+  build-ios:
     needs: create-release
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 'lts/*'
-
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown,aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+          targets: wasm32-unknown-unknown,aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
 
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Process Tailwind CSS v4
-        run: |
-          npx @tailwindcss/cli@latest -i styles.css -o styles-processed.css
-          mv styles-processed.css styles.css
-
       - name: Install Trunk
-        uses: jetli/trunk-action@v0.5.0
+        uses: jetli/trunk-action@v0.4.0
         with:
           version: 'latest'
 
-      - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v2
+      - name: Install Tauri CLI
+        uses: baptiste0928/cargo-install@v3
         with:
-          workspaces: './src-tauri -> target'
+          crate: tauri-cli
+          version: '^2.0'
+          cache-key: tauri-cli-v2
 
       - name: Import Code-Signing Certificates
         if: ${{ secrets.APPLE_CERTIFICATE != '' }}
@@ -202,15 +215,14 @@ jobs:
           p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
           p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
 
+      - name: Initialize iOS platform
+        run: cargo tauri ios init
+
       - name: Build iOS release
-        uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
-        with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
-          args: ios build --release
+        run: cargo tauri ios build --release
 
       - name: Upload to App Store Connect
         if: ${{ secrets.APPLE_API_KEY != '' }}
@@ -218,10 +230,8 @@ jobs:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
-          # Find the IPA file
           IPA_PATH=$(find src-tauri/gen/apple/build -name "*.ipa" | head -n 1)
           if [ -n "$IPA_PATH" ]; then
-            # Install xcodes for altool
             xcrun altool --upload-app --type ios --file "$IPA_PATH" \
               --apiKey "$APPLE_API_KEY" \
               --apiIssuer "$APPLE_API_ISSUER"
@@ -229,3 +239,24 @@ jobs:
             echo "No IPA file found"
             exit 1
           fi
+
+  publish-release:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    needs: [create-release, build-desktop, build-android, build-ios]
+
+    steps:
+      - name: Publish release
+        uses: actions/github-script@v7
+        env:
+          release_id: ${{ needs.create-release.outputs.release_id }}
+        with:
+          script: |
+            github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: process.env.release_id,
+              draft: false,
+              prerelease: false
+            })

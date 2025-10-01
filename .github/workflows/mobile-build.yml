@@ -8,117 +8,85 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-android:
-    runs-on: ubuntu-22.04
+  build-mobile:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'ubuntu-latest'
+            target: 'android'
+            mobile-targets: 'aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android'
+          - platform: 'macos-latest'
+            target: 'ios'
+            mobile-targets: 'aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim'
+
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 'lts/*'
-
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown,aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          targets: wasm32-unknown-unknown,${{ matrix.mobile-targets }}
 
-      - name: Setup Java
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.4.0
+        with:
+          version: 'latest'
+
+      - name: Install Tauri CLI
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: tauri-cli
+          version: '^2.0'
+          cache-key: tauri-cli-v2
+
+      - name: Setup Java (Android only)
+        if: matrix.target == 'android'
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
       - name: Setup Android SDK
+        if: matrix.target == 'android'
         uses: android-actions/setup-android@v3
 
-      - name: Install NDK
+      - name: Setup Android environment
+        if: matrix.target == 'android'
         run: |
-          ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.0.12077973"
-          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/27.0.12077973" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.1.8937393" >> $GITHUB_ENV
 
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Process Tailwind CSS v4
+      - name: Initialize mobile platform
         run: |
-          npx @tailwindcss/cli@latest -i styles.css -o styles-processed.css
-          mv styles-processed.css styles.css
+          if [ "${{ matrix.target }}" = "android" ]; then
+            cargo tauri android init
+          elif [ "${{ matrix.target }}" = "ios" ]; then
+            cargo tauri ios init
+          fi
 
-      - name: Install Trunk
-        uses: jetli/trunk-action@v0.5.0
-        with:
-          version: 'latest'
+      - name: Build mobile app
+        run: |
+          if [ "${{ matrix.target }}" = "android" ]; then
+            cargo tauri android build --apk
+          elif [ "${{ matrix.target }}" = "ios" ]; then
+            cargo tauri ios build
+          fi
 
-      - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
-      - name: Build Android app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          args: android build
-
-      - name: Upload Android artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk
-          path: src-tauri/gen/android/app/build/outputs/**/*.apk
-          if-no-files-found: warn
-
-      - name: Upload Android bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-aab
-          path: src-tauri/gen/android/app/build/outputs/**/*.aab
-          if-no-files-found: warn
-
-  build-ios:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 'lts/*'
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          targets: wasm32-unknown-unknown,aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
-
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Process Tailwind CSS v4
-        run: |
-          npx @tailwindcss/cli@latest -i styles.css -o styles-processed.css
-          mv styles-processed.css styles.css
-
-      - name: Install Trunk
-        uses: jetli/trunk-action@v0.5.0
-        with:
-          version: 'latest'
-
-      - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
-      - name: Build iOS app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          args: ios build
-
-      - name: Upload iOS artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-app
-          path: src-tauri/gen/apple/build/**/*.app
+          name: mobile-${{ matrix.target }}-build
+          path: |
+            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+            src-tauri/gen/apple/**/*.app
           if-no-files-found: warn

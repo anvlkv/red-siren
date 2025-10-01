@@ -2,13 +2,13 @@ mod commands;
 #[cfg(target_os = "macos")]
 mod setup_mac_window;
 
+use parking_lot::Mutex;
 use serde_json::Value;
 use shared::error::{AppError, Result, SetupError};
 use tauri::{App, Manager};
 use tauri_plugin_store::StoreExt;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
-use tauri_plugin_window_state::WindowExt;
-use tokio::sync::Mutex;
+use tauri_plugin_window_state::WindowExt; // parking_lot chosen over tokio::sync::Mutex to avoid awaiting locks and reduce deadlock risk
 
 pub use commands::*;
 

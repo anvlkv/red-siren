@@ -1,7 +1,7 @@
 use serde_json::Value;
 use tauri::{App, AppHandle, Emitter, Manager, State};
 use tauri_plugin_store::StoreExt;
-use tokio::sync::{Mutex, MutexGuard};
+use parking_lot::{Mutex, MutexGuard}; // switched from tokio::sync::Mutex to parking_lot for non-async, faster locking
 use shared::error::{HealthError, AppError};
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -140,7 +140,7 @@ pub async fn health_grant_mic_premission(
         false
     };
 
-    let mut health_state = state.lock().await;
+    let mut health_state = state.lock();
 
     health_state.mic_permission = Some(check_result);
 
@@ -159,7 +159,7 @@ pub async fn health_on_gui_ready(
     log::info!("GUI ready signal received");
 
     // Lock the state and mark GUI as ready
-    let mut state_lock = state.lock().await;
+    let mut state_lock = state.lock();
     state_lock.gui_ready = true;
 
     maybe_toggle_windows(&state_lock, &app)?;

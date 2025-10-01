@@ -1,7 +1,7 @@
 mod commands;
 mod engine;
 
-use shared::error::Result;
+use shared::error::{AppError, Result, SetupError};
 use tauri::{async_runtime::spawn, App, Emitter, Listener, Manager};
 
 pub use commands::*;
@@ -9,18 +9,45 @@ pub use commands::*;
 use crate::setup::WindowState;
 
 pub fn setup(app: &mut App) -> Result<()> {
-    app.manage(engine::InstrumentEngine::default());
+    let is_new = app.manage(engine::InstrumentEngine::default());
 
+    if is_new {
+        log::debug!("Instrument engine initialized and managed state created");
+        let windows = app.webview_windows();
+        let window = windows.get("main").ok_or(AppError::Setup(SetupError::MainWindowMissing))?;
+        let size = window.inner_size()?;
+
+        let base_handle_new = app.handle().clone();
+        spawn(async move {
+            let state = base_handle_new.state::<engine::InstrumentEngine>();
+            match state.set_size(size.width as f64, size.height as f64) {
+                Ok(_) => {
+                    log::debug!("Set initial instrument layout for window size: {}x{}", size.width, size.height);
+                    let layout = state.inner.layout.lock();
+                    if let Err(e) = base_handle_new.emit(shared::instrument::events::LAYOUT, *layout) {
+                        log::error!("Failed emitting initial instrument layout: {e}");
+                    }
+                }
+                Err(e) => {
+                    log::error!("error setting initial instrument layout: {e}");
+                }
+            }
+
+        });
+    } else {
+        log::debug!("Instrument engine state already exists; skipping initialization");
+    }
 
     let base_handle_appearance = app.handle().clone();
     app.listen(shared::events::setup::UPDATE_WINDOW_APPEARANCE, move |_| {
         let handle = base_handle_appearance.clone();
+        log::debug!("Received UPDATE_WINDOW_APPEARANCE event");
         // Acquire state objects inside spawned task so they have 'static lifetime relative to task.
         spawn(async move {
             let state = handle.state::<engine::InstrumentEngine>();
             let win_state = handle.state::<WindowState>();
-            let is_dark = win_state.lock().await.dark;
-            if let Err(e) = state.set_is_dark(is_dark).await {
+            let is_dark = win_state.lock().dark;
+            if let Err(e) = state.set_is_dark(is_dark) {
                 log::error!("error updating `{}`: {e}", shared::events::setup::UPDATE_WINDOW_APPEARANCE)
             }
         });
@@ -32,15 +59,17 @@ pub fn setup(app: &mut App) -> Result<()> {
         // Acquire state objects inside spawned task so they have 'static lifetime relative to task.
         log::debug!("Received UPDATE_WINDOW_SIZE event");
         spawn(async move {
+            log::trace!("updating engine state");
             let state = handle.state::<engine::InstrumentEngine>();
             let win_state = handle.state::<WindowState>();
-            let window_state = win_state.lock().await;
-            log::trace!("updating engine state with `set_size`: [{}x{}]", window_state.width, window_state.height);
-
-            match state.set_size(window_state.width, window_state.height).await {
+            log::trace!("acquired states, locking window state");
+            let window_state = win_state.lock();
+            log::trace!("locked window state: {:#?}", *window_state);
+            log::trace!("Setting instrument layout for new window size: {}x{}", window_state.width, window_state.height);
+            match state.set_size(window_state.width, window_state.height) {
                 Ok(_) => {
                     log::debug!("Updated instrument layout for new window size: {}x{}", window_state.width, window_state.height);
-                    let layout = state.inner.layout.lock().await;
+                    let layout = state.inner.layout.lock();
                     if let Err(e) = handle.emit(shared::instrument::events::LAYOUT, *layout) {
                         log::error!("Failed emitting instrument layout: {e}");
                     }

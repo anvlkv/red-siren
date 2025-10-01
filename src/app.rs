@@ -121,7 +121,7 @@ pub fn App() -> impl IntoView {
     Effect::new(move |_| {
         let width = width();
         let height = height();
-        log::info!("Window size: {width}, {height}");
+        log::info!("Detected window resize: {width}, {height}");
         trigger_update_window_size(Some((UpdateWindowSizePayload { width, height }, ())));
     });
 

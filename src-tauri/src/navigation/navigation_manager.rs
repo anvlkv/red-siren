@@ -1,6 +1,7 @@
+use parking_lot::Mutex;
 use std::sync::{
     atomic::{AtomicU64, Ordering},
-    Arc, Mutex,
+    Arc,
 };
 
 use log::{error, info, warn};
@@ -105,7 +106,7 @@ impl NavigationManager {
     /// Request navigation to a route.
     /// Returns Some(tx_id) if a new transaction started, or None if ignored (same-route).
     pub fn request(&self, to: RouteId) -> Option<u64> {
-        let mut guard = self.state.lock().unwrap();
+        let mut guard = self.state.lock();
         let current = guard.current;
 
         // Same-route: no-op
@@ -118,7 +119,7 @@ impl NavigationManager {
             existing.canceled = true;
             drop(guard);
             self.emit_canceled(existing.id, CancelReason::Superseded);
-            guard = self.state.lock().unwrap();
+            guard = self.state.lock();
         }
 
         let id = self.id_gen.fetch_add(1, Ordering::SeqCst);
@@ -139,7 +140,7 @@ impl NavigationManager {
 
     /// Explicit cancel API (optional external call). If tx_id matches active, it cancels.
     pub fn cancel(&self, tx_id: u64, reason: CancelReason) {
-        let mut guard = self.state.lock().unwrap();
+        let mut guard = self.state.lock();
         if let Some(active) = guard.active.as_mut() {
             if active.id == tx_id
                 && !matches!(active.phase, NavPhase::Completed | NavPhase::Canceled)
@@ -148,7 +149,7 @@ impl NavigationManager {
                 active.phase = NavPhase::Canceled;
                 drop(guard);
                 self.emit_canceled(tx_id, reason);
-                let mut guard = self.state.lock().unwrap();
+                let mut guard = self.state.lock();
                 guard.active = None;
             }
         }
@@ -158,7 +159,7 @@ impl NavigationManager {
     /// Returns Some(tx_id) of the new navigation transaction, or None if history empty.
     pub fn back(&self) -> Option<u64> {
         let target = {
-            let mut guard = self.state.lock().unwrap();
+            let mut guard = self.state.lock();
             if let Some(route) = guard.history.pop() {
                 // Suppress history push for this backward nav to avoid looping.
                 guard.suppress_history_push = true;
@@ -174,7 +175,7 @@ impl NavigationManager {
     pub fn leave_done(&self, tx_id: u64) {
         // Only proceed if this tx is still active and in Leaving phase.
         let phase_ok = {
-            let guard = self.state.lock().unwrap();
+            let guard = self.state.lock();
             guard
                 .active
                 .as_ref()
@@ -189,7 +190,7 @@ impl NavigationManager {
     /// Called by UI when enter animation has completed; completes the transaction.
     pub fn enter_done(&self, tx_id: u64) {
         let to_opt = {
-            let mut guard = self.state.lock().unwrap();
+            let mut guard = self.state.lock();
             if let Some(active) = guard.active.as_mut() {
                 if active.id == tx_id && active.phase == NavPhase::Committing && !active.canceled {
                     active.phase = NavPhase::Completed;
@@ -204,7 +205,7 @@ impl NavigationManager {
         if let Some(to) = to_opt {
             self.emit_completed(tx_id, to);
             // Clear active transaction
-            let mut guard = self.state.lock().unwrap();
+            let mut guard = self.state.lock();
             if let Some(active) = &guard.active {
                 if active.id == tx_id {
                     guard.active = None;
@@ -225,7 +226,7 @@ impl NavigationManager {
     pub fn bootstrap_initial_transaction(&self) -> u64 {
         // Detect prior bootstrap or progressed id space.
         {
-            let guard = self.state.lock().unwrap();
+            let guard = self.state.lock();
             if self.id_gen.load(Ordering::SeqCst) > 1 {
                 if let Some(active) = &guard.active {
                     if active.id == 0 {
@@ -240,7 +241,7 @@ impl NavigationManager {
         let tx_id = 0;
 
         {
-            let mut guard = self.state.lock().unwrap();
+            let mut guard = self.state.lock();
             guard.active = Some(NavTx::new(tx_id, current, current));
         }
 
@@ -250,7 +251,7 @@ impl NavigationManager {
 
         // Advance to Leaving (mirrors post-gating phase)
         {
-            let mut guard = self.state.lock().unwrap();
+            let mut guard = self.state.lock();
             if let Some(active) = guard.active.as_mut() {
                 if active.id == tx_id {
                     active.phase = NavPhase::Leaving;
@@ -329,7 +330,7 @@ impl NavigationManager {
 
         // Emit committed, update current
         let to = {
-            let mut guard = self.state.lock().unwrap();
+            let mut guard = self.state.lock();
             if let Some((from, to, id)) = guard
                 .active
                 .as_ref()
@@ -358,7 +359,7 @@ impl NavigationManager {
     }
 
     fn is_tx_active(&self, tx_id: u64) -> bool {
-        let guard = self.state.lock().unwrap();
+        let guard = self.state.lock();
         guard
             .active
             .as_ref()
@@ -367,7 +368,7 @@ impl NavigationManager {
     }
 
     fn active_to_route(&self, tx_id: u64) -> RouteId {
-        let guard = self.state.lock().unwrap();
+        let guard = self.state.lock();
         guard
             .active
             .as_ref()
@@ -377,7 +378,7 @@ impl NavigationManager {
     }
 
     fn set_active_to(&self, tx_id: u64, to: RouteId) {
-        let mut guard = self.state.lock().unwrap();
+        let mut guard = self.state.lock();
         if let Some(active) = guard.active.as_mut() {
             if active.id == tx_id {
                 active.to = to;
@@ -386,17 +387,17 @@ impl NavigationManager {
     }
 
     fn set_pending(&self, to: RouteId) {
-        let mut guard = self.state.lock().unwrap();
+        let mut guard = self.state.lock();
         guard.pending = Some(to);
     }
 
     fn take_pending(&self) -> Option<RouteId> {
-        let mut guard = self.state.lock().unwrap();
+        let mut guard = self.state.lock();
         guard.pending.take()
     }
 
     fn advance_phase(&self, tx_id: u64, expect: NavPhase, next: NavPhase) -> bool {
-        let mut guard = self.state.lock().unwrap();
+        let mut guard = self.state.lock();
         if let Some(active) = guard.active.as_mut() {
             if active.id == tx_id && active.phase == expect && !active.canceled {
                 active.phase = next;
@@ -420,7 +421,7 @@ impl NavigationManager {
 
     fn emit_started(&self, tx_id: u64) {
         let (from, to) = {
-            let guard = self.state.lock().unwrap();
+            let guard = self.state.lock();
             if let Some(active) = guard.active.as_ref() {
                 if active.id == tx_id {
                     (active.from, active.to)
@@ -465,7 +466,7 @@ impl NavigationManager {
 
     /// Returns the current committed route (backend truth).
     pub fn current_route(&self) -> RouteId {
-        let guard = self.state.lock().unwrap();
+        let guard = self.state.lock();
         guard.current
     }
 
@@ -478,7 +479,7 @@ impl NavigationManager {
 
     /// Returns true if a back navigation is currently possible.
     pub fn can_go_back(&self) -> bool {
-        let guard = self.state.lock().unwrap();
+        let guard = self.state.lock();
         !guard.history.is_empty()
     }
 }

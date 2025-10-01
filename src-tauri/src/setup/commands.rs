@@ -1,66 +1,85 @@
+use shared::{
+    commands::setup::UpdateWindowAppearanceOverridePayload,
+    error::{Result, SetupError},
+};
 use tauri::{AppHandle, Emitter, Manager, State};
-use shared::{commands::setup::UpdateWindowAppearanceOverridePayload, error::{Result, SetupError}};
 use tauri_plugin_store::StoreExt;
 
 use super::WindowState;
 
 #[tauri::command]
-pub async fn update_window_appearance(
+pub fn update_window_appearance(
     dark: bool,
     app: AppHandle,
     state: State<'_, WindowState>,
 ) -> Result<()> {
-    let health_state = state.lock().await;
+    log::debug!("Updating window appearance to dark mode: {}", dark);
 
-        if health_state.override_dark.is_none() {
-            let mut main_window = app
-                .get_webview_window("main")
-                .ok_or(SetupError::MainWindowMissing)?;
+    // Determine if override is set (narrow lock scope; drop before further work)
+    let override_is_none = {
+        let guard = state.lock();
+        log::trace!("Current override_dark state: {:?}", guard.override_dark);
+        guard.override_dark.is_none()
+    };
 
-            #[cfg(target_os = "macos")]
-            {
-                super::setup_mac_window::update_appearance(&mut main_window, dark)
-                    .map_err(SetupError::appearance)?;
-            }
+    if override_is_none {
+        log::debug!("No override set; applying appearance change");
+        let mut main_window = app
+            .get_webview_window("main")
+            .ok_or(SetupError::MainWindowMissing)?;
 
-            let mut state_lock = state.lock().await;
-            state_lock.dark = dark;
-
-            app.emit(shared::events::setup::UPDATE_WINDOW_APPEARANCE, ())
-                .map_err(|e| SetupError::emit(shared::events::setup::UPDATE_WINDOW_APPEARANCE, e))?;
+        #[cfg(target_os = "macos")]
+        {
+            super::setup_mac_window::update_appearance(&mut main_window, dark)
+                .map_err(SetupError::appearance)?;
         }
 
+        {
+            let mut guard = state.lock();
+            guard.dark = dark;
+        }
+
+        app.emit(shared::events::setup::UPDATE_WINDOW_APPEARANCE, ())
+            .map_err(|e| SetupError::emit(shared::events::setup::UPDATE_WINDOW_APPEARANCE, e))?;
+    } else {
+        log::trace!("Ignoring appearance update because an override is active");
+    }
 
     Ok(())
 }
 
 #[tauri::command]
-pub async fn update_window_appearance_dark_override(
+pub fn update_window_appearance_dark_override(
     dark: Option<bool>,
     app: AppHandle,
     state: State<'_, WindowState>,
 ) -> Result<()> {
-    let mut health_state = state.lock().await;
+    // Update override flag (short lock scope)
+    {
+        let mut guard = state.lock();
+        guard.override_dark = dark;
+    }
 
-        health_state.override_dark = dark;
+    let store = app.store(super::SETUP_STORE_NAME).unwrap();
+    store.set(super::DARK_OVERRIDE_KEY, dark);
 
-        let store = app.store(super::SETUP_STORE_NAME).unwrap();
-
-        store.set(super::DARK_OVERRIDE_KEY, dark);
-
-
-        app.emit(shared::events::setup::GET_WINDOW_APPEARANCE_OVERRIDE, UpdateWindowAppearanceOverridePayload { dark })
-            .map_err(|e| SetupError::emit(shared::events::setup::GET_WINDOW_APPEARANCE_OVERRIDE, e))?;
+    app.emit(
+        shared::events::setup::GET_WINDOW_APPEARANCE_OVERRIDE,
+        UpdateWindowAppearanceOverridePayload { dark },
+    )
+    .map_err(|e| SetupError::emit(shared::events::setup::GET_WINDOW_APPEARANCE_OVERRIDE, e))?;
 
     if dark.is_none() {
+        // Re-evaluate system appearance since override removed
         let mut main_window = app
             .get_webview_window("main")
             .ok_or(SetupError::MainWindowMissing)?;
 
-        let dark = {
+        let system_dark = {
             #[cfg(target_os = "macos")]
             {
-                super::setup_mac_window::setup(&mut main_window, None).map_err(SetupError::appearance)?
+                super::setup_mac_window::setup(&mut main_window, None)
+                    .map_err(SetupError::appearance)?
             }
             #[cfg(not(target_os = "macos"))]
             {
@@ -68,35 +87,40 @@ pub async fn update_window_appearance_dark_override(
             }
         };
 
-        let mut state_lock = state.lock().await;
-        state_lock.dark = dark;
+        {
+            let mut guard = state.lock();
+            guard.dark = system_dark;
+        }
 
         app.emit(shared::events::setup::UPDATE_WINDOW_APPEARANCE, ())
             .map_err(|e| SetupError::emit(shared::events::setup::UPDATE_WINDOW_APPEARANCE, e))?;
     }
 
-
     Ok(())
 }
 
 #[tauri::command]
-pub async fn window_appearance_override(
+pub fn window_appearance_override(
     state: State<'_, WindowState>,
 ) -> Result<UpdateWindowAppearanceOverridePayload> {
-    let health_state = state.lock().await;
-    Ok(UpdateWindowAppearanceOverridePayload { dark: health_state.override_dark })
+    let guard = state.lock();
+    Ok(UpdateWindowAppearanceOverridePayload {
+        dark: guard.override_dark,
+    })
 }
 
 #[tauri::command]
-pub async fn update_window_size(
+pub fn update_window_size(
     width: f64,
     height: f64,
     app: AppHandle,
     state: State<'_, WindowState>,
 ) -> Result<()> {
-    let mut state_lock = state.lock().await;
-    state_lock.width = width;
-    state_lock.height = height;
+    {
+        let mut guard = state.lock();
+        guard.width = width;
+        guard.height = height;
+    }
 
     log::debug!("Updating window size to {}x{}", width, height);
 

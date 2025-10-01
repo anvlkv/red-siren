@@ -8,8 +8,7 @@ use super::engine::{IntroEngineState, Control};
 pub async fn intro_pause(state: State<'_, IntroEngineState>) -> Result<()> {
     let mut inner = state
         .inner
-        .lock()
-        .map_err(|_| IntroError::StatePoisoned)?;
+        .lock();
     if inner.paused {
         return Ok(());
     }
@@ -25,8 +24,7 @@ pub async fn intro_pause(state: State<'_, IntroEngineState>) -> Result<()> {
 pub async fn intro_resume(state: State<'_, IntroEngineState>) -> Result<()> {
     let mut inner = state
         .inner
-        .lock()
-        .map_err(|_| IntroError::StatePoisoned)?;
+        .lock();
     if !inner.paused {
         return Ok(());
     }
@@ -53,8 +51,7 @@ pub async fn intro_next_frame(
     {
         let mut inner = state
             .inner
-            .lock()
-            .map_err(|_| IntroError::StatePoisoned)?;
+            .lock();
         if !inner.started {
             let config = super::engine::EngineConfig::default();
             let (tx, handle, snoops, _depths) = super::engine::spawn_engine(inner.paused, config);
@@ -68,8 +65,7 @@ pub async fn intro_next_frame(
     // Collect snapshot.
     let mut inner = state
         .inner
-        .lock()
-        .map_err(|_| IntroError::StatePoisoned)?;
+        .lock();
     if inner.snoops.is_empty() {
         return Err(IntroError::EngineNotReady.into());
     }

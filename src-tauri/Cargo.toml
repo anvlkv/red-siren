@@ -18,6 +18,7 @@ cpal = "0.16"
 fundsp = "0.20"
 log = { workspace = true }
 mint = { workspace = true, features = ["serde"] }
+parking_lot = "0.12"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 shared = { workspace = true, features = ["tauri"] }

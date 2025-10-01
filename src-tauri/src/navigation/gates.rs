@@ -39,7 +39,7 @@ pub async fn gate_navigation(to: RouteId, app: &AppHandle) -> Result<GateOutcome
 
     let health_state = app.state::<crate::health::HealthSetupState>();
 
-    let hs_guard = health_state.lock().await;
+    let hs_guard = health_state.lock();
 
     match to {
         RouteId::Play => {

@@ -1,8 +1,6 @@
+use parking_lot::Mutex;
 use std::{
-    sync::{
-        mpsc::{self, Receiver, Sender},
-        Mutex,
-    },
+    sync::mpsc::{self, Receiver, Sender},
     thread,
     time::Duration,
 };
@@ -44,13 +42,12 @@ impl IntroEngineState {
 
 impl Drop for IntroEngineState {
     fn drop(&mut self) {
-        if let Ok(mut inner) = self.inner.lock() {
-            if let Some(tx) = inner.tx.take() {
-                let _ = tx.send(Control::Shutdown);
-            }
-            if let Some(handle) = inner.join.take() {
-                let _ = handle.join();
-            }
+        let mut inner = self.inner.lock();
+        if let Some(tx) = inner.tx.take() {
+            let _ = tx.send(Control::Shutdown);
+        }
+        if let Some(handle) = inner.join.take() {
+            let _ = handle.join();
         }
     }
 }

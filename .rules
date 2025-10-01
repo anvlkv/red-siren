@@ -118,7 +118,6 @@ let value = {
     let s = shared.lock();
     s.value
 };
-// some_async_op(value).await;
 
 // Share across tasks
 let shared = std::sync::Arc::new(parking_lot::Mutex::new(State { value: 0 }));

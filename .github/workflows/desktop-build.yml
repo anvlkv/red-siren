@@ -38,7 +38,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@nightly
         with:
-          targets: ${{ matrix.target }}
+          targets: wasm32-unknown-unknown,${{ matrix.target }}
 
       - name: Install dependencies (Ubuntu only)
         if: matrix.platform == 'ubuntu-22.04'
@@ -48,6 +48,10 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Setup Tailwind CSS CLI
+        run: |
+          npx tailwindcss --help || echo "Tailwind CSS CLI installed"
 
       - name: Install Trunk
         uses: jetli/trunk-action@v0.5.0

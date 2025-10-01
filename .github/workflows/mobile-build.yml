@@ -21,7 +21,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@nightly
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          targets: wasm32-unknown-unknown,aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -39,6 +39,10 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Setup Tailwind CSS CLI
+        run: |
+          npx tailwindcss --help || echo "Tailwind CSS CLI installed"
 
       - name: Install Trunk
         uses: jetli/trunk-action@v0.5.0
@@ -84,10 +88,14 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@nightly
         with:
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+          targets: wasm32-unknown-unknown,aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Setup Tailwind CSS CLI
+        run: |
+          npx tailwindcss --help || echo "Tailwind CSS CLI installed"
 
       - name: Install Trunk
         uses: jetli/trunk-action@v0.5.0

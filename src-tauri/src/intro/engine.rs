@@ -142,7 +142,9 @@ impl FundspEngine {
 
             ((pass() + ((pass() * depth) * pass())) * (amp * depth))
                 >> declick()
-                >> fresonator(Softsign(1.0 / (k + 1) as f32))
+                >> chorus(k, 0.015, 0.005, mod_freq)
+                // >> (pass() | constant(INTRO_MOD_FREQ_HZ * (k + 1) as f32) | constant(0.5))
+                // >> fresonator(Softsign(1.0 / (k + 1) as f32))
                 >> snoop_be
         });
 

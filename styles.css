@@ -23,23 +23,3 @@
     src: url(/public/Rosarivo/Rosarivo-Italic.ttf);
     font-style: italic;
 }
-
-svg.splash-fragment {
-    position: absolute;
-    height: 100%;
-    width: auto;
-    top: 0;
-    left: 0;
-
-    &.siren,
-    &.siren-front,
-    &.flute,
-    &.stone,
-    &.flute-shadow,
-    &.siren-arm {
-        right: 0;
-        bottom: 0;
-        left: auto;
-        top: auto;
-    }
-}

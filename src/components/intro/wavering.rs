@@ -131,12 +131,8 @@ pub fn Wavering() -> impl IntoView {
     );
 
     view! {
-        <svg
-            viewBox="0 0 1048 932"
-            fill="none"
-            class="splash-fragment waves stroke-gray dark:stroke-cinnabar blur-[.5px]"
-            xmlns="http://www.w3.org/2000/svg"
-        >
+        <g>
+
             {move || {
                 wave_paths()
                     .into_iter()
@@ -156,7 +152,7 @@ pub fn Wavering() -> impl IntoView {
                         .collect_view()
                 }}
             </g>
-        </svg>
+        </g>
     }
 }
 

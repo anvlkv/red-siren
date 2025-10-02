@@ -1,5 +1,5 @@
 mod animation;
-
+mod composition;
 mod static_path;
 // mod suns; // removed as it is currently unused
 mod wavering;
@@ -11,6 +11,7 @@ use crate::{
 use keyframe::{keyframes, AnimationSequence};
 use leptos::prelude::*;
 
+use composition::IntroComp;
 use leptos_use::{use_raf_fn_with_options, UseRafFnCallbackArgs, UseRafFnOptions};
 use static_path::*;
 
@@ -72,9 +73,9 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
         complete_layout,
     } = expect_layout_contex();
 
-    // Snapshot (None when idle)
+    // Initialize animation sequence with dummy snapshot aligned to intro composition.
     let animation_seq = RwSignal::<AnimationSequence<IntroTransformSnapshot>>::new(keyframes![(
-        IntroTransformSnapshot::default(),
+        IntroTransformSnapshot::dummy_with_layout(complete_layout()),
         0.0
     )]);
 
@@ -472,83 +473,7 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
     view! {
         <div class="contents" style=intro_vars>
             <Show when=move || !hidden_svgs()>
-                <div
-                    class="absolute h-screen w-screen splash-picture overflow-hidden"
-                    // style:opacity=move || now_state().picture_opacity.to_string()
-                    role="img"
-                >
-                    <Wavering />
-                    <svg
-                        viewBox="0 0 430 932"
-                        class="splash-fragment stone fill-red dark:fill-black stroke-black dark:stroke-red"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <path d=STONE_PATH stroke-width="3" />
-                    </svg>
-                    <svg
-                        viewBox="0 0 430 932"
-                        class="splash-fragment siren fill-black dark:fill-red"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <path d=SIREN_PATH_1 />
-                        <path d=SIREN_PATH_2 />
-                        <path d=SIREN_PATH_3 />
-                    </svg>
-                    <svg
-                        viewBox="0 0 430 932"
-                        fill="none"
-                        class="splash-fragment flute-shadow stroke-red dark:stroke-black"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <rect
-                            x="73.7113"
-                            y="576.054"
-                            width="53.653"
-                            height="8.25253"
-                            transform="rotate(-17.1246 48.3365 585.964)"
-                            stroke-width="2"
-                        />
-                    </svg>
-                    <svg
-                        viewBox="0 0 430 932"
-                        class="splash-fragment flute fill-red dark:fill-black stroke-black dark:stroke-red"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <rect
-                            width="282.096"
-                            height="4.25253"
-                            x="48.3365"
-                            y="585.964"
-                            transform="rotate(-17.1246 48.3365, 585.964)"
-                            stroke-width="2"
-                        />
-                    </svg>
-                    <svg
-                        viewBox="0 0 430 932"
-                        class="splash-fragment sun fill-black dark:fill-red"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <circle r="39" cx="107" cy="164" />
-                    </svg>
-                    <svg
-                        viewBox="0 0 430 932"
-                        class="splash-fragment siren-arm fill-black dark:fill-red stroke-red dark:stroke-black"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <path d=SIREN_ARM_PATH stroke-width="2" />
-                    </svg>
-                    <svg
-                        viewBox="0 0 430 932"
-                        class="splash-fragment siren-front fill-black dark:fill-red"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <path d=SIREN_FRONT_PATH_1 />
-                        <path d=SIREN_FRONT_PATH_2 />
-                        <path d=SIREN_FRONT_PATH_3 />
-                        <path d=SIREN_FRONT_PATH_4 />
-                        <path d=SIREN_FRONT_PATH_5 />
-                    </svg>
-                </div>
+                <IntroComp />
             </Show>
             {move || children()}
         </div>

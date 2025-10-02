@@ -24,6 +24,11 @@ use keyframe::{num_traits::Float, CanTween};
 use keyframe_derive::CanTween;
 use shared::instrument::Layout as InstrumentLayout;
 
+// Intro composition reference constants (SVG coordinate space 430x932)
+const SUN_CX: f32 = 107.0;
+const SUN_CY: f32 = 164.0;
+const INITIAL_STRING_ROT_DEG: f32 = -17.1246;
+
 /// Runtime storing only primitive arrays for CSS variable emission.
 #[derive(Debug, Clone, Default)]
 pub struct IntroTransformSnapshot {
@@ -59,6 +64,104 @@ pub struct IntroTransformSnapshot {
 }
 
 impl IntroTransformSnapshot {
+    /// Build a dummy snapshot aligned with the intro composition graphic.
+    ///
+    /// All keys and bands are translated so their centers coincide with the
+    /// intro "sun" circle center (SUN_CX, SUN_CY). Bands are circular
+    /// (round=1.0). Left string has the initial negative rotation. Scales
+    /// remain 1.0 so when animation begins you can interpolate toward the
+    /// real layout (which corresponds to zero translations).
+    ///
+    /// NOTE: This analytically reconstructs approximate centers using the
+    /// same spacing model as the live keyboard layout. For higher fidelity
+    /// per-key positions, replace the center calculation with authoritative
+    /// layout-provided coordinates once exposed.
+    pub fn dummy_with_layout(layout: InstrumentLayout) -> Self {
+        let mut snap = Self::new(layout);
+        let num_groups = snap.num_groups;
+        let keys_per_group = snap.keys_per_group;
+
+        // Shorthand (all f32 copies)
+        let space = layout.space;
+        let orientation = layout.orientation;
+        let sa = layout.safe_area_padding;
+        let key_band_length = layout.key_band_length;
+        let key_band_breadth = layout.key_band_breadth;
+        let groups_gap = layout.groups_gap;
+        let key_bands_gap = layout.key_bands_gap;
+
+        // Safe extents
+        let safe_length = orientation.safe_length(space, sa);
+        let safe_breadth = orientation.safe_breadth(space, sa);
+
+        // Map safe-area to box sides (following keyboard.rs logic)
+        let (safe_top, safe_right, safe_bottom, safe_left) = match orientation {
+            shared::orientation::LayoutOrientation::Vertical => {
+                // Vertical: indices are [top, left, bottom, right]
+                (sa[0], sa[3], sa[2], sa[1])
+            }
+            shared::orientation::LayoutOrientation::Horizontal => {
+                // Horizontal: indices are [left, top, right, bottom]
+                (sa[1], sa[2], sa[3], sa[0])
+            }
+        };
+
+        // Main-axis padding to center groups
+        let groups_f = num_groups as f32;
+        let required_length = groups_f * key_band_length + ((groups_f - 1.0).max(0.0) * groups_gap);
+        let pad_main = ((safe_length - required_length) / 2.0).max(0.0);
+
+        // Helper closures for center computation
+        let mut center_for = |g: u8, k: u8| -> (f32, f32) {
+            let g_f = g as f32;
+            let k_f = k as f32;
+            match orientation {
+                shared::orientation::LayoutOrientation::Horizontal => {
+                    // Groups laid out along X (length axis), keys stacked along Y (breadth axis)
+                    let cx = safe_left
+                        + pad_main
+                        + g_f * (key_band_length + groups_gap)
+                        + key_band_length * 0.5;
+                    let cy = safe_top
+                        + k_f * (key_band_breadth + key_bands_gap)
+                        + key_band_breadth * 0.5;
+                    (cx, cy)
+                }
+                shared::orientation::LayoutOrientation::Vertical => {
+                    // Groups along Y, keys along X
+                    let cy = safe_top
+                        + pad_main
+                        + g_f * (key_band_length + groups_gap)
+                        + key_band_length * 0.5;
+                    let cx = safe_left
+                        + k_f * (key_band_breadth + key_bands_gap)
+                        + key_band_breadth * 0.5;
+                    (cx, cy)
+                }
+            }
+        };
+
+        for g in 0..num_groups {
+            for k in 0..keys_per_group {
+                let i = snap.idx(g, k);
+                let (cx, cy) = center_for(g, k);
+                // Translate so each center coincides with sun center
+                snap.key_tx[i] = SUN_CX - cx;
+                snap.key_ty[i] = SUN_CY - cy;
+                snap.band_tx[i] = SUN_CX - cx;
+                snap.band_ty[i] = SUN_CY - cy;
+
+                snap.band_round[i] = 1.0; // circular at intro start
+                                          // Rotations remain zero (no per-key/band rotation in intro start)
+                                          // Scales already 1.0
+            }
+        }
+
+        // Left string initial rotation; translation left at 0 (overlaid by picture)
+        snap.left_rot_deg = INITIAL_STRING_ROT_DEG;
+
+        snap
+    }
     /// Create a new runtime with a layout snapshot.
     pub fn new(layout: InstrumentLayout) -> Self {
         let num_groups = layout.num_groups.get();

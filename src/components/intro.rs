@@ -1,18 +1,19 @@
 mod animation;
-mod animation_keyframes;
+
 mod static_path;
-mod suns;
+// mod suns; // removed as it is currently unused
 mod wavering;
 
+use crate::{
+    components::intro::animation::IntroTransformSnapshot,
+    util::layout_context::{expect_layout_contex, LayoutContextReturn},
+};
 use keyframe::{keyframes, AnimationSequence};
 use leptos::prelude::*;
-use leptos_router::hooks::use_location;
-use leptos_use::{
-    use_prefers_reduced_motion, use_raf_fn_with_options, utils::Pausable, UseRafFnCallbackArgs,
-    UseRafFnOptions,
-};
+
+use leptos_use::{use_raf_fn_with_options, UseRafFnCallbackArgs, UseRafFnOptions};
 use static_path::*;
-use suns::*;
+
 use wavering::*;
 
 use crate::util::{
@@ -22,7 +23,7 @@ use crate::util::{
 use common::RouteId;
 use std::str::FromStr;
 
-pub use animation::*;
+use std::collections::HashMap;
 
 pub struct IntroContext {
     // --- Instrument properties ---
@@ -36,31 +37,157 @@ pub struct IntroContext {
 
 #[component]
 pub fn Intro(children: ChildrenFn) -> impl IntoView {
-    // // ========== User Preferences ==========
+    // Intro animation now uses a pure tweenable snapshot (IntroTransformSnapshot)
+    // instead of an internal runtime/timeline.
+    //
+    // We keep:
+    // - instrument_layout (when available)
+    // - Option<IntroTransformSnapshot> for the current state
+    // - a top-level CSS var string (intro_vars) rebuilt on RAF
+    // - static transform style templates referencing primitive CSS vars
+    //
+    // Future: external keyframe sequencing will interpolate snapshots.
+    // Currently we emit the baseline (identity) snapshot once per RAF.
+    //
+    // Translation (tx/ty) remains 0 until real layout mapping is integrated.
 
-    // let reduced_motion = use_prefers_reduced_motion();
-
-    // // ========== Animation State Management ==========
-
-    // // Animation driving signal (tracks current transition: None | Some(from, to))
-    // let (animation_pair, set_animation_pair) =
-    //     signal::<Option<(IntroAnimationTarget, IntroAnimationTarget)>>(None);
-
-    // // Animation timeline state
-    // let animation_state = RwSignal::new(animation_keyframes::default_static());
-
-    // // Reduced motion tracking
-    // let reduced_motion_state = RwSignal::new(ReducedMotionState {
-    //     total_keyframes: animation_state.get_untracked().keyframes(),
-    //     current_keyframe: 0,
-    //     accumulated_time: 0.0,
-    // });
-
-    // // Animation completion flag
-    // let completed = RwSignal::new(false);
-
-    // // SVG visibility state (hidden when showing instrument/tuner)
     let hidden_svgs = RwSignal::new(false);
+
+    // Instrument layout (used to size runtime); if absent we delay animation start.
+    let LayoutContextReturn {
+        space,
+        orientation,
+        left_string_position,
+        right_string_position,
+        key_radius,
+        key_band_length,
+        key_band_breadth,
+        safe_area_padding,
+        key_bands_gap,
+        groups_gap,
+        num_keys_per_group,
+        num_groups,
+        first_group_channel,
+        scale,
+        complete_layout,
+    } = expect_layout_contex();
+
+    // Snapshot (None when idle)
+    let animation_seq = RwSignal::<AnimationSequence<IntroTransformSnapshot>>::new(keyframes![(
+        IntroTransformSnapshot::default(),
+        0.0
+    )]);
+
+    let intro_vars = Signal::derive(move || {
+        animation_seq()
+            .now_strict()
+            .map(|s| s.emit_css_vars())
+            .unwrap_or_default()
+    });
+
+    // Whether transform style templates are currently mounted (animation running)
+    let (transform_templates_enabled, set_transform_templates_enabled) = signal(false);
+
+    // Build key style templates (only when layout changes OR templates toggled)
+    let key_styles = Memo::new(move |old| {
+        let mut map = HashMap::new();
+        if !transform_templates_enabled() {
+            return old.cloned().unwrap_or(map);
+        }
+        let num_groups = num_groups();
+        let num_keys_per_group = num_keys_per_group();
+
+        for g in 0..num_groups {
+            for k in 0..num_keys_per_group {
+                map.insert(
+                        (g, k),
+                        format!(
+                            "transform: translate(var(--key-{g}-{k}-tx,0px), var(--key-{g}-{k}-ty,0px)) rotate(var(--key-{g}-{k}-rot,0deg)) scale(var(--key-{g}-{k}-sx,1), var(--key-{g}-{k}-sy,1));"
+                        ),
+                    );
+            }
+        }
+        map
+    });
+
+    // Band style templates
+    let band_styles = Memo::new(move |old| {
+        let mut map = HashMap::new();
+        if !transform_templates_enabled() {
+            return old.cloned().unwrap_or(map);
+        }
+        let num_groups = num_groups();
+        let num_keys_per_group = num_keys_per_group();
+        for g in 0..num_groups {
+            for k in 0..num_keys_per_group {
+                map.insert(
+                        (g, k),
+                        format!(
+                            "transform: translate(var(--band-{g}-{k}-tx,0px), var(--band-{g}-{k}-ty,0px)) rotate(var(--band-{g}-{k}-rot,0deg)) scale(var(--band-{g}-{k}-sx,1), var(--band-{g}-{k}-sy,1)); border-radius: calc(var(--band-{g}-{k}-round,0) * 9999px);"
+                        ),
+                    );
+            }
+        }
+        map
+    });
+
+    // Strings (only left for now; right mirrors left if desired)
+    let left_string_style = Memo::new(move |_| {
+        if transform_templates_enabled() {
+            "transform: translate(var(--left-string-tx,0px), var(--left-string-ty,0px)) rotate(var(--left-string-rot,0deg)) scale(var(--left-string-sx,1), var(--left-string-sy,1));"
+                    .to_string()
+        } else {
+            String::new()
+        }
+    });
+    let right_string_style = Memo::new(move |_| {
+        // Placeholder (same as left or empty)
+        if transform_templates_enabled() {
+            "transform: translate(var(--right-string-tx,0px), var(--right-string-ty,0px)) rotate(var(--right-string-rot,0deg)) scale(var(--right-string-sx,1), var(--right-string-sy,1));".to_string()
+        } else {
+            String::new()
+        }
+    });
+
+    // Provide context (non-reactive to per-frame updates)
+    provide_context(IntroContext {
+        left_string_style,
+        right_string_style,
+        key_styles,
+        band_styles,
+    });
+
+    // Start animation automatically once layout arrives (placeholder trigger)
+    Effect::new(move |_| {
+        // TODO: use navigation to determine animation start.
+        // let layout = complete_layout();
+        // let snap = IntroTransformSnapshot::new(layout);
+        // // Store snapshot
+        // // snapshot.set(Some(snap.clone()));
+        // // Emit initial CSS vars immediately
+        // set_intro_vars.set(snap.emit_css_vars());
+        // set_transform_templates_enabled.set(true);
+        // hidden_svgs.set(false);
+        //
+        //
+        // TODO: determine actual keyframes
+        //
+        // animation_seq.set(keyframes![(kf_1, 0.0), (kf_2, 1000.0, EaseOut)])
+    });
+
+    // RAF driver
+    let _raf = use_raf_fn_with_options(
+        {
+            move |UseRafFnCallbackArgs { delta, .. }| {
+                animation_seq.update(|s| {
+                    let rem = s.duration() - s.time();
+                    let clamp_d = delta.min(rem);
+                    s.advance_by(clamp_d);
+                });
+            }
+        },
+        UseRafFnOptions::default().immediate(true),
+    );
 
     // // ========== External Context & Resources ==========
 
@@ -90,10 +217,6 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
 
     // // Initialize correct animation state based on current route
     // // Track instrument_layout so we update when it arrives
-    // Effect::new(move |_| {
-    //     let current_path = location.pathname.get_untracked();
-    //     let current_route = RouteId::from_str(&current_path).unwrap_or(RouteId::Home);
-    //     let layout = instrument_layout(); // Track this signal
 
     //     log::debug!(
     //         "Intro state check: route = {:?}, layout available = {}",
@@ -344,10 +467,10 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
 
     // let now_state = move || animation_state().now();
 
-    let intro_style = Signal::derive(move || format!(""));
+    // Top-level style string providing primitive CSS vars (empty when idle)
 
     view! {
-        <div class="contents" style=intro_style>
+        <div class="contents" style=intro_vars>
             <Show when=move || !hidden_svgs()>
                 <div
                     class="absolute h-screen w-screen splash-picture overflow-hidden"

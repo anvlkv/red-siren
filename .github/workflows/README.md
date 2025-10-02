@@ -4,55 +4,45 @@ This directory contains GitHub Actions workflows for building and releasing Red 
 
 ## Workflows
 
-### 1. Desktop Build (`desktop-build.yml`)
-Builds desktop applications for macOS (ARM64 & x64), Linux (x64), and Windows (x64).
+### 1. Build and Release (`main.yml`)
+Main production workflow that builds and publishes releases when code is pushed to the main branch.
 
 **Triggers:**
 - Push to `main` branch
-- Pull requests
-- Manual workflow dispatch
-
-**Artifacts:** Desktop bundles for each platform uploaded as workflow artifacts.
-
-### 2. Mobile Build (`mobile-build.yml`)
-Builds mobile applications for Android and iOS.
-
-**Triggers:**
-- Push to `main` branch
-- Pull requests
-- Manual workflow dispatch
-
-**Artifacts:** 
-- Android: APK and AAB files
-- iOS: App bundles
-
-### 3. Release (`release.yml`)
-Creates official releases and publishes artifacts to GitHub Releases. Also handles App Store Connect publishing for iOS.
-
-**Triggers:**
-- Push tags matching `v*` pattern (e.g., `v1.0.0`)
 - Manual workflow dispatch
 
 **Features:**
-- Creates GitHub Release
-- Builds and uploads artifacts for all platforms
-- Signs Android releases (if configured)
-- Signs iOS releases and uploads to App Store Connect (if configured)
+- **Desktop builds:** Uses official `tauri-apps/tauri-action` for macOS (ARM64 & x64), Linux (x64), and Windows (x64)
+- **Mobile builds:** Custom build steps for Android and iOS
+- **Release publishing:** Creates GitHub releases with all platform artifacts
+- **App Store integration:** Automatically uploads iOS builds to App Store Connect (when configured)
 
-### 4. PR Preview (`pr-preview.yml`)
-Generates preview builds for pull requests with 30-day retention.
+### 2. PR Preview (`pr-preview.yml`)
+Generates preview builds for pull requests with limited platform support for faster feedback.
 
 **Triggers:**
 - Pull request opened, synchronized, or reopened
 
 **Features:**
-- Builds all desktop and mobile platforms
-- Uploads preview artifacts
-- Posts a comment on the PR with download links
+- **Limited platforms:** Only Ubuntu desktop and Android mobile (for speed)
+- **Draft releases:** Creates draft releases marked as pre-release
+- **PR comments:** Posts download links directly in PR comments
+- **Short retention:** 7-day artifact retention for cleanup
+
+## Build Matrix
+
+| Platform | Main Branch | PR Preview |
+|----------|-------------|------------|
+| macOS ARM64 | ✅ | ❌ |
+| macOS x64 | ✅ | ❌ |
+| Ubuntu x64 | ✅ | ✅ |
+| Windows x64 | ✅ | ❌ |
+| Android | ✅ | ✅ |
+| iOS | ✅ | ❌ |
 
 ## Required Secrets
 
-To fully utilize these workflows, configure the following secrets in your repository settings:
+Configure these secrets in your repository settings for full functionality:
 
 ### Android Release Signing (Optional but Recommended)
 - `ANDROID_KEYSTORE_BASE64`: Base64-encoded keystore file
@@ -66,78 +56,76 @@ To fully utilize these workflows, configure the following secrets in your reposi
 
 ### iOS Release Signing & Distribution (Optional but Recommended)
 - `APPLE_CERTIFICATE`: Base64-encoded P12 certificate file
-  ```bash
-  base64 -i certificate.p12 | pbcopy  # macOS
-  base64 -w 0 certificate.p12  # Linux
-  ```
 - `APPLE_CERTIFICATE_PASSWORD`: Password for the P12 certificate
-- `APPLE_SIGNING_IDENTITY`: Developer signing identity (e.g., "Apple Development: Your Name (TEAMID)")
+- `APPLE_SIGNING_IDENTITY`: Developer signing identity
 - `APPLE_PROVISIONING_PROFILE`: Base64-encoded provisioning profile
 
 ### App Store Connect Upload (Required for App Store Distribution)
 - `APPLE_API_KEY`: App Store Connect API Key ID
 - `APPLE_API_ISSUER`: App Store Connect API Issuer ID
 
-## Creating a Release
+## Release Process
 
-To create a new release:
+### Automatic Releases
+Every push to the `main` branch automatically:
+1. Builds all desktop platforms using Tauri action
+2. Builds mobile platforms using custom steps
+3. Creates a GitHub release with version `v{run_number}`
+4. Uploads all platform artifacts
+5. Publishes iOS to App Store Connect (if configured)
 
-1. Tag your commit with a version number:
-   ```bash
-   git tag v1.0.0
-   git push origin v1.0.0
-   ```
-
-2. The release workflow will automatically:
-   - Build all platform variants
-   - Create a GitHub Release
-   - Upload all artifacts
-   - Publish to App Store Connect (if iOS secrets are configured)
+### PR Previews
+Every pull request automatically:
+1. Builds Ubuntu desktop and Android mobile only
+2. Creates a draft pre-release with tag `preview-pr-{number}-{run}`
+3. Posts download links in PR comments
+4. Cleans up artifacts after 7 days
 
 ## Local Development
 
-These workflows use standard Tauri commands. To build locally:
+Build commands for local development:
 
 ```bash
-# Desktop
+# Desktop (all platforms)
 cargo tauri build
 
 # iOS
+cargo tauri ios init
 cargo tauri ios build
 
 # Android
-cargo tauri android build
+cargo tauri android init
+cargo tauri android build --apk
 ```
 
 ## Dependencies
 
 The workflows automatically install:
-- Rust (nightly toolchain as specified in `rust-toolchain.toml`)
+- Rust (stable toolchain with required targets)
 - Node.js (LTS version)
 - Trunk (for WASM builds)
 - Platform-specific dependencies (Android SDK/NDK, Xcode tools, etc.)
+- Tauri CLI v2.x
 
 ## Troubleshooting
 
 ### Build Failures
-1. Check that `rust-toolchain.toml` specifies the correct targets
-2. Verify that `tauri.conf.json` and platform-specific configs are valid
-3. Ensure all required secrets are set for release builds
+1. Check that all required Rust targets are available
+2. Verify `tauri.conf.json` and platform configs are valid
+3. Ensure secrets are properly configured for release builds
 
-### iOS Build Issues
-- Verify signing certificates and provisioning profiles are valid
-- Check that the bundle identifier matches your App Store Connect configuration
-- Ensure App Store Connect API credentials have proper permissions
+### Mobile Build Issues
+- **Android:** Verify NDK version and signing credentials
+- **iOS:** Check certificates, provisioning profiles, and App Store Connect API access
 
-### Android Build Issues
-- Verify NDK version compatibility
-- Check that minSdkVersion in `tauri.android.conf.json` matches requirements
-- For release builds, ensure keystore and signing credentials are correctly configured
+### Release Issues
+- Releases are created automatically on main branch pushes
+- PR previews are marked as draft and pre-release
+- Check repository permissions if release creation fails
 
-## Notes
+## Architecture
 
-- Preview artifacts are retained for 30 days
-- Release artifacts are permanently stored in GitHub Releases
-- Mobile builds require more time and resources than desktop builds
-- iOS builds require macOS runners
-- Android builds can run on Ubuntu runners
+This workflow setup follows the **MAYA DRY KISS** principle:
+- **Simple:** Only 2 workflows with clear responsibilities
+- **Efficient:** Desktop uses official Tauri action, mobile uses optimized custom steps
+- **Focused:** Main builds everything, PR previews build only what's needed for testing

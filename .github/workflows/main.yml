@@ -1,13 +1,13 @@
-name: Release
+name: Build and Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
-  publish-tauri:
+  build-desktop:
     permissions:
       contents: write
     strategy:
@@ -16,16 +16,12 @@ jobs:
         include:
           - platform: 'macos-latest'
             args: '--target aarch64-apple-darwin'
-            target: 'aarch64-apple-darwin'
           - platform: 'macos-latest'
             args: '--target x86_64-apple-darwin'
-            target: 'x86_64-apple-darwin'
           - platform: 'ubuntu-22.04'
             args: ''
-            target: 'x86_64-unknown-linux-gnu'
           - platform: 'windows-latest'
             args: ''
-            target: 'x86_64-pc-windows-msvc'
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -37,16 +33,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown,${{ matrix.target }}
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -54,9 +40,6 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
-
-      - name: Add node_modules/.bin to PATH
-        run: echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH
 
       - name: Install Trunk
         uses: jetli/trunk-action@v0.4.0
@@ -70,7 +53,7 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Red Siren v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
 
@@ -98,9 +81,6 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
-
-      - name: Add node_modules/.bin to PATH
-        run: echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH
 
       - name: Install Trunk
         uses: jetli/trunk-action@v0.4.0
@@ -146,20 +126,18 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: cargo tauri android build --apk --release
+        run: cargo tauri android build --apk --aab --release
 
-      - name: Get version from tag
-        id: version
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Upload Android APK to release
+      - name: Upload Android artifacts to release
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: src-tauri/gen/android/app/build/outputs/apk/release/*.apk
-          draft: true
+          tag_name: v${{ github.run_number }}
+          name: 'Red Siren v${{ github.run_number }}'
+          body: 'Automated release from main branch'
+          files: |
+            src-tauri/gen/android/app/build/outputs/apk/release/*.apk
+            src-tauri/gen/android/app/build/outputs/bundle/release/*.aab
+          draft: false
           prerelease: false
 
   build-ios:
@@ -186,9 +164,6 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
-
-      - name: Add node_modules/.bin to PATH
-        run: echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH
 
       - name: Install Trunk
         uses: jetli/trunk-action@v0.4.0
@@ -229,15 +204,14 @@ jobs:
             xcrun altool --upload-app --type ios --file "$IPA_PATH" \
               --apiKey "$APPLE_API_KEY" \
               --apiIssuer "$APPLE_API_ISSUER"
-          else
-            echo "No IPA file found"
-            exit 1
           fi
 
-      - name: Upload iOS IPA to release
+      - name: Upload iOS artifacts to release
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
         with:
+          tag_name: v${{ github.run_number }}
+          name: 'Red Siren v${{ github.run_number }}'
+          body: 'Automated release from main branch'
           files: src-tauri/gen/apple/build/**/*.ipa
-          draft: true
+          draft: false
           prerelease: false

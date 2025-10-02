@@ -10,12 +10,11 @@ pub const UPDATE_WINDOW_SIZE: &str = "update_window_size";
 /// Get value of appearance override
 pub const GET_WINDOW_APPEARANCE_OVERRIDE: &str = "window_appearance_override";
 
-/// Safe area insets applied to instrument layout, originating from ui elements.
+/// Safe area insets (UI layer) applied to instrument layout, originating from UI elements.
 ///
-/// Added as increment to the device safe area insets.
-///
-/// Event overrides the increment amounts
-pub const UI_SAFE_AREA_INSETS_INCREMENT: &str = "ui_safe_area_insets_increment";
+/// This value is an absolute override of the UI-contributed safe area portion (NOT an incremental add).
+/// Back-end recomputes full layout using these values each time it is applied.
+pub const UI_SAFE_AREA_INSETS_APPLY: &str = "ui_safe_area_insets_apply";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

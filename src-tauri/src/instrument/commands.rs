@@ -202,18 +202,25 @@ pub fn instrument_layout(state: State<'_, InstrumentEngine>) -> Result<Layout> {
 }
 
 #[tauri::command]
-pub fn ui_safe_area_insets_increment(
+pub fn ui_safe_area_insets_apply(
     payload: SafeAreaInstestUiIncrementPayload,
     state: State<'_, InstrumentEngine>,
+    window_state: State<'_, crate::setup::WindowState>,
     app: AppHandle,
 ) -> Result<()> {
     log::debug!(
-        "ui_safe_area_insets_increment called: top={}, right={}, bottom={}, left={}",
+        "ui_safe_area_insets_apply called (UI override): top={}, right={}, bottom={}, left={}",
         payload.top,
         payload.right,
         payload.bottom,
         payload.left
     );
+
+    {
+        // Persist UI safe area contribution in window state (non-additive override)
+        let mut win = window_state.lock();
+        win.ui_safe_area = payload;
+    }
 
     state
         .set_safe_area(payload.top, payload.right, payload.bottom, payload.left)
@@ -224,7 +231,7 @@ pub fn ui_safe_area_insets_increment(
 
     let layout = *state.inner.layout.lock();
     log::info!(
-        "Updated layout with new safe area [top: {}, right: {}, bottom: {}, left: {}]",
+        "Applied UI safe area override [top: {}, right: {}, bottom: {}, left: {}]",
         payload.top,
         payload.right,
         payload.bottom,

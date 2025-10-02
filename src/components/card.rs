@@ -1,63 +1,28 @@
+mod animation;
+mod types;
+
+use animation::{
+    adapt_appear, adapt_enter, adapt_leave, CARD_APPEAR_PERSPECTIVE_CM, CARD_MAX_BLUR,
+    CARD_PERSPECTIVE_CM,
+};
+use types::CardEffects;
+pub use types::{CardAnimation, StretchAxis};
+
 use std::time::Duration;
 
 use keyframe::{
     functions::{EaseInCubic, EaseOutCubic},
     keyframes, AnimationSequence,
 };
-use keyframe_derive::CanTween;
 use leptos::prelude::*;
-use leptos_use::{
-    use_prefers_reduced_motion, use_raf_fn_with_options, utils::Pausable, UseRafFnCallbackArgs,
-    UseRafFnOptions,
+use leptos_use::use_prefers_reduced_motion;
+
+use crate::{
+    components::{UiPadding, UiVariant},
+    util::raf_fn_fps::use_raf_fn_with_fps_signal,
 };
 
-use crate::components::{UiPadding, UiVariant};
-
-const PERSPECTIVE_CM: f64 = 80.0;
-const APPEAR_PERSPECTIVE_CM: f64 = 60.0;
 const THICKNESS_PX: f64 = 8.0;
-const MAX_BLUR: f32 = 1.0;
-
-#[derive(Debug, Default, Clone, Copy, CanTween)]
-struct CardEffects {
-    x_px: f32,
-    y_px: f32,
-    tilt_x_deg: f32,
-    rot_y_deg: f32,
-    perspective: f64,
-    blur: f32,
-}
-
-#[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
-pub enum CardAnimation {
-    Appear {
-        x_from_px: f32,
-        y_from_px: f32,
-        tilt_x_from_deg: f32,
-        ms: f64,
-    },
-    EnterY {
-        from_deg: f32,
-        to_deg: f32,
-        ms: f64,
-    },
-    LeaveY {
-        from_deg: f32,
-        to_deg: f32,
-        ms: f64,
-    },
-    EnterTiltX {
-        from_deg: f32,
-        to_deg: f32,
-        ms: f64,
-    },
-    LeaveTiltX {
-        from_deg: f32,
-        to_deg: f32,
-        ms: f64,
-    },
-}
 
 /// Generic Card component (MAYA DRY KISS).
 ///
@@ -150,7 +115,7 @@ pub fn Card(
         )
     });
 
-    // Built-in rotateY animation plumbing (imperative)
+    // Built-in animation plumbing (imperative)
     let reduced_motion = use_prefers_reduced_motion();
 
     let anim_ms_sig = RwSignal::new(0.0_f64);
@@ -158,214 +123,310 @@ pub fn Card(
         CardEffects {
             x_px: 0.0,
             y_px: 0.0,
+            z_px: 0.0,
             tilt_x_deg: 0.0,
             rot_y_deg: 0.0,
+            scale_x: 1.0,
+            scale_y: 1.0,
             perspective: 0.0,
             blur: 0.0
         },
         0.0
     )]);
 
-    // RAF loops
-    let Pausable {
-        pause: anim_pause,
-        resume: anim_resume,
-        is_active: anim_active,
-    } = use_raf_fn_with_options(
-        move |UseRafFnCallbackArgs { delta, .. }| {
-            let reduced = reduced_motion();
-            transform_seq.update(|seq| {
+    // RAF loop (FPS throttled via reactive signal)
+    let fps_signal = Signal::derive(move || {
+        if reduced_motion() {
+            animation::REDUCED_FPS
+        } else {
+            animation::NORMAL_FPS
+        }
+    });
+
+    let pausable = use_raf_fn_with_fps_signal(
+        {
+            move |args: leptos_use::UseRafFnCallbackArgs| {
+                let reduced = reduced_motion();
                 if reduced {
-                    seq.advance_to(anim_ms_sig());
+                    // In reduced motion, fast-forward to end (no intermediate frames)
+                    transform_seq.update(|seq| {
+                        seq.advance_to(anim_ms_sig());
+                    });
                 } else {
-                    let rem = seq.duration() - seq.time();
-                    seq.advance_by(delta.min(rem));
+                    transform_seq.update(|seq| {
+                        let rem = seq.duration() - seq.time();
+                        seq.advance_by(args.delta.min(rem));
+                    });
                 }
-            });
+            }
         },
-        UseRafFnOptions::default().immediate(false),
+        Signal::derive(move || fps_signal.get()),
     );
+    let anim_pause = pausable.pause;
+    let anim_resume = pausable.resume;
+    let anim_active = pausable.is_active;
 
     // Start animation when parent sets a new (tx_id, CardAnimation)
     Effect::new(move |_| {
         if let Some(animation) = start_animation() {
+            // FPS already chosen (normal vs reduced only)
             match animation {
-                CardAnimation::EnterY {
-                    from_deg,
-                    to_deg,
-                    ms,
+                CardAnimation::Appear3D {
+                    from_x_px,
+                    from_y_px,
+                    from_z_px,
+                    from_tilt_x_deg,
+                    stretch_axis,
+                    stretch_factor,
                 } => {
-                    anim_ms_sig.set(ms);
-                    transform_seq.set(keyframes![
-                        (
-                            CardEffects {
-                                x_px: 0.0,
-                                y_px: 0.0,
-                                tilt_x_deg: 0.0,
-                                rot_y_deg: from_deg,
-                                perspective: PERSPECTIVE_CM,
-                                blur: MAX_BLUR,
-                            },
-                            0.0
-                        ),
-                        (
-                            CardEffects {
-                                x_px: 0.0,
-                                y_px: 0.0,
-                                tilt_x_deg: 0.0,
-                                rot_y_deg: to_deg,
-                                perspective: PERSPECTIVE_CM,
-                                blur: 0.0,
-                            },
-                            ms,
-                            EaseOutCubic
-                        )
-                    ]);
-                    anim_resume();
-                    log::debug!("Card: ENTER start {from_deg} -> {to_deg}ms={ms}");
-                }
-                CardAnimation::LeaveY {
-                    from_deg,
-                    to_deg,
-                    ms,
-                } => {
-                    anim_ms_sig.set(ms);
-                    transform_seq.set(keyframes![
-                        (
-                            CardEffects {
-                                x_px: 0.0,
-                                y_px: 0.0,
-                                tilt_x_deg: 0.0,
-                                rot_y_deg: from_deg,
-                                perspective: PERSPECTIVE_CM,
-                                blur: 0.0,
-                            },
-                            0.0
-                        ),
-                        (
-                            CardEffects {
-                                x_px: 0.0,
-                                y_px: 0.0,
-                                tilt_x_deg: 0.0,
-                                rot_y_deg: to_deg,
-                                perspective: PERSPECTIVE_CM,
-                                blur: MAX_BLUR,
-                            },
-                            ms,
-                            EaseInCubic
-                        )
-                    ]);
-                    anim_resume();
-                    log::debug!("Card: LEAVE start {from_deg} -> {to_deg}ms={ms}");
-                }
-                CardAnimation::EnterTiltX {
-                    from_deg,
-                    to_deg,
-                    ms,
-                } => {
-                    anim_ms_sig.set(ms);
-                    transform_seq.set(keyframes![
-                        (
-                            CardEffects {
-                                x_px: 0.0,
-                                y_px: 0.0,
-                                tilt_x_deg: from_deg,
-                                rot_y_deg: 0.0,
-                                perspective: PERSPECTIVE_CM,
-                                blur: MAX_BLUR,
-                            },
-                            0.0
-                        ),
-                        (
-                            CardEffects {
-                                x_px: 0.0,
-                                y_px: 0.0,
-                                tilt_x_deg: to_deg,
-                                rot_y_deg: 0.0,
-                                perspective: PERSPECTIVE_CM,
-                                blur: 0.0,
-                            },
-                            ms,
-                            EaseOutCubic
-                        )
-                    ]);
-                    anim_resume();
-                    log::debug!("Card: ENTER_TILTX start {from_deg} -> {to_deg}ms={ms}");
-                }
-                CardAnimation::LeaveTiltX {
-                    from_deg,
-                    to_deg,
-                    ms,
-                } => {
-                    anim_ms_sig.set(ms);
-                    transform_seq.set(keyframes![
-                        (
-                            CardEffects {
-                                x_px: 0.0,
-                                y_px: 0.0,
-                                tilt_x_deg: from_deg,
-                                rot_y_deg: 0.0,
-                                perspective: PERSPECTIVE_CM,
-                                blur: 0.0,
-                            },
-                            0.0
-                        ),
-                        (
-                            CardEffects {
-                                x_px: 0.0,
-                                y_px: 0.0,
-                                tilt_x_deg: to_deg,
-                                rot_y_deg: 0.0,
-                                perspective: PERSPECTIVE_CM,
-                                blur: MAX_BLUR,
-                            },
-                            ms,
-                            EaseInCubic
-                        )
-                    ]);
-                    anim_resume();
-                    log::debug!("Card: LEAVE_TILTX start {from_deg} -> {to_deg}ms={ms}");
-                }
-                CardAnimation::Appear {
-                    x_from_px,
-                    y_from_px,
-                    tilt_x_from_deg,
-                    ms,
-                } => {
-                    anim_ms_sig.set(ms);
-                    transform_seq.set(keyframes![
-                        (
-                            CardEffects {
-                                x_px: x_from_px,
-                                y_px: y_from_px,
-                                tilt_x_deg: tilt_x_from_deg,
-                                rot_y_deg: 0.0,
-                                perspective: APPEAR_PERSPECTIVE_CM,
-                                blur: MAX_BLUR,
-                            },
-                            0.0
-                        ),
-                        (
-                            CardEffects {
-                                x_px: 0.0,
-                                y_px: 0.0,
-                                tilt_x_deg: 0.0,
-                                rot_y_deg: 0.0,
-                                perspective: PERSPECTIVE_CM,
-                                blur: 0.0,
-                            },
-                            ms,
-                            EaseOutCubic
-                        )
-                    ]);
-                    anim_resume();
-                    log::debug!(
-                        "Card: APPEAR start trans=({}, {}) tilt={}ms={}",
-                        x_from_px,
-                        y_from_px,
-                        tilt_x_from_deg,
-                        ms
+                    // Adapt (duration, depth, stretch, tilt) using helper
+                    let adapt = adapt_appear(
+                        from_x_px,
+                        from_y_px,
+                        from_z_px,
+                        from_tilt_x_deg,
+                        stretch_factor,
                     );
+                    anim_ms_sig.set(animation::CARD_APPEAR_BASE_MS);
+                    let edge_ratio = adapt.edge_ratio;
+                    let final_stretch = adapt.final_stretch_factor;
+                    let adj_tilt = adapt.adjusted_tilt_deg;
+                    let adj_from_z = adapt.adjusted_from_z;
+                    let curve_point1_t = adapt.curve_point1_t;
+                    let curve_point2_t = adapt.curve_point2_t;
+                    let total_t = adapt.total_t;
+                    let (sx_stretch, sy_stretch) = match stretch_axis {
+                        StretchAxis::X => (final_stretch, 1.0),
+                        StretchAxis::Y => (1.0, final_stretch),
+                    };
+
+                    // Cubic curve: start deep → curve point 1 → curve point 2 → center
+                    transform_seq.set(keyframes![
+                        (
+                            CardEffects {
+                                x_px: from_x_px,
+                                y_px: from_y_px,
+                                z_px: adj_from_z,
+                                tilt_x_deg: adj_tilt,
+                                rot_y_deg: 0.0,
+                                scale_x: sx_stretch,
+                                scale_y: sy_stretch,
+                                perspective: CARD_APPEAR_PERSPECTIVE_CM * adapt.perspective_scale,
+                                blur: CARD_MAX_BLUR,
+                            },
+                            0.0
+                        ),
+                        (
+                            CardEffects {
+                                x_px: from_x_px * 0.33,
+                                y_px: from_y_px * 0.33,
+                                z_px: adj_from_z * 0.33,
+                                tilt_x_deg: adj_tilt * 0.33,
+                                rot_y_deg: 0.0,
+                                scale_x: 1.0 + (sx_stretch - 1.0) * 0.67,
+                                scale_y: 1.0 + (sy_stretch - 1.0) * 0.67,
+                                perspective: CARD_APPEAR_PERSPECTIVE_CM * adapt.perspective_scale,
+                                blur: CARD_MAX_BLUR * 0.67,
+                            },
+                            curve_point1_t,
+                            EaseOutCubic
+                        ),
+                        (
+                            CardEffects {
+                                x_px: from_x_px * 0.1,
+                                y_px: from_y_px * 0.1,
+                                z_px: adj_from_z * 0.1,
+                                tilt_x_deg: adj_tilt * 0.1,
+                                rot_y_deg: 0.0,
+                                scale_x: 1.0 + (sx_stretch - 1.0) * 0.33,
+                                scale_y: 1.0 + (sy_stretch - 1.0) * 0.33,
+                                perspective: CARD_PERSPECTIVE_CM * adapt.perspective_scale,
+                                blur: CARD_MAX_BLUR * 0.33,
+                            },
+                            curve_point2_t,
+                            EaseOutCubic
+                        ),
+                        (
+                            CardEffects {
+                                x_px: 0.0,
+                                y_px: 0.0,
+                                z_px: 0.0,
+                                tilt_x_deg: 0.0,
+                                rot_y_deg: 0.0,
+                                scale_x: 1.0,
+                                scale_y: 1.0,
+                                perspective: CARD_PERSPECTIVE_CM,
+                                blur: 0.0,
+                            },
+                            total_t,
+                            EaseOutCubic
+                        )
+                    ]);
+                    anim_resume();
+                    log::debug!("Card: APPEAR3D edge_ratio={edge_ratio:.2} ms={} tilt_in={from_tilt_x_deg} tilt_adj={adj_tilt} stretch_final={final_stretch}", animation::CARD_APPEAR_BASE_MS);
+                }
+                CardAnimation::EnterTravel3D {
+                    from_x_px,
+                    from_z_px,
+                    from_rot_y_deg,
+                    to_rot_y_deg,
+                } => {
+                    let enter = adapt_enter(from_x_px, from_z_px, from_rot_y_deg);
+                    anim_ms_sig.set(animation::CARD_ENTER_BASE_MS);
+                    let edge_ratio = enter.edge_ratio;
+                    let adj_from_rot = enter.adjusted_from_rot_y_deg;
+                    let adj_from_z = enter.adjusted_from_z;
+                    let curve_point1_t = enter.curve_point1_t;
+                    let curve_point2_t = enter.curve_point2_t;
+                    let total_t = enter.total_t;
+                    let stretch_start = enter.entry_stretch_start;
+
+                    // Cubic curve: back-left → curve point 1 → curve point 2 → center
+                    // With rotation following curve and stretch effects
+                    transform_seq.set(keyframes![
+                        (
+                            CardEffects {
+                                x_px: from_x_px,
+                                y_px: 0.0,
+                                z_px: adj_from_z,
+                                tilt_x_deg: 0.0,
+                                rot_y_deg: adj_from_rot,
+                                scale_x: stretch_start, // Stretched at start
+                                scale_y: 1.0,
+                                perspective: CARD_PERSPECTIVE_CM * enter.perspective_scale,
+                                blur: CARD_MAX_BLUR,
+                            },
+                            0.0
+                        ),
+                        (
+                            CardEffects {
+                                x_px: from_x_px * 0.33,
+                                y_px: 0.0,
+                                z_px: adj_from_z * 0.33,
+                                tilt_x_deg: 0.0,
+                                rot_y_deg: adj_from_rot * 0.67,
+                                scale_x: 1.0 + (stretch_start - 1.0) * 0.67, // Gradually return to normal
+                                scale_y: 1.0,
+                                perspective: CARD_PERSPECTIVE_CM * enter.perspective_scale,
+                                blur: CARD_MAX_BLUR * 0.67,
+                            },
+                            curve_point1_t,
+                            EaseOutCubic
+                        ),
+                        (
+                            CardEffects {
+                                x_px: from_x_px * 0.1,
+                                y_px: 0.0,
+                                z_px: adj_from_z * 0.1,
+                                tilt_x_deg: 0.0,
+                                rot_y_deg: adj_from_rot * 0.33,
+                                scale_x: 1.0 + (stretch_start - 1.0) * 0.33, // Nearly normal
+                                scale_y: 1.0,
+                                perspective: CARD_PERSPECTIVE_CM,
+                                blur: CARD_MAX_BLUR * 0.33,
+                            },
+                            curve_point2_t,
+                            EaseOutCubic
+                        ),
+                        (
+                            CardEffects {
+                                x_px: 0.0,
+                                y_px: 0.0,
+                                z_px: 0.0,
+                                tilt_x_deg: 0.0,
+                                rot_y_deg: to_rot_y_deg,
+                                scale_x: 1.0, // Normal scale at end
+                                scale_y: 1.0,
+                                perspective: CARD_PERSPECTIVE_CM,
+                                blur: 0.0,
+                            },
+                            total_t,
+                            EaseOutCubic
+                        )
+                    ]);
+                    anim_resume();
+                    log::debug!("Card: ENTER_TRAVEL3D edge_ratio={edge_ratio:.2} ms={} rot_adj={adj_from_rot}->{to_rot_y_deg}", animation::CARD_ENTER_BASE_MS);
+                }
+                CardAnimation::LeaveTravel3D {
+                    to_x_px,
+                    to_z_px,
+                    to_rot_y_deg,
+                } => {
+                    let leave = adapt_leave(to_x_px, to_z_px, to_rot_y_deg);
+                    anim_ms_sig.set(animation::CARD_LEAVE_BASE_MS);
+                    let edge_ratio = leave.edge_ratio;
+                    let adj_to_rot = leave.adjusted_to_rot_y_deg;
+                    let adj_to_z = leave.adjusted_to_z;
+                    let curve_point1_t = leave.curve_point1_t;
+                    let curve_point2_t = leave.curve_point2_t;
+                    let total_t = leave.total_t;
+                    let stretch_end = leave.leave_stretch_end;
+
+                    // Cubic curve: center → curve point 1 → curve point 2 → back-right
+                    // With rotation following curve and dramatic stretch at exit
+                    transform_seq.set(keyframes![
+                        (
+                            CardEffects {
+                                x_px: 0.0,
+                                y_px: 0.0,
+                                z_px: 0.0,
+                                tilt_x_deg: 0.0,
+                                rot_y_deg: 0.0,
+                                scale_x: 1.0, // Start normal
+                                scale_y: 1.0,
+                                perspective: CARD_PERSPECTIVE_CM,
+                                blur: 0.0,
+                            },
+                            0.0
+                        ),
+                        (
+                            CardEffects {
+                                x_px: to_x_px * 0.33,
+                                y_px: 0.0,
+                                z_px: adj_to_z * 0.33,
+                                tilt_x_deg: 0.0,
+                                rot_y_deg: adj_to_rot * 0.33,
+                                scale_x: 1.0 + (stretch_end - 1.0) * 0.33, // Begin stretching
+                                scale_y: 1.0,
+                                perspective: CARD_PERSPECTIVE_CM * leave.perspective_scale,
+                                blur: CARD_MAX_BLUR * 0.33,
+                            },
+                            curve_point1_t,
+                            EaseInCubic
+                        ),
+                        (
+                            CardEffects {
+                                x_px: to_x_px * 0.67,
+                                y_px: 0.0,
+                                z_px: adj_to_z * 0.67,
+                                tilt_x_deg: 0.0,
+                                rot_y_deg: adj_to_rot * 0.67,
+                                scale_x: 1.0 + (stretch_end - 1.0) * 0.67, // More stretching
+                                scale_y: 1.0,
+                                perspective: CARD_PERSPECTIVE_CM,
+                                blur: CARD_MAX_BLUR * 0.67,
+                            },
+                            curve_point2_t,
+                            EaseInCubic
+                        ),
+                        (
+                            CardEffects {
+                                x_px: to_x_px,
+                                y_px: 0.0,
+                                z_px: adj_to_z,
+                                tilt_x_deg: 0.0,
+                                rot_y_deg: adj_to_rot,
+                                scale_x: stretch_end, // Maximum stretch at exit
+                                scale_y: 1.0,
+                                perspective: CARD_PERSPECTIVE_CM,
+                                blur: CARD_MAX_BLUR,
+                            },
+                            total_t,
+                            EaseInCubic
+                        )
+                    ]);
+                    anim_resume();
+                    log::debug!("Card: LEAVE_TRAVEL3D edge_ratio={edge_ratio:.2} ms={} rot_adj={adj_to_rot}", animation::CARD_LEAVE_BASE_MS);
                 }
             }
         }
@@ -373,11 +434,9 @@ pub fn Card(
 
     let transform_style = move || {
         let s = transform_seq().now();
-        log::trace!("card animation state: {s:?}");
-        // Ensure a stable baseline: translateZ(0) and scale(1) explicitly set.
         format!(
-            "rotate3d(1, 0, 0, {}deg) rotate3d(0, 1, 0, {}deg) translate3d({}px, {}px, 0) translateZ(0) scale(1)",
-             s.tilt_x_deg, s.rot_y_deg, s.x_px, s.y_px
+            "translate3d({}px, {}px, {}px) rotateX({}deg) rotateY({}deg) scale({},{})",
+            s.x_px, s.y_px, s.z_px, s.tilt_x_deg, s.rot_y_deg, s.scale_x, s.scale_y
         )
     };
 

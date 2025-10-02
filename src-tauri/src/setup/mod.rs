@@ -20,6 +20,8 @@ pub struct Window {
     pub override_dark: Option<bool>,
     pub width: f64,
     pub height: f64,
+    pub ui_safe_area: shared::events::setup::SafeAreaInstestUiIncrementPayload,
+    pub system_safe_area: shared::events::setup::SafeAreaInstestUiIncrementPayload,
 }
 
 pub type WindowState = Mutex<Window>;
@@ -60,6 +62,18 @@ pub fn app_setup(app: &mut App) -> Result<()> {
         height: size.height as f64,
         dark: state_dark_mode,
         override_dark,
+        ui_safe_area: shared::events::setup::SafeAreaInstestUiIncrementPayload {
+            top: 0.0,
+            right: 0.0,
+            bottom: 0.0,
+            left: 0.0,
+        },
+        system_safe_area: shared::events::setup::SafeAreaInstestUiIncrementPayload {
+            top: 0.0,
+            right: 0.0,
+            bottom: 0.0,
+            left: 0.0,
+        },
     };
 
     app.manage(Mutex::new(initial_state));

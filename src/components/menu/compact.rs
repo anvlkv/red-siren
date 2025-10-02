@@ -5,9 +5,9 @@ use shared::{
     RouteId,
 };
 
-use tauri_use::{use_command, use_invoke_with_args, UseTauriReturn, UseTauriWithReturn};
+use tauri_use::use_invoke_with_args;
 
-use crate::components::{Card, CardAnimation, NavigationTx};
+use crate::components::{Card, CardAnimation, NavigationTx, StretchAxis};
 
 use super::item::{MenuItem, MenuItemView};
 
@@ -28,7 +28,7 @@ const APPEAR_MS: f64 = 650.0;
 #[component]
 pub fn CompactMenu(
     #[prop(into)] items: Signal<Vec<MenuItem>>,
-    #[prop(optional)] placement: CompactMenuPlacement,
+    #[prop(into)] placement: Signal<CompactMenuPlacement>,
     children: Children,
 ) -> impl IntoView {
     let nav_tx = expect_context::<Signal<Option<NavigationTx>>>();
@@ -42,22 +42,22 @@ pub fn CompactMenu(
         height: menu_height,
     } = use_element_size(el);
 
-    let UseTauriWithReturn {
+    let tauri_use::UseTauriWithReturn {
         trigger: trigger_inset_update,
         error: inset_error,
         ..
     } = use_invoke_with_args::<shared::commands::setup::SafeAreaInstestUiIncrementPayload, ()>(
-        shared::commands::setup::UI_SAFE_AREA_INSETS_INCREMENT,
+        shared::commands::setup::UI_SAFE_AREA_INSETS_APPLY,
     );
 
-    let UseTauriWithReturn {
+    let tauri_use::UseTauriWithReturn {
         trigger: trigger_navigate,
         error,
         ..
     } = use_invoke_with_args::<NavigateRequestPayload, ()>(shared::commands::navigation::NAVIGATE);
 
     // Trigger to notify backend that the enter animation has completed
-    let UseTauriWithReturn {
+    let tauri_use::UseTauriWithReturn {
         trigger: enter_done_trigger,
         error: enter_error,
         ..
@@ -66,7 +66,7 @@ pub fn CompactMenu(
     );
 
     // Trigger to notify backend that the leave animation has completed
-    let UseTauriWithReturn {
+    let tauri_use::UseTauriWithReturn {
         trigger: leave_done_trigger,
         error: leave_error,
         ..
@@ -78,6 +78,7 @@ pub fn CompactMenu(
     Effect::new(move || {
         let menu_height = menu_height() as f32;
         let menu_width = menu_width() as f32;
+        let placement = placement();
         trigger_inset_update(Some(match placement {
             CompactMenuPlacement::Bottom => SafeAreaInstestUiIncrementPayload {
                 top: 0_f32,
@@ -115,40 +116,46 @@ pub fn CompactMenu(
         if menu_anim().is_some() || docked() {
             return;
         }
-        set_menu_anim(Some(CardAnimation::Appear {
-            x_from_px: 0.0,
-            y_from_px: -200.0,      // slide downward to final dock position
-            tilt_x_from_deg: -75.0, // strong forward flip
-            ms: APPEAR_MS,
+        // Determine stretch axis based on current placement (horizontal bar stretches Y, vertical bar stretches X)
+        let place = placement();
+        let stretch_axis = match place {
+            CompactMenuPlacement::Left | CompactMenuPlacement::Right => StretchAxis::X,
+            _ => StretchAxis::Y,
+        };
+        // Depth & translation tuning (temporary placeholder values for new 3D system)
+        let (from_x, from_y, from_z, tilt) = match place {
+            CompactMenuPlacement::Bottom => (0.0, 140.0, -400.0, -25.0),
+            CompactMenuPlacement::Top => (0.0, -140.0, -400.0, 25.0),
+            CompactMenuPlacement::Left => (-140.0, 0.0, -400.0, -10.0),
+            CompactMenuPlacement::Right => (140.0, 0.0, -400.0, -10.0),
+        };
+        set_menu_anim(Some(CardAnimation::Appear3D {
+            from_x_px: from_x,
+            from_y_px: from_y,
+            from_z_px: from_z,
+            from_tilt_x_deg: tilt,
+            stretch_axis,
+            stretch_factor: 1.08,
         }));
     });
 
     // Queue leave animation on navigation leave
     Effect::new(move |_| {
-        if matches!(nav_tx(), Some(NavigationTx::Leave(_))) {
-            let leave = match placement {
-                CompactMenuPlacement::Bottom => CardAnimation::LeaveTiltX {
-                    from_deg: 0.0,
-                    to_deg: 90.0,
-                    ms: LEAVE_MS,
-                },
-                CompactMenuPlacement::Top => CardAnimation::LeaveTiltX {
-                    from_deg: 0.0,
-                    to_deg: -90.0,
-                    ms: LEAVE_MS,
-                },
-                CompactMenuPlacement::Left => CardAnimation::LeaveY {
-                    from_deg: 0.0,
-                    to_deg: -90.0,
-                    ms: LEAVE_MS,
-                },
-                CompactMenuPlacement::Right => CardAnimation::LeaveY {
-                    from_deg: 0.0,
-                    to_deg: 90.0,
-                    ms: LEAVE_MS,
-                },
+        let nav = nav_tx();
+        let place = placement();
+        if matches!(nav, Some(NavigationTx::Leave(_))) {
+            // Travel out in direction consistent with placement (edge retract) with depth + yaw
+            let (to_x, to_z, to_rot_y) = match place {
+                CompactMenuPlacement::Bottom => (260.0_f32, -380.0_f32, -95.0_f32),
+                CompactMenuPlacement::Top => (-260.0_f32, -380.0_f32, 95.0_f32),
+                CompactMenuPlacement::Left => (-260.0_f32, -380.0_f32, 95.0_f32),
+                CompactMenuPlacement::Right => (260.0_f32, -380.0_f32, -95.0_f32),
             };
-            set_menu_anim(Some(leave));
+            set_menu_anim(Some(CardAnimation::LeaveTravel3D {
+                to_x_px: to_x,
+                to_z_px: to_z,
+                to_rot_y_deg: to_rot_y,
+            }));
         }
     });
 
@@ -198,14 +205,14 @@ pub fn CompactMenu(
         if let Some(err) = inset_error() {
             log::error!(
                 "Error invoking {}: {}",
-                shared::commands::setup::UI_SAFE_AREA_INSETS_INCREMENT,
+                shared::commands::setup::UI_SAFE_AREA_INSETS_APPLY,
                 err
             );
         }
     });
 
-    // Edge positioning container (self-contained so outer wrapper on page not needed)
-    let edge_container_cls = match placement {
+    // Edge positioning container (reactive to placement changes)
+    let edge_container_cls = Signal::derive(move || match placement() {
         CompactMenuPlacement::Bottom => {
             "fixed inset-x-0 bottom-0 flex justify-center pointer-events-none"
         }
@@ -218,10 +225,12 @@ pub fn CompactMenu(
         CompactMenuPlacement::Right => {
             "fixed inset-y-0 right-0 flex items-center pointer-events-none"
         }
-    };
+    });
 
     let card_variant = Signal::derive(move || {
-        if !docked() {
+        let docked = docked();
+        let placement = placement();
+        if !docked {
             "".to_string()
         } else {
             match placement {

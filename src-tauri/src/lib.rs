@@ -75,7 +75,7 @@ pub fn run() {
         instrument::instrument_activation_source,
         instrument::instrument_set_activation_source,
         instrument::instrument_layout,
-        instrument::ui_safe_area_insets_increment,
+        instrument::ui_safe_area_insets_apply,
     ]);
 
     builder

@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 use tauri_use::{use_invoke_with_args, UseTauriWithReturn};
 
-use crate::components::{Button, Card, CardAnimation, Icon, UiSize, UiVariant};
+use crate::components::{Button, Card, CardAnimation, Icon, StretchAxis, UiSize, UiVariant};
 
 const BASE_ANIMATION_DURATION_MS: f64 = 600.0;
 
@@ -165,17 +165,22 @@ pub fn ContentPage(
             let played = c.played_flag.get().unwrap();
             !played.load(Ordering::Relaxed)
         }) {
-            Some(CardAnimation::Appear {
-                x_from_px: 0.0,
-                y_from_px: config.base_y_px as f32,
-                tilt_x_from_deg: config.tilt_x_from_deg,
-                ms: config.base_ms,
+            // First-time appear with depth + stretch on Y
+            Some(CardAnimation::Appear3D {
+                from_x_px: 0.0,
+                from_y_px: config.base_y_px as f32 * 2.0,
+                from_z_px: -700.0,
+                from_tilt_x_deg: config.tilt_x_from_deg,
+                stretch_axis: StretchAxis::Y,
+                stretch_factor: 1.18,
             })
         } else {
-            Some(CardAnimation::EnterY {
-                from_deg: 90.0,
-                to_deg: 0.0,
-                ms: BASE_ANIMATION_DURATION_MS,
+            // Standard enter travel: from left/back with yaw
+            Some(CardAnimation::EnterTravel3D {
+                from_x_px: -480.0,
+                from_z_px: -700.0,
+                from_rot_y_deg: 110.0,
+                to_rot_y_deg: 0.0,
             })
         };
 
@@ -187,12 +192,15 @@ pub fn ContentPage(
     // Queue LEAVE animation on navigation start from this route
     Effect::new(move |_| {
         if matches!(nav_tx(), Some(NavigationTx::Leave(_))) {
-            set_card_animation(Some(CardAnimation::LeaveY {
-                from_deg: 0.0,
-                to_deg: 90.0,
-                ms: BASE_ANIMATION_DURATION_MS,
+            set_card_animation(Some(CardAnimation::LeaveTravel3D {
+                to_x_px: 480.0,
+                to_z_px: -700.0,
+                to_rot_y_deg: -110.0,
             }));
-            log::debug!("Page({route_id:?}): queued LEAVE tx_id={:?}", nav_tx());
+            log::debug!(
+                "Page({route_id:?}): queued LEAVE (travel3d) tx_id={:?}",
+                nav_tx()
+            );
         }
     });
 
@@ -208,7 +216,7 @@ pub fn ContentPage(
         }
 
         if let Some(c) = card_animation()
-            .filter(|a| matches!(a, CardAnimation::Appear { .. }))
+            .filter(|a| matches!(a, CardAnimation::Appear3D { .. }))
             .and(appear_animation_config)
         {
             let played = c.played_flag.get().unwrap();

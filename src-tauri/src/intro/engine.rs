@@ -139,9 +139,11 @@ impl FundspEngine {
             let depth = depths_for_closure[idx];
             let snoop_be = backs[idx].clone();
             // Apply branch-specific depth and amplitude modulation
-            //(((pass() * depth) * (pass() * amp)) * pass())
 
-            ((pass() + ((pass() * depth) * pass())) * (amp * depth)) >> declick() >> snoop_be
+            ((pass() + ((pass() * depth) * pass())) * (amp * depth))
+                >> declick()
+                >> fresonator(Softsign(1.0 / (k + 1) as f32))
+                >> snoop_be
         });
 
         // Collapse multi-channel bus to one mono output (not used, just drives ticking).

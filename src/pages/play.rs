@@ -5,7 +5,7 @@ use tauri_use::{
 };
 
 use crate::{
-    components::{CompactMenu, Icon, Instrument, MenuItem, Switch, UiSize},
+    components::{CompactMenu, CompactMenuPlacement, Icon, Instrument, MenuItem, Switch, UiSize},
     util::tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
 };
 
@@ -48,6 +48,20 @@ pub fn Play() -> impl IntoView {
         use_tauri_resource::<shared::instrument::events::PlaybackStatePayload>(
             shared::instrument::events::PLAYBACK_STATE,
         );
+
+    // Derive compact menu placement from current instrument layout orientation
+    let UseTauriResourceReturn { data: layout, .. } =
+        use_tauri_resource::<shared::instrument::Layout>(shared::instrument::events::LAYOUT);
+
+    let placement = Signal::derive(move || {
+        layout
+            .get()
+            .map(|l| match l.orientation {
+                shared::orientation::LayoutOrientation::Vertical => CompactMenuPlacement::Left,
+                shared::orientation::LayoutOrientation::Horizontal => CompactMenuPlacement::Bottom,
+            })
+            .unwrap_or(CompactMenuPlacement::Bottom)
+    });
 
     let UseTauriWithReturn {
         error: pause_error,
@@ -204,7 +218,7 @@ pub fn Play() -> impl IntoView {
     view! {
         <div>
             <Instrument />
-            <CompactMenu items=menu_items>
+            <CompactMenu items=menu_items placement=placement>
                 <Switch
                     labels=vec![
                         view! { <Icon name="entropy" size=UiSize::Sm /> }.into_any(),

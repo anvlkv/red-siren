@@ -11,13 +11,7 @@ use crate::{
 #[component]
 pub fn AppRoutes() -> impl IntoView {
     view! {
-        <>
-            <div
-                class="absolute h-full w-full overflow-hidden pointer-events-none z-0"
-                role="presentation"
-            >
-                <Intro />
-            </div>
+        <Intro>
             <div class="absolute h-full w-full overflow-hidden pointer-events-auto z-1" role="main">
                 <Routes
                     fallback=|| {
@@ -35,6 +29,6 @@ pub fn AppRoutes() -> impl IntoView {
                     <Route path=(StaticSegment(RouteId::Permissions.as_ref()),) view=Permissions />
                 </Routes>
             </div>
-        </>
+        </Intro>
     }
 }

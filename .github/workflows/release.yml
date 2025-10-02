@@ -7,40 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  create-release:
-    permissions:
-      contents: write
-    runs-on: ubuntu-latest
-    outputs:
-      release_id: ${{ steps.create-release.outputs.result }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Get version from tag
-        id: version
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-      - name: Create release
-        id: create-release
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { data } = await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: context.ref.replace('refs/tags/', ''),
-              name: `Release ${context.ref.replace('refs/tags/', '')}`,
-              body: 'Red Siren release artifacts',
-              draft: true,
-              prerelease: false
-            })
-            return data.id
-
-  build-desktop:
-    needs: create-release
+  publish-tauri:
     permissions:
       contents: write
     strategy:
@@ -96,26 +63,20 @@ jobs:
         with:
           version: 'latest'
 
-      - name: Install Tauri CLI
-        uses: baptiste0928/cargo-install@v3
-        with:
-          crate: tauri-cli
-          version: '^2.0'
-          cache-key: tauri-cli-v2
-
-      - name: Build Tauri app
-        run: cargo tauri build ${{ matrix.args }}
-
-      - name: Upload to release
-        uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
+          tagName: v__VERSION__
+          releaseName: 'Red Siren v__VERSION__'
+          releaseBody: 'See the assets to download this version and install.'
+          releaseDraft: true
+          prerelease: false
           args: ${{ matrix.args }}
 
   build-android:
-    needs: create-release
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -187,18 +148,23 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: cargo tauri android build --apk --release
 
+      - name: Get version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
       - name: Upload Android APK to release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          upload_url: ${{ needs.create-release.outputs.release_id }}
-          asset_path: src-tauri/gen/android/app/build/outputs/apk/release/*.apk
-          asset_name: red-siren-android.apk
-          asset_content_type: application/vnd.android.package-archive
+          files: src-tauri/gen/android/app/build/outputs/apk/release/*.apk
+          draft: true
+          prerelease: false
 
   build-ios:
-    needs: create-release
+    permissions:
+      contents: write
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -268,23 +234,10 @@ jobs:
             exit 1
           fi
 
-  publish-release:
-    permissions:
-      contents: write
-    runs-on: ubuntu-latest
-    needs: [create-release, build-desktop, build-android, build-ios]
-
-    steps:
-      - name: Publish release
-        uses: actions/github-script@v7
-        env:
-          release_id: ${{ needs.create-release.outputs.release_id }}
+      - name: Upload iOS IPA to release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          script: |
-            github.rest.repos.updateRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: process.env.release_id,
-              draft: false,
-              prerelease: false
-            })
+          files: src-tauri/gen/apple/build/**/*.ipa
+          draft: true
+          prerelease: false

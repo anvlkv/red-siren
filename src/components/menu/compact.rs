@@ -149,9 +149,7 @@ pub fn CompactMenu(
         }
     });
 
-    // Animation state
     let (docked, set_docked) = signal(false);
-    let last_leave_tx_id = RwSignal::new(None::<u64>);
 
     let menu_anim = Memo::new(move |_| {
         let docked = docked();

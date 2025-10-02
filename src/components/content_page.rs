@@ -107,23 +107,28 @@ pub fn ContentPage(
         }
     };
 
-    // Initial animation (will also be refreshed on nav enter below)
-    let (card_animation, set_card_animation) = signal(Some(compute_enter()));
+    // Signal to track when animation should be cleared after completion
+    let (enter_animation_done, set_enter_animation_done) = signal(false);
 
-    // Queue edge leave animation on navigation start from this route
-    Effect::new(move |_| {
-        // Recompute dynamic enter animation if a new Enter transaction begins
-        if matches!(nav_tx(), Some(NavigationTx::Enter(_))) {
-            set_card_animation(Some(compute_enter()));
-        }
-        // Queue dynamic leave animation when a leave begins
-        if matches!(nav_tx(), Some(NavigationTx::Leave(_))) {
-            set_card_animation(Some(compute_leave()));
+    // Compute animation based on navigation transaction state
+    let card_animation = Memo::new(move |_| {
+        // Read all reactive values first
+        let enter_animation_done = enter_animation_done();
+        let nav_tx = nav_tx();
+        let leave = compute_leave();
+        let enter = compute_enter();
+
+        if let Some(NavigationTx::Leave(_)) = nav_tx {
             log::debug!(
                 "Page({:?}): queued LEAVE_TRAVEL (dynamic) tx_id={:?}",
                 route_id,
-                nav_tx()
+                nav_tx
             );
+            Some(leave)
+        } else if enter_animation_done {
+            None
+        } else {
+            Some(enter)
         }
     });
 
@@ -139,7 +144,7 @@ pub fn ContentPage(
         }
 
         // Clear animation so Card can settle
-        set_card_animation(None);
+        set_enter_animation_done(true);
     });
 
     view! {

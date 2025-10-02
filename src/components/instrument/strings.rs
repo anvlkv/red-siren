@@ -1,40 +1,49 @@
 use leptos::prelude::*;
-use leptos_use::UseRafFnCallbackArgs;
 use shared::{
     instrument::GroupChanel,
     instrument::{StringSnoopDataRequest, StringSnoopDataResponse},
 };
 use tauri_use::{use_invoke, UseTauriReturn};
 
-use crate::util::raf_fn_fps::use_raf_fn_with_fps;
+use crate::util::layout_context::{expect_layout_contex, LayoutContextReturn};
 
 #[component]
-pub fn InstrumentStrings(
-    #[prop(into)] layout: Signal<shared::instrument::Layout>,
-) -> impl IntoView {
+pub fn InstrumentStrings() -> impl IntoView {
+    let LayoutContextReturn {
+        space,
+        num_groups,
+        num_keys_per_group,
+        first_group_channel,
+        orientation,
+        left_string_position,
+        right_string_position,
+        ..
+    } = expect_layout_contex();
+
     let view_box = move || {
-        let space = layout().space;
+        let space = space();
         format!("0 0 {} {}", space.x, space.y)
     };
     view! {
         <svg viewBox=view_box fill="none" xmlns="http://www.w3.org/2000/svg">
             {move || {
-                let layout = layout();
-                (0..layout.num_groups.get())
+                let num_groups = num_groups();
+                let num_keys_per_group = num_keys_per_group();
+                let first_group_channel = first_group_channel();
+                let orientation = orientation();
+                let left_string_position = left_string_position();
+                let right_string_position = right_string_position();
+                (0..num_groups)
                     .flat_map(|g: u8| {
-                        (0..layout.num_keys_per_group.get())
+                        (0..num_keys_per_group)
                             .map(move |k: u8| {
                                 let k = k as usize;
                                 let g = g as usize;
-                                let ch = layout.first_group_channel.nth_channel_from_first(g);
-                                let orientation = layout.orientation;
+                                let ch = first_group_channel.nth_channel_from_first(g);
+                                let orientation = orientation;
                                 let line = match ch {
-                                    shared::instrument::GroupChanel::Left => {
-                                        layout.left_string_position
-                                    }
-                                    shared::instrument::GroupChanel::Right => {
-                                        layout.right_string_position
-                                    }
+                                    shared::instrument::GroupChanel::Left => left_string_position,
+                                    shared::instrument::GroupChanel::Right => right_string_position,
                                 };
 
                                 view! { <StringView g k line orientation ch /> }

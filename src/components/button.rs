@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::components::{UiSize, UiVariant};
+use crate::components::{UiPlacement, UiSize, UiVariant};
 
 /// Generic, theme-aware button for Red Siren (MAYA DRY KISS).
 ///
@@ -34,6 +34,9 @@ pub fn Button(
     #[prop(optional, into)] size: Signal<UiSize>,
     #[prop(optional, into)] round: Signal<bool>,
     #[prop(optional, into)] square: Signal<bool>,
+
+    // Optional placement for directional / edge-aware layout (Left/Right => vertical stacking)
+    #[prop(optional, into)] placement: Signal<Option<UiPlacement>>,
 ) -> impl IntoView {
     let base = "relative inline-flex items-center justify-center cursor-pointer \
             transition-colors transition-shadow transition-opacity duration-200 focus:outline-none \
@@ -89,9 +92,15 @@ pub fn Button(
         } else {
             ""
         };
+        let placement_cls = if matches!(placement(), Some(UiPlacement::Left | UiPlacement::Right)) {
+            // Vertical stacking for left/right edge usage
+            "flex flex-col"
+        } else {
+            "flex flex-row"
+        };
 
         format!(
-            "{base} {rounding} {size_cls} {variant_cls} {disabled_cls} {}",
+            "{base} {rounding} {size_cls} {variant_cls} {disabled_cls} {placement_cls} {}",
             class()
         )
     };

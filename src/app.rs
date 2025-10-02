@@ -10,6 +10,7 @@ use tauri_use::{
 use crate::{
     routes::AppRoutes,
     util::tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
+    util::layout_context::provide_layout_context
 };
 
 #[component]
@@ -128,6 +129,8 @@ pub fn App() -> impl IntoView {
     on_cleanup(move || {
         close_app_ready();
     });
+
+    provide_layout_context();
 
     view! {
         <div class=window_appearance_class>

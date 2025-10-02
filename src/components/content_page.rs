@@ -1,50 +1,9 @@
 use leptos::prelude::*;
+use leptos_use::use_window_size;
 use shared::RouteId;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::OnceLock;
 use tauri_use::{use_invoke_with_args, UseTauriWithReturn};
 
-use crate::components::{Button, Card, CardAnimation, Icon, StretchAxis, UiSize, UiVariant};
-
-const BASE_ANIMATION_DURATION_MS: f64 = 600.0;
-
-/// Configuration for one-time appear animation (used by Home page)
-#[derive(Debug, Clone, Copy)]
-pub struct AppearAnimationConfig {
-    /// Base height for scaling calculations
-    pub base_height: f64,
-    /// Base Y translation distance
-    pub base_y_px: f64,
-    /// Base tilt angle
-    pub tilt_x_from_deg: f32,
-    /// Base duration in milliseconds
-    pub base_ms: f64,
-    /// Static flag to track if animation has been played
-    pub played_flag: &'static OnceLock<AtomicBool>,
-}
-
-impl PartialEq for AppearAnimationConfig {
-    fn eq(&self, other: &Self) -> bool {
-        self.base_height == other.base_height
-            && self.base_y_px == other.base_y_px
-            && self.tilt_x_from_deg == other.tilt_x_from_deg
-            && self.base_ms == other.base_ms
-            && std::ptr::eq(self.played_flag, other.played_flag)
-    }
-}
-
-impl Default for AppearAnimationConfig {
-    fn default() -> Self {
-        static DEFAULT_APPEAR_PLAYED: OnceLock<AtomicBool> = OnceLock::new();
-        Self {
-            base_height: 900.0,
-            base_y_px: 800.0,
-            tilt_x_from_deg: -60.0,
-            base_ms: BASE_ANIMATION_DURATION_MS,
-            played_flag: &DEFAULT_APPEAR_PLAYED,
-        }
-    }
-}
+use crate::components::{Button, Card, CardAnimation, Icon, UiSize, UiVariant};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NavigationTx {
@@ -65,24 +24,9 @@ pub fn ContentPage(
     /// Page content
     children: Children,
 
-    /// Optional appear animation config (for Home page first-time animation)
-    #[prop(optional)]
-    appear_animation_config: Option<AppearAnimationConfig>,
-
     #[prop(optional, into)] no_back_button: bool,
 ) -> impl IntoView {
     let nav_tx = expect_context::<Signal<Option<NavigationTx>>>();
-
-    // Track whether a back navigation is currently possible.
-    let (can_go_back, set_can_go_back) = signal(false);
-
-    // Query: can we go back? (returns bool)
-    let UseTauriWithReturn {
-        trigger: can_go_back_trigger,
-        data: can_go_back_data,
-        error: can_go_back_error,
-        ..
-    } = use_invoke_with_args::<(), bool>(shared::commands::navigation::NAV_CAN_GO_BACK);
 
     // Back navigation (history) command (no payload)
     let UseTauriWithReturn {
@@ -131,74 +75,53 @@ pub fn ContentPage(
                 err
             );
         }
-        if let Some(err) = can_go_back_error() {
-            log::error!(
-                "Error invoking {}: {}",
-                shared::commands::navigation::NAV_CAN_GO_BACK,
-                err
-            );
+    });
+
+    // Unified animation signal driving Card.
+    // Enter / leave travel distances derived dynamically from current window size (no hardcoded px).
+    let window_size = use_window_size();
+
+    // Helper closures so we recalc on demand (resize, nav events).
+    let compute_enter = move || {
+        let w = window_size.width.get() as f32;
+        let offset_x = -(w / 2.0 + 100.0); // Start just off-screen based on half width
+        let depth_z = -w * 0.45; // Depth proportional to width for consistent perspective
+        let rot = (w / 1600.0).min(1.0) * 55.0; // Scale rotation up to 55deg at large widths
+        CardAnimation::EnterTravel3D {
+            from_x_px: offset_x,
+            from_z_px: depth_z,
+            from_rot_y_deg: rot,
+            to_rot_y_deg: 0.0,
         }
-    });
+    };
 
-    // Update local signal when query result arrives.
-    Effect::new(move |_| {
-        if let Some(v) = can_go_back_data() {
-            set_can_go_back(v);
+    let compute_leave = move || {
+        let w = window_size.width.get() as f32;
+        let offset_x = w / 2.0 + 100.0; // Exit off opposite side
+        let depth_z = -w * 0.45;
+        let rot = -(w / 1600.0).min(1.0) * 55.0;
+        CardAnimation::LeaveTravel3D {
+            to_x_px: offset_x,
+            to_z_px: depth_z,
+            to_rot_y_deg: rot,
         }
-    });
+    };
 
-    // Initial query on mount.
-    Effect::new(move |_| {
-        can_go_back_trigger(Some(()));
-    });
+    // Initial animation (will also be refreshed on nav enter below)
+    let (card_animation, set_card_animation) = signal(Some(compute_enter()));
 
-    // Re-query on entering a new route (after commit & enter animation begins).
+    // Queue edge leave animation on navigation start from this route
     Effect::new(move |_| {
+        // Recompute dynamic enter animation if a new Enter transaction begins
         if matches!(nav_tx(), Some(NavigationTx::Enter(_))) {
-            can_go_back_trigger(Some(()));
+            set_card_animation(Some(compute_enter()));
         }
-    });
-
-    // Unified animation signal driving Card
-    let (card_animation, set_card_animation) = signal({
-        let initial = if let Some(config) = appear_animation_config.filter(|c| {
-            let played = c.played_flag.get().unwrap();
-            !played.load(Ordering::Relaxed)
-        }) {
-            // First-time appear with depth + stretch on Y
-            Some(CardAnimation::Appear3D {
-                from_x_px: 0.0,
-                from_y_px: config.base_y_px as f32 * 2.0,
-                from_z_px: -700.0,
-                from_tilt_x_deg: config.tilt_x_from_deg,
-                stretch_axis: StretchAxis::Y,
-                stretch_factor: 1.18,
-            })
-        } else {
-            // Standard enter travel: from left/back with yaw
-            Some(CardAnimation::EnterTravel3D {
-                from_x_px: -480.0,
-                from_z_px: -700.0,
-                from_rot_y_deg: 110.0,
-                to_rot_y_deg: 0.0,
-            })
-        };
-
-        log::debug!("Initial animation: {initial:?}");
-
-        initial
-    });
-
-    // Queue LEAVE animation on navigation start from this route
-    Effect::new(move |_| {
+        // Queue dynamic leave animation when a leave begins
         if matches!(nav_tx(), Some(NavigationTx::Leave(_))) {
-            set_card_animation(Some(CardAnimation::LeaveTravel3D {
-                to_x_px: 480.0,
-                to_z_px: -700.0,
-                to_rot_y_deg: -110.0,
-            }));
+            set_card_animation(Some(compute_leave()));
             log::debug!(
-                "Page({route_id:?}): queued LEAVE (travel3d) tx_id={:?}",
+                "Page({:?}): queued LEAVE_TRAVEL (dynamic) tx_id={:?}",
+                route_id,
                 nav_tx()
             );
         }
@@ -215,14 +138,7 @@ pub fn ContentPage(
             None => {}
         }
 
-        if let Some(c) = card_animation()
-            .filter(|a| matches!(a, CardAnimation::Appear3D { .. }))
-            .and(appear_animation_config)
-        {
-            let played = c.played_flag.get().unwrap();
-            played.store(true, Ordering::Relaxed);
-        }
-
+        // Clear animation so Card can settle
         set_card_animation(None);
     });
 
@@ -234,7 +150,7 @@ pub fn ContentPage(
                 on_animation_done=animation_done_cb
             >
                 <div class="flex items-center justify-between gap-4 mb-6">
-                    <Show when=move || !no_back_button && can_go_back()>
+                    <Show when=move || !no_back_button>
                         <Button
                             size=UiSize::Md
                             variant=UiVariant::Outline

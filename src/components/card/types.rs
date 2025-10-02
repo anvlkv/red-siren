@@ -1,15 +1,4 @@
-/*!
-Card types module.
-
-This isolates the core data structures used by the Card animation system
-so that `card.rs` can stay focused on rendering concerns and
-`animation.rs` can focus on numeric adaptation & easing decisions.
-
-MAYA DRY KISS:
-- Small, purpose‑fit types
-- No logic / side effects here
-- Re-export friendly so other modules can depend without pulling in heavy code
-*/
+/*! Core data types for Card animation. Keep lean and focused. */
 
 use keyframe_derive::CanTween;
 
@@ -31,39 +20,43 @@ pub struct CardEffects {
     pub blur: f32,
 }
 
-/// Axis along which a stretch overshoot is applied for Appear3D.
+/// Edge anchor used by edge-based enter/leave animations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StretchAxis {
-    X,
-    Y,
+pub enum EdgeSide {
+    Top,
+    Bottom,
+    Left,
+    Right,
 }
 
-/// Declarative animation variants consumed by the Card component.
-///
-/// Variants are intentionally high‑level: all edge / distance adaptations
-/// are computed elsewhere (animation.rs) before keyframes are built.
-#[derive(Debug, Clone, Copy)]
+/// Animation variants (kept lean; higher-level code maps scenarios to these).
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CardAnimation {
-    /// First-time or contextual appear with depth + stretch.
-    Appear3D {
-        from_x_px: f32,
-        from_y_px: f32,
-        from_z_px: f32,
-        from_tilt_x_deg: f32,
-        stretch_axis: StretchAxis,
-        stretch_factor: f32,
-    },
-    /// Travel in from an off‑screen (left/back) origin with yaw easing to 0.
     EnterTravel3D {
         from_x_px: f32,
         from_z_px: f32,
         from_rot_y_deg: f32,
         to_rot_y_deg: f32,
     },
-    /// Travel out toward an off‑screen (right/back) destination with yaw.
     LeaveTravel3D {
         to_x_px: f32,
         to_z_px: f32,
         to_rot_y_deg: f32,
     },
+    /// Perpendicular edge entry (CompactMenu, pages, etc.)
+    EdgeEnter3D {
+        side: EdgeSide,
+        offset_px: f32,
+        depth_z_px: f32,
+        yaw_deg: f32,
+    },
+    /// Perpendicular edge exit.
+    EdgeLeave3D {
+        side: EdgeSide,
+        offset_px: f32,
+        depth_z_px: f32,
+        yaw_deg: f32,
+    },
 }
+
+impl Eq for CardAnimation {}

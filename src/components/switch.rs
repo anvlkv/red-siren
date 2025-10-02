@@ -1,32 +1,10 @@
 use leptos::prelude::*;
 
-use crate::components::{Tooltip, UiSize, UiVariant};
+use crate::components::{Tooltip, UiPlacement, UiSize, UiVariant};
 
 /// Multi-state segmented switch component for Red Siren (MAYA DRY KISS).
 ///
-/// A segmented control that displays all labels at once with the selected state highlighted.
-/// Each segment is clickable to directly set that state.
-///
-/// - Labels: Vec of views for each state
-/// - Tooltips: optional Vec of tooltip strings for hover/focus
-/// - Variants: Solid | Outline | Ghost (follows Button styling)
-/// - Sizes: Sm | Md | Lg
-///
-/// Usage:
-/// ```rust
-/// view! {
-///     <Switch
-///         labels=vec![
-///             view! { "Off" }.into_any(),
-///             view! { "Auto" }.into_any(),
-///             view! { "On" }.into_any(),
-///         ]
-///         tooltips=Some(vec!["Turn off".to_string(), "Automatic mode".to_string(), "Turn on".to_string()])
-///         current_state=create_rw_signal(1)
-///         on_change=Callback::new(|state| console_log!("State: {}", state))
-///     />
-/// }
-/// ```
+/// Refactored: orientation now inferred from shared UiPlacement (Left/Right => vertical, Top/Bottom => horizontal).
 #[component]
 pub fn Switch(
     // Label views for each state
@@ -47,39 +25,39 @@ pub fn Switch(
     #[prop(optional, into)] variant: Signal<UiVariant>,
     #[prop(optional, into)] size: Signal<UiSize>,
     #[prop(optional, into)] round: Signal<bool>,
+    // Placement drives orientation (Top/Bottom horizontal, Left/Right vertical)
+    #[prop(into)] placement: Signal<Option<UiPlacement>>,
 ) -> impl IntoView {
-    // Ensure at least 2 state
     if labels.len() < 2 {
         panic!("Switch must have at least 2 labels");
     }
 
-    // Validate tooltips length if provided
     if let Some(ref tips) = tooltips {
         if tips.len() != labels.len() {
             panic!("Tooltips length must match labels length");
         }
     }
 
-    // Precompute total for cycling logic.
-    let total = labels.len();
+    let is_vertical = move || placement().unwrap_or_default().is_vertical();
 
     let handle_segment_click = move |segment_index: usize| {
         move |_| {
             if !disabled.get_untracked() {
                 let current = current_state.get_untracked();
-                let target = if current == segment_index {
-                    // Clicking the already-selected segment cycles to next (wrap)
-                    (current + 1) % total
-                } else {
-                    segment_index
-                };
-                on_change.run(target);
+                if current != segment_index {
+                    on_change.run(segment_index);
+                }
             }
         }
     };
 
-    // Base styles for the container
-    let container_base = "inline-flex overflow-visible";
+    let container_base = move || {
+        if is_vertical() {
+            "inline-flex flex-col overflow-visible"
+        } else {
+            "inline-flex overflow-visible"
+        }
+    };
     let container_rounding = move || {
         if round() {
             "rounded-full"
@@ -94,23 +72,35 @@ pub fn Switch(
 
     let container_class = move || {
         format!(
-            "{container_base} {} {} {}",
+            "{} {} {} {}",
+            container_base(),
             container_rounding(),
             container_variant(),
             class()
         )
     };
 
-    // Base styles for individual segments
-    let segment_base = "relative flex-1 flex items-center justify-center cursor-pointer \
+    // Removed flex-1 from base; horizontal growth now applied conditionally in segment_class so vertical stays square.
+    let segment_base = "relative flex items-center justify-center cursor-pointer \
                        transition-all duration-200 focus:outline-none \
                        focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-offset-0 \
                        italic";
 
-    let segment_size = move || match size() {
-        UiSize::Sm => "h-10 px-4 text-base",
-        UiSize::Md => "h-12 px-5 text-lg",
-        UiSize::Lg => "h-16 px-6 text-2xl",
+    let segment_size = move || {
+        if is_vertical() {
+            // Square sizing to match Button square variants
+            match size() {
+                UiSize::Sm => "h-10 w-10 text-base",
+                UiSize::Md => "h-12 w-12 text-lg",
+                UiSize::Lg => "h-16 w-16 text-2xl",
+            }
+        } else {
+            match size() {
+                UiSize::Sm => "h-10 px-4 text-base",
+                UiSize::Md => "h-12 px-5 text-lg",
+                UiSize::Lg => "h-16 px-6 text-2xl",
+            }
+        }
     };
 
     let segment_class = move |index: usize, is_selected: bool| {
@@ -135,7 +125,11 @@ pub fn Switch(
         let separator_cls = if index > 0 && !is_selected {
             match variant() {
                 UiVariant::Solid | UiVariant::Outline => {
-                    "border-l border-black/20 dark:border-red/20"
+                    if is_vertical() {
+                        "border-t border-black/20 dark:border-red/20"
+                    } else {
+                        "border-l border-black/20 dark:border-red/20"
+                    }
                 }
                 UiVariant::Ghost => "",
             }
@@ -148,10 +142,13 @@ pub fn Switch(
         } else {
             ""
         };
+        // Horizontal segments expand; vertical stay fixed-size squares.
+        let grow_cls = if !is_vertical() { "flex-1" } else { "" };
 
         format!(
-            "{} {} {} {} {}",
+            "{} {} {} {} {} {}",
             segment_base,
+            grow_cls,
             segment_size(),
             selected_cls,
             separator_cls,
@@ -160,7 +157,11 @@ pub fn Switch(
     };
 
     view! {
-        <div class=container_class role="radiogroup">
+        <div
+            class=container_class
+            role="radiogroup"
+            aria-orientation=move || if is_vertical() { "vertical" } else { "horizontal" }
+        >
             {labels
                 .into_iter()
                 .enumerate()
@@ -181,9 +182,12 @@ pub fn Switch(
                     match &tooltips {
                         Some(tooltip_array) => {
                             let tooltip_text = tooltip_array[segment_index].clone();
-
-                            // Wrap with tooltip if tooltips are provided
-                            view! { <Tooltip text=tooltip_text>{segment_view}</Tooltip> }
+                            let placement = placement().map(|p| p.opposite());
+                            view! {
+                                <Tooltip text=tooltip_text placement>
+                                    {segment_view}
+                                </Tooltip>
+                            }
                                 .into_any()
                         }
                         _ => segment_view.into_any(),

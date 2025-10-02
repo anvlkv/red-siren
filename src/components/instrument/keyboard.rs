@@ -1,41 +1,62 @@
 use leptos::prelude::*;
 
-use crate::components::{Button, UiSize};
+use crate::{
+    components::{Button, UiSize},
+    util::layout_context::{expect_layout_contex, LayoutContextReturn},
+};
 
 const BAND_STROKE_WIDTH: f32 = 4.0;
 
 #[component]
-pub fn Keyboard(#[prop(into)] layout: Signal<shared::instrument::Layout>) -> impl IntoView {
+pub fn Keyboard() -> impl IntoView {
+    let LayoutContextReturn {
+        orientation,
+        space,
+        safe_area_padding,
+        num_groups,
+        key_band_length,
+        groups_gap,
+        key_bands_gap,
+        key_band_breadth,
+        key_radius,
+        ..
+    } = expect_layout_contex();
+
     let main_container_axis_style = Signal::derive(move || {
-        let layout = layout();
+        let orientation = orientation();
+        let space = space();
+        let safe_area_padding = safe_area_padding();
+        let num_groups = num_groups();
+        let key_band_length = key_band_length();
+        let groups_gap = groups_gap();
+        let key_bands_gap = key_bands_gap();
+        let key_band_breadth = key_band_breadth();
+        let key_radius = key_radius();
 
         // Map the orientation-dependent safe area format into CSS box-model (top,right,bottom,left)
-        let (safe_top, safe_right, safe_bottom, safe_left) = match layout.orientation {
+        let (safe_top, safe_right, safe_bottom, safe_left) = match orientation {
             // Vertical: indices are [top, left, bottom, right]
             shared::orientation::LayoutOrientation::Vertical => {
-                let sa = layout.safe_area_padding;
+                let sa = safe_area_padding;
                 (sa[0], sa[3], sa[2], sa[1])
             }
             // Horizontal: indices are [left, top, right, bottom]
             shared::orientation::LayoutOrientation::Horizontal => {
-                let sa = layout.safe_area_padding;
+                let sa = safe_area_padding;
                 (sa[1], sa[2], sa[3], sa[0])
             }
         };
 
-        let safe_length = layout
-            .orientation
-            .safe_length(layout.space, layout.safe_area_padding);
+        let safe_length = orientation.safe_length(space, safe_area_padding);
 
         let pad_main = {
-            let groups = layout.num_groups.get() as f32;
-            let required_length =
-                groups * layout.key_band_length + ((groups - 1.0) * layout.groups_gap);
+            let groups = num_groups as f32;
+            let required_length = groups * key_band_length + ((groups - 1.0) * groups_gap);
 
             ((safe_length - required_length) / 2.0).max(0.0)
         };
 
-        let mut defs = match layout.orientation {
+        let mut defs = match orientation {
             shared::orientation::LayoutOrientation::Vertical => format!(
                 r#"
                 --keyboard-rows: repeat({0}, minmax(0, 1fr));
@@ -45,12 +66,7 @@ pub fn Keyboard(#[prop(into)] layout: Signal<shared::instrument::Layout>) -> imp
                 --keyboard-pad-x: {4}px;
                 --keyboard-pad-y: {5}px;
                 "#,
-                layout.num_groups.get(),
-                1,
-                layout.groups_gap,
-                0,
-                0,
-                pad_main
+                num_groups, 1, groups_gap, 0, 0, pad_main
             ),
             shared::orientation::LayoutOrientation::Horizontal => format!(
                 r#"
@@ -61,20 +77,15 @@ pub fn Keyboard(#[prop(into)] layout: Signal<shared::instrument::Layout>) -> imp
                 --keyboard-pad-x: {4}px;
                 --keyboard-pad-y: {5}px;
                 "#,
-                1,
-                layout.num_groups.get(),
-                0,
-                layout.groups_gap,
-                pad_main,
-                0
+                1, num_groups, 0, groups_gap, pad_main, 0
             ),
         };
 
-        defs.push_str(&format!("--keyboard-keys-gap: {}px;", layout.key_bands_gap));
+        defs.push_str(&format!("--keyboard-keys-gap: {}px;", key_bands_gap));
 
         // Compute padding so the key is exactly centered inside the band.
-        let inner_band = layout.key_band_breadth;
-        let desired_diameter = layout.key_radius * 2.0;
+        let inner_band = key_band_breadth;
+        let desired_diameter = key_radius * 2.0;
 
         defs.push_str(&format!(
             r#"
@@ -89,8 +100,8 @@ pub fn Keyboard(#[prop(into)] layout: Signal<shared::instrument::Layout>) -> imp
             height: {space_h}px;
             padding: {safe_top}px {safe_right}px {safe_bottom}px {safe_left}px;
             "#,
-            breadth = layout.key_band_breadth,
-            length = layout.key_band_length,
+            breadth = key_band_breadth,
+            length = key_band_length,
             diameter = { desired_diameter.min(inner_band.max(0.0)) },
             key_pad = {
                 // Clamp diameter to the available inner breadth (never negative)
@@ -98,8 +109,8 @@ pub fn Keyboard(#[prop(into)] layout: Signal<shared::instrument::Layout>) -> imp
                 // Evenly distribute the remaining space on both sides to keep the key perfectly centered
                 ((inner_band - dia) / 2.0).max(0.0)
             },
-            space_w = layout.space.x,
-            space_h = layout.space.y,
+            space_w = space.x,
+            space_h = space.y,
             safe_top = safe_top,
             safe_right = safe_right,
             safe_bottom = safe_bottom,
@@ -114,11 +125,11 @@ pub fn Keyboard(#[prop(into)] layout: Signal<shared::instrument::Layout>) -> imp
         <div style=main_container_axis_style class="flex items-center justify-center">
             <div class="grid items-center justify-center grid-rows-(--keyboard-rows) grid-cols-(--keyboard-cols) gap-y-(--keyboard-row-gap) gap-x-(--keyboard-col-gap) p-x-(length:--keyboard-pad-x) p-y-(length:--keyboard-pad-y) w-full h-full">
                 {move || {
-                    let layout = layout();
-                    (0..layout.num_groups.get() as usize)
+                    let num_groups = num_groups();
+                    (0..num_groups as usize)
                         .rev()
                         .map(|g| {
-                            view! { <Group g layout /> }
+                            view! { <Group g /> }
                         })
                         .collect_view()
                 }}
@@ -128,25 +139,35 @@ pub fn Keyboard(#[prop(into)] layout: Signal<shared::instrument::Layout>) -> imp
 }
 
 #[component]
-fn Group(layout: shared::instrument::Layout, g: usize) -> impl IntoView {
-    let class = format!(
-        "flex {} gap-(--keyboard-keys-gap) justify-center items-center",
-        match layout.orientation {
-            shared::orientation::LayoutOrientation::Vertical => "flex-col w-full",
-            shared::orientation::LayoutOrientation::Horizontal => "flex-row h-full",
-        }
-    );
+fn Group(g: usize) -> impl IntoView {
+    let LayoutContextReturn {
+        orientation,
+        num_keys_per_group,
+        first_group_channel,
+        ..
+    } = expect_layout_contex();
+
+    let class = move || {
+        format!(
+            "flex {} gap-(--keyboard-keys-gap) justify-center items-center",
+            match orientation() {
+                shared::orientation::LayoutOrientation::Vertical => "flex-col w-full",
+                shared::orientation::LayoutOrientation::Horizontal => "flex-row h-full",
+            }
+        )
+    };
 
     view! {
         <div class=class>
             {move || {
-                (0..(layout.num_keys_per_group.get() as usize))
+                let first_group_channel = first_group_channel();
+                let num_keys_per_group = num_keys_per_group();
+                let orientation = orientation();
+                (0..(num_keys_per_group as usize))
                     .rev()
                     .map(move |k| {
                         let key_code = (g, k);
-                        let channel_alignment = match layout
-                            .first_group_channel
-                            .nth_channel_from_first(g)
+                        let channel_alignment = match first_group_channel.nth_channel_from_first(g)
                         {
                             shared::instrument::GroupChanel::Left => {
                                 r#"
@@ -166,7 +187,7 @@ fn Group(layout: shared::instrument::Layout, g: usize) -> impl IntoView {
                             <div class="relative">
                                 <div
                                     class="absolute rounded-full bg-red dark:bg-black border-(length:--keyboard-band-stroke-width) border-black dark:border-red"
-                                    style=match layout.orientation {
+                                    style=match orientation {
                                         shared::orientation::LayoutOrientation::Vertical => {
                                             format!(
                                                 r#"

@@ -1,13 +1,12 @@
+use crate::{
+    components::{Button, CompactMenu, Icon, MenuItem, UiPlacement, UiSize, UiVariant},
+    util::{
+        layout_context::{expect_layout_contex, LayoutContextReturn},
+        tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
+    },
+};
 use leptos::prelude::*;
 use shared::RouteId;
-use tauri_use::{use_command, use_invoke, UseTauriReturn, UseTauriWithReturn};
-
-use crate::{
-    components::{
-        Button, CompactMenu, CompactMenuPlacement, Icon, MenuItem, Switch, UiSize, UiVariant,
-    },
-    util::tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
-};
 
 #[component]
 pub fn Tune() -> impl IntoView {
@@ -67,17 +66,12 @@ pub fn Tune() -> impl IntoView {
             label: "About",
         },
     ]);
-    // Derive compact menu placement from current instrument layout orientation
-    let UseTauriResourceReturn { data: layout, .. } =
-        use_tauri_resource::<shared::instrument::Layout>(shared::instrument::events::LAYOUT);
-    let placement = Signal::derive(move || {
-        layout
-            .get()
-            .map(|l| match l.orientation {
-                shared::orientation::LayoutOrientation::Vertical => CompactMenuPlacement::Left,
-                shared::orientation::LayoutOrientation::Horizontal => CompactMenuPlacement::Bottom,
-            })
-            .unwrap_or(CompactMenuPlacement::Bottom)
+
+    let LayoutContextReturn { orientation, .. } = expect_layout_contex();
+
+    let placement = Signal::derive(move || match orientation() {
+        shared::orientation::LayoutOrientation::Vertical => UiPlacement::Left,
+        shared::orientation::LayoutOrientation::Horizontal => UiPlacement::Bottom,
     });
 
     // let on_activation_source_change = Callback::new(move |source: usize| {
@@ -162,7 +156,12 @@ pub fn Tune() -> impl IntoView {
 
     view! {
         <CompactMenu items=menu_items placement=placement>
-            <Button on:click=on_reset size=UiSize::Sm variant=UiVariant::Outline>
+            <Button
+                on:click=on_reset
+                size=UiSize::Sm
+                variant=UiVariant::Outline
+                placement=placement
+            >
                 <Icon name="reset" size=UiSize::Sm />
                 <span class="inline-block flex-grow text-center">Reset</span>
             </Button>

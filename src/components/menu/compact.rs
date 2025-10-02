@@ -1,5 +1,5 @@
 use leptos::{html, prelude::*};
-use leptos_use::{use_element_size, UseElementSizeReturn};
+use leptos_use::{use_element_size, use_window_size, UseElementSizeReturn};
 use shared::{
     commands::navigation::NavigateRequestPayload, events::setup::SafeAreaInstestUiIncrementPayload,
     RouteId,
@@ -7,35 +7,23 @@ use shared::{
 
 use tauri_use::use_invoke_with_args;
 
-use crate::components::{Card, CardAnimation, NavigationTx, StretchAxis};
+use crate::components::{Card, CardAnimation, EdgeSide, NavigationTx, UiPlacement};
 
 use super::item::{MenuItem, MenuItemView};
-
-/// Edge placement for the compact menu bar.
-#[derive(Clone, Copy, Default)]
-#[allow(dead_code)]
-pub enum CompactMenuPlacement {
-    #[default]
-    Bottom,
-    Top,
-    Left,
-    Right,
-}
-
-const LEAVE_MS: f64 = 400.0;
-const APPEAR_MS: f64 = 650.0;
 
 #[component]
 pub fn CompactMenu(
     #[prop(into)] items: Signal<Vec<MenuItem>>,
-    #[prop(into)] placement: Signal<CompactMenuPlacement>,
+    #[prop(into)] placement: Signal<UiPlacement>,
     children: Children,
 ) -> impl IntoView {
     let nav_tx = expect_context::<Signal<Option<NavigationTx>>>();
-    // Materialize children once; avoids re-calling a possibly FnMut closure in reactive nodes.
+    // Materialize children once
     let child_view = children();
 
     let el = NodeRef::<html::Div>::new();
+    // Track window size (reactive) for dynamic, non-hardcoded animation distances
+    let window_size = use_window_size();
 
     let UseElementSizeReturn {
         width: menu_width,
@@ -56,7 +44,6 @@ pub fn CompactMenu(
         ..
     } = use_invoke_with_args::<NavigateRequestPayload, ()>(shared::commands::navigation::NAVIGATE);
 
-    // Trigger to notify backend that the enter animation has completed
     let tauri_use::UseTauriWithReturn {
         trigger: enter_done_trigger,
         error: enter_error,
@@ -65,7 +52,6 @@ pub fn CompactMenu(
         shared::commands::navigation::NAV_ENTER_DONE,
     );
 
-    // Trigger to notify backend that the leave animation has completed
     let tauri_use::UseTauriWithReturn {
         trigger: leave_done_trigger,
         error: leave_error,
@@ -74,88 +60,125 @@ pub fn CompactMenu(
         shared::commands::navigation::NAV_LEAVE_DONE,
     );
 
-    // Update safe area insets when menu height changes
-    Effect::new(move || {
+    // Track previous inset values to prevent unnecessary updates and loops
+    let prev_insets = RwSignal::new(None::<SafeAreaInstestUiIncrementPayload>);
+
+    // Update safe area insets when menu size or placement changes
+    Effect::new(move |_| {
         let menu_height = menu_height() as f32;
         let menu_width = menu_width() as f32;
         let placement = placement();
-        trigger_inset_update(Some(match placement {
-            CompactMenuPlacement::Bottom => SafeAreaInstestUiIncrementPayload {
-                top: 0_f32,
-                right: 0_f32,
+
+        // Skip if dimensions are invalid
+        if menu_height <= 0.0 && menu_width <= 0.0 {
+            return;
+        }
+
+        let new_insets = match placement {
+            UiPlacement::Bottom => SafeAreaInstestUiIncrementPayload {
+                top: 0.0,
+                right: 0.0,
                 bottom: menu_height,
-                left: 0_f32,
+                left: 0.0,
             },
-            CompactMenuPlacement::Top => SafeAreaInstestUiIncrementPayload {
+            UiPlacement::Top => SafeAreaInstestUiIncrementPayload {
                 top: menu_height,
-                right: 0_f32,
-                bottom: 0_f32,
-                left: 0_f32,
+                right: 0.0,
+                bottom: 0.0,
+                left: 0.0,
             },
-            CompactMenuPlacement::Left => SafeAreaInstestUiIncrementPayload {
-                top: 0_f32,
-                right: 0_f32,
-                bottom: 0_f32,
+            UiPlacement::Left => SafeAreaInstestUiIncrementPayload {
+                top: 0.0,
+                right: 0.0,
+                bottom: 0.0,
                 left: menu_width,
             },
-            CompactMenuPlacement::Right => SafeAreaInstestUiIncrementPayload {
-                top: 0_f32,
+            UiPlacement::Right => SafeAreaInstestUiIncrementPayload {
+                top: 0.0,
                 right: menu_width,
-                bottom: 0_f32,
-                left: 0_f32,
+                bottom: 0.0,
+                left: 0.0,
             },
-        }))
+        };
+
+        // Only trigger if values have changed significantly (>1px threshold)
+        let should_update = match prev_insets() {
+            None => true,
+            Some(prev) => {
+                (new_insets.top - prev.top).abs() > 1.0
+                    || (new_insets.right - prev.right).abs() > 1.0
+                    || (new_insets.bottom - prev.bottom).abs() > 1.0
+                    || (new_insets.left - prev.left).abs() > 1.0
+            }
+        };
+
+        if should_update {
+            prev_insets.set(Some(new_insets));
+            trigger_inset_update(Some(new_insets));
+        }
+    });
+
+    // Derived signals for layout-dependent values to prevent remounts
+    let side = Signal::derive(move || match placement() {
+        UiPlacement::Top => EdgeSide::Top,
+        UiPlacement::Bottom => EdgeSide::Bottom,
+        UiPlacement::Left => EdgeSide::Left,
+        UiPlacement::Right => EdgeSide::Right,
+    });
+
+    let is_vertical = Signal::derive(move || placement().is_vertical());
+
+    // Animation parameters derived from placement and window size
+    let enter_anim_params = Signal::derive(move || {
+        let w = window_size.width.get() as f32;
+        let h = window_size.height.get() as f32;
+        match side() {
+            EdgeSide::Top | EdgeSide::Bottom => (h * 0.18, -w * 0.35, 0.0),
+            EdgeSide::Left => (w * 0.14, 0.0, -w * 0.15),
+            EdgeSide::Right => (w * 0.14, 0.0, -w * 0.15),
+        }
+    });
+
+    let leave_anim_params = Signal::derive(move || {
+        let w = window_size.width.get() as f32;
+        let h = window_size.height.get() as f32;
+        match side() {
+            EdgeSide::Top | EdgeSide::Bottom => (h * 0.22, -w * 0.32, 0.0),
+            EdgeSide::Left => (w * 0.18, 0.0, -w * 0.2),
+            EdgeSide::Right => (w * 0.18, 0.0, -w * 0.2),
+        }
     });
 
     // Animation state
-    let (menu_anim, set_menu_anim) = signal(None::<CardAnimation>);
     let (docked, set_docked) = signal(false);
+    let last_leave_tx_id = RwSignal::new(None::<u64>);
 
-    // Initial appear animation (replays each mount)
-    Effect::new(move |_| {
-        if menu_anim().is_some() || docked() {
-            return;
-        }
-        // Determine stretch axis based on current placement (horizontal bar stretches Y, vertical bar stretches X)
-        let place = placement();
-        let stretch_axis = match place {
-            CompactMenuPlacement::Left | CompactMenuPlacement::Right => StretchAxis::X,
-            _ => StretchAxis::Y,
-        };
-        // Depth & translation tuning (temporary placeholder values for new 3D system)
-        let (from_x, from_y, from_z, tilt) = match place {
-            CompactMenuPlacement::Bottom => (0.0, 140.0, -400.0, -25.0),
-            CompactMenuPlacement::Top => (0.0, -140.0, -400.0, 25.0),
-            CompactMenuPlacement::Left => (-140.0, 0.0, -400.0, -10.0),
-            CompactMenuPlacement::Right => (140.0, 0.0, -400.0, -10.0),
-        };
-        set_menu_anim(Some(CardAnimation::Appear3D {
-            from_x_px: from_x,
-            from_y_px: from_y,
-            from_z_px: from_z,
-            from_tilt_x_deg: tilt,
-            stretch_axis,
-            stretch_factor: 1.08,
-        }));
-    });
+    let menu_anim = Memo::new(move |_| {
+        let docked = docked();
+        let current_side = side();
+        let (offset_px_enter, depth_z_px_enter, yaw_deg_enter) = enter_anim_params();
+        let (offset_px_leave, depth_z_px_leave, yaw_deg_leave) = leave_anim_params();
 
-    // Queue leave animation on navigation leave
-    Effect::new(move |_| {
-        let nav = nav_tx();
-        let place = placement();
-        if matches!(nav, Some(NavigationTx::Leave(_))) {
-            // Travel out in direction consistent with placement (edge retract) with depth + yaw
-            let (to_x, to_z, to_rot_y) = match place {
-                CompactMenuPlacement::Bottom => (260.0_f32, -380.0_f32, -95.0_f32),
-                CompactMenuPlacement::Top => (-260.0_f32, -380.0_f32, 95.0_f32),
-                CompactMenuPlacement::Left => (-260.0_f32, -380.0_f32, 95.0_f32),
-                CompactMenuPlacement::Right => (260.0_f32, -380.0_f32, -95.0_f32),
-            };
-            set_menu_anim(Some(CardAnimation::LeaveTravel3D {
-                to_x_px: to_x,
-                to_z_px: to_z,
-                to_rot_y_deg: to_rot_y,
-            }));
+        let nav_tx = nav_tx();
+
+        if let Some(NavigationTx::Leave(_)) = nav_tx {
+            //leave
+            Some(CardAnimation::EdgeLeave3D {
+                side: current_side,
+                offset_px: offset_px_leave,
+                depth_z_px: depth_z_px_leave,
+                yaw_deg: yaw_deg_leave,
+            })
+        } else if docked {
+            None
+        } else {
+            // enter
+            Some(CardAnimation::EdgeEnter3D {
+                side: current_side,
+                offset_px: offset_px_enter,
+                depth_z_px: depth_z_px_enter,
+                yaw_deg: yaw_deg_enter,
+            })
         }
     });
 
@@ -170,88 +193,92 @@ pub fn CompactMenu(
             }
             None => {}
         }
-
-        set_menu_anim(None);
         if !docked.get_untracked() {
             set_docked(true);
         }
     });
 
+    // Error logging
     Effect::new(move |_| {
         if let Some(err) = error() {
             log::error!(
-                "Error invoking {}: {}",
-                shared::commands::navigation::NAVIGATE,
-                err
+                "Error invoking {}: {err}",
+                shared::commands::navigation::NAVIGATE
             );
         }
-
         if let Some(err) = enter_error() {
             log::error!(
-                "Error invoking {}: {}",
-                shared::commands::navigation::NAV_ENTER_DONE,
-                err
+                "Error invoking {}: {err}",
+                shared::commands::navigation::NAV_ENTER_DONE
             );
         }
-
         if let Some(err) = leave_error() {
             log::error!(
-                "Error invoking {}: {}",
-                shared::commands::navigation::NAV_LEAVE_DONE,
-                err
+                "Error invoking {}: {err}",
+                shared::commands::navigation::NAV_LEAVE_DONE
             );
         }
-
         if let Some(err) = inset_error() {
             log::error!(
-                "Error invoking {}: {}",
-                shared::commands::setup::UI_SAFE_AREA_INSETS_APPLY,
-                err
+                "Error invoking {}: {err}",
+                shared::commands::setup::UI_SAFE_AREA_INSETS_APPLY
             );
         }
     });
 
-    // Edge positioning container (reactive to placement changes)
+    // Derived CSS classes to prevent recalculation
     let edge_container_cls = Signal::derive(move || match placement() {
-        CompactMenuPlacement::Bottom => {
-            "fixed inset-x-0 bottom-0 flex justify-center pointer-events-none"
-        }
-        CompactMenuPlacement::Top => {
-            "fixed inset-x-0 top-0 flex justify-center pointer-events-none"
-        }
-        CompactMenuPlacement::Left => {
-            "fixed inset-y-0 left-0 flex items-center pointer-events-none"
-        }
-        CompactMenuPlacement::Right => {
-            "fixed inset-y-0 right-0 flex items-center pointer-events-none"
-        }
+        UiPlacement::Bottom => "fixed inset-x-0 bottom-0 flex justify-center pointer-events-none",
+        UiPlacement::Top => "fixed inset-x-0 top-0 flex justify-center pointer-events-none",
+        UiPlacement::Left => "fixed inset-y-0 left-0 flex items-center pointer-events-none",
+        UiPlacement::Right => "fixed inset-y-0 right-0 flex items-center pointer-events-none",
     });
 
     let card_variant = Signal::derive(move || {
         let docked = docked();
-        let placement = placement();
+        let place = placement();
         if !docked {
             "".to_string()
         } else {
-            match placement {
-                CompactMenuPlacement::Bottom => "rounded-b-none",
-                CompactMenuPlacement::Top => "rounded-t-none",
-                CompactMenuPlacement::Left => "rounded-l-none",
-                CompactMenuPlacement::Right => "rounded-r-none",
+            match place {
+                UiPlacement::Bottom => "rounded-b-none",
+                UiPlacement::Top => "rounded-t-none",
+                UiPlacement::Left => "rounded-l-none",
+                UiPlacement::Right => "rounded-r-none",
             }
             .to_string()
         }
     });
 
+    let inner_flex_class = Signal::derive(move || {
+        format!(
+            "flex {} gap-4 pointer-events-auto",
+            if is_vertical() {
+                "flex-col items-center justify-center"
+            } else {
+                "flex-row items-center"
+            }
+        )
+    });
+
+    let title_style = Signal::derive(move || {
+        if is_vertical() {
+            "writing-mode: vertical-rl; text-orientation: mixed;"
+        } else {
+            ""
+        }
+    });
+
     view! {
-        <div class=edge_container_cls node_ref=el>
+        <div class=edge_container_cls>
             <Card
-                padding="Md".to_string()
+
+                padding="Sm".to_string()
                 class=card_variant
                 start_animation=Signal::derive(menu_anim)
                 on_animation_done=on_anim_done
             >
-                <div class="flex items-center gap-4 pointer-events-auto">
+                <div class=inner_flex_class>
                     <button on:click=move |_| {
                         trigger_navigate(
                             Some(NavigateRequestPayload {
@@ -259,7 +286,10 @@ pub fn CompactMenu(
                             }),
                         );
                     }>
-                        <h1 class="block text-3xl italic cursor-pointer hover:underline focus:underline">
+                        <h1
+                            class="block text-3xl italic cursor-pointer hover:underline focus:underline"
+                            style=title_style
+                        >
                             "Red Siren"
                         </h1>
                     </button>
@@ -269,7 +299,14 @@ pub fn CompactMenu(
                             .iter()
                             .copied()
                             .map(|item| {
-                                view! { <MenuItemView item trigger_navigate compact=true /> }
+                                view! {
+                                    <MenuItemView
+                                        item
+                                        trigger_navigate
+                                        compact=true
+                                        menu_placement=placement()
+                                    />
+                                }
                             })
                             .collect_view()
                     }}

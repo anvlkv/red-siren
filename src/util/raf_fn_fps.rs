@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 pub use leptos_use::UseRafFnCallbackArgs;
 
-#[allow(dead_code)]
+/// Simple RAF function with fixed FPS throttling
 pub fn use_raf_fn_with_fps<F>(
     callback: F,
     fps: f64,
@@ -16,7 +16,7 @@ where
     use_raf_fn_with_fps_and_options(callback, fps, UseRafFnWithFpsOptions::default())
 }
 
-/// Fixed-fps with options (legacy)
+/// Fixed-fps with options
 pub fn use_raf_fn_with_fps_and_options<F>(
     callback: F,
     fps: f64,
@@ -28,8 +28,7 @@ where
     throttled_runner(callback, Signal::derive(move || fps), options)
 }
 
-/// NEW: Dynamic FPS version controlled by a reactive Signal<f64>.
-/// Whenever the fps signal changes, the internal accumulator resets to avoid stutter.
+/// Signal-driven FPS version - reactive to FPS changes
 pub fn use_raf_fn_with_fps_signal<F>(
     callback: F,
     fps: Signal<f64>,
@@ -40,7 +39,7 @@ where
     throttled_runner(callback, fps, UseRafFnWithFpsOptions::default())
 }
 
-/// Core throttled runner used by both fixed and signal-driven APIs.
+/// Core throttled runner with simplified timing
 fn throttled_runner<F>(
     callback: F,
     fps: Signal<f64>,
@@ -49,50 +48,58 @@ fn throttled_runner<F>(
 where
     F: Fn(UseRafFnCallbackArgs) + 'static,
 {
-    let last_execution_time = Rc::new(Cell::new(0.0));
-    let last_fps_interval = Rc::new(Cell::new(0.0));
-    let last_fps_value = Rc::new(Cell::new(0.0));
+    let last_frame_time = Rc::new(Cell::new(0.0));
+    let accumulated_time = Rc::new(Cell::new(0.0));
+    let current_fps_interval = Rc::new(Cell::new(0.0));
 
-    // Reactive effect: update stored fps interval when fps signal changes
+    // Update FPS interval when signal changes
     {
-        let last_fps_interval = Rc::clone(&last_fps_interval);
-        let last_fps_value = Rc::clone(&last_fps_value);
-        let last_execution_time_effect = Rc::clone(&last_execution_time);
+        let current_fps_interval = Rc::clone(&current_fps_interval);
+        let last_frame_time = Rc::clone(&last_frame_time);
         Effect::new(move |_| {
             let f = fps().max(1.0);
             let interval = 1000.0 / f;
-            last_fps_interval.set(interval);
-            last_fps_value.set(f);
-            // Reset timing so first frame after change is immediate
-            last_execution_time_effect.set(0.0);
+            current_fps_interval.set(interval);
+            // Reset on FPS change to avoid jumps
+            last_frame_time.set(0.0);
         });
     }
 
     let throttled_callback = {
-        let last_execution_time_cb = Rc::clone(&last_execution_time);
-        let last_fps_interval = Rc::clone(&last_fps_interval);
+        let last_frame_time = Rc::clone(&last_frame_time);
+        let accumulated_time = Rc::clone(&accumulated_time);
+        let current_fps_interval = Rc::clone(&current_fps_interval);
+
         move |args: UseRafFnCallbackArgs| {
             let current_time = args.timestamp;
-            let last_time = last_execution_time_cb.get();
-            let fps_interval = last_fps_interval.get().max(1.0);
+            let last_time = last_frame_time.get();
+            let fps_interval = current_fps_interval.get();
 
-            if last_time == 0.0 || current_time - last_time >= fps_interval {
-                let throttled_delta = if last_time > 0.0 {
-                    current_time - last_time
-                } else {
-                    0.0
-                };
-                // Snap execution time to an aligned boundary to reduce jitter accumulation
-                let aligned_time = if last_time == 0.0 {
-                    current_time
-                } else {
-                    current_time - ((current_time - last_time) % fps_interval)
-                };
-                last_execution_time_cb.set(aligned_time);
+            if last_time == 0.0 {
+                // First frame after reset
+                last_frame_time.set(current_time);
+                accumulated_time.set(0.0);
                 callback(UseRafFnCallbackArgs {
-                    delta: throttled_delta,
+                    delta: 0.0,
                     timestamp: current_time,
                 });
+            } else {
+                // Accumulate time since last frame
+                let time_since_last = accumulated_time.get() + (current_time - last_time);
+                accumulated_time.set(time_since_last);
+                last_frame_time.set(current_time);
+
+                // Execute callback if we've accumulated enough time for a frame
+                if time_since_last >= fps_interval {
+                    // Consume one frame's worth of time
+                    accumulated_time.set(time_since_last - fps_interval);
+
+                    // Use the actual delta between executions
+                    callback(UseRafFnCallbackArgs {
+                        delta: fps_interval,
+                        timestamp: current_time,
+                    });
+                }
             }
         }
     };

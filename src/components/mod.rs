@@ -1,5 +1,7 @@
 use std::str::FromStr;
 
+mod activation_source_toggle;
+mod appearance_toggle;
 mod button;
 mod card;
 mod content_page;
@@ -11,6 +13,8 @@ mod menu;
 mod switch;
 mod tooltip;
 
+pub use activation_source_toggle::*;
+pub use appearance_toggle::*;
 pub use button::*;
 pub use card::*;
 pub use content_page::*;
@@ -74,5 +78,36 @@ impl UiPadding {
             Self::Md => "p-4",
             Self::Lg => "p-8",
         }
+    }
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, strum::EnumString)]
+pub enum UiPlacement {
+    Top,
+    #[default]
+    Bottom,
+    Left,
+    Right,
+}
+
+impl UiPlacement {
+    pub fn is_vertical(self) -> bool {
+        matches!(self, UiPlacement::Left | UiPlacement::Right)
+    }
+
+    pub fn opposite(self) -> Self {
+        match self {
+            UiPlacement::Top => UiPlacement::Bottom,
+            UiPlacement::Bottom => UiPlacement::Top,
+            UiPlacement::Left => UiPlacement::Right,
+            UiPlacement::Right => UiPlacement::Left,
+        }
+    }
+}
+
+impl From<String> for UiPlacement {
+    fn from(value: String) -> Self {
+        use std::str::FromStr;
+        UiPlacement::from_str(&value).expect("invalid placement")
     }
 }

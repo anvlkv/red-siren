@@ -20,10 +20,8 @@ Additions should justify themselves in comments (focus on WHY over WHAT).
 
 /// Perspective baseline (cm) for settled card (matches existing visual baseline)
 pub const CARD_PERSPECTIVE_CM: f64 = 80.0;
-/// Perspective used during appear (slightly “flatter” for stronger depth illusion)
-pub const CARD_APPEAR_PERSPECTIVE_CM: f64 = 60.0;
 
-/// Maximum Gaussian blur applied at sequence start (enter/appear) or end (leave)
+/// Maximum Gaussian blur applied at sequence start (enter) or end (leave)
 pub const CARD_MAX_BLUR: f32 = 1.0;
 
 /// FPS: only switch between normal and reduced
@@ -31,19 +29,18 @@ pub const NORMAL_FPS: f64 = 40.0;
 pub const REDUCED_FPS: f64 = 8.0;
 
 // Base timing constants (ms) for each animation type
-pub const CARD_APPEAR_BASE_MS: f64 = 800.0;
+
 pub const CARD_ENTER_BASE_MS: f64 = 600.0;
 pub const CARD_LEAVE_BASE_MS: f64 = 450.0;
+pub const CARD_ENTER_SHORT_MS: f64 = 300.0;
+pub const CARD_LEAVE_SHORT_MS: f64 = 200.0;
 
 /// Normalization distance (px) used to compute an edge proximity ratio (0..=1)
 pub const CARD_EDGE_NORM_DISTANCE_PX: f32 = 600.0;
 
-/// Extra stretch added (beyond requested) at max edge proximity
-pub const CARD_EDGE_STRETCH_EXTRA: f32 = 0.35;
 /// Extra depth (|z|) scaling at max edge proximity
 pub const CARD_EDGE_DEPTH_FACTOR: f32 = 0.60;
-/// Fraction of tilt removed at max edge proximity (less flip near edge)
-pub const CARD_EDGE_TILT_REDUCTION: f32 = 0.40;
+
 /// Fraction of yaw removed at max edge proximity (enter)
 pub const CARD_EDGE_YAW_REDUCTION_ENTER: f32 = 0.35;
 /// Fraction of yaw removed at max edge proximity (leave)
@@ -57,16 +54,6 @@ pub const CARD_LEAVE_SCALE_SHRINK: f32 = 0.04;
 /// Stretch effects for motion blur (always >= 1.0, never compression)
 pub const CARD_ENTER_STRETCH_START: f32 = 1.15; // Initial stretch on entry
 pub const CARD_LEAVE_STRETCH_END: f32 = 1.25; // Final stretch on leave
-
-/// Output of edge adaptation pass for appear animation
-#[derive(Debug, Clone, Copy)]
-pub struct AppearEdgeAdapt {
-    pub edge_ratio: f32,
-    pub final_stretch_factor: f32,
-    pub adjusted_tilt_deg: f32,
-    pub adjusted_from_z: f32,
-    pub perspective_scale: f64,
-}
 
 /// Output of edge adaptation for enter travel animation
 #[derive(Debug, Clone, Copy)]
@@ -92,30 +79,6 @@ pub struct LeaveEdgeAdapt {
 #[inline]
 pub fn edge_ratio(distance_px: f32) -> f32 {
     (distance_px / CARD_EDGE_NORM_DISTANCE_PX).clamp(0.0, 1.0)
-}
-
-/// Adapt appear animation parameters based on starting displacement.
-pub fn adapt_appear(
-    from_x_px: f32,
-    from_y_px: f32,
-    from_z_px: f32,
-    base_tilt_deg: f32,
-    base_stretch: f32,
-) -> AppearEdgeAdapt {
-    let dist = from_x_px.abs().max(from_y_px.abs());
-    let er = edge_ratio(dist);
-    let final_stretch_factor = base_stretch + CARD_EDGE_STRETCH_EXTRA * er;
-    let adjusted_tilt_deg = base_tilt_deg * (1.0 - CARD_EDGE_TILT_REDUCTION * er);
-    let adjusted_from_z = from_z_px * (1.0 + CARD_EDGE_DEPTH_FACTOR * er);
-    let perspective_scale = 0.85 - 0.25 * er as f64;
-
-    AppearEdgeAdapt {
-        edge_ratio: er,
-        final_stretch_factor,
-        adjusted_tilt_deg,
-        adjusted_from_z,
-        perspective_scale,
-    }
 }
 
 /// Adapt enter travel animation.

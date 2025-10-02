@@ -1,12 +1,9 @@
 mod animation;
 mod types;
 
-use animation::{
-    adapt_appear, adapt_enter, adapt_leave, CARD_APPEAR_PERSPECTIVE_CM, CARD_MAX_BLUR,
-    CARD_PERSPECTIVE_CM,
-};
+use animation::{adapt_enter, adapt_leave, CARD_MAX_BLUR, CARD_PERSPECTIVE_CM};
 use types::CardEffects;
-pub use types::{CardAnimation, StretchAxis};
+pub use types::{CardAnimation, EdgeSide};
 
 use std::time::Duration;
 
@@ -15,7 +12,7 @@ use keyframe::{
     keyframes, AnimationSequence,
 };
 use leptos::prelude::*;
-use leptos_use::{use_prefers_reduced_motion, use_raf_fn};
+use leptos_use::use_prefers_reduced_motion;
 
 use crate::{
     components::{UiPadding, UiVariant},
@@ -120,6 +117,7 @@ pub fn Card(
     let reduced_motion = use_prefers_reduced_motion();
 
     let anim_ms_sig = RwSignal::new(0.0_f64);
+    let (current_edge_side, set_current_edge_side) = signal(None::<EdgeSide>);
     let transform_seq = RwSignal::new(keyframes![(
         CardEffects {
             x_px: 0.0,
@@ -147,8 +145,7 @@ pub fn Card(
         }
     });
 
-    let pausable = use_raf_fn(
-        //_with_fps_signal(
+    let pausable = use_raf_fn_with_fps_signal(
         {
             move |args: leptos_use::UseRafFnCallbackArgs| {
                 let reduced = reduced_motion();
@@ -165,7 +162,7 @@ pub fn Card(
                 }
             }
         },
-        // Signal::derive(move || fps_signal.get()),
+        fps_signal,
     );
     let anim_pause = pausable.pause;
     let anim_resume = pausable.resume;
@@ -174,109 +171,29 @@ pub fn Card(
     // Start animation when parent sets a new (tx_id, CardAnimation)
     Effect::new(move |_| {
         if let Some(animation) = start_animation() {
-            let (window_width, window_height) = (window_size.width.get(), window_size.height.get());
-
             match animation {
-                CardAnimation::Appear3D {
-                    from_x_px,
-                    from_y_px,
-                    from_z_px,
-                    from_tilt_x_deg,
-                    stretch_axis,
-                    stretch_factor,
-                } => {
-                    // Ensure card starts off-screen
-                    let actual_from_y = if from_y_px.abs() < window_height as f32 / 2.0 {
-                        (window_height as f32 / 2.0 + 100.0) * from_y_px.signum()
-                    } else {
-                        from_y_px
-                    };
-
-                    // Adapt (depth, stretch, tilt) using helper
-                    let adapt = adapt_appear(
-                        from_x_px,
-                        actual_from_y,
-                        from_z_px,
-                        from_tilt_x_deg,
-                        stretch_factor,
-                    );
-                    anim_ms_sig.set(animation::CARD_APPEAR_BASE_MS);
-                    let edge_ratio = adapt.edge_ratio;
-                    let final_stretch = adapt.final_stretch_factor;
-                    let adj_tilt = adapt.adjusted_tilt_deg;
-                    let adj_from_z = adapt.adjusted_from_z;
-                    let (sx_stretch, sy_stretch) = match stretch_axis {
-                        StretchAxis::X => (final_stretch, 1.0),
-                        StretchAxis::Y => (1.0, final_stretch),
-                    };
-
-                    // Simple 2-keyframe animation: start off-screen → center
-                    // The custom CanTween implementation creates the cubic path
-                    transform_seq.set(keyframes![
-                        (
-                            CardEffects {
-                                x_px: from_x_px,
-                                y_px: actual_from_y,
-                                z_px: adj_from_z,
-                                tilt_x_deg: adj_tilt,
-                                rot_y_deg: 0.0,
-                                scale_x: sx_stretch,
-                                scale_y: sy_stretch,
-                                perspective: CARD_APPEAR_PERSPECTIVE_CM * adapt.perspective_scale,
-                                blur: CARD_MAX_BLUR,
-                            },
-                            0.0
-                        ),
-                        (
-                            CardEffects {
-                                x_px: 0.0,
-                                y_px: 0.0,
-                                z_px: 0.0,
-                                tilt_x_deg: 0.0,
-                                rot_y_deg: 0.0,
-                                scale_x: 1.0,
-                                scale_y: 1.0,
-                                perspective: CARD_PERSPECTIVE_CM,
-                                blur: 0.0,
-                            },
-                            animation::CARD_APPEAR_BASE_MS,
-                            EaseOutCubic
-                        )
-                    ]);
-                    anim_resume();
-                    log::debug!("Card: APPEAR3D edge_ratio={edge_ratio:.2} ms={} tilt_in={from_tilt_x_deg} tilt_adj={adj_tilt} stretch_final={final_stretch}", animation::CARD_APPEAR_BASE_MS);
-                }
                 CardAnimation::EnterTravel3D {
                     from_x_px,
                     from_z_px,
                     from_rot_y_deg,
                     to_rot_y_deg,
                 } => {
-                    // Ensure card starts off-screen
-                    let actual_from_x = if from_x_px.abs() < window_width as f32 / 2.0 {
-                        (window_width as f32 / 2.0 + 100.0) * from_x_px.signum()
-                    } else {
-                        from_x_px
-                    };
-
-                    let enter = adapt_enter(actual_from_x, from_z_px, from_rot_y_deg);
+                    let enter = adapt_enter(from_x_px, from_z_px, from_rot_y_deg);
                     anim_ms_sig.set(animation::CARD_ENTER_BASE_MS);
                     let edge_ratio = enter.edge_ratio;
                     let adj_from_rot = enter.adjusted_from_rot_y_deg;
                     let adj_from_z = enter.adjusted_from_z;
                     let stretch_start = enter.entry_stretch_start;
 
-                    // Simple 2-keyframe animation: off-screen → center
-                    // The custom CanTween implementation creates the cubic path
                     transform_seq.set(keyframes![
                         (
                             CardEffects {
-                                x_px: actual_from_x,
+                                x_px: from_x_px,
                                 y_px: 0.0,
                                 z_px: adj_from_z,
                                 tilt_x_deg: 0.0,
                                 rot_y_deg: adj_from_rot,
-                                scale_x: stretch_start, // Stretched at start
+                                scale_x: stretch_start,
                                 scale_y: 1.0,
                                 perspective: CARD_PERSPECTIVE_CM * enter.perspective_scale,
                                 blur: CARD_MAX_BLUR,
@@ -290,7 +207,7 @@ pub fn Card(
                                 z_px: 0.0,
                                 tilt_x_deg: 0.0,
                                 rot_y_deg: to_rot_y_deg,
-                                scale_x: 1.0, // Normal scale at end
+                                scale_x: 1.0,
                                 scale_y: 1.0,
                                 perspective: CARD_PERSPECTIVE_CM,
                                 blur: 0.0,
@@ -307,14 +224,7 @@ pub fn Card(
                     to_z_px,
                     to_rot_y_deg,
                 } => {
-                    // Ensure card goes fully off-screen
-                    let actual_to_x = if to_x_px.abs() < window_width as f32 / 2.0 {
-                        (window_width as f32 / 2.0 + 100.0) * to_x_px.signum()
-                    } else {
-                        to_x_px
-                    };
-
-                    let leave = adapt_leave(actual_to_x, to_z_px, to_rot_y_deg);
+                    let leave = adapt_leave(to_x_px, to_z_px, to_rot_y_deg);
                     anim_ms_sig.set(animation::CARD_LEAVE_BASE_MS);
                     let edge_ratio = leave.edge_ratio;
                     let adj_to_rot = leave.adjusted_to_rot_y_deg;
@@ -331,7 +241,7 @@ pub fn Card(
                                 z_px: 0.0,
                                 tilt_x_deg: 0.0,
                                 rot_y_deg: 0.0,
-                                scale_x: 1.0, // Start normal
+                                scale_x: 1.0,
                                 scale_y: 1.0,
                                 perspective: CARD_PERSPECTIVE_CM,
                                 blur: 0.0,
@@ -340,12 +250,12 @@ pub fn Card(
                         ),
                         (
                             CardEffects {
-                                x_px: actual_to_x,
+                                x_px: to_x_px,
                                 y_px: 0.0,
                                 z_px: adj_to_z,
                                 tilt_x_deg: 0.0,
                                 rot_y_deg: adj_to_rot,
-                                scale_x: stretch_end, // Maximum stretch at exit
+                                scale_x: stretch_end,
                                 scale_y: 1.0,
                                 perspective: CARD_PERSPECTIVE_CM * leave.perspective_scale,
                                 blur: CARD_MAX_BLUR,
@@ -356,6 +266,106 @@ pub fn Card(
                     ]);
                     anim_resume();
                     log::debug!("Card: LEAVE_TRAVEL3D edge_ratio={edge_ratio:.2} ms={} rot_adj={adj_to_rot}", animation::CARD_LEAVE_BASE_MS);
+                }
+                CardAnimation::EdgeEnter3D {
+                    side,
+                    offset_px,
+                    depth_z_px,
+                    yaw_deg,
+                } => {
+                    set_current_edge_side(Some(side));
+                    // Use provided offsets directly (no window-based minimum adjustments)
+                    let (from_x, from_y) = match side {
+                        EdgeSide::Top => (0.0, -offset_px),
+                        EdgeSide::Bottom => (0.0, offset_px),
+                        EdgeSide::Left => (-offset_px, 0.0),
+                        EdgeSide::Right => (offset_px, 0.0),
+                    };
+                    log::debug!(
+                    "Card EdgeEnter3D: side={:?}, offset_px={}, depth_z_px={}, yaw_deg={} -> from_x={}, from_y={}",
+                    side, offset_px, depth_z_px, yaw_deg, from_x, from_y
+                );
+                    anim_ms_sig.set(animation::CARD_ENTER_SHORT_MS);
+                    transform_seq.set(keyframes![
+                        (
+                            CardEffects {
+                                x_px: from_x,
+                                y_px: from_y,
+                                z_px: depth_z_px,
+                                tilt_x_deg: 0.0,
+                                rot_y_deg: yaw_deg,
+                                scale_x: 1.0,
+                                scale_y: 1.0,
+                                perspective: CARD_PERSPECTIVE_CM * 0.9,
+                                blur: CARD_MAX_BLUR,
+                            },
+                            0.0
+                        ),
+                        (
+                            CardEffects {
+                                x_px: 0.0,
+                                y_px: 0.0,
+                                z_px: 0.0,
+                                tilt_x_deg: 0.0,
+                                rot_y_deg: 0.0,
+                                scale_x: 1.0,
+                                scale_y: 1.0,
+                                perspective: CARD_PERSPECTIVE_CM,
+                                blur: 0.0,
+                            },
+                            animation::CARD_ENTER_SHORT_MS,
+                            EaseOutCubic
+                        )
+                    ]);
+                    anim_resume();
+                }
+                CardAnimation::EdgeLeave3D {
+                    side,
+                    offset_px,
+                    depth_z_px,
+                    yaw_deg,
+                } => {
+                    set_current_edge_side(Some(side));
+                    // Use provided offsets directly; no automatic expansion to screen edge
+                    let (to_x, to_y) = match side {
+                        EdgeSide::Top => (0.0, -offset_px),
+                        EdgeSide::Bottom => (0.0, offset_px),
+                        EdgeSide::Left => (-offset_px, 0.0),
+                        EdgeSide::Right => (offset_px, 0.0),
+                    };
+                    anim_ms_sig.set(animation::CARD_LEAVE_SHORT_MS);
+                    transform_seq.set(keyframes![
+                        (
+                            CardEffects {
+                                x_px: 0.0,
+                                y_px: 0.0,
+                                z_px: 0.0,
+                                tilt_x_deg: 0.0,
+                                rot_y_deg: 0.0,
+                                scale_x: 1.0,
+                                scale_y: 1.0,
+                                perspective: CARD_PERSPECTIVE_CM,
+                                blur: 0.0,
+                            },
+                            0.0
+                        ),
+                        (
+                            CardEffects {
+                                x_px: to_x,
+                                y_px: to_y,
+                                z_px: depth_z_px,
+                                tilt_x_deg: 0.0,
+                                rot_y_deg: yaw_deg,
+                                scale_x: 1.0,
+                                scale_y: 1.0,
+                                perspective: CARD_PERSPECTIVE_CM * 0.9,
+                                blur: CARD_MAX_BLUR,
+                            },
+                            animation::CARD_LEAVE_SHORT_MS,
+                            EaseInCubic
+                        )
+                    ]);
+                    anim_resume();
                 }
             }
         }
@@ -379,6 +389,13 @@ pub fn Card(
         format!("blur({}px)", s.blur)
     };
 
+    let transform_origin = move || {
+        match current_edge_side() {
+            Some(EdgeSide::Left | EdgeSide::Right) => "50% 50%", // Center origin for left/right to prevent Y movement
+            _ => "50% 100%", // Bottom center for top/bottom and default
+        }
+    };
+
     let thick_edge_class =
         move |pos: &str| format!("absolute {pos} bg-cinnabar/25 dark:bg-gray/25 blur-xs ");
 
@@ -399,7 +416,11 @@ pub fn Card(
             role=if interactive { "button" } else { "group" }
             tabindex=if interactive { Some("0") } else { None }
         >
-            <div class=class style:transform=transform_style style:transform-origin="50% 100%">
+            <div
+                class=class
+                style:transform=transform_style
+                style:transform-origin=transform_origin
+            >
                 <div
                     class="relative backface-hidden"
                     style:transform=format!("translateZ({THICKNESS_PX}px)")

@@ -5,62 +5,29 @@ use tauri_use::{
 };
 
 use crate::{
-    components::{CompactMenu, CompactMenuPlacement, Icon, Instrument, MenuItem, Switch, UiSize},
-    util::tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
+    components::{
+        ActivationSourceToggle, AppearanceToggle, CompactMenu, Icon, Instrument, MenuItem, Switch,
+        UiPlacement, UiSize,
+    },
+    util::{
+        layout_context::{expect_layout_contex, LayoutContextReturn},
+        tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
+    },
 };
 
 #[component]
 pub fn Play() -> impl IntoView {
-    let UseTauriResourceReturn {
-        data: dark_override,
-        ..
-    } = use_tauri_resource::<shared::commands::setup::UpdateWindowAppearanceOverridePayload>(
-        shared::commands::setup::GET_WINDOW_APPEARANCE_OVERRIDE,
-    );
-
-    let dark_override_value = Signal::derive(move || {
-        dark_override
-            .get()
-            .map(|d| match d.dark {
-                Some(true) => 2_usize,
-                Some(false) => 1_usize,
-                None => 0_usize,
-            })
-            .unwrap_or(0)
-    });
-
-    let UseTauriWithReturn {
-        error: appearance_override_error,
-        trigger: trigger_appearance_override,
-        ..
-    } = use_invoke_with_args::<shared::commands::setup::UpdateWindowAppearanceOverridePayload, ()>(
-        shared::commands::setup::WINDOW_APPEARANCE_OVERRIDE,
-    );
-
-    let UseTauriResourceReturn {
-        data: activation_source,
-        ..
-    } = use_tauri_resource::<shared::instrument::events::ActivationSourcePayload>(
-        shared::instrument::events::ACTIVATION_SRC,
-    );
-
     let UseTauriResourceReturn { data: playback, .. } =
         use_tauri_resource::<shared::instrument::events::PlaybackStatePayload>(
             shared::instrument::events::PLAYBACK_STATE,
         );
 
     // Derive compact menu placement from current instrument layout orientation
-    let UseTauriResourceReturn { data: layout, .. } =
-        use_tauri_resource::<shared::instrument::Layout>(shared::instrument::events::LAYOUT);
+    let LayoutContextReturn { orientation, .. } = expect_layout_contex();
 
-    let placement = Signal::derive(move || {
-        layout
-            .get()
-            .map(|l| match l.orientation {
-                shared::orientation::LayoutOrientation::Vertical => CompactMenuPlacement::Left,
-                shared::orientation::LayoutOrientation::Horizontal => CompactMenuPlacement::Bottom,
-            })
-            .unwrap_or(CompactMenuPlacement::Bottom)
+    let placement = Signal::derive(move || match orientation() {
+        shared::orientation::LayoutOrientation::Vertical => UiPlacement::Left,
+        shared::orientation::LayoutOrientation::Horizontal => UiPlacement::Bottom,
     });
 
     let UseTauriWithReturn {
@@ -87,14 +54,6 @@ pub fn Play() -> impl IntoView {
         ..
     } = use_command::<()>(shared::instrument::commands::PLAYBACK_STOP);
 
-    let UseTauriReturn {
-        error: set_activation_source_error,
-        trigger: trigger_set_activation_source,
-        ..
-    } = use_invoke::<shared::commands::instrument::ActivationSourcePayload, (), ()>(
-        shared::instrument::commands::SET_ACTIVATION_SRC,
-    );
-
     let (menu_items, set_menu_items) = signal(vec![
         MenuItem::Action {
             icon: "pause",
@@ -112,30 +71,6 @@ pub fn Play() -> impl IntoView {
             label: "About",
         },
     ]);
-
-    let on_activation_source_change = Callback::new(move |source: usize| {
-        trigger_set_activation_source(Some((
-            shared::instrument::commands::ActivationSourcePayload {
-                source: source as u8,
-            },
-            (),
-        )));
-    });
-
-    let on_appearance_override_change = Callback::new(move |source: usize| {
-        let dark = match source {
-            0 => None,
-            1 => Some(false),
-            2 => Some(true),
-            _ => None,
-        };
-
-        log::debug!("Setting appearance override to: {:?}", dark);
-
-        trigger_appearance_override(Some(
-            shared::commands::setup::UpdateWindowAppearanceOverridePayload { dark },
-        ));
-    });
 
     Effect::new(move |_| {
         if let Some(err) = pause_error() {
@@ -163,20 +98,6 @@ pub fn Play() -> impl IntoView {
             log::error!(
                 "Error invoking {}: {err}",
                 shared::instrument::commands::PLAYBACK_STOP
-            );
-        }
-
-        if let Some(err) = set_activation_source_error() {
-            log::error!(
-                "Error invoking {}: {err}",
-                shared::instrument::commands::SET_ACTIVATION_SRC
-            );
-        }
-
-        if let Some(err) = appearance_override_error() {
-            log::error!(
-                "Error invoking {}: {err}",
-                shared::commands::setup::WINDOW_APPEARANCE_OVERRIDE
             );
         }
     });
@@ -218,34 +139,9 @@ pub fn Play() -> impl IntoView {
     view! {
         <div>
             <Instrument />
-            <CompactMenu items=menu_items placement=placement>
-                <Switch
-                    labels=vec![
-                        view! { <Icon name="entropy" size=UiSize::Sm /> }.into_any(),
-                        view! { <Icon name="mic" size=UiSize::Sm /> }.into_any(),
-                    ]
-                    tooltips=vec!["Random".to_string(), "Mic".to_string()]
-                    current_state=Signal::derive(move || {
-                        activation_source().map(|s| s.source).unwrap_or_default() as usize
-                    })
-                    on_change=on_activation_source_change
-                    size=UiSize::Sm
-                />
-                <Switch
-                    labels=vec![
-                        view! { <Icon name="system" size=UiSize::Sm /> }.into_any(),
-                        view! { <Icon name="bright" size=UiSize::Sm /> }.into_any(),
-                        view! { <Icon name="dark" size=UiSize::Sm /> }.into_any(),
-                    ]
-                    tooltips=vec![
-                        "System theme (auto)".to_string(),
-                        "In (bright)".to_string(),
-                        "Yo (dark)".to_string(),
-                    ]
-                    current_state=dark_override_value
-                    on_change=on_appearance_override_change
-                    size=UiSize::Sm
-                />
+            <CompactMenu items=menu_items placement>
+                <ActivationSourceToggle placement />
+                <AppearanceToggle placement />
             </CompactMenu>
         </div>
     }

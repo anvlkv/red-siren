@@ -24,6 +24,16 @@ use std::str::FromStr;
 
 pub use animation::*;
 
+pub struct IntroContext {
+    // --- Instrument properties ---
+    pub left_string_style: Memo<String>,
+    pub right_string_style: Memo<String>,
+    pub key_styles: Memo<HashMap<(u8, u8), String>>,
+    pub band_styles: Memo<HashMap<(u8, u8), String>>,
+    // --- Tuner properties ---
+    // TODO: add properties with tuner
+}
+
 #[component]
 pub fn Intro(children: ChildrenFn) -> impl IntoView {
     // // ========== User Preferences ==========

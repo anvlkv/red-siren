@@ -137,11 +137,27 @@ jobs:
         with:
           path: ./artifacts
 
+      - name: Delete existing preview release
+        run: |
+          TAG_NAME="preview-pr-${{ github.event.pull_request.number }}"
+          # Check if release exists and delete it
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Deleting existing preview release: $TAG_NAME"
+            gh release delete "$TAG_NAME" --yes
+          fi
+          # Delete tag if it exists
+          if git ls-remote --tags origin | grep -q "refs/tags/$TAG_NAME"; then
+            echo "Deleting existing tag: $TAG_NAME"
+            git push --delete origin "$TAG_NAME" || true
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create preview release
         id: create-release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: preview-pr-${{ github.event.pull_request.number }}-${{ github.run_id }}
+          tag_name: preview-pr-${{ github.event.pull_request.number }}
           name: "Preview: PR #${{ github.event.pull_request.number }}"
           body: |
             🔍 **Preview build for PR #${{ github.event.pull_request.number }}**

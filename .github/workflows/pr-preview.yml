@@ -141,7 +141,7 @@ jobs:
         id: create-release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: preview-pr-${{ github.event.pull_request.number }}-${{ github.run_number }}
+          tag_name: preview-pr-${{ github.event.pull_request.number }}-${{ github.run_id }}
           name: "Preview: PR #${{ github.event.pull_request.number }}"
           body: |
             🔍 **Preview build for PR #${{ github.event.pull_request.number }}**
@@ -157,6 +157,8 @@ jobs:
           files: artifacts/**/*
           draft: true
           prerelease: true
+          fail_on_unmatched_files: false
+          generate_release_notes: true
 
   comment-on-pr:
     needs: create-preview-release

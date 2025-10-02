@@ -147,6 +147,9 @@ jobs:
             src-tauri/gen/android/app/build/outputs/bundle/release/*.aab
           draft: false
           prerelease: false
+          fail_on_unmatched_files: false
+          generate_release_notes: true
+          make_latest: true
 
   build-ios:
     permissions:
@@ -222,3 +225,6 @@ jobs:
           files: src-tauri/gen/apple/build/**/*.ipa
           draft: false
           prerelease: false
+          fail_on_unmatched_files: false
+          generate_release_notes: true
+          make_latest: true

@@ -5,30 +5,60 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-  build-preview:
-    permissions:
-      contents: write
-      pull-requests: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: "ubuntu-22.04"
-            type: "desktop"
-            artifact_name: "ubuntu-desktop"
-          - platform: "ubuntu-latest"
-            type: "android"
-            artifact_name: "android-mobile"
-
-    runs-on: ${{ matrix.platform }}
+  build-desktop-preview:
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies (Desktop Ubuntu only)
-        if: matrix.type == 'desktop'
+      - name: Install dependencies (ubuntu only)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Add node_modules/.bin to PATH
+        run: echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH
+
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.4.0
+        with:
+          version: "latest"
+
+      - name: Install Tauri CLI
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: tauri-cli
+          version: "^2.0"
+          cache-key: tauri-cli-v2
+
+      - name: Build desktop app
+        run: cargo tauri build
+
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-ubuntu-desktop-${{ github.event.pull_request.number }}
+          path: target/release/bundle/
+          if-no-files-found: warn
+          retention-days: 7
+
+  build-android-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -59,56 +89,46 @@ jobs:
           version: "^2.0"
           cache-key: tauri-cli-v2
 
-      - name: Setup Java (Android only)
-        if: matrix.type == 'android'
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: "temurin"
           java-version: "17"
 
       - name: Setup Android SDK
-        if: matrix.type == 'android'
         uses: android-actions/setup-android@v3
 
       - name: Install Android NDK
-        if: matrix.type == 'android'
         run: |
           ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "ndk;25.1.8937393"
 
       - name: Setup Android environment
-        if: matrix.type == 'android'
         run: |
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.1.8937393" >> $GITHUB_ENV
 
       - name: Initialize Android platform
-        if: matrix.type == 'android'
         run: cargo tauri android init
 
-      - name: Build desktop app
-        if: matrix.type == 'desktop'
-        run: cargo tauri build
-
       - name: Build Android app
-        if: matrix.type == 'android'
         run: cargo tauri android build --apk
 
-      - name: Upload preview artifacts
+      - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: preview-${{ matrix.artifact_name }}-${{ github.event.pull_request.number }}
-          path: |
-            src-tauri/target/release/bundle/
-            src-tauri/target/*/release/bundle/
-            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          name: preview-android-mobile-${{ github.event.pull_request.number }}
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
           if-no-files-found: warn
           retention-days: 7
 
   create-preview-release:
-    needs: build-preview
+    needs: [build-desktop-preview, build-android-preview]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
+    outputs:
+      release-url: ${{ steps.create-release.outputs.html_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -118,6 +138,7 @@ jobs:
           path: ./artifacts
 
       - name: Create preview release
+        id: create-release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: preview-pr-${{ github.event.pull_request.number }}-${{ github.run_number }}
@@ -129,7 +150,7 @@ jobs:
             **Commit:** ${{ github.event.pull_request.head.sha }}
 
             ### Available Previews:
-            - 🐧 Ubuntu Desktop
+            - 🐧 Ubuntu Desktop (AppImage, DEB, RPM)
             - 📱 Android APK
 
             This is an automated preview build. Artifacts will be cleaned up periodically.
@@ -148,16 +169,14 @@ jobs:
         with:
           script: |
             const prNumber = context.payload.pull_request.number;
-            const runNumber = context.runNumber;
-            const tagName = `preview-pr-${prNumber}-${runNumber}`;
-            const releaseUrl = `${context.payload.repository.html_url}/releases/tag/${tagName}`;
+            const releaseUrl = "${{ needs.create-preview-release.outputs.release-url }}";
 
             const comment = `## 🎉 Preview Build Complete!
 
             A preview release has been created for this PR: [**Download Preview**](${releaseUrl})
 
             ### 📦 Available Downloads:
-            - 🐧 **Ubuntu Desktop** - Linux AppImage/DEB packages
+            - 🐧 **Ubuntu Desktop** - AppImage, DEB, and RPM packages
             - 📱 **Android Mobile** - APK file for testing
 
             The preview release is marked as draft and pre-release. Artifacts are retained for 7 days.

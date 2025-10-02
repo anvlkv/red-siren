@@ -101,7 +101,7 @@ pub fn Button(
 
     let button_style = Signal::derive(move || {
         if matches!(placement(), Some(UiPlacement::Left | UiPlacement::Right)) {
-            "writing-mode: vertical-rl; text-orientation: mixed;"
+            "writing-mode: vertical-rl; text-orientation: mixed; height: auto;"
         } else {
             ""
         }

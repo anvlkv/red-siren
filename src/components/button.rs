@@ -92,21 +92,23 @@ pub fn Button(
         } else {
             ""
         };
-        let placement_cls = if matches!(placement(), Some(UiPlacement::Left | UiPlacement::Right)) {
-            // Vertical stacking for left/right edge usage
-            "flex flex-col"
-        } else {
-            "flex flex-row"
-        };
 
         format!(
-            "{base} {rounding} {size_cls} {variant_cls} {disabled_cls} {placement_cls} {}",
+            "{base} {rounding} {size_cls} {variant_cls} {disabled_cls} {}",
             class()
         )
     };
 
+    let button_style = Signal::derive(move || {
+        if matches!(placement(), Some(UiPlacement::Left | UiPlacement::Right)) {
+            "writing-mode: vertical-rl; text-orientation: mixed;"
+        } else {
+            ""
+        }
+    });
+
     view! {
-        <button type="button" class=class disabled=disabled>
+        <button class=class disabled=disabled style=button_style>
             {children()}
         </button>
     }

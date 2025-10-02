@@ -12,7 +12,7 @@ pub struct CardEffects {
     pub x_px: f32,
     pub y_px: f32,
     pub z_px: f32,
-    pub tilt_x_deg: f32,
+    pub rot_x_deg: f32,
     pub rot_y_deg: f32,
     pub scale_x: f32,
     pub scale_y: f32,

@@ -8,17 +8,14 @@ pub use types::{CardAnimation, EdgeSide};
 use std::time::Duration;
 
 use keyframe::{
-    functions::{EaseInCubic, EaseOutCubic},
+    functions::{EaseIn, EaseOut},
     keyframes, AnimationSequence,
 };
 use leptos::prelude::*;
 use leptos_use::use_prefers_reduced_motion;
+use leptos_use::use_raf_fn;
 
-use crate::{
-    components::{UiPadding, UiVariant},
-    util::raf_fn_fps::use_raf_fn_with_fps_signal,
-};
-use leptos_use::use_window_size;
+use crate::components::{UiPadding, UiVariant};
 
 const THICKNESS_PX: f64 = 8.0;
 
@@ -123,7 +120,7 @@ pub fn Card(
             x_px: 0.0,
             y_px: 0.0,
             z_px: 0.0,
-            tilt_x_deg: 0.0,
+            rot_x_deg: 0.0,
             rot_y_deg: 0.0,
             scale_x: 1.0,
             scale_y: 1.0,
@@ -133,37 +130,22 @@ pub fn Card(
         0.0
     )]);
 
-    // Get window dimensions for proper off-screen positions
-    let window_size = use_window_size();
-
-    // RAF loop (FPS throttled via reactive signal)
-    let fps_signal = Signal::derive(move || {
-        if reduced_motion() {
-            animation::REDUCED_FPS
-        } else {
-            animation::NORMAL_FPS
+    let pausable = use_raf_fn({
+        move |args: leptos_use::UseRafFnCallbackArgs| {
+            let reduced = reduced_motion();
+            if reduced {
+                // In reduced motion, fast-forward to end (no intermediate frames)
+                transform_seq.update(|seq| {
+                    seq.advance_to(anim_ms_sig());
+                });
+            } else {
+                transform_seq.update(|seq| {
+                    let rem = seq.duration() - seq.time();
+                    seq.advance_by(args.delta.min(rem));
+                });
+            }
         }
     });
-
-    let pausable = use_raf_fn_with_fps_signal(
-        {
-            move |args: leptos_use::UseRafFnCallbackArgs| {
-                let reduced = reduced_motion();
-                if reduced {
-                    // In reduced motion, fast-forward to end (no intermediate frames)
-                    transform_seq.update(|seq| {
-                        seq.advance_to(anim_ms_sig());
-                    });
-                } else {
-                    transform_seq.update(|seq| {
-                        let rem = seq.duration() - seq.time();
-                        seq.advance_by(args.delta.min(rem));
-                    });
-                }
-            }
-        },
-        fps_signal,
-    );
     let anim_pause = pausable.pause;
     let anim_resume = pausable.resume;
     let anim_active = pausable.is_active;
@@ -191,7 +173,7 @@ pub fn Card(
                                 x_px: from_x_px,
                                 y_px: 0.0,
                                 z_px: adj_from_z,
-                                tilt_x_deg: 0.0,
+                                rot_x_deg: 0.0,
                                 rot_y_deg: adj_from_rot,
                                 scale_x: stretch_start,
                                 scale_y: 1.0,
@@ -205,7 +187,7 @@ pub fn Card(
                                 x_px: 0.0,
                                 y_px: 0.0,
                                 z_px: 0.0,
-                                tilt_x_deg: 0.0,
+                                rot_x_deg: 0.0,
                                 rot_y_deg: to_rot_y_deg,
                                 scale_x: 1.0,
                                 scale_y: 1.0,
@@ -213,7 +195,7 @@ pub fn Card(
                                 blur: 0.0,
                             },
                             animation::CARD_ENTER_BASE_MS,
-                            EaseOutCubic
+                            EaseOut
                         )
                     ]);
                     anim_resume();
@@ -239,7 +221,7 @@ pub fn Card(
                                 x_px: 0.0,
                                 y_px: 0.0,
                                 z_px: 0.0,
-                                tilt_x_deg: 0.0,
+                                rot_x_deg: 0.0,
                                 rot_y_deg: 0.0,
                                 scale_x: 1.0,
                                 scale_y: 1.0,
@@ -253,7 +235,7 @@ pub fn Card(
                                 x_px: to_x_px,
                                 y_px: 0.0,
                                 z_px: adj_to_z,
-                                tilt_x_deg: 0.0,
+                                rot_x_deg: 0.0,
                                 rot_y_deg: adj_to_rot,
                                 scale_x: stretch_end,
                                 scale_y: 1.0,
@@ -261,7 +243,7 @@ pub fn Card(
                                 blur: CARD_MAX_BLUR,
                             },
                             animation::CARD_LEAVE_BASE_MS,
-                            EaseInCubic
+                            EaseIn
                         )
                     ]);
                     anim_resume();
@@ -292,10 +274,10 @@ pub fn Card(
                                 x_px: from_x,
                                 y_px: from_y,
                                 z_px: depth_z_px,
-                                tilt_x_deg: 0.0,
+                                rot_x_deg: 0.0,
                                 rot_y_deg: yaw_deg,
-                                scale_x: 1.0,
-                                scale_y: 1.0,
+                                scale_x: 1.5,
+                                scale_y: 0.1,
                                 perspective: CARD_PERSPECTIVE_CM * 0.9,
                                 blur: CARD_MAX_BLUR,
                             },
@@ -306,7 +288,7 @@ pub fn Card(
                                 x_px: 0.0,
                                 y_px: 0.0,
                                 z_px: 0.0,
-                                tilt_x_deg: 0.0,
+                                rot_x_deg: 0.0,
                                 rot_y_deg: 0.0,
                                 scale_x: 1.0,
                                 scale_y: 1.0,
@@ -314,7 +296,7 @@ pub fn Card(
                                 blur: 0.0,
                             },
                             animation::CARD_ENTER_SHORT_MS,
-                            EaseOutCubic
+                            EaseOut
                         )
                     ]);
                     anim_resume();
@@ -340,7 +322,7 @@ pub fn Card(
                                 x_px: 0.0,
                                 y_px: 0.0,
                                 z_px: 0.0,
-                                tilt_x_deg: 0.0,
+                                rot_x_deg: 0.0,
                                 rot_y_deg: 0.0,
                                 scale_x: 1.0,
                                 scale_y: 1.0,
@@ -354,7 +336,7 @@ pub fn Card(
                                 x_px: to_x,
                                 y_px: to_y,
                                 z_px: depth_z_px,
-                                tilt_x_deg: 0.0,
+                                rot_x_deg: 0.0,
                                 rot_y_deg: yaw_deg,
                                 scale_x: 1.0,
                                 scale_y: 1.0,
@@ -362,7 +344,7 @@ pub fn Card(
                                 blur: CARD_MAX_BLUR,
                             },
                             animation::CARD_LEAVE_SHORT_MS,
-                            EaseInCubic
+                            EaseIn
                         )
                     ]);
                     anim_resume();
@@ -375,7 +357,7 @@ pub fn Card(
         let s = transform_seq().now();
         format!(
             "translate3d({}px, {}px, {}px) rotateX({}deg) rotateY({}deg) scale({},{})",
-            s.x_px, s.y_px, s.z_px, s.tilt_x_deg, s.rot_y_deg, s.scale_x, s.scale_y
+            s.x_px, s.y_px, s.z_px, s.rot_x_deg, s.rot_y_deg, s.scale_x, s.scale_y
         )
     };
 

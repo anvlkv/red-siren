@@ -156,6 +156,8 @@ pub fn Switch(
         )
     };
 
+    let placement = Signal::derive(move || placement().unwrap_or_default().opposite());
+
     view! {
         <div
             class=container_class
@@ -182,7 +184,7 @@ pub fn Switch(
                     match &tooltips {
                         Some(tooltip_array) => {
                             let tooltip_text = tooltip_array[segment_index].clone();
-                            let placement = placement().map(|p| p.opposite());
+
                             view! {
                                 <Tooltip text=tooltip_text placement>
                                     {segment_view}

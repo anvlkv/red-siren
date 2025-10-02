@@ -24,14 +24,16 @@ pub fn About() -> impl IntoView {
     view! {
         <ContentPage route_id=RouteId::About title="About">
             <div class="flex flex-col items-center justify-center gap-6">
-                <h2 class="text-2xl text-bold max-w-[42ch] italic">"Red Siren is a noise chime"</h2>
-                <p class="text-xl max-w-[42ch] ">
+                <h2 class="text-2xl text-bold max-w-md lg:max-w-[42ch] italic">
+                    "Red Siren is a noise chime"
+                </h2>
+                <p class="text-xl max-w-md lg:max-w-[42ch] ">
                     "It pulls the present into focus — a siren's call, loud and true. A sound that blooms, that bends, that sharpens to the edge you set. It is a siren that sings only when you do, a mirror of noise, a vessel of tone."
                 </p>
-                <p class="text-xl max-w-[42ch] ">
+                <p class="text-xl max-w-md lg:max-w-[42ch] ">
                     "It hums with what you give it — loud, brief, true. A thousand crystal bowls shattering into light, a frequency tuned to the shape of your breath. Strike it, and it strikes back. Call it, and it calls you forward."
                 </p>
-                <p class="text-xl max-w-[42ch] ">
+                <p class="text-xl max-w-md lg:max-w-[42ch] ">
                     "Red Siren is free and open source under the CC‑BY‑SA license — take the code, remix it, and share what you make. If it speaks to you, show some love:"
                     <a
                         class="font-bold ml-2 underline"

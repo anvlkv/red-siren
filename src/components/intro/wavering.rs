@@ -2,9 +2,7 @@ use leptos::prelude::*;
 use shared::events::intro::IntroSnoopBatchPayload;
 use tauri_use::{use_command, UseTauriWithReturn};
 
-use crate::util::raf_fn_fps::{
-    use_raf_fn_with_fps_and_options, UseRafFnCallbackArgs, UseRafFnWithFpsOptions,
-};
+use crate::util::raf_fn_fps::{use_raf_fn_with_fps, UseRafFnCallbackArgs};
 
 // Wave geometry (tiled, taller, centered under sun)
 // Sun center (107,164), radius 39 => bottom ≈ 203 -> start just below.
@@ -99,40 +97,37 @@ pub fn Wavering() -> impl IntoView {
             .collect(),
     );
 
-    let _wave_raf = use_raf_fn_with_fps_and_options(
-        {
-            move |UseRafFnCallbackArgs {
-                      delta: _,
-                      timestamp: _,
-                  }| {
-                if let Some(batch) = frame_data.get() {
-                    wave_paths.update(|paths| {
-                        for (i, (snoop, (p, _, _))) in
-                            batch.snoops.iter().zip(paths.iter_mut()).enumerate()
-                        {
-                            if i >= 11 {
-                                break;
-                            }
-                            let base_y =
-                                WAVE_TOP_Y + WAVE_Y_OFFSET + (i as f32) * WAVE_VERTICAL_SPACING;
-                            let samples = &snoop.samples;
-                            let path = crate::util::wave::waveform_path_x(
-                                samples,
-                                WAVES_LENGHT[i],
-                                WAVE_CENTER_X,
-                                base_y,
-                                WAVE_AMPLITUDE_PX,
-                            );
-                            *p = path;
+    let _wave_raf = use_raf_fn_with_fps(
+        move |UseRafFnCallbackArgs {
+                  delta: _,
+                  timestamp: _,
+              }| {
+            if let Some(batch) = frame_data.get() {
+                wave_paths.update(|paths| {
+                    for (i, (snoop, (p, _, _))) in
+                        batch.snoops.iter().zip(paths.iter_mut()).enumerate()
+                    {
+                        if i >= 11 {
+                            break;
                         }
-                    });
-                }
-
-                fetch_frame(Some(()));
+                        let base_y =
+                            WAVE_TOP_Y + WAVE_Y_OFFSET + (i as f32) * WAVE_VERTICAL_SPACING;
+                        let samples = &snoop.samples;
+                        let path = crate::util::wave::waveform_path_x(
+                            samples,
+                            WAVES_LENGHT[i],
+                            WAVE_CENTER_X,
+                            base_y,
+                            WAVE_AMPLITUDE_PX,
+                        );
+                        *p = path;
+                    }
+                });
             }
+
+            fetch_frame(Some(()));
         },
         20.0,
-        UseRafFnWithFpsOptions { immediate: true },
     );
 
     view! {

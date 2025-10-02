@@ -161,6 +161,7 @@ pub fn Tune() -> impl IntoView {
                 size=UiSize::Sm
                 variant=UiVariant::Outline
                 placement=placement
+                attr:r#type="reset"
             >
                 <Icon name="reset" size=UiSize::Sm />
                 <span class="inline-block flex-grow text-center">Reset</span>

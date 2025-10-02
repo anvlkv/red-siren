@@ -228,8 +228,10 @@ pub fn CompactMenu(
     let edge_container_cls = Signal::derive(move || match placement() {
         UiPlacement::Bottom => "fixed inset-x-0 bottom-0 flex justify-center pointer-events-none",
         UiPlacement::Top => "fixed inset-x-0 top-0 flex justify-center pointer-events-none",
-        UiPlacement::Left => "fixed inset-y-0 left-0 flex items-center pointer-events-none",
-        UiPlacement::Right => "fixed inset-y-0 right-0 flex items-center pointer-events-none",
+        UiPlacement::Left => "fixed min-w-5 inset-y-0 left-0 flex items-center pointer-events-none",
+        UiPlacement::Right => {
+            "fixed min-w-5 inset-y-0 right-0 flex items-center pointer-events-none"
+        }
     });
 
     let card_variant = Signal::derive(move || {
@@ -277,13 +279,16 @@ pub fn CompactMenu(
                 on_animation_done=on_anim_done
             >
                 <div class=inner_flex_class>
-                    <button on:click=move |_| {
-                        trigger_navigate(
-                            Some(NavigateRequestPayload {
-                                route: RouteId::Home,
-                            }),
-                        );
-                    }>
+                    <button
+                        on:click=move |_| {
+                            trigger_navigate(
+                                Some(NavigateRequestPayload {
+                                    route: RouteId::Home,
+                                }),
+                            );
+                        }
+                        class="contents"
+                    >
                         <h1
                             class="block text-3xl italic cursor-pointer hover:underline focus:underline"
                             style=title_style
@@ -302,7 +307,7 @@ pub fn CompactMenu(
                                         item
                                         trigger_navigate
                                         compact=true
-                                        menu_placement=placement()
+                                        menu_placement=placement
                                     />
                                 }
                             })

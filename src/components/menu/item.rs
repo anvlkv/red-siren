@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use shared::{commands::navigation::NavigateRequestPayload, RouteId};
+use common::{commands::navigation::NavigateRequestPayload, RouteId};
 
 use crate::components::{Button, Icon, Tooltip, UiPlacement, UiSize};
 

@@ -3,7 +3,7 @@ mod item;
 
 use leptos::prelude::*;
 
-use shared::commands::navigation::NavigateRequestPayload;
+use common::commands::navigation::NavigateRequestPayload;
 use tauri_use::{use_invoke_with_args, UseTauriWithReturn};
 
 pub use compact::*;
@@ -15,13 +15,13 @@ pub fn Menu() -> impl IntoView {
         trigger: trigger_navigate,
         error,
         ..
-    } = use_invoke_with_args::<NavigateRequestPayload, ()>(shared::commands::navigation::NAVIGATE);
+    } = use_invoke_with_args::<NavigateRequestPayload, ()>(common::commands::navigation::NAVIGATE);
 
     Effect::new(move |_| {
         if let Some(err) = error() {
             log::error!(
                 "Error invoking {}: {}",
-                shared::commands::navigation::NAVIGATE,
+                common::commands::navigation::NAVIGATE,
                 err
             );
         }

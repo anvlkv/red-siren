@@ -1,4 +1,4 @@
-use shared::{
+use common::{
     commands::setup::UpdateWindowAppearanceOverridePayload,
     error::{Result, SetupError},
 };
@@ -39,8 +39,8 @@ pub fn update_window_appearance(
             guard.dark = dark;
         }
 
-        app.emit(shared::events::setup::UPDATE_WINDOW_APPEARANCE, ())
-            .map_err(|e| SetupError::emit(shared::events::setup::UPDATE_WINDOW_APPEARANCE, e))?;
+        app.emit(common::events::setup::UPDATE_WINDOW_APPEARANCE, ())
+            .map_err(|e| SetupError::emit(common::events::setup::UPDATE_WINDOW_APPEARANCE, e))?;
     } else {
         log::trace!("Ignoring appearance update because an override is active");
     }
@@ -110,14 +110,14 @@ pub fn update_window_appearance_dark_override(
 
     // 4. Emit override state payload (consumer can know if override active)
     app.emit(
-        shared::events::setup::GET_WINDOW_APPEARANCE_OVERRIDE,
+        common::events::setup::GET_WINDOW_APPEARANCE_OVERRIDE,
         UpdateWindowAppearanceOverridePayload { dark },
     )
-    .map_err(|e| SetupError::emit(shared::events::setup::GET_WINDOW_APPEARANCE_OVERRIDE, e))?;
+    .map_err(|e| SetupError::emit(common::events::setup::GET_WINDOW_APPEARANCE_OVERRIDE, e))?;
 
     // 5. Always emit appearance update so listeners react uniformly
-    app.emit(shared::events::setup::UPDATE_WINDOW_APPEARANCE, ())
-        .map_err(|e| SetupError::emit(shared::events::setup::UPDATE_WINDOW_APPEARANCE, e))?;
+    app.emit(common::events::setup::UPDATE_WINDOW_APPEARANCE, ())
+        .map_err(|e| SetupError::emit(common::events::setup::UPDATE_WINDOW_APPEARANCE, e))?;
 
     Ok(())
 }
@@ -147,8 +147,8 @@ pub fn update_window_size(
 
     log::debug!("Updating window size to {}x{}", width, height);
 
-    app.emit(shared::events::setup::UPDATE_WINDOW_SIZE, ())
-        .map_err(|e| SetupError::emit(shared::events::setup::UPDATE_WINDOW_SIZE, e))?;
+    app.emit(common::events::setup::UPDATE_WINDOW_SIZE, ())
+        .map_err(|e| SetupError::emit(common::events::setup::UPDATE_WINDOW_SIZE, e))?;
 
     Ok(())
 }

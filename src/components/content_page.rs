@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 use leptos_use::use_window_size;
-use shared::RouteId;
+use common::RouteId;
 use tauri_use::{use_invoke_with_args, UseTauriWithReturn};
 
 use crate::components::{Button, Card, CardAnimation, Icon, UiSize, UiVariant};
@@ -33,15 +33,15 @@ pub fn ContentPage(
         trigger: back_trigger,
         error: back_error,
         ..
-    } = use_invoke_with_args::<(), ()>(shared::commands::navigation::NAV_BACK);
+    } = use_invoke_with_args::<(), ()>(common::commands::navigation::NAV_BACK);
 
     // Trigger to notify backend that the enter animation has completed
     let UseTauriWithReturn {
         trigger: enter_done_trigger,
         error: enter_error,
         ..
-    } = use_invoke_with_args::<shared::commands::navigation::NavTxPayload, ()>(
-        shared::commands::navigation::NAV_ENTER_DONE,
+    } = use_invoke_with_args::<common::commands::navigation::NavTxPayload, ()>(
+        common::commands::navigation::NAV_ENTER_DONE,
     );
 
     // Trigger to notify backend that the leave animation has completed
@@ -49,29 +49,29 @@ pub fn ContentPage(
         trigger: leave_done_trigger,
         error: leave_error,
         ..
-    } = use_invoke_with_args::<shared::commands::navigation::NavTxPayload, ()>(
-        shared::commands::navigation::NAV_LEAVE_DONE,
+    } = use_invoke_with_args::<common::commands::navigation::NavTxPayload, ()>(
+        common::commands::navigation::NAV_LEAVE_DONE,
     );
 
     Effect::new(move |_| {
         if let Some(err) = enter_error() {
             log::error!(
                 "Error invoking {}: {}",
-                shared::commands::navigation::NAV_ENTER_DONE,
+                common::commands::navigation::NAV_ENTER_DONE,
                 err
             );
         }
         if let Some(err) = leave_error() {
             log::error!(
                 "Error invoking {}: {}",
-                shared::commands::navigation::NAV_LEAVE_DONE,
+                common::commands::navigation::NAV_LEAVE_DONE,
                 err
             );
         }
         if let Some(err) = back_error() {
             log::error!(
                 "Error invoking {}: {}",
-                shared::commands::navigation::NAV_BACK,
+                common::commands::navigation::NAV_BACK,
                 err
             );
         }
@@ -135,10 +135,10 @@ pub fn ContentPage(
     let animation_done_cb = Callback::new(move |_| {
         match nav_tx() {
             Some(NavigationTx::Enter(tx_id)) => {
-                enter_done_trigger(Some(shared::commands::navigation::NavTxPayload { tx_id }));
+                enter_done_trigger(Some(common::commands::navigation::NavTxPayload { tx_id }));
             }
             Some(NavigationTx::Leave(tx_id)) => {
-                leave_done_trigger(Some(shared::commands::navigation::NavTxPayload { tx_id }));
+                leave_done_trigger(Some(common::commands::navigation::NavTxPayload { tx_id }));
             }
             None => {}
         }

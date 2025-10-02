@@ -13,8 +13,8 @@ pub fn AppearanceToggle(
     let UseTauriResourceReturn {
         data: dark_override,
         ..
-    } = use_tauri_resource::<shared::commands::setup::UpdateWindowAppearanceOverridePayload>(
-        shared::commands::setup::GET_WINDOW_APPEARANCE_OVERRIDE,
+    } = use_tauri_resource::<common::commands::setup::UpdateWindowAppearanceOverridePayload>(
+        common::commands::setup::GET_WINDOW_APPEARANCE_OVERRIDE,
     );
 
     let dark_override_value = Signal::derive(move || {
@@ -32,8 +32,8 @@ pub fn AppearanceToggle(
         error: appearance_override_error,
         trigger: trigger_appearance_override,
         ..
-    } = use_invoke_with_args::<shared::commands::setup::UpdateWindowAppearanceOverridePayload, ()>(
-        shared::commands::setup::WINDOW_APPEARANCE_OVERRIDE,
+    } = use_invoke_with_args::<common::commands::setup::UpdateWindowAppearanceOverridePayload, ()>(
+        common::commands::setup::WINDOW_APPEARANCE_OVERRIDE,
     );
 
     let on_appearance_override_change = Callback::new(move |source: usize| {
@@ -47,7 +47,7 @@ pub fn AppearanceToggle(
         log::debug!("Setting appearance override to: {:?}", dark);
 
         trigger_appearance_override(Some(
-            shared::commands::setup::UpdateWindowAppearanceOverridePayload { dark },
+            common::commands::setup::UpdateWindowAppearanceOverridePayload { dark },
         ));
     });
 
@@ -55,7 +55,7 @@ pub fn AppearanceToggle(
         if let Some(err) = appearance_override_error() {
             log::error!(
                 "Error invoking {}: {err}",
-                shared::commands::setup::WINDOW_APPEARANCE_OVERRIDE
+                common::commands::setup::WINDOW_APPEARANCE_OVERRIDE
             );
         }
     });

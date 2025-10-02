@@ -5,53 +5,53 @@ use crate::{
         tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
     },
 };
+use common::RouteId;
 use leptos::prelude::*;
-use shared::RouteId;
 
 #[component]
 pub fn Tune() -> impl IntoView {
     // let UseTauriResourceReturn {
     //     data: activation_source,
     //     ..
-    // } = use_tauri_resource::<shared::instrument::events::ActivationSourcePayload>(
-    //     shared::instrument::events::ACTIVATION_SRC,
+    // } = use_tauri_resource::<common::instrument::events::ActivationSourcePayload>(
+    //     common::instrument::events::ACTIVATION_SRC,
     // );
 
     // let UseTauriResourceReturn { data: playback, .. } =
-    //     use_tauri_resource::<shared::instrument::events::PlaybackStatePayload>(
-    //         shared::instrument::events::PLAYBACK_STATE,
+    //     use_tauri_resource::<common::instrument::events::PlaybackStatePayload>(
+    //         common::instrument::events::PLAYBACK_STATE,
     //     );
 
     // let UseTauriWithReturn {
     //     error: pause_error,
     //     trigger: trigger_pause,
     //     ..
-    // } = use_command::<()>(shared::instrument::commands::PLAYBACK_PAUSE);
+    // } = use_command::<()>(common::instrument::commands::PLAYBACK_PAUSE);
 
     // let UseTauriWithReturn {
     //     error: resume_error,
     //     trigger: trigger_resume,
     //     ..
-    // } = use_command::<()>(shared::instrument::commands::PLAYBACK_RESUME);
+    // } = use_command::<()>(common::instrument::commands::PLAYBACK_RESUME);
 
     // let UseTauriWithReturn {
     //     error: start_error,
     //     trigger: trigger_start,
     //     ..
-    // } = use_command::<()>(shared::instrument::commands::PLAYBACK_START);
+    // } = use_command::<()>(common::instrument::commands::PLAYBACK_START);
 
     // let UseTauriWithReturn {
     //     error: stop_error,
     //     trigger: trigger_stop,
     //     ..
-    // } = use_command::<()>(shared::instrument::commands::PLAYBACK_STOP);
+    // } = use_command::<()>(common::instrument::commands::PLAYBACK_STOP);
 
     // let UseTauriReturn {
     //     error: set_activation_source_error,
     //     trigger: trigger_set_activation_source,
     //     ..
-    // } = use_invoke::<shared::commands::instrument::ActivationSourcePayload, (), ()>(
-    //     shared::instrument::commands::SET_ACTIVATION_SRC,
+    // } = use_invoke::<common::commands::instrument::ActivationSourcePayload, (), ()>(
+    //     common::instrument::commands::SET_ACTIVATION_SRC,
     // );
 
     let (menu_items, set_menu_items) = signal(vec![
@@ -70,13 +70,13 @@ pub fn Tune() -> impl IntoView {
     let LayoutContextReturn { orientation, .. } = expect_layout_contex();
 
     let placement = Signal::derive(move || match orientation() {
-        shared::orientation::LayoutOrientation::Vertical => UiPlacement::Left,
-        shared::orientation::LayoutOrientation::Horizontal => UiPlacement::Bottom,
+        common::orientation::LayoutOrientation::Vertical => UiPlacement::Left,
+        common::orientation::LayoutOrientation::Horizontal => UiPlacement::Bottom,
     });
 
     // let on_activation_source_change = Callback::new(move |source: usize| {
     //     trigger_set_activation_source(Some((
-    //         shared::instrument::commands::ActivationSourcePayload {
+    //         common::instrument::commands::ActivationSourcePayload {
     //             source: source as u8,
     //         },
     //         (),
@@ -87,41 +87,41 @@ pub fn Tune() -> impl IntoView {
     //     if let Some(err) = pause_error() {
     //         log::error!(
     //             "Error invoking {}: {err}",
-    //             shared::instrument::commands::PLAYBACK_PAUSE
+    //             common::instrument::commands::PLAYBACK_PAUSE
     //         );
     //     }
 
     //     if let Some(err) = resume_error() {
     //         log::error!(
     //             "Error invoking {}: {err}",
-    //             shared::instrument::commands::PLAYBACK_RESUME
+    //             common::instrument::commands::PLAYBACK_RESUME
     //         );
     //     }
 
     //     if let Some(err) = start_error() {
     //         log::error!(
     //             "Error invoking {}: {err}",
-    //             shared::instrument::commands::PLAYBACK_START
+    //             common::instrument::commands::PLAYBACK_START
     //         );
     //     }
 
     //     if let Some(err) = stop_error() {
     //         log::error!(
     //             "Error invoking {}: {err}",
-    //             shared::instrument::commands::PLAYBACK_STOP
+    //             common::instrument::commands::PLAYBACK_STOP
     //         );
     //     }
 
     //     if let Some(err) = set_activation_source_error() {
     //         log::error!(
     //             "Error invoking {}: {err}",
-    //             shared::instrument::commands::SET_ACTIVATION_SRC
+    //             common::instrument::commands::SET_ACTIVATION_SRC
     //         );
     //     }
     // });
 
     // Effect::new(move |_| {
-    //     if let Some(shared::instrument::events::PlaybackStatePayload { playing }) = playback() {
+    //     if let Some(common::instrument::events::PlaybackStatePayload { playing }) = playback() {
     //         if playing {
     //             set_menu_items.update(|m| {
     //                 m[0] = MenuItem::Action {

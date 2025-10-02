@@ -1,4 +1,4 @@
-use shared::RouteId;
+use common::RouteId;
 use tauri::State;
 
 use super::navigation_manager::NavigationManager;
@@ -11,7 +11,7 @@ use super::navigation_manager::NavigationManager;
 #[tauri::command]
 pub async fn navigation_bootstrap(
     manager: State<'_, NavigationManager>,
-) -> shared::error::Result<()> {
+) -> common::error::Result<()> {
     _ = manager.bootstrap_initial_transaction();
     Ok(())
 }
@@ -21,7 +21,7 @@ pub async fn navigation_bootstrap(
 pub async fn navigation_leave_done(
     manager: State<'_, NavigationManager>,
     tx_id: u64,
-) -> shared::error::Result<()> {
+) -> common::error::Result<()> {
     manager.leave_done(tx_id);
     Ok(())
 }
@@ -31,7 +31,7 @@ pub async fn navigation_leave_done(
 pub async fn navigation_enter_done(
     manager: State<'_, NavigationManager>,
     tx_id: u64,
-) -> shared::error::Result<()> {
+) -> common::error::Result<()> {
     manager.enter_done(tx_id);
     Ok(())
 }
@@ -40,7 +40,7 @@ pub async fn navigation_enter_done(
 pub async fn navigation_request(
     manager: State<'_, NavigationManager>,
     route: RouteId,
-) -> shared::error::Result<()> {
+) -> common::error::Result<()> {
     if manager.request(route).is_none() {
         log::warn!("Same-route requests are ignored (not an error): {route}");
         return Ok(());
@@ -55,7 +55,7 @@ pub async fn navigation_sync(
     _app: tauri::AppHandle,
     manager: State<'_, NavigationManager>,
     route: RouteId,
-) -> shared::error::Result<()> {
+) -> common::error::Result<()> {
     let current = manager.current_route();
     if current != route {
         manager.emit_sync_snapshot();
@@ -81,7 +81,7 @@ pub fn navigation_resume(manager: State<'_, NavigationManager>,) {
 
 
 #[tauri::command]
-pub fn navigation_back(manager: State<'_, NavigationManager>) -> shared::error::Result<()> {
+pub fn navigation_back(manager: State<'_, NavigationManager>) -> common::error::Result<()> {
     match manager.back() {
         Some(tx_id) => {
             log::info!("navigation_back started tx_id={tx_id}");

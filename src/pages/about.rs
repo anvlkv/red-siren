@@ -1,6 +1,6 @@
 use crate::components::{Button, ContentPage, Icon, UiSize};
+use common::{commands::navigation::NavigateRequestPayload, RouteId};
 use leptos::prelude::*;
-use shared::{commands::navigation::NavigateRequestPayload, RouteId};
 use tauri_use::{use_invoke_with_args, UseTauriWithReturn};
 
 #[component]
@@ -9,13 +9,13 @@ pub fn About() -> impl IntoView {
         trigger: navigate_trigger,
         error: navigate_error,
         ..
-    } = use_invoke_with_args::<NavigateRequestPayload, ()>(shared::commands::navigation::NAVIGATE);
+    } = use_invoke_with_args::<NavigateRequestPayload, ()>(common::commands::navigation::NAVIGATE);
 
     Effect::new(move |_| {
         if let Some(err) = navigate_error() {
             log::error!(
                 "Error invoking {}: {}",
-                shared::commands::navigation::NAVIGATE,
+                common::commands::navigation::NAVIGATE,
                 err
             );
         }

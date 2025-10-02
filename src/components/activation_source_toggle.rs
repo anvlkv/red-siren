@@ -13,21 +13,21 @@ pub fn ActivationSourceToggle(
     let UseTauriResourceReturn {
         data: activation_source,
         ..
-    } = use_tauri_resource::<shared::instrument::events::ActivationSourcePayload>(
-        shared::instrument::events::ACTIVATION_SRC,
+    } = use_tauri_resource::<common::instrument::events::ActivationSourcePayload>(
+        common::instrument::events::ACTIVATION_SRC,
     );
 
     let UseTauriReturn {
         error: set_activation_source_error,
         trigger: trigger_set_activation_source,
         ..
-    } = use_invoke::<shared::commands::instrument::ActivationSourcePayload, (), ()>(
-        shared::instrument::commands::SET_ACTIVATION_SRC,
+    } = use_invoke::<common::commands::instrument::ActivationSourcePayload, (), ()>(
+        common::instrument::commands::SET_ACTIVATION_SRC,
     );
 
     let on_activation_source_change = Callback::new(move |source: usize| {
         trigger_set_activation_source(Some((
-            shared::instrument::commands::ActivationSourcePayload {
+            common::instrument::commands::ActivationSourcePayload {
                 source: source as u8,
             },
             (),
@@ -38,7 +38,7 @@ pub fn ActivationSourceToggle(
         if let Some(err) = set_activation_source_error() {
             log::error!(
                 "Error invoking {}: {err}",
-                shared::instrument::commands::SET_ACTIVATION_SRC
+                common::instrument::commands::SET_ACTIVATION_SRC
             );
         }
     });

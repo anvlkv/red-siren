@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use shared::events::intro::IntroSnoopBatchPayload;
+use common::events::intro::IntroSnoopBatchPayload;
 use tauri_use::{use_command, UseTauriWithReturn};
 
 use crate::util::raf_fn_fps::{use_raf_fn_with_fps, UseRafFnCallbackArgs};
@@ -30,40 +30,40 @@ pub fn Wavering() -> impl IntoView {
         trigger: trigger_resume,
         error: resume_error,
         ..
-    } = use_command::<()>(shared::commands::intro::INTRO_RESUME);
+    } = use_command::<()>(common::commands::intro::INTRO_RESUME);
 
     let UseTauriWithReturn {
         trigger: trigger_pause,
         error: pause_error,
         ..
-    } = use_command::<()>(shared::commands::intro::INTRO_PAUSE);
+    } = use_command::<()>(common::commands::intro::INTRO_PAUSE);
 
     let UseTauriWithReturn {
         trigger: fetch_frame,
         data: frame_data,
         error: frame_error,
         ..
-    } = use_command::<IntroSnoopBatchPayload>(shared::commands::intro::INTRO_NEXT_FRAME);
+    } = use_command::<IntroSnoopBatchPayload>(common::commands::intro::INTRO_NEXT_FRAME);
 
     Effect::new(move |_| {
         if let Some(err) = frame_error() {
             log::error!(
                 "Error invoking {}: {err}",
-                shared::commands::intro::INTRO_NEXT_FRAME
+                common::commands::intro::INTRO_NEXT_FRAME
             );
         }
 
         if let Some(err) = resume_error() {
             log::error!(
                 "Error invoking {}: {err}",
-                shared::commands::intro::INTRO_RESUME
+                common::commands::intro::INTRO_RESUME
             );
         }
 
         if let Some(err) = pause_error() {
             log::error!(
                 "Error invoking {}: {err}",
-                shared::commands::intro::INTRO_PAUSE
+                common::commands::intro::INTRO_PAUSE
             );
         }
     });

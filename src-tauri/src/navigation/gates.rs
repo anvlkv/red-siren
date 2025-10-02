@@ -1,9 +1,9 @@
-use shared::RouteId;
+use common::RouteId;
 use tauri::{AppHandle, Manager};
-use shared::error::NavGateError;
+use common::error::NavGateError;
 
 
-// NavGateError moved to shared::error (phase 1 centralization).
+// NavGateError moved to common::error (phase 1 centralization).
 
 /// Async gating wrapper. For now this delegates to the synchronous
 /// `crate::navigation::can_navigate` and wraps result. Extend here

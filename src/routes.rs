@@ -6,7 +6,7 @@ use leptos_router::{
     hooks::{use_location, use_navigate},
 };
 use leptos_router::{NavigateOptions, StaticSegment};
-use shared::{NavCommittedPayload, NavStartedPayload, RouteId};
+use common::{NavCommittedPayload, NavStartedPayload, RouteId};
 use tauri_use::{use_invoke_with_args, use_listen, EventType, UseListenReturn, UseTauriWithReturn};
 
 use crate::{
@@ -26,8 +26,8 @@ pub fn AppRoutes() -> impl IntoView {
         error: invoke_nav_syn_error,
         trigger: trigger_nav_sync,
         ..
-    } = use_invoke_with_args::<shared::commands::navigation::NavSyncRequestPayload, ()>(
-        shared::commands::navigation::NAV_SYNC,
+    } = use_invoke_with_args::<common::commands::navigation::NavSyncRequestPayload, ()>(
+        common::commands::navigation::NAV_SYNC,
     );
 
     // Listen for navigation_sync (UI reload alignment)
@@ -37,8 +37,8 @@ pub fn AppRoutes() -> impl IntoView {
         open: sync_open,
         close: close_sync,
         ..
-    } = use_listen::<shared::NavSyncPayload>(EventType::Custom(
-        shared::events::navigation::NAV_SYNC,
+    } = use_listen::<common::NavSyncPayload>(EventType::Custom(
+        common::events::navigation::NAV_SYNC,
     ));
     // Listen for the commit event to get tx_id for enter_done
     let UseListenReturn {
@@ -48,7 +48,7 @@ pub fn AppRoutes() -> impl IntoView {
         close: close_committed,
         ..
     } = use_listen::<NavCommittedPayload>(EventType::Custom(
-        shared::events::navigation::NAV_COMMITTED,
+        common::events::navigation::NAV_COMMITTED,
     ));
 
     // Listen for navigation_started to handle leave animations
@@ -58,7 +58,7 @@ pub fn AppRoutes() -> impl IntoView {
         open: open_started,
         close: close_started,
         ..
-    } = use_listen::<NavStartedPayload>(EventType::Custom(shared::events::navigation::NAV_STARTED));
+    } = use_listen::<NavStartedPayload>(EventType::Custom(common::events::navigation::NAV_STARTED));
 
     let nav_tx = Signal::derive(move || {
         let started = started();
@@ -89,7 +89,7 @@ pub fn AppRoutes() -> impl IntoView {
         open_committed();
         // this effect supposed to only run once, therefore we get pathname untracked.
         let current = location.pathname.get_untracked();
-        trigger_nav_sync(Some(shared::commands::navigation::NavSyncRequestPayload {
+        trigger_nav_sync(Some(common::commands::navigation::NavSyncRequestPayload {
             route: RouteId::from_str(&current).unwrap_or(RouteId::Home),
         }));
     });
@@ -98,25 +98,25 @@ pub fn AppRoutes() -> impl IntoView {
         if let Some(err) = sync_error() {
             log::error!(
                 "Error listening to {}: {err}",
-                shared::events::navigation::NAV_SYNC
+                common::events::navigation::NAV_SYNC
             );
         }
         if let Some(err) = invoke_nav_syn_error() {
             log::error!(
                 "Error invoking {}: {err}",
-                shared::commands::navigation::NAV_SYNC
+                common::commands::navigation::NAV_SYNC
             );
         }
         if let Some(err) = error_committed() {
             log::error!(
                 "Error listening to {}: {err}",
-                shared::events::navigation::NAV_COMMITTED
+                common::events::navigation::NAV_COMMITTED
             );
         }
         if let Some(err) = error_started() {
             log::error!(
                 "Error listening to {}: {err}",
-                shared::events::navigation::NAV_STARTED
+                common::events::navigation::NAV_STARTED
             );
         }
     });

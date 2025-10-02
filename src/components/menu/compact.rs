@@ -1,6 +1,6 @@
 use leptos::{html, prelude::*};
 use leptos_use::{use_element_size, use_window_size, UseElementSizeReturn};
-use shared::{
+use common::{
     commands::navigation::NavigateRequestPayload, events::setup::SafeAreaInstestUiIncrementPayload,
     RouteId,
 };
@@ -34,30 +34,30 @@ pub fn CompactMenu(
         trigger: trigger_inset_update,
         error: inset_error,
         ..
-    } = use_invoke_with_args::<shared::commands::setup::SafeAreaInstestUiIncrementPayload, ()>(
-        shared::commands::setup::UI_SAFE_AREA_INSETS_APPLY,
+    } = use_invoke_with_args::<common::commands::setup::SafeAreaInstestUiIncrementPayload, ()>(
+        common::commands::setup::UI_SAFE_AREA_INSETS_APPLY,
     );
 
     let tauri_use::UseTauriWithReturn {
         trigger: trigger_navigate,
         error,
         ..
-    } = use_invoke_with_args::<NavigateRequestPayload, ()>(shared::commands::navigation::NAVIGATE);
+    } = use_invoke_with_args::<NavigateRequestPayload, ()>(common::commands::navigation::NAVIGATE);
 
     let tauri_use::UseTauriWithReturn {
         trigger: enter_done_trigger,
         error: enter_error,
         ..
-    } = use_invoke_with_args::<shared::commands::navigation::NavTxPayload, ()>(
-        shared::commands::navigation::NAV_ENTER_DONE,
+    } = use_invoke_with_args::<common::commands::navigation::NavTxPayload, ()>(
+        common::commands::navigation::NAV_ENTER_DONE,
     );
 
     let tauri_use::UseTauriWithReturn {
         trigger: leave_done_trigger,
         error: leave_error,
         ..
-    } = use_invoke_with_args::<shared::commands::navigation::NavTxPayload, ()>(
-        shared::commands::navigation::NAV_LEAVE_DONE,
+    } = use_invoke_with_args::<common::commands::navigation::NavTxPayload, ()>(
+        common::commands::navigation::NAV_LEAVE_DONE,
     );
 
     // Track previous inset values to prevent unnecessary updates and loops
@@ -184,10 +184,10 @@ pub fn CompactMenu(
     let on_anim_done = Callback::new(move |_| {
         match nav_tx() {
             Some(NavigationTx::Enter(tx_id)) => {
-                enter_done_trigger(Some(shared::commands::navigation::NavTxPayload { tx_id }));
+                enter_done_trigger(Some(common::commands::navigation::NavTxPayload { tx_id }));
             }
             Some(NavigationTx::Leave(tx_id)) => {
-                leave_done_trigger(Some(shared::commands::navigation::NavTxPayload { tx_id }));
+                leave_done_trigger(Some(common::commands::navigation::NavTxPayload { tx_id }));
             }
             None => {}
         }
@@ -201,25 +201,25 @@ pub fn CompactMenu(
         if let Some(err) = error() {
             log::error!(
                 "Error invoking {}: {err}",
-                shared::commands::navigation::NAVIGATE
+                common::commands::navigation::NAVIGATE
             );
         }
         if let Some(err) = enter_error() {
             log::error!(
                 "Error invoking {}: {err}",
-                shared::commands::navigation::NAV_ENTER_DONE
+                common::commands::navigation::NAV_ENTER_DONE
             );
         }
         if let Some(err) = leave_error() {
             log::error!(
                 "Error invoking {}: {err}",
-                shared::commands::navigation::NAV_LEAVE_DONE
+                common::commands::navigation::NAV_LEAVE_DONE
             );
         }
         if let Some(err) = inset_error() {
             log::error!(
                 "Error invoking {}: {err}",
-                shared::commands::setup::UI_SAFE_AREA_INSETS_APPLY
+                common::commands::setup::UI_SAFE_AREA_INSETS_APPLY
             );
         }
     });

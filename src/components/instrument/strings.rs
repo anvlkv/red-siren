@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use shared::{
+use common::{
     instrument::GroupChanel,
     instrument::{StringSnoopDataRequest, StringSnoopDataResponse},
 };
@@ -42,8 +42,8 @@ pub fn InstrumentStrings() -> impl IntoView {
                                 let ch = first_group_channel.nth_channel_from_first(g);
                                 let orientation = orientation;
                                 let line = match ch {
-                                    shared::instrument::GroupChanel::Left => left_string_position,
-                                    shared::instrument::GroupChanel::Right => right_string_position,
+                                    common::instrument::GroupChanel::Left => left_string_position,
+                                    common::instrument::GroupChanel::Right => right_string_position,
                                 };
 
                                 view! { <StringView g k line orientation ch /> }
@@ -59,8 +59,8 @@ pub fn InstrumentStrings() -> impl IntoView {
 pub fn StringView(
     g: usize,
     k: usize,
-    line: shared::Line,
-    orientation: shared::orientation::LayoutOrientation,
+    line: common::Line,
+    orientation: common::orientation::LayoutOrientation,
     ch: GroupChanel,
 ) -> impl IntoView {
     let (start, end) = line;
@@ -72,7 +72,7 @@ pub fn StringView(
         error,
         trigger,
     } = use_invoke::<StringSnoopDataRequest, (), StringSnoopDataResponse>(
-        shared::instrument::data::GET_STRING_SNOOP_DATA,
+        common::instrument::data::GET_STRING_SNOOP_DATA,
     );
 
     // let _ = use_raf_fn_with_fps(move |UseRafFnCallbackArgs{ delta, timestamp }| {
@@ -80,14 +80,14 @@ pub fn StringView(
 
     //     if let Some(data) = data.get_untracked() {
     //         let path = match orientation {
-    //             shared::orientation::LayoutOrientation::Vertical => crate::util::wave::waveform_path_y(
+    //             common::orientation::LayoutOrientation::Vertical => crate::util::wave::waveform_path_y(
     //             samples,
     //             WAVES_LENGHT[i],
     //             WAVE_CENTER_X,
     //             base_y,
     //             WAVE_AMPLITUDE_PX,
     //         ),
-    //             shared::orientation::LayoutOrientation::Horizontal => crate::util::wave::waveform_path_x(
+    //             common::orientation::LayoutOrientation::Horizontal => crate::util::wave::waveform_path_x(
     //             samples,
     //             WAVES_LENGHT[i],
     //             WAVE_CENTER_X,

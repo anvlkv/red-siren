@@ -1,5 +1,5 @@
-use shared::events::intro::{IntroSnoopBatchPayload, IntroSnoopSample};
-use shared::error::{Result, IntroError};
+use common::events::intro::{IntroSnoopBatchPayload, IntroSnoopSample};
+use common::error::{Result, IntroError};
 use tauri::State;
 
 use super::engine::{IntroEngineState, Control};

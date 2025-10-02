@@ -19,7 +19,7 @@ use crate::util::{
     animation::ReducedMotionState,
     tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
 };
-use shared::{NavStartedPayload, RouteId};
+use common::{NavStartedPayload, RouteId};
 use std::str::FromStr;
 
 pub use animation::*;
@@ -65,7 +65,7 @@ pub fn Intro() -> impl IntoView {
     let UseTauriResourceReturn {
         data: instrument_layout,
         ..
-    } = use_tauri_resource::<shared::instrument::Layout>(shared::instrument::events::LAYOUT);
+    } = use_tauri_resource::<common::instrument::Layout>(common::instrument::events::LAYOUT);
 
     // ========== Helper Functions ==========
 

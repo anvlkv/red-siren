@@ -1,6 +1,6 @@
 use keyframe::CanTween;
 use mint::{Point2, Vector2};
-use shared::orientation::LayoutOrientation;
+use common::orientation::LayoutOrientation;
 
 use crate::util::animation::{tween_tuple_vectors, tween_vectors};
 
@@ -11,11 +11,11 @@ pub enum IntroAnimationTarget {
     Intro,
     /// Tuner page
     Tuner {
-        layout: shared::tuner::Layout,
-        data: shared::tuner::Data,
+        layout: common::tuner::Layout,
+        data: common::tuner::Data,
     },
     /// Play page
-    Instrument(shared::instrument::Layout),
+    Instrument(common::instrument::Layout),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -251,7 +251,7 @@ impl CanTween for IntroAnimationState {
 mod tests {
     use super::*;
     use keyframe::{keyframes, AnimationSequence};
-    use shared::instrument::layout::layout_test_cases;
+    use common::instrument::layout::layout_test_cases;
 
     #[test]
     fn standard_instrument_layouts() {

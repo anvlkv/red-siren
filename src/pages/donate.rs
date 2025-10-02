@@ -1,6 +1,6 @@
 use crate::components::ContentPage;
 use leptos::prelude::*;
-use shared::RouteId;
+use common::RouteId;
 
 #[component]
 pub fn Donate() -> impl IntoView {

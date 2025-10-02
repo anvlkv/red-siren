@@ -36,12 +36,12 @@ pub fn Keyboard() -> impl IntoView {
         // Map the orientation-dependent safe area format into CSS box-model (top,right,bottom,left)
         let (safe_top, safe_right, safe_bottom, safe_left) = match orientation {
             // Vertical: indices are [top, left, bottom, right]
-            shared::orientation::LayoutOrientation::Vertical => {
+            common::orientation::LayoutOrientation::Vertical => {
                 let sa = safe_area_padding;
                 (sa[0], sa[3], sa[2], sa[1])
             }
             // Horizontal: indices are [left, top, right, bottom]
-            shared::orientation::LayoutOrientation::Horizontal => {
+            common::orientation::LayoutOrientation::Horizontal => {
                 let sa = safe_area_padding;
                 (sa[1], sa[2], sa[3], sa[0])
             }
@@ -57,7 +57,7 @@ pub fn Keyboard() -> impl IntoView {
         };
 
         let mut defs = match orientation {
-            shared::orientation::LayoutOrientation::Vertical => format!(
+            common::orientation::LayoutOrientation::Vertical => format!(
                 r#"
                 --keyboard-rows: repeat({0}, minmax(0, 1fr));
                 --keyboard-cols: repeat({1}, minmax(0, 1fr));
@@ -68,7 +68,7 @@ pub fn Keyboard() -> impl IntoView {
                 "#,
                 num_groups, 1, groups_gap, 0, 0, pad_main
             ),
-            shared::orientation::LayoutOrientation::Horizontal => format!(
+            common::orientation::LayoutOrientation::Horizontal => format!(
                 r#"
                 --keyboard-rows: repeat({0}, minmax(0, 1fr));
                 --keyboard-cols: repeat({1}, minmax(0, 1fr));
@@ -151,8 +151,8 @@ fn Group(g: usize) -> impl IntoView {
         format!(
             "flex {} gap-(--keyboard-keys-gap) justify-center items-center",
             match orientation() {
-                shared::orientation::LayoutOrientation::Vertical => "flex-col w-full",
-                shared::orientation::LayoutOrientation::Horizontal => "flex-row h-full",
+                common::orientation::LayoutOrientation::Vertical => "flex-col w-full",
+                common::orientation::LayoutOrientation::Horizontal => "flex-row h-full",
             }
         )
     };
@@ -169,13 +169,13 @@ fn Group(g: usize) -> impl IntoView {
                         let key_code = (g, k);
                         let channel_alignment = match first_group_channel.nth_channel_from_first(g)
                         {
-                            shared::instrument::GroupChanel::Left => {
+                            common::instrument::GroupChanel::Left => {
                                 r#"
                                 top: 0;
                                 left: 0;
                                 "#
                             }
-                            shared::instrument::GroupChanel::Right => {
+                            common::instrument::GroupChanel::Right => {
                                 r#"
                                 bottom: 0;
                                 right: 0;
@@ -188,7 +188,7 @@ fn Group(g: usize) -> impl IntoView {
                                 <div
                                     class="absolute rounded-full bg-red dark:bg-black border-(length:--keyboard-band-stroke-width) border-black dark:border-red"
                                     style=match orientation {
-                                        shared::orientation::LayoutOrientation::Vertical => {
+                                        common::orientation::LayoutOrientation::Vertical => {
                                             format!(
                                                 r#"
                                             width: var(--keyboard-band-length);
@@ -198,7 +198,7 @@ fn Group(g: usize) -> impl IntoView {
                                             "#,
                                             )
                                         }
-                                        shared::orientation::LayoutOrientation::Horizontal => {
+                                        common::orientation::LayoutOrientation::Horizontal => {
                                             format!(
                                                 r#"
                                             width: var(--keyboard-band-breadth);

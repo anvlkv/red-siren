@@ -1,20 +1,20 @@
-use leptos::prelude::*;
-use mint::Vector2;
-use shared::{
+use common::{
     instrument::{GroupChanel, Scale},
     orientation::LayoutOrientation,
     safe_area::SafeArea,
     Line,
 };
+use leptos::prelude::*;
+use mint::Vector2;
 
 use super::tauri_resource::{use_tauri_resource, UseTauriResourceReturn};
 
 #[derive(Debug, Clone, Copy)]
-struct LayoutContext(Memo<shared::instrument::Layout>);
+struct LayoutContext(Memo<common::instrument::Layout>);
 
 pub fn provide_layout_context() {
     let UseTauriResourceReturn { data: layout, .. } =
-        use_tauri_resource::<shared::instrument::Layout>(shared::instrument::events::LAYOUT);
+        use_tauri_resource::<common::instrument::Layout>(common::instrument::events::LAYOUT);
 
     provide_context(LayoutContext(Memo::new(move |_| {
         layout().unwrap_or_default()
@@ -36,7 +36,7 @@ pub struct LayoutContextReturn {
     pub num_groups: Memo<u8>,
     pub first_group_channel: Memo<GroupChanel>,
     pub scale: Memo<Scale>,
-    pub complete_layout: Memo<shared::instrument::Layout>,
+    pub complete_layout: Memo<common::instrument::Layout>,
 }
 
 pub fn expect_layout_contex() -> LayoutContextReturn {

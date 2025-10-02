@@ -1,3 +1,4 @@
+use common::error::{Result, SetupError};
 use objc2::rc::Retained;
 use objc2_app_kit::{
     NSAppearanceCustomization, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSView,
@@ -5,7 +6,6 @@ use objc2_app_kit::{
 use objc2_app_kit::{NSColor, NSWindow};
 use objc2_foundation::NSArray;
 use raw_window_handle::HasWindowHandle;
-use shared::error::{Result, SetupError};
 use tauri::WebviewWindow;
 
 pub fn setup(window: &mut WebviewWindow, override_dark: Option<bool>) -> Result<bool> {

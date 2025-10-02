@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use leptos_router::components::*;
 use leptos_use::{signal_debounced, use_preferred_dark, use_window_size, UseWindowSizeReturn};
-use shared::commands::setup::{UpdateWindowAppearancePayload, UpdateWindowSizePayload};
+use common::commands::setup::{UpdateWindowAppearancePayload, UpdateWindowSizePayload};
 use tauri_use::{
     use_command, use_invoke, use_listen, EventType, UseListenReturn, UseTauriReturn,
     UseTauriWithReturn,
@@ -18,7 +18,7 @@ pub fn App() -> impl IntoView {
     let UseTauriWithReturn {
         trigger: trigger_gui_ready,
         ..
-    } = use_command::<()>(shared::commands::health::GUI_READY);
+    } = use_command::<()>(common::commands::health::GUI_READY);
 
     let UseListenReturn {
         event_id: app_ready,
@@ -26,33 +26,33 @@ pub fn App() -> impl IntoView {
         error,
         close: close_app_ready,
         ..
-    } = use_listen::<()>(EventType::Custom(shared::events::health::APP_READY));
+    } = use_listen::<()>(EventType::Custom(common::events::health::APP_READY));
 
     let UseTauriWithReturn {
         error: nav_bootstrap_error,
         trigger: bootstrap_trigger,
         ..
-    } = use_command::<()>(shared::commands::navigation::NAV_BOOTSTRAP);
+    } = use_command::<()>(common::commands::navigation::NAV_BOOTSTRAP);
 
     let UseTauriReturn {
         trigger: trigger_update_window_appearance,
         error: error_update_window_appearance,
         ..
     } = use_invoke::<UpdateWindowAppearancePayload, (), ()>(
-        shared::commands::setup::UPDATE_WINDOW_APPEARANCE,
+        common::commands::setup::UPDATE_WINDOW_APPEARANCE,
     );
 
     let UseTauriReturn {
         trigger: trigger_update_window_size,
         error: error_update_window_size,
         ..
-    } = use_invoke::<UpdateWindowSizePayload, (), ()>(shared::commands::setup::UPDATE_WINDOW_SIZE);
+    } = use_invoke::<UpdateWindowSizePayload, (), ()>(common::commands::setup::UPDATE_WINDOW_SIZE);
 
     let UseTauriResourceReturn {
         data: window_appearance_override,
         ..
-    } = use_tauri_resource::<shared::commands::setup::UpdateWindowAppearanceOverridePayload>(
-        shared::commands::setup::GET_WINDOW_APPEARANCE_OVERRIDE,
+    } = use_tauri_resource::<common::commands::setup::UpdateWindowAppearanceOverridePayload>(
+        common::commands::setup::GET_WINDOW_APPEARANCE_OVERRIDE,
     );
 
     let preferred_dark = use_preferred_dark();
@@ -83,26 +83,26 @@ pub fn App() -> impl IntoView {
         if let Some(err) = error() {
             log::error!(
                 "Error listening to {}: {err}",
-                shared::events::health::APP_READY
+                common::events::health::APP_READY
             )
         }
 
         if let Some(err) = nav_bootstrap_error() {
             log::error!(
                 "Error invoking {}: {err}",
-                shared::commands::navigation::NAV_BOOTSTRAP
+                common::commands::navigation::NAV_BOOTSTRAP
             );
         }
         if let Some(err) = error_update_window_appearance() {
             log::error!(
                 "Error invoking {}: {err}",
-                shared::commands::setup::UPDATE_WINDOW_APPEARANCE
+                common::commands::setup::UPDATE_WINDOW_APPEARANCE
             );
         }
         if let Some(err) = error_update_window_size() {
             log::error!(
                 "Error invoking {}: {err}",
-                shared::commands::setup::UPDATE_WINDOW_SIZE
+                common::commands::setup::UPDATE_WINDOW_SIZE
             );
         }
     });

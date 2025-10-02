@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use shared::RouteId;
+use common::RouteId;
 
 use crate::components::{ContentPage, Menu};
 

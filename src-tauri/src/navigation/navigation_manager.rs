@@ -6,7 +6,7 @@ use std::sync::{
 
 use log::{error, info, warn};
 use serde::Serialize;
-use shared::{
+use common::{
     events::navigation_payloads::{
         NavCanceledPayload, NavCommittedPayload, NavCompletedPayload, NavGatedPayload,
         NavStartedPayload,
@@ -15,7 +15,7 @@ use shared::{
 };
 use tauri::{async_runtime::spawn, AppHandle, Emitter};
 
-use shared::events::navigation::{
+use common::events::navigation::{
     NAV_CANCELED, NAV_COMMITTED, NAV_COMPLETED, NAV_GATED, NAV_REQUESTED, NAV_STARTED, NAV_SYNC,
 };
 
@@ -474,7 +474,7 @@ impl NavigationManager {
     /// Consumers can listen for `navigation_sync` and align UI state.
     pub fn emit_sync_snapshot(&self) {
         let to = self.current_route();
-        self.emit(NAV_SYNC, &shared::events::navigation::NavSyncPayload { to });
+        self.emit(NAV_SYNC, &common::events::navigation::NavSyncPayload { to });
     }
 
     /// Returns true if a back navigation is currently possible.

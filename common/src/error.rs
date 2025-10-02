@@ -188,8 +188,38 @@ pub enum InstrumentError {
     PauseFailed { detail: Option<String> },
     #[error("instrument resume failed")]
     ResumeFailed { detail: Option<String> },
+    #[error("instrument start failed")]
+    StartFailed { detail: Option<String> },
+    #[error("instrument control error: {0}")]
+    Control(#[from] ControlError),
     #[error("instrument config error: {0}")]
     ConfigError(#[from] InstrumentConfigError),
+}
+
+#[derive(Debug, Error, Serialize, Deserialize)]
+pub enum ControlError {
+    #[error("device unavailable")]
+    DeviceUnavailable,
+    #[error("default output config unavailable")]
+    OutputConfigUnavailable,
+    #[error("unsupported sample format: {0}")]
+    UnsupportedSampleFormat(String),
+    #[error("stream build failed: {detail}")]
+    BuildStream { detail: String },
+    #[error("control channel send failed (op={op})")]
+    ChannelSend { op: String },
+    #[error("control acknowledgement timeout (op={op})")]
+    AckTimeout { op: String },
+    #[error("control thread join failed (op={op})")]
+    ThreadJoin { op: String },
+    #[error("backend missing (op={op})")]
+    BackendMissing { op: String },
+}
+
+impl From<ControlError> for AppError {
+    fn from(value: ControlError) -> Self {
+        AppError::Instrument(InstrumentError::Control(value))
+    }
 }
 
 #[derive(Debug, Error, Serialize, Deserialize)]

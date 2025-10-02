@@ -1,6 +1,6 @@
-use shared::commands::setup::SafeAreaInstestUiIncrementPayload;
-use shared::error::{InstrumentError, Result};
-use shared::instrument::{
+use common::commands::setup::SafeAreaInstestUiIncrementPayload;
+use common::error::{InstrumentError, Result};
+use common::instrument::{
     events::{ActivationSourcePayload, PlaybackStatePayload},
     Layout,
 };
@@ -15,22 +15,22 @@ use crate::{
 /// Creates instrument engine and starts streaming
 pub fn instrument_playback_start(state: State<'_, InstrumentEngine>, app: AppHandle) -> Result<()> {
     log::debug!("instrument_playback_start called");
-    let mut playing = state.inner.playing.lock();
-    log::debug!("Current playing state: {}", *playing);
 
-    if !*playing {
-        *playing = true;
-        log::info!("Starting playback");
-        app.emit(
-            shared::instrument::events::PLAYBACK_STATE,
-            PlaybackStatePayload { playing: *playing },
-        )
-        .map_err(|e| InstrumentError::ResumeFailed {
-            detail: Some(e.to_string()),
-        })?;
-        log::info!("Emitted playback state: playing={}", *playing);
-    } else {
-        log::warn!("Playback already active; no action taken");
+    match state.inner.start_playback()? {
+        true => {
+            log::info!("Starting playback");
+            app.emit(
+                common::instrument::events::PLAYBACK_STATE,
+                PlaybackStatePayload { playing: true },
+            )
+            .map_err(|e| InstrumentError::ResumeFailed {
+                detail: Some(e.to_string()),
+            })?;
+            log::info!("Emitted playback state: playing");
+        }
+        false => {
+            log::warn!("Playback already active; no action taken");
+        }
     }
 
     Ok(())
@@ -40,22 +40,22 @@ pub fn instrument_playback_start(state: State<'_, InstrumentEngine>, app: AppHan
 /// Stops stream and destroys instrument engine
 pub fn instrument_playback_stop(state: State<'_, InstrumentEngine>, app: AppHandle) -> Result<()> {
     log::debug!("instrument_playback_stop called");
-    let mut playing = state.inner.playing.lock();
-    log::debug!("Current playing state: {}", *playing);
 
-    if !*playing {
-        *playing = false;
-        log::info!("Stopping playback");
-        app.emit(
-            shared::instrument::events::PLAYBACK_STATE,
-            PlaybackStatePayload { playing: *playing },
-        )
-        .map_err(|e| InstrumentError::ResumeFailed {
-            detail: Some(e.to_string()),
-        })?;
-        log::info!("Emitted playback state: playing={}", *playing);
-    } else {
-        log::warn!("Playback already stopped; no action taken");
+    match state.inner.stop_playback()? {
+        true => {
+            log::info!("Stopping playback");
+            app.emit(
+                common::instrument::events::PLAYBACK_STATE,
+                PlaybackStatePayload { playing: false },
+            )
+            .map_err(|e| InstrumentError::ResumeFailed {
+                detail: Some(e.to_string()),
+            })?;
+            log::info!("Emitted playback state: stopped");
+        }
+        false => {
+            log::warn!("Playback already stopped; no action taken");
+        }
     }
 
     Ok(())
@@ -67,9 +67,9 @@ pub fn instrument_playback_state(
     state: State<'_, InstrumentEngine>,
 ) -> Result<PlaybackStatePayload> {
     log::debug!("instrument_playback_state called");
-    let playing = state.inner.playing.lock();
-    log::debug!("Returning playback state: {}", *playing);
-    Ok(PlaybackStatePayload { playing: *playing })
+    let playing = state.inner.playing();
+    log::debug!("Returning playback state: {}", playing);
+    Ok(PlaybackStatePayload { playing })
 }
 
 #[tauri::command]
@@ -78,9 +78,9 @@ pub fn instrument_activation_source(
     state: State<'_, InstrumentEngine>,
 ) -> Result<ActivationSourcePayload> {
     log::debug!("instrument_activation_source called");
-    let src = *state.inner.activation_source.lock();
-    log::debug!("Current activation source (enum): {:?}", src);
-    Ok(ActivationSourcePayload { source: src.into() })
+    let source = state.inner.activation_source();
+    log::debug!("Current activation source (enum): {:?}", source);
+    Ok(ActivationSourcePayload { source })
 }
 
 #[tauri::command]
@@ -95,46 +95,54 @@ pub fn instrument_set_activation_source(
         "instrument_set_activation_source called with source={}",
         source
     );
+
     let hs_state = health.lock();
     let src_u8 = source;
-    let source: ActivationSource = source.into();
-    let mut engine_src = state.inner.activation_source.lock();
+    let requested: ActivationSource = source.into();
+    let current: ActivationSource = state.inner.activation_source().into();
 
-    match source {
-        ActivationSource::Entropy => {
-            *engine_src = source;
-            log::info!("Setting activation source to Entropy (code={})", src_u8);
+    // If no change, just log and return
+    if current == requested {
+        log::debug!(
+            "Activation source unchanged (still {:?}, code={}) - no action taken",
+            current,
+            src_u8
+        );
+        return Ok(());
+    }
+
+    // Permission check if Mic requested
+    if matches!(requested, ActivationSource::Mic) && hs_state.mic_permission != Some(true) {
+        log::warn!("Won't enable mic activation source without mic permission");
+        return Err(InstrumentError::MicPermissionMissing.into());
+    }
+
+    // Apply change via inner method
+    match state.inner.set_activation_source(requested)? {
+        true => {
+            log::info!(
+                "Setting activation source to {:?} (code={})",
+                requested,
+                src_u8
+            );
             app.emit(
-                shared::instrument::events::ACTIVATION_SRC,
+                common::instrument::events::ACTIVATION_SRC,
                 ActivationSourcePayload {
-                    source: source.into(),
+                    source: requested.into(),
                 },
             )
             .map_err(|e| InstrumentError::Emit {
-                event: shared::instrument::events::ACTIVATION_SRC.to_string(),
+                event: common::instrument::events::ACTIVATION_SRC.to_string(),
                 message: e.to_string(),
             })?;
             log::info!("Emitted activation source event: code={}", src_u8);
         }
-        ActivationSource::Mic => {
-            if hs_state.mic_permission == Some(true) {
-                *engine_src = source;
-                log::info!("Setting activation source to Mic (code={})", src_u8);
-                app.emit(
-                    shared::instrument::events::ACTIVATION_SRC,
-                    ActivationSourcePayload {
-                        source: source.into(),
-                    },
-                )
-                .map_err(|e| InstrumentError::Emit {
-                    event: shared::instrument::events::ACTIVATION_SRC.to_string(),
-                    message: e.to_string(),
-                })?;
-                log::info!("Emitted activation source event: code={}", src_u8);
-            } else {
-                log::warn!("Won't enable mic activation source without mic permission");
-                return Err(InstrumentError::MicPermissionMissing.into());
-            }
+        false => {
+            log::warn!(
+                "Inner reported activation source not changed for {:?} (code={})",
+                requested,
+                src_u8
+            );
         }
     }
 
@@ -145,22 +153,22 @@ pub fn instrument_set_activation_source(
 /// Pauses playback, maintaining state
 pub fn instrument_playback_pause(state: State<'_, InstrumentEngine>, app: AppHandle) -> Result<()> {
     log::debug!("instrument_playback_pause called");
-    let mut playing = state.inner.playing.lock();
-    log::debug!("Current playing state: {}", *playing);
 
-    if *playing {
-        *playing = false;
-        log::info!("Pausing playback");
-        app.emit(
-            shared::instrument::events::PLAYBACK_STATE,
-            PlaybackStatePayload { playing: *playing },
-        )
-        .map_err(|e| InstrumentError::PauseFailed {
-            detail: Some(e.to_string()),
-        })?;
-        log::info!("Emitted playback state: playing={}", *playing);
-    } else {
-        log::warn!("Playback already paused; no action taken");
+    match state.inner.pause_playback()? {
+        true => {
+            log::info!("Pausing playback");
+            app.emit(
+                common::instrument::events::PLAYBACK_STATE,
+                PlaybackStatePayload { playing: false },
+            )
+            .map_err(|e| InstrumentError::PauseFailed {
+                detail: Some(e.to_string()),
+            })?;
+            log::info!("Emitted playback state: playing=false");
+        }
+        false => {
+            log::warn!("Playback already paused; no action taken");
+        }
     }
 
     Ok(())
@@ -173,22 +181,22 @@ pub fn instrument_playback_resume(
     app: AppHandle,
 ) -> Result<()> {
     log::debug!("instrument_playback_resume called");
-    let mut playing = state.inner.playing.lock();
-    log::debug!("Current playing state: {}", *playing);
 
-    if !*playing {
-        *playing = true;
-        log::info!("Resuming playback");
-        app.emit(
-            shared::instrument::events::PLAYBACK_STATE,
-            PlaybackStatePayload { playing: *playing },
-        )
-        .map_err(|e| InstrumentError::ResumeFailed {
-            detail: Some(e.to_string()),
-        })?;
-        log::info!("Emitted playback state: playing={}", *playing);
-    } else {
-        log::warn!("Playback already running; no action taken");
+    match state.inner.resume_playback()? {
+        true => {
+            log::info!("Resuming playback");
+            app.emit(
+                common::instrument::events::PLAYBACK_STATE,
+                PlaybackStatePayload { playing: true },
+            )
+            .map_err(|e| InstrumentError::ResumeFailed {
+                detail: Some(e.to_string()),
+            })?;
+            log::info!("Emitted playback state: playing=true");
+        }
+        false => {
+            log::warn!("Playback already running; no action taken");
+        }
     }
 
     Ok(())
@@ -198,7 +206,7 @@ pub fn instrument_playback_resume(
 /// Returns current instrument layout (invoke/event: instrument_layout)
 pub fn instrument_layout(state: State<'_, InstrumentEngine>) -> Result<Layout> {
     log::debug!("instrument_layout called");
-    Ok(*state.inner.layout.lock())
+    Ok(state.inner.layout())
 }
 
 #[tauri::command]
@@ -232,16 +240,17 @@ pub fn ui_safe_area_insets_apply(
     }
 
     // Get current layout before changes
-    let old_layout = *state.inner.layout.lock();
+    let old_layout = state.inner.layout();
 
     state
+        .inner
         .set_safe_area(top, right, bottom, left)
         .map_err(|e| InstrumentError::Emit {
             event: "set_safe_area".to_string(),
             message: e.to_string(),
         })?;
 
-    let new_layout = *state.inner.layout.lock();
+    let new_layout = state.inner.layout();
 
     // Only emit LAYOUT event if layout actually changed
     if old_layout != new_layout {
@@ -253,9 +262,9 @@ pub fn ui_safe_area_insets_apply(
             left
         );
 
-        app.emit(shared::instrument::events::LAYOUT, new_layout)
+        app.emit(common::instrument::events::LAYOUT, new_layout)
             .map_err(|e| InstrumentError::Emit {
-                event: shared::instrument::events::LAYOUT.to_string(),
+                event: common::instrument::events::LAYOUT.to_string(),
                 message: e.to_string(),
             })?;
     } else {

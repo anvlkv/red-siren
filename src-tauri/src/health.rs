@@ -2,7 +2,7 @@ use serde_json::Value;
 use tauri::{App, AppHandle, Emitter, Manager, State};
 use tauri_plugin_store::StoreExt;
 use parking_lot::{Mutex, MutexGuard}; // switched from tokio::sync::Mutex to parking_lot for non-async, faster locking
-use shared::error::{HealthError, AppError};
+use common::error::{HealthError, AppError};
 
 #[derive(Default, Debug, Clone, Copy)]
 /// State to track setup completion
@@ -34,7 +34,7 @@ pub async fn health_grant_mic_premission(
     app: AppHandle,
     state: State<'_, Mutex<SetupState>>,
     prompt: bool,
-) -> shared::error::Result<bool> {
+) -> common::error::Result<bool> {
     use cpal::{
         traits::{DeviceTrait, HostTrait, StreamTrait},
         *,
@@ -155,7 +155,7 @@ pub async fn health_grant_mic_premission(
 pub async fn health_on_gui_ready(
     app: AppHandle,
     state: State<'_, Mutex<SetupState>>,
-) -> shared::error::Result<()> {
+) -> common::error::Result<()> {
     log::info!("GUI ready signal received");
 
     // Lock the state and mark GUI as ready
@@ -175,7 +175,7 @@ pub async fn health_on_gui_ready(
 fn maybe_toggle_windows(
     state_lock: &MutexGuard<'_, SetupState>,
     app: &AppHandle,
-) -> shared::error::Result<()> {
+) -> common::error::Result<()> {
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     if state_lock.gui_ready {
         log::info!("Both GUI and backend ready, closing splashscreen and showing main window");
@@ -198,10 +198,10 @@ fn maybe_toggle_windows(
                 .map_err(|e| HealthError::WindowOp { op: "focus_main".into(), message: e.to_string() })?;
         }
 
-        app.emit(shared::events::health::APP_READY, ())
-            .map_err(|e| HealthError::Emit { event: shared::events::health::APP_READY.to_string(), message: e.to_string() })?;
+        app.emit(common::events::health::APP_READY, ())
+            .map_err(|e| HealthError::Emit { event: common::events::health::APP_READY.to_string(), message: e.to_string() })?;
 
-        log::debug!("Emited: {}", shared::events::health::APP_READY);
+        log::debug!("Emited: {}", common::events::health::APP_READY);
     } else {
         log::debug!(
             "GUI ready: {}.",

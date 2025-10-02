@@ -1,6 +1,6 @@
 use crate::components::{Button, ContentPage, Icon, UiVariant};
 use leptos::prelude::*;
-use shared::{commands::health::MicPermissionPayload, RouteId};
+use common::{commands::health::MicPermissionPayload, RouteId};
 use tauri_use::{use_command, use_invoke, UseTauriReturn, UseTauriWithReturn};
 
 #[component]
@@ -12,14 +12,14 @@ pub fn Permissions() -> impl IntoView {
         trigger: mic_permission_trigger,
         data: mic_permission_data,
     } = use_invoke::<MicPermissionPayload, (), bool>(
-        shared::commands::health::GRANT_MIC_PREMISSION,
+        common::commands::health::GRANT_MIC_PREMISSION,
     );
 
     Effect::new(move |_| {
         if let Some(err) = mic_permission_error() {
             log::error!(
                 "Error invoking {}: {}",
-                shared::commands::health::GRANT_MIC_PREMISSION,
+                common::commands::health::GRANT_MIC_PREMISSION,
                 err
             );
 
@@ -31,13 +31,13 @@ pub fn Permissions() -> impl IntoView {
         error: nav_resume_error,
         trigger: nav_resume_trigger,
         ..
-    } = use_command::<()>(shared::commands::navigation::NAV_RESUME);
+    } = use_command::<()>(common::commands::navigation::NAV_RESUME);
 
     Effect::new(move |_| {
         if let Some(err) = nav_resume_error() {
             log::error!(
                 "Error invoking {}: {}",
-                shared::commands::navigation::NAV_RESUME,
+                common::commands::navigation::NAV_RESUME,
                 err
             );
         }

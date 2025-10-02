@@ -1,7 +1,7 @@
 mod commands;
 mod engine;
 
-use shared::error::Result;
+use common::error::Result;
 use tauri::{App, Manager};
 
 pub use commands::*;

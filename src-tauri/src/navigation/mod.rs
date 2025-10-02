@@ -4,7 +4,7 @@ mod navigation_manager;
 
 pub use commands::*;
 #[allow(unused_imports)]
-use shared::{
+use common::{
     error::{NavigationError, Result},
     RouteId,
 };

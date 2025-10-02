@@ -1,0 +1,209 @@
+name: PR Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  build-desktop-preview:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (ubuntu only)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Add node_modules/.bin to PATH
+        run: echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH
+
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.4.0
+        with:
+          version: "latest"
+
+      - name: Install Tauri CLI
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: tauri-cli
+          version: "^2.0"
+          cache-key: tauri-cli-v2
+
+      - name: Build desktop app
+        run: cargo tauri build
+
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-ubuntu-desktop-${{ github.event.pull_request.number }}
+          path: target/release/bundle/
+          if-no-files-found: warn
+          retention-days: 7
+
+  build-android-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Add node_modules/.bin to PATH
+        run: echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH
+
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.4.0
+        with:
+          version: "latest"
+
+      - name: Install Tauri CLI
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: tauri-cli
+          version: "^2.0"
+          cache-key: tauri-cli-v2
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: |
+          ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "ndk;25.1.8937393"
+
+      - name: Setup Android environment
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.1.8937393" >> $GITHUB_ENV
+
+      - name: Initialize Android platform
+        run: cargo tauri android init
+
+      - name: Build Android app
+        run: cargo tauri android build --apk
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-android-mobile-${{ github.event.pull_request.number }}
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: warn
+          retention-days: 7
+
+  create-preview-release:
+    needs: [build-desktop-preview, build-android-preview]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release-url: ${{ steps.create-release.outputs.html_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Delete existing preview release
+        run: |
+          TAG_NAME="preview-pr-${{ github.event.pull_request.number }}"
+          # Check if release exists and delete it
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Deleting existing preview release: $TAG_NAME"
+            gh release delete "$TAG_NAME" --yes
+          fi
+          # Delete tag if it exists
+          if git ls-remote --tags origin | grep -q "refs/tags/$TAG_NAME"; then
+            echo "Deleting existing tag: $TAG_NAME"
+            git push --delete origin "$TAG_NAME" || true
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create preview release
+        id: create-release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: preview-pr-${{ github.event.pull_request.number }}
+          name: "Preview: PR #${{ github.event.pull_request.number }}"
+          body: |
+            🔍 **Preview build for PR #${{ github.event.pull_request.number }}**
+
+            **Branch:** `${{ github.head_ref }}`
+            **Commit:** ${{ github.event.pull_request.head.sha }}
+
+            ### Available Previews:
+            - 🐧 Ubuntu Desktop (AppImage, DEB, RPM)
+            - 📱 Android APK
+
+            This is an automated preview build. Artifacts will be cleaned up periodically.
+          files: artifacts/**/*
+          draft: true
+          prerelease: true
+          fail_on_unmatched_files: false
+          generate_release_notes: true
+
+  comment-on-pr:
+    needs: create-preview-release
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const releaseUrl = "${{ needs.create-preview-release.outputs.release-url }}";
+
+            const comment = `## 🎉 Preview Build Complete!
+
+            A preview release has been created for this PR: [**Download Preview**](${releaseUrl})
+
+            ### 📦 Available Downloads:
+            - 🐧 **Ubuntu Desktop** - AppImage, DEB, and RPM packages
+            - 📱 **Android Mobile** - APK file for testing
+
+            The preview release is marked as draft and pre-release. Artifacts are retained for 7 days.
+
+            *Generated for commit ${context.payload.pull_request.head.sha.substring(0, 7)}*`;
+
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: comment
+            });

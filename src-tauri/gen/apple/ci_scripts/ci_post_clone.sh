@@ -35,4 +35,24 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../../../.. && pwd)"
 cd "$REPO_ROOT"
 npm ci
 
+echo "[post-clone] Setting up tailwindcss wrapper to use npm version..."
+# Create a wrapper script that trunk will find before it tries to download its own version
+mkdir -p "$HOME/.local/bin"
+
+# Store the current repo root for the wrapper script
+WRAPPER_REPO_ROOT="$REPO_ROOT"
+
+# Create the wrapper script
+cat > "$HOME/.local/bin/tailwindcss" << EOF
+#!/bin/bash
+cd "$WRAPPER_REPO_ROOT"
+exec npx --yes tailwindcss "\$@"
+EOF
+chmod +x "$HOME/.local/bin/tailwindcss"
+
+# Add to PATH so trunk finds our wrapper
+export PATH="$HOME/.local/bin:$PATH"
+echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$HOME/.bash_profile" 2>/dev/null || true
+echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$HOME/.zshrc" 2>/dev/null || true
+
 echo "[post-clone] Done."

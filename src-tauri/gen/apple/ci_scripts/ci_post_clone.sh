@@ -18,6 +18,39 @@ export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
 curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
 . "$CARGO_HOME/env"
 
+# Ensure cargo is available on PATH for Xcode build phase
+export PATH="$CARGO_HOME/bin:$PATH"
+
+# Create cargo wrapper to handle CI environment path issues
+echo "[post-clone] Creating cargo wrapper for Xcode build compatibility..."
+mkdir -p /Users/local/.cargo/bin 2>/dev/null || sudo mkdir -p /Users/local/.cargo/bin
+cat > /tmp/cargo_wrapper << 'EOF'
+#!/bin/bash
+# Find and execute the real cargo binary
+REAL_CARGO=$(which cargo 2>/dev/null || find /home /Users -name cargo -type f -executable 2>/dev/null | head -1)
+if [ -z "$REAL_CARGO" ]; then
+    echo "Error: cargo not found" >&2
+    exit 1
+fi
+exec "$REAL_CARGO" "$@"
+EOF
+chmod +x /tmp/cargo_wrapper
+sudo cp /tmp/cargo_wrapper /Users/local/.cargo/bin/cargo 2>/dev/null || cp /tmp/cargo_wrapper /Users/local/.cargo/bin/cargo 2>/dev/null || true
+rm /tmp/cargo_wrapper
+
+# Add environment variables to shell profiles for Xcode build access
+echo "export RUSTUP_HOME=\"$RUSTUP_HOME\"" >> "$HOME/.bash_profile" 2>/dev/null || true
+echo "export CARGO_HOME=\"$CARGO_HOME\"" >> "$HOME/.bash_profile" 2>/dev/null || true
+echo "export PATH=\"$CARGO_HOME/bin:\$PATH\"" >> "$HOME/.bash_profile" 2>/dev/null || true
+echo "export RUSTUP_HOME=\"$RUSTUP_HOME\"" >> "$HOME/.zshrc" 2>/dev/null || true
+echo "export CARGO_HOME=\"$CARGO_HOME\"" >> "$HOME/.zshrc" 2>/dev/null || true
+echo "export PATH=\"$CARGO_HOME/bin:\$PATH\"" >> "$HOME/.zshrc" 2>/dev/null || true
+
+# Verify cargo installation
+echo "[post-clone] Verifying cargo installation..."
+"$CARGO_HOME/bin/cargo" --version
+/Users/local/.cargo/bin/cargo --version 2>/dev/null || echo "[post-clone] Warning: wrapper cargo not accessible"
+
 echo "[post-clone] Adding required Rust targets..."
 rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-darwin x86_64-apple-darwin || true
 

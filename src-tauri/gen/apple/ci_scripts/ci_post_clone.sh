@@ -50,9 +50,9 @@ export VOLTA_HOME="${VOLTA_HOME:-$HOME/.volta}"
 export PATH="$VOLTA_HOME/bin:$PATH"
 if ! command -v npm >/dev/null 2>&1; then
   echo "[post-clone] Installing Node via Volta..."
-  curl https://get.volta.sh | bash -s -- --quiet
+  curl https://get.volta.sh | bash -s -- --skip-setup
   export PATH="$VOLTA_HOME/bin:$PATH"
-  volta install node@lts
+  "$VOLTA_HOME/bin/volta" install node@lts
 fi
 mkdir -p "$HOME/.local/bin"
 ln -sf "$VOLTA_HOME/bin/node" "$HOME/.local/bin/node" || true

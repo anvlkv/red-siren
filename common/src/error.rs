@@ -192,12 +192,6 @@ pub enum InstrumentError {
     StartFailed { detail: Option<String> },
     #[error("instrument control error: {0}")]
     Control(#[from] ControlError),
-    #[error("instrument config error: {0}")]
-    ConfigError(#[from] InstrumentConfigError),
-}
-
-#[derive(Debug, Error, Serialize, Deserialize)]
-pub enum ControlError {
     #[error("device unavailable")]
     DeviceUnavailable,
     #[error("default output config unavailable")]
@@ -206,6 +200,19 @@ pub enum ControlError {
     UnsupportedSampleFormat(String),
     #[error("stream build failed: {detail}")]
     BuildStream { detail: String },
+    #[error("control acknowledgement timeout (op={op})")]
+    AckTimeout { op: String },
+    #[error("control thread join failed (op={op})")]
+    ThreadJoin { op: String },
+    #[error("backend missing (op={op})")]
+    BackendMissing { op: String },
+    #[error("instrument config error: {0}")]
+    ConfigError(#[from] InstrumentConfigError),
+}
+
+#[derive(Debug, Error, Serialize, Deserialize)]
+/// Errors controlling playback thread
+pub enum ControlError {
     #[error("control channel send failed (op={op})")]
     ChannelSend { op: String },
     #[error("control acknowledgement timeout (op={op})")]
@@ -214,6 +221,8 @@ pub enum ControlError {
     ThreadJoin { op: String },
     #[error("backend missing (op={op})")]
     BackendMissing { op: String },
+    #[error("stream build failed: {detail}")]
+    BuildStream { detail: String },
 }
 
 impl From<ControlError> for AppError {

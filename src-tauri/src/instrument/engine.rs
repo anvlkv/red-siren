@@ -3,6 +3,7 @@ use common::instrument::Config as InstrumentConfig;
 use common::instrument::Layout as InstrumentLayout;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::SampleFormat;
 use fundsp::hacker::prelude::*;
 use mint::Vector2;
 use parking_lot::RwLock;
@@ -69,6 +70,8 @@ pub(super) struct Inner {
     dsp_net_frontend: RwLock<Option<fundsp::hacker32::Net>>,
     // Primary oscillator node id for dynamic replacement.
     dsp_primary_node_id: RwLock<Option<NodeId>>,
+    // Device/output sample rate (Hz) captured at stream start.
+    sample_rate: RwLock<Option<f64>>,
     control_tx: RwLock<Option<Sender<Control>>>,
     join: RwLock<Option<std::thread::JoinHandle<()>>>,
 }
@@ -108,11 +111,12 @@ impl Inner {
             return;
         };
 
-        let new_node = self.create_network(1200.0);
+        let sr = self.sample_rate.read().unwrap_or(44100.0);
+        let new_node = self.create_network(sr);
 
         net.crossfade(primary_id, Fade::Smooth, 0.3, Box::new(new_node));
         net.commit();
-        log::info!("Updated primary node");
+        log::info!("Updated primary node (sr={sr})");
     }
 
     pub fn start_playback(&self) -> AppResult<bool> {
@@ -123,12 +127,13 @@ impl Inner {
         let host = cpal::default_host();
         let device = host
             .default_output_device()
-            .ok_or(InstrumentError::Control(ControlError::DeviceUnavailable))?;
+            .ok_or(InstrumentError::DeviceUnavailable)?;
         let default_cfg = device
             .default_output_config()
-            .map_err(|_| InstrumentError::Control(ControlError::OutputConfigUnavailable))?;
+            .map_err(|_| InstrumentError::OutputConfigUnavailable)?;
 
         let sample_rate = default_cfg.sample_rate().0 as f64;
+        *self.sample_rate.write() = Some(sample_rate);
         let subnet = self.create_network(sample_rate);
         let mut net = Net::new(0, 2);
         net.set_sample_rate(sample_rate);
@@ -154,27 +159,10 @@ impl Inner {
             *self.dsp_primary_node_id.write() = Some(main_node_id);
         }
 
-        // Build output stream
-        let stream_result = match default_cfg.sample_format() {
-            cpal::SampleFormat::F32 => {
-                let data_callback = move |output: &mut [f32], _info: &cpal::OutputCallbackInfo| {
-                    for frame in output.chunks_mut(channels) {
-                        let (l, r) = backend.get_stereo();
-                        frame[0] = l;
-                        if frame.len() > 1 {
-                            frame[1] = r;
-                        }
-                    }
-                };
-                let err_callback = move |err| {
-                    log::error!("instrument playback stream error: {err}");
-                };
-                device.build_output_stream(&stream_cfg, data_callback, err_callback, None)
-            }
-            other => {
-                return Err(ControlError::UnsupportedSampleFormat(format!("{other:?}")).into());
-            }
-        };
+        let next_value = move || backend.get_stereo();
+
+        // Build output stream (per-format handlers; simple, no generic helper).
+        let stream_result = Self::run(&device, &stream_cfg, &default_cfg, next_value);
 
         let stream = stream_result.map_err(|e| InstrumentError::StartFailed {
             detail: Some(e.to_string()),
@@ -216,6 +204,76 @@ impl Inner {
         Ok(true)
     }
 
+    fn run<F>(
+        device: &cpal::Device,
+        config: &cpal::StreamConfig,
+        default_cfg: &cpal::SupportedStreamConfig,
+        mut next_sample: F,
+    ) -> common::error::Result<cpal::Stream>
+    where
+        F: FnMut() -> (f32, f32) + Send + Sync + 'static,
+    {
+        let err_cb = |err| log::error!("instrument playback stream error: {err}");
+
+        match default_cfg.sample_format() {
+            SampleFormat::F32 => device.build_output_stream(
+                config,
+                move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                    Self::write_data(data, 2, &mut next_sample)
+                },
+                err_cb,
+                None,
+            ),
+            SampleFormat::I16 => device.build_output_stream(
+                config,
+                move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
+                    Self::write_data(data, 2, &mut next_sample)
+                },
+                err_cb,
+                None,
+            ),
+            SampleFormat::U16 => device.build_output_stream(
+                config,
+                move |data: &mut [u16], _: &cpal::OutputCallbackInfo| {
+                    Self::write_data(data, 2, &mut next_sample)
+                },
+                err_cb,
+                None,
+            ),
+            other => {
+                return Err(InstrumentError::UnsupportedSampleFormat(format!(
+                    "unsupported_sample_format:{other:?}"
+                ))
+                .into())
+            }
+        }
+        .map_err(|e| {
+            InstrumentError::BuildStream {
+                detail: e.to_string(),
+            }
+            .into()
+        })
+    }
+
+    fn write_data<T>(output: &mut [T], channels: usize, next_sample: &mut dyn FnMut() -> (f32, f32))
+    where
+        T: cpal::SizedSample + cpal::FromSample<f64>,
+    {
+        for frame in output.chunks_mut(channels) {
+            let sample = next_sample();
+            let left: T = T::from_sample(sample.0 as f64);
+            let right: T = T::from_sample(sample.1 as f64);
+
+            for (channel, sample) in frame.iter_mut().enumerate() {
+                if channel & 1 == 0 {
+                    *sample = left;
+                } else {
+                    *sample = right;
+                }
+            }
+        }
+    }
+
     pub fn stop_playback(&self) -> AppResult<bool> {
         if !*self.playing.read() {
             return Ok(false);
@@ -238,16 +296,16 @@ impl Inner {
             match ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS)) {
                 Ok(ControlInvocationResult::OkChanged | ControlInvocationResult::NoOp) => {}
                 Ok(ControlInvocationResult::Error(e)) => {
-                    return Err(ControlError::BuildStream { detail: e }.into())
+                    return Err(InstrumentError::BuildStream { detail: e }.into())
                 }
                 Ok(ControlInvocationResult::BackendMissing) => {
-                    return Err(ControlError::BackendMissing {
+                    return Err(InstrumentError::BackendMissing {
                         op: "shutdown".into(),
                     }
                     .into())
                 }
                 Err(_) => {
-                    return Err(ControlError::AckTimeout {
+                    return Err(InstrumentError::AckTimeout {
                         op: "shutdown".into(),
                     }
                     .into())
@@ -259,7 +317,7 @@ impl Inner {
 
         if let Some(handle) = self.join.write().take() {
             if let Err(_e) = handle.join() {
-                return Err(ControlError::ThreadJoin {
+                return Err(InstrumentError::ThreadJoin {
                     op: "shutdown".into(),
                 }
                 .into());

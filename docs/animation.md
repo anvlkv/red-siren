@@ -1,3 +1,7 @@
+## intro comp. (load -> home)
+
+no keyframes animation. composition visible as is.
+
 ## intro comp -> instrument
 
 ### keyframe 1

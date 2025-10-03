@@ -1,12 +1,12 @@
 mod composition;
 mod consts;
-mod static_path;
-// mod suns; // removed as it is currently unused
 mod hooks;
+mod static_path;
 mod wavering;
 
 use crate::components::intro::consts::*;
 use crate::util::layout_context::{expect_layout_contex, LayoutContextReturn};
+use leptos::leptos_dom::helpers::set_timeout;
 use leptos::prelude::*;
 
 use composition::IntroComp;
@@ -25,40 +25,29 @@ use std::str::FromStr;
 use std::collections::HashMap;
 
 use composition::IntroComp;
-use leptos::leptos_dom::helpers::set_timeout;
 
 #[component]
-pub fn Intro(children: ChildrenFn) -> impl IntoView {
-    // Intro: CSS-only animation (unique @keyframes per element). Collapsed → natural layout. Reverse supported via animation-direction.
+pub fn Intro(
+    #[prop(into)] nav_tx: Signal<Option<crate::components::NavigationTx>>,
+    #[prop(into)] nav_started: Signal<Option<NavStartedPayload>>,
+    #[prop(into)] current_route: Signal<RouteId>,
+    children: ChildrenFn,
+) -> impl IntoView {
+    // Intro animation component (controlled):
+    //   - All navigation signals are required props (no context fallbacks).
+    //   - Static content routes: intro visible, no animations.
+    //   - Forward: content -> Play/Tune (Leave tx toward Play/Tune).
+    //   - Reverse: Play/Tune -> content (Enter tx from Play/Tune).
 
-    // Hidden flag (legacy name preserved for minimal downstream impact)
+    // Visibility flag (hidden only after successful forward transition completes).
     let intro_hidden = RwSignal::new(false);
 
-    // Instrument layout (used to size runtime); if absent we delay animation start.
+    // Layout context (we only need complete_layout + iter helpers here).
     let LayoutContextReturn {
-        space: _space,
-        orientation: _orientation,
-        left_string_position: _left_string_position,
-        right_string_position: _right_string_position,
-        key_radius: _key_radius,
-        key_band_length: _key_band_length,
-        key_band_breadth: _key_band_breadth,
-        safe_area_padding: _safe_area_padding,
-        key_bands_gap: _key_bands_gap,
-        groups_gap: _groups_gap,
-        num_keys_per_group: _num_keys_per_group,
-        num_groups: _num_groups,
-        first_group_channel: _first_group_channel,
-        scale: _scale,
-        complete_layout,
-        iter_keys: _iter_keys,
-        key_centers: _key_centers,
-        first_key_center: _first_key_center,
-        key_pad_main: _key_pad_main,
-        key_pad_aux: _key_pad_aux,
+        complete_layout, ..
     } = expect_layout_contex();
 
-    // Animation state signals (new CSS-based system)
+    // Animation state signals (CSS-driven)
     let keyframes_css = RwSignal::new(String::new());
     let key_styles_signal = RwSignal::new(HashMap::<(u8, u8), String>::new());
     let band_styles_signal = RwSignal::new(HashMap::<(u8, u8), String>::new());
@@ -67,53 +56,34 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
     let picture_style_signal = RwSignal::new(String::new());
     let direction_reverse = RwSignal::new(false);
     let rerun_counter = RwSignal::new(0u32);
+    // Active only while a forward or reverse transition animation is running.
+    // For content routes (None/Home/About/Donate/Permissions) this stays false so
+    // the IntroComp renders statically with no fade (animation.md: intro comp load -> home).
+    let transition_active = RwSignal::new(false);
+    // Track last applied navigation animation (tx_id, reverse_flag)
+    let last_applied = RwSignal::new(None::<(u64, bool)>);
 
-    // Initialize animation sequence with dummy snapshot aligned to intro composition.
-    // Legacy animation_seq removed (CSS animations now handle progression)
-
-    // Build animations once layout is complete.
+    // Build keyframes & per-element animation styles once layout is available or changes.
     Effect::new(move |_| {
         let layout = complete_layout();
         let num_groups = layout.num_groups.get();
         let num_keys = layout.num_keys_per_group.get();
-        // Basic guard: do nothing if zero (should not happen)
         if num_groups == 0 || num_keys == 0 {
             return;
         }
-        // DURATIONS
+
         let forward_ms = INTRO_ANIM_DURATION_MS;
-        // Percent -> keyframe markers
         let k1_5 = PHASE_FADE_OVERSHOOT_PCT;
         let k2 = PHASE_COLLAPSE_LINE_PCT;
         let k3 = PHASE_TRAVEL_PCT;
         let k4 = PHASE_REFINE_PCT;
-        // Placeholder translations (TODO: compute real collapsed sun & axis offsets)
-        // For now all elements translate from (0,0) -> (0,0) so only scale / radius animates.
+
         let mut css = String::new();
         let mut key_styles = HashMap::new();
         let mut band_styles = HashMap::new();
-        // Keys
-        //
-        // We need to inject per-key collapsed translations (sun + axis) before
-        // pushing keyframe strings. The current snippet you provided ends
-        // right at the start of the keyframe construction, but the tail of
-        // the original `css.push_str(&format!( ... ))` block (with all the
-        // percentage frames and closing braces) is not included in the edit
-        // window, so I cannot safely rewrite the inner format without the
-        // exact trailing lines (the old_text must match exactly).
-        //
-        // Please provide the remaining lines of this keyframe construction
-        // (through the end of the "@keyframes" format for keys and the
-        // similar block for bands) so I can replace them with the version
-        // that includes:
-        //   0%: translate(sun_tx, sun_ty)
-        //   {k2}%: translate(axis_tx, axis_ty)
-        //   {k3}% / {k4}% / 100%: translate(0,0)
-        //
-        // Additionally I will add analogous logic for bands (with overshoot)
-        // and leave strings rotation-only as requested.
+
+        // Iterate keys
         for (g, k) in layout.iter_keys() {
-            // Utilize shared helpers from Layout
             let (final_cx, final_cy) = layout.key_center(g, k);
             let (first_cx, first_cy) = layout.first_key_center();
             let sun_cx = (INTRO_SUN_CX / INTRO_ART_WIDTH) * layout.space.x;
@@ -130,14 +100,15 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
                 }
             };
 
+            // Key animation
             let anim_name = format!("key-anim-g-{g}-k-{k}");
             css.push_str(&format!(
                 "@keyframes {name}{{\
-        0%{{transform:translate({stx}px,{sty}px) scale({ks});}}\
-        {k2}%{{transform:translate({atx}px,{aty}px) scale({mid});}}\
-        {k3}%{{transform:translate(0px,0px) scale(1);}}\
-        {k4}%{{transform:translate(0px,0px) scale(1);}}\
-        100%{{transform:translate(0px,0px) scale(1);}}}}",
+ 0%{{transform:translate({stx}px,{sty}px) scale({ks});}}\
+ {k2}%{{transform:translate({atx}px,{aty}px) scale({mid});}}\
+ {k3}%{{transform:translate(0px,0px) scale(1);}}\
+ {k4}%{{transform:translate(0px,0px) scale(1);}}\
+ 100%{{transform:translate(0px,0px) scale(1);}}}}",
                 name = anim_name,
                 ks = KEY_START_SCALE,
                 mid = (KEY_START_SCALE + 1.0) * 0.5,
@@ -161,12 +132,12 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
             let band_anim = format!("band-anim-g-{g}-k-{k}");
             css.push_str(&format!(
                 "@keyframes {name}{{\
-        0%{{transform:translate({stx}px,{sty}px) scale({bs});border-radius:{brc}px;}}\
-        {k1_5}%{{transform:translate({stx}px,{sty}px) scale({bo});border-radius:{brc}px;}}\
-        {k2}%{{transform:translate({atx}px,{aty}px) scale({bc});border-radius:{brc}px;}}\
-        {k3}%{{transform:translate(0px,0px) scale({bf});border-radius:{brc}px;}}\
-        {k4}%{{transform:translate(0px,0px) scale({bf});border-radius:0px;}}\
-        100%{{transform:translate(0px,0px) scale({bf});border-radius:0px;}}}}",
+ 0%{{transform:translate({stx}px,{sty}px) scale({bs});border-radius:{brc}px;}}\
+ {k1_5}%{{transform:translate({stx}px,{sty}px) scale({bo});border-radius:{brc}px;}}\
+ {k2}%{{transform:translate({atx}px,{aty}px) scale({bc});border-radius:{brc}px;}}\
+ {k3}%{{transform:translate(0px,0px) scale({bf});border-radius:{brc}px;}}\
+ {k4}%{{transform:translate(0px,0px) scale({bf});border-radius:0px;}}\
+ 100%{{transform:translate(0px,0px) scale({bf});border-radius:0px;}}}}",
                 name = band_anim,
                 bs = BAND_START_SCALE,
                 bo = BAND_OVERSHOOT_SCALE,
@@ -190,12 +161,13 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
             );
             band_styles.insert((g, k), bstyle);
         }
-        // Strings (left/right) - rotation only; no collapsed translation for now
+
+        // Strings (rotation only)
         css.push_str(&format!(
             "@keyframes string-anim-left{{0%{{transform:translate(0px,0px) rotate({start}deg);}}\
-        {k2}%{{transform:translate(0px,0px) rotate({mid}deg);}}\
-        {k3}%{{transform:translate(0px,0px) rotate(0deg);}}\
-        100%{{transform:translate(0px,0px) rotate(0deg);}}}}",
+ {k2}%{{transform:translate(0px,0px) rotate({mid}deg);}}\
+ {k3}%{{transform:translate(0px,0px) rotate(0deg);}}\
+ 100%{{transform:translate(0px,0px) rotate(0deg);}}}}",
             start = STRING_START_ROT_DEG,
             mid = STRING_START_ROT_DEG * 0.35,
             k2 = k2,
@@ -203,9 +175,9 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
         ));
         css.push_str(&format!(
             "@keyframes string-anim-right{{0%{{transform:translate(0px,0px) rotate({start}deg);}}\
-        {k2}%{{transform:translate(0px,0px) rotate({mid}deg);}}\
-        {k3}%{{transform:translate(0px,0px) rotate(0deg);}}\
-        100%{{transform:translate(0px,0px) rotate(0deg);}}}}",
+ {k2}%{{transform:translate(0px,0px) rotate({mid}deg);}}\
+ {k3}%{{transform:translate(0px,0px) rotate(0deg);}}\
+ 100%{{transform:translate(0px,0px) rotate(0deg);}}}}",
             start = STRING_START_ROT_DEG,
             mid = STRING_START_ROT_DEG * 0.35,
             k2 = k2,
@@ -221,17 +193,19 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
             dur = forward_ms,
             ease = EASE_MAIN
         );
-        // Picture fade
+
+        // Picture fade (forward only; reverse keeps hidden until we re-show explicitly)
         css.push_str(&format!(
-                    "@keyframes intro-picture-fade{{0%{{opacity:1;}}{k1_5}%{{opacity:.25;}}{k2}%{{opacity:0;}}100%{{opacity:0;}}}}",
-                    k1_5 = k1_5,
-                    k2 = k2
-                ));
+            "@keyframes intro-picture-fade{{0%{{opacity:1;}}{k1_5}%{{opacity:.25;}}{k2}%{{opacity:0;}}100%{{opacity:0;}}}}",
+            k1_5 = k1_5,
+            k2 = k2
+        ));
         let picture_anim = format!(
             "animation:intro-picture-fade {}ms {} 1 forwards;animation-direction:{{DIR}};",
             percent_to_time_ms(PICTURE_FADE_OUT_PCT),
             EASE_FADE
         );
+
         // Commit signals
         keyframes_css.set(css);
         key_styles_signal.set(key_styles);
@@ -239,24 +213,13 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
         left_string_style_signal.set(str_style_left);
         right_string_style_signal.set(str_style_right);
         picture_style_signal.set(picture_anim);
-        // Schedule hide (forward only)
-        let hide_ms = hide_intro_at_ms();
-        let hidden = intro_hidden;
-        let dir_flag = direction_reverse;
-        set_timeout(
-            move || {
-                if !dir_flag.get_untracked() {
-                    hidden.set(true);
-                }
-            },
-            std::time::Duration::from_millis(hide_ms as u64),
-        );
     });
 
-    // Animation direction reactive signal (used to rewrite animation-direction in styles)
-
-    // Derive effective styles by injecting current direction (simple string replace {DIR})
+    // Direction-aware style resolution
     let key_styles_memo = Memo::new(move |_| {
+        if !transition_active.get() {
+            return HashMap::new();
+        }
         let dir = if direction_reverse.get() {
             "reverse"
         } else {
@@ -264,15 +227,13 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
         };
         key_styles_signal()
             .into_iter()
-            .map(|(k, v)| {
-                let replaced = v.replace("{DIR}", dir);
-                (k, replaced)
-            })
+            .map(|(k, v)| (k, v.replace("{DIR}", dir)))
             .collect::<HashMap<_, _>>()
     });
-    // removed legacy right_string_transform memo (obsolete)
-
     let band_styles_memo = Memo::new(move |_| {
+        if !transition_active.get() {
+            return HashMap::new();
+        }
         let dir = if direction_reverse.get() {
             "reverse"
         } else {
@@ -280,23 +241,27 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
         };
         band_styles_signal()
             .into_iter()
-            .map(|(k, v)| {
-                let replaced = v.replace("{DIR}", dir);
-                (k, replaced)
-            })
+            .map(|(k, v)| (k, v.replace("{DIR}", dir)))
             .collect::<HashMap<_, _>>()
     });
-
-    // Provide context (non-reactive to per-frame updates)
     let picture_style_memo = Memo::new(move |_| {
-        let dir = if direction_reverse.get() {
-            "reverse"
+        if !transition_active.get() {
+            // Static (no active transition): keep picture fully visible with explicit style.
+            "opacity:1;".to_string()
         } else {
-            "normal"
-        };
-        picture_style_signal().replace("{DIR}", dir)
+            let dir = if direction_reverse.get() {
+                "reverse"
+            } else {
+                "normal"
+            };
+            // Always include a concrete style (opacity baseline) plus animation definition.
+            format!("opacity:1;{}", picture_style_signal().replace("{DIR}", dir))
+        }
     });
     let left_string_style_memo = Memo::new(move |_| {
+        if !transition_active.get() {
+            return String::new();
+        }
         let dir = if direction_reverse.get() {
             "reverse"
         } else {
@@ -305,6 +270,9 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
         left_string_style_signal().replace("{DIR}", dir)
     });
     let right_string_style_memo = Memo::new(move |_| {
+        if !transition_active.get() {
+            return String::new();
+        }
         let dir = if direction_reverse.get() {
             "reverse"
         } else {
@@ -312,7 +280,8 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
         };
         right_string_style_signal().replace("{DIR}", dir)
     });
-    // Provide new animation context (hooks consume this, see hooks.rs)
+
+    // Provide context to intro subcomponents
     provide_context(crate::components::intro::hooks::IntroAnimationContext {
         key_styles: key_styles_memo,
         band_styles: band_styles_memo,
@@ -321,52 +290,34 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
         direction_reverse,
         rerun_counter,
     });
-    // Collapsed translation computation IMPLEMENTATION ENTRY POINT:
-    //
-    // We will compute per-key (g,k) final centers using the same math
-    // the keyboard component applies implicitly through CSS grid + gaps.
-    // From those centers we derive two translation vectors:
-    //
-    //   sun_tx,  sun_ty  = (sun_center - key_center)
-    //   axis_tx, axis_ty = (first_key_center - key_center)
-    //
-    // These will feed into keyframes:
-    //   0%   translate(sun_tx, sun_ty)
-    //   {k2}% translate(axis_tx, axis_ty)
-    //   {k3}% / {k4}% / 100% translate(0,0)
-    //
-    // The actual code integrating this lives inside the keyframe
-    // generation Effect further above; if that block still shows
-    // translate(0px,0px) literals you need to supply the lines of
-    // that section so we can patch them precisely (unique line
-    // numbers required for replacement in this editing protocol).
-    //
-    // ACTION NEEDED: Please provide the lines (with numbers) of the
-    // keyframe construction (the css.push_str calls for keys/bands)
-    // so we can replace the hardcoded (0px,0px) with computed values.
 
-    // Start animation automatically once layout arrives (placeholder trigger)
-    Effect::new(move |_| {
-        // TODO: use navigation to determine animation start.
-        // let layout = complete_layout();
-        // let snap = IntroTransformSnapshot::new(layout);
-        // // Store snapshot
-        // // snapshot.set(Some(snap.clone()));
-        // // Emit initial CSS vars immediately
-        // set_intro_vars.set(snap.emit_css_vars());
-        // set_transform_templates_enabled.set(true);
-        // hidden_svgs.set(false);
-        //
-        //
-        // TODO: determine actual keyframes
-        //
-        // animation_seq.set(keyframes![(kf_1, 0.0), (kf_2, 1000.0, EaseOut)])
+    // Initial static route handling (no animation) based on current_route prop.
+    // Instrument / tuner start hidden; other routes visible & idle.
+    Effect::new(move |_| match current_route() {
+        RouteId::Play | RouteId::Tune => {
+            intro_hidden.set(true);
+            transition_active.set(false);
+        }
+        _ => {
+            intro_hidden.set(false);
+            transition_active.set(false);
+        }
     });
 
-    // RAF driver
-    // No RAF loop needed now (CSS handles progression).
+    // Navigation-driven animation triggering (forward & reverse) – props only (no legacy context)
+    Effect::new(move |_| {
+        // Direct props
+        let nav_tx_val = nav_tx();
+        let started_opt = nav_started();
+        // If navigation start payload absent we stay in current static/animated state
+        let Some(started) = started_opt else {
+            return;
+        };
+        // Local (non-static) guard for redundant triggering
+        // Fetch last applied state (tx_id, reverse_flag) once per effect run
+        let last_current = last_applied.get();
 
-    // // ========== External Context & Resources ==========
+        // Determine directional intent
 
     // Navigation handled client-side (use_location + prev path)
 
@@ -392,14 +343,17 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
 
     // // ========== Initial State Setup ==========
 
-    // // Initialize correct animation state based on current route
-    // // Track instrument_layout so we update when it arrives
+        // last_current already captured above
 
-    //     log::debug!(
-    //         "Intro state check: route = {:?}, layout available = {}",
-    //         current_route,
-    //         layout.is_some()
-    //     );
+        match nav_tx_val {
+            // Forward: leaving content (we only animate when destination is Play/Tune and we currently show intro)
+            Some(crate::components::NavigationTx::Leave(tx_id)) if (to_play || to_tune) => {
+                if last_current != Some((tx_id, false)) {
+                    direction_reverse.set(false); // forward direction
+                    intro_hidden.set(false); // ensure visible while animating
+                    transition_active.set(true); // enable element styles
+                    rerun_counter.update(|c| *c = c.wrapping_add(1)); // restart animations
+                    last_applied.set(Some((tx_id, false)));
 
     //     // Only initialize if we haven't already animated to this state
     //     if current_route == RouteId::Play {
@@ -648,13 +602,28 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
 
     view! {
         <div class="contents">
-            // Inject generated keyframes stylesheet once ready
             <Show when=move || !keyframes_css().is_empty()>
                 <style inner_html=keyframes_css />
             </Show>
             <Show when=move || !intro_hidden()>
                 <IntroComp attr:style=picture_style_memo />
             </Show>
+            <Show when=|| {
+                cfg!(debug_assertions)
+            }>
+                {move || {
+                    view! {
+                        <div class="fixed left-2 top-2 z-[9999] px-2 py-1 rounded bg-black/60 text-[10px] font-mono tracking-wide text-white pointer-events-none select-none">
+                            {if transition_active() {
+                                "intro transition: active"
+                            } else {
+                                "intro transition: idle"
+                            }}
+                        </div>
+                    }
+                }}
+            </Show>
+
             {move || children()}
         </div>
     }

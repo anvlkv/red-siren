@@ -11,7 +11,7 @@ use crate::{
 #[component]
 pub fn AppRoutes() -> impl IntoView {
     view! {
-        <Intro>
+        <Intro nav_tx=nav_tx_signal nav_started=started current_route=current_route>
             <div class="absolute h-full w-full overflow-hidden pointer-events-auto z-1" role="main">
                 <Routes
                     fallback=|| {

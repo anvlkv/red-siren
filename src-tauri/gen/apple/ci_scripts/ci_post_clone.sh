@@ -34,7 +34,7 @@ fi
 
 
 echo "[post-clone] Adding required Rust targets..."
-rustup target add aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin wasm32-unknown-unknown || true
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin x86_64-apple-darwin wasm32-unknown-unknown || true
 
 echo "[post-clone] Installing trunk (ignore if already installed)..."
 cargo install trunk --locked || true
@@ -45,6 +45,20 @@ echo "[post-clone] Installing dependencies (npm ci)..."
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../../../.. && pwd)"
 cd "$REPO_ROOT"
+# Ensure Node/npm via Volta (no sudo) and expose via ~/.local/bin
+export VOLTA_HOME="${VOLTA_HOME:-$HOME/.volta}"
+export PATH="$VOLTA_HOME/bin:$PATH"
+if ! command -v npm >/dev/null 2>&1; then
+  echo "[post-clone] Installing Node via Volta..."
+  curl https://get.volta.sh | bash -s -- --quiet
+  export PATH="$VOLTA_HOME/bin:$PATH"
+  volta install node@lts
+fi
+mkdir -p "$HOME/.local/bin"
+ln -sf "$VOLTA_HOME/bin/node" "$HOME/.local/bin/node" || true
+ln -sf "$VOLTA_HOME/bin/npm" "$HOME/.local/bin/npm" || true
+ln -sf "$VOLTA_HOME/bin/npx" "$HOME/.local/bin/npx" || true
+
 npm ci
 
 echo "[post-clone] Setting up tailwindcss wrapper to use npm version..."

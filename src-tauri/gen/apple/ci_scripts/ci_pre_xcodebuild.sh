@@ -8,6 +8,8 @@ echo "[pre-xcodebuild] Starting frontend asset build (trunk release)..."
 export RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}"
 export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
 export PATH="$HOME/.local/bin:$CARGO_HOME/bin:$PATH"
+export VOLTA_HOME="${VOLTA_HOME:-$HOME/.volta}"
+export PATH="$VOLTA_HOME/bin:$PATH"
 
 
 

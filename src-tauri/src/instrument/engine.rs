@@ -67,6 +67,8 @@ pub(super) struct Inner {
     layout: RwLock<InstrumentLayout>,
     config: RwLock<InstrumentConfig>,
     dsp_net_frontend: RwLock<Option<fundsp::hacker32::Net>>,
+    // Primary oscillator node id for dynamic replacement.
+    dsp_primary_node_id: RwLock<Option<NodeId>>,
     control_tx: RwLock<Option<Sender<Control>>>,
     join: RwLock<Option<std::thread::JoinHandle<()>>>,
 }
@@ -76,8 +78,44 @@ impl Inner {
         *self.layout.read()
     }
 
+    /// Build a fresh network based on current config; returns (Net, primary_node_id).
+    fn create_network(&self, sample_rate: f64) -> fundsp::hacker32::Net {
+        let mut net = fundsp::hacker32::Net::new(0, 2);
+        net.set_sample_rate(sample_rate);
+        let config_len = self.config.read().0.len();
+        let base_freq: f32 = (220.0 + (config_len as f64 * 5.0)) as f32;
+
+        // Left channel (primary tracked node)
+        let left_id = net.push(Box::new(sine_hz::<f32>(base_freq)));
+        net.pipe_output(left_id);
+        // Right channel slight detune
+        let right_id = net.push(Box::new(sine_hz::<f32>(base_freq * 1.01)));
+        net.pipe_output(right_id);
+
+        net
+    }
+
+    /// Replace primary node oscillator based on current config (if playing).
+    fn update_primary_node(&self) {
+        if !*self.playing.read() {
+            return;
+        }
+        let Some(primary_id) = *self.dsp_primary_node_id.read() else {
+            return;
+        };
+        let mut guard = self.dsp_net_frontend.write();
+        let Some(net) = guard.as_mut() else {
+            return;
+        };
+
+        let new_node = self.create_network(1200.0);
+
+        net.crossfade(primary_id, Fade::Smooth, 0.3, Box::new(new_node));
+        net.commit();
+        log::info!("Updated primary node");
+    }
+
     pub fn start_playback(&self) -> AppResult<bool> {
-        // Already playing?
         if *self.playing.read() {
             return Ok(false);
         }
@@ -90,10 +128,14 @@ impl Inner {
             .default_output_config()
             .map_err(|_| InstrumentError::Control(ControlError::OutputConfigUnavailable))?;
 
-        // Configure fundsp Net for device sample rate (empty graph for now).
-        let sample_rate = default_cfg.sample_rate().0 as f32;
-        let mut net = fundsp::hacker32::Net::new(0, 2);
-        net.set_sample_rate(sample_rate as f64);
+        let sample_rate = default_cfg.sample_rate().0 as f64;
+        let subnet = self.create_network(sample_rate);
+        let mut net = Net::new(0, 2);
+        net.set_sample_rate(sample_rate);
+
+        let main_node_id = net.push(Box::new(subnet));
+
+        net.pipe_output(main_node_id);
 
         // Split (retain front-end for later mutation).
         let mut backend = net.backend();
@@ -106,10 +148,10 @@ impl Inner {
         // Control channel root
         let (tx, rx) = mpsc::channel::<Control>();
 
-        // Store front-end
+        // Store front-end & primary node id.
         {
-            let mut dsp_net = self.dsp_net_frontend.write();
-            *dsp_net = Some(front);
+            *self.dsp_net_frontend.write() = Some(front);
+            *self.dsp_primary_node_id.write() = Some(main_node_id);
         }
 
         // Build output stream
@@ -165,28 +207,19 @@ impl Inner {
 
         // Publish control channel + join handle
         {
-            let mut c = self.control_tx.write();
-            *c = Some(tx);
-            let mut j = self.join.write();
-            *j = Some(handle);
+            *self.control_tx.write() = Some(tx);
+            *self.join.write() = Some(handle);
         }
 
-        // Mark playing
-        {
-            let mut playing = self.playing.write();
-            *playing = true;
-        }
+        *self.playing.write() = true;
 
         Ok(true)
     }
 
     pub fn stop_playback(&self) -> AppResult<bool> {
-        // If not playing: no-op
         if !*self.playing.read() {
             return Ok(false);
         }
-
-        // Update local state first (Option A strategy)
         {
             let mut playing = self.playing.write();
             if !*playing {
@@ -195,7 +228,6 @@ impl Inner {
             *playing = false;
         }
 
-        // Send Shutdown control
         let tx_opt = self.control_tx.write().take();
         if let Some(tx) = tx_opt {
             let (ack_tx, ack_rx) = mpsc::channel();
@@ -214,7 +246,6 @@ impl Inner {
                     }
                     .into())
                 }
-
                 Err(_) => {
                     return Err(ControlError::AckTimeout {
                         op: "shutdown".into(),
@@ -223,11 +254,9 @@ impl Inner {
                 }
             }
         } else {
-            // Already terminated; treat as benign no-op
             return Ok(false);
         }
 
-        // Join thread
         if let Some(handle) = self.join.write().take() {
             if let Err(_e) = handle.join() {
                 return Err(ControlError::ThreadJoin {
@@ -237,8 +266,8 @@ impl Inner {
             }
         }
 
-        // Drop net frontend
         self.dsp_net_frontend.write().take();
+        self.dsp_primary_node_id.write().take();
 
         Ok(true)
     }
@@ -262,7 +291,6 @@ impl Inner {
     }
 
     pub fn pause_playback(&self) -> AppResult<bool> {
-        // If already paused
         if !*self.playing.read() {
             return Ok(false);
         }
@@ -275,7 +303,6 @@ impl Inner {
         }
 
         let Some(tx) = self.control_tx.read().as_ref().cloned() else {
-            // No backend thread -> treat as backend missing.
             return Err(ControlError::BackendMissing { op: "pause".into() }.into());
         };
         let (ack_tx, ack_rx) = mpsc::channel();
@@ -283,7 +310,6 @@ impl Inner {
             .map_err(|_| ControlError::ChannelSend { op: "pause".into() })?;
         match ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS)) {
             Ok(ControlInvocationResult::OkChanged | ControlInvocationResult::NoOp) => Ok(true),
-
             Ok(ControlInvocationResult::BackendMissing) => {
                 Err(ControlError::BackendMissing { op: "pause".into() }.into())
             }
@@ -295,7 +321,6 @@ impl Inner {
     }
 
     pub fn resume_playback(&self) -> AppResult<bool> {
-        // If already playing
         if *self.playing.read() {
             return Ok(false);
         }
@@ -320,7 +345,6 @@ impl Inner {
             })?;
         match ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS)) {
             Ok(ControlInvocationResult::OkChanged | ControlInvocationResult::NoOp) => Ok(true),
-
             Ok(ControlInvocationResult::BackendMissing) => Err(ControlError::BackendMissing {
                 op: "resume".into(),
             }
@@ -336,7 +360,6 @@ impl Inner {
     }
 
     pub fn set_is_dark(&self, is_dark: bool) -> common::error::Result<()> {
-        // Narrow lock scope: first mutate layout & derive new config while holding only layout lock
         let new_config = {
             let mut layout = self.layout.write();
             layout.scale = if is_dark {
@@ -349,10 +372,16 @@ impl Inner {
         {
             let mut config = self.config.write();
             *config = new_config;
-            log::info!("Created new config for [dark: {is_dark}]: {:#?}", *config);
+            log::info!(
+                "Created new config for [dark: {is_dark}] (len={}): {:#?}",
+                config.0.len(),
+                *config
+            );
         }
+        self.update_primary_node();
         Ok(())
     }
+
     pub fn set_size(&self, width: f64, height: f64) -> common::error::Result<()> {
         let new_config = {
             let mut layout = self.layout.write();
@@ -370,10 +399,12 @@ impl Inner {
             let mut config = self.config.write();
             *config = new_config;
             log::info!(
-                "Created new config for [width: {width}, height: {height}]: {:#?}",
+                "Created new config for [width: {width}, height: {height}] (len={}): {:#?}",
+                config.0.len(),
                 *config
             );
         }
+        self.update_primary_node();
         Ok(())
     }
 
@@ -398,10 +429,12 @@ impl Inner {
             let mut config = self.config.write();
             *config = new_config;
             log::info!(
-                "Updated config after safe area change [top: {top}, right: {right}, bottom: {bottom}, left: {left}]: {:#?}",
+                "Updated config after safe area change [top: {top}, right: {right}, bottom: {bottom}, left: {left}] (len={}): {:#?}",
+                config.0.len(),
                 *config
             );
         }
+        self.update_primary_node();
         Ok(())
     }
 }

@@ -7,21 +7,6 @@ mod setup;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
-
-    builder = builder.setup(|app| {
-        let config = app.config();
-        log::debug!("App starting with config: {config:#?}");
-
-        // Existing setup logic
-        setup::app_setup(app)?;
-        navigation::setup(app)?;
-        health::setup(app)?;
-        intro::setup(app)?;
-        instrument::setup(app)?;
-
-        Ok(())
-    });
-
     /*
      * ---------- Plugins ----------
      */
@@ -77,6 +62,22 @@ pub fn run() {
         instrument::instrument_layout,
         instrument::ui_safe_area_insets_apply,
     ]);
+
+    // Setup logic
+
+    builder = builder.setup(|app| {
+        let config = app.config();
+        log::debug!("App starting with config: {config:#?}");
+
+        // Existing setup logic
+        setup::app_setup(app)?;
+        navigation::setup(app)?;
+        health::setup(app)?;
+        intro::setup(app)?;
+        instrument::setup(app)?;
+
+        Ok(())
+    });
 
     builder
         .run(tauri::generate_context!())

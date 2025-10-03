@@ -1,23 +1,5 @@
 #!/usr/bin/env bash
-#
-# ci_pre_xcodebuild.src.sh
-#
-# Source version of the Xcode Cloud pre-xcodebuild script for Red Siren.
-# Wrapper at repository root named `ci_pre_xcodebuild.sh` should `source` this file.
-#
-# Purpose:
-#   Prepare frontend (WASM) assets before Xcode builds iOS/mac targets.
-#   Purely linear; no conditionals, no environment probing.
-#
-# Philosophy (MAYA DRY KISS):
-#   - Minimal, deterministic.
-#   - No branching, no secret / profile checks (Xcode Cloud handles those).
-#   - Assume prior script installed rust, trunk, tauri-cli, npm deps.
-#
-# NOTE:
-#   If frontend build customization is needed later (Tailwind pipeline, etc.),
-#   extend here but keep it linear (no guards).
-#
+
 set -euo pipefail
 
 echo "[pre-xcodebuild] Starting frontend asset build (trunk release)..."
@@ -34,5 +16,3 @@ cd "$REPO_ROOT"
 trunk build --release
 
 echo "[pre-xcodebuild] Frontend assets built."
-
-# (Deliberately nothing else: no warm-up cargo builds per instruction.)

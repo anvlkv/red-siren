@@ -30,6 +30,9 @@ cargo install tauri-cli --locked || true
 echo "[post-clone] Installing Node (Homebrew) and dependencies (npm ci)..."
 brew update >/dev/null 2>&1 || true
 brew install node >/dev/null 2>&1 || true
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../../../.. && pwd)"
+cd "$REPO_ROOT"
 npm ci
 
 echo "[post-clone] Done."

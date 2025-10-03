@@ -58,9 +58,20 @@ jobs:
 
   build-android-preview:
     runs-on: ubuntu-latest
+    outputs:
+      built: ${{ steps.evaluate.outputs.built }}
     steps:
+      - name: Evaluate Android signing secrets
+        id: evaluate
+        run: |
+          if [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ] || [ -z "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ] || [ -z "${{ secrets.ANDROID_KEY_ALIAS }}" ] || [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ]; then
+            echo "built=false" >> $GITHUB_OUTPUT
+            echo "Android signing secrets missing. Skipping Android preview build."
+            exit 0
+          else
+            echo "built=true" >> $GITHUB_OUTPUT
+          fi
       - uses: actions/checkout@v4
-
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
@@ -179,16 +190,9 @@ jobs:
           tag_name: preview-pr-${{ github.event.pull_request.number }}
           name: "Preview: PR #${{ github.event.pull_request.number }}"
           body: |
-            🔍 **Preview build for PR #${{ github.event.pull_request.number }}**
+            Preview build for PR #${{ github.event.pull_request.number }} (commit ${{ github.event.pull_request.head.sha }})
+            Artifacts: Linux desktop bundles and Android APK (if available).
 
-            **Branch:** `${{ github.head_ref }}`
-            **Commit:** ${{ github.event.pull_request.head.sha }}
-
-            ### Available Previews:
-            - 🐧 Ubuntu Desktop (AppImage, DEB, RPM)
-            - 📱 Android APK
-
-            This is an automated preview build. Artifacts will be cleaned up periodically.
           files: |
             artifacts/**/appimage/*.AppImage
             artifacts/**/deb/*.deb
@@ -197,10 +201,10 @@ jobs:
           draft: true
           prerelease: true
           fail_on_unmatched_files: false
-          generate_release_notes: true
+          generate_release_notes: false
 
   comment-on-pr:
-    needs: create-preview-release
+    needs: [create-preview-release, build-android-preview]
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -210,19 +214,18 @@ jobs:
         with:
           script: |
             const prNumber = context.payload.pull_request.number;
-            const releaseUrl = "${{ needs.create-preview-release.outputs.release-url }}";
+            const tagName = `preview-pr-${prNumber}`;
+            const releaseUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/${tagName}`;
+            const androidBuilt = "${{ needs.build-android-preview.outputs.built }}" === "true";
+            const commit = context.payload.pull_request.head.sha.substring(0,7);
+            let comment = `Preview build: PR #${prNumber} (${commit})\n${releaseUrl}\n\nArtifacts:\n- Linux desktop\n`;
+            if (androidBuilt) comment += "- Android APK\n";
 
-            const comment = `## 🎉 Preview Build Complete!
 
-            A preview release has been created for this PR: [**Download Preview**](${releaseUrl})
 
-            ### 📦 Available Downloads:
-            - 🐧 **Ubuntu Desktop** - AppImage, DEB, and RPM packages
-            - 📱 **Android Mobile** - APK file for testing
 
-            The preview release is marked as draft and pre-release. Artifacts are retained for 7 days.
 
-            *Generated for commit ${context.payload.pull_request.head.sha.substring(0, 7)}*`;
+
 
             github.rest.issues.createComment({
               owner: context.repo.owner,

@@ -12,29 +12,55 @@ VALID_DAYS=10000
 KEYALG="RSA"
 KEYSIZE=2048
 
+# ====== ARG PARSING ======
+# -f : force regeneration (overwrite existing keystore file)
+FORCE=0
+while getopts ":f" opt; do
+  case "$opt" in
+    f) FORCE=1 ;;
+    *) echo "Usage: $0 [-f]"; exit 1 ;;
+  esac
+done
+
 # ====== 1. Generate keystore (self-signed) ======
 # keytool comes with Java (JDK). Ensure 'keytool -help' works first.
-echo "Generating keystore ${KEYSTORE_FILE} ..."
-keytool -genkeypair \
-  -storetype PKCS12 \
-  -keystore "${KEYSTORE_FILE}" \
-  -alias "${ALIAS}" \
-  -storepass "${STOREPASS}" \
-  -keypass "${KEYPASS}" \
-  -keyalg "${KEYALG}" \
-  -keysize "${KEYSIZE}" \
-  -validity "${VALID_DAYS}" \
-  -dname "${DNAME}"
+echo "Preparing keystore ${KEYSTORE_FILE} ..."
+if [[ -f "${KEYSTORE_FILE}" ]]; then
+  if [[ $FORCE -eq 1 ]]; then
+    echo "-f supplied: removing existing keystore ${KEYSTORE_FILE}"
+    rm -f "${KEYSTORE_FILE}"
+  else
+    echo "Keystore ${KEYSTORE_FILE} already exists. Use -f to force regeneration."
+    echo "Re-using existing keystore; skipping generation step."
+  fi
+fi
 
-echo "Keystore generated:"
-keytool -list -v -keystore "${KEYSTORE_FILE}" -storepass "${STOREPASS}" -alias "${ALIAS}" | grep -E 'Alias name:|Entry type:|Valid from:'
+if [[ ! -f "${KEYSTORE_FILE}" ]]; then
+  echo "Generating keystore ${KEYSTORE_FILE} ..."
+  keytool -genkeypair \
+    -storetype PKCS12 \
+    -keystore "${KEYSTORE_FILE}" \
+    -alias "${ALIAS}" \
+    -storepass "${STOREPASS}" \
+    -keypass "${KEYPASS}" \
+    -keyalg "${KEYALG}" \
+    -keysize "${KEYSIZE}" \
+    -validity "${VALID_DAYS}" \
+    -dname "${DNAME}"
+
+  echo "Keystore generated:"
+  keytool -list -v -keystore "${KEYSTORE_FILE}" -storepass "${STOREPASS}" -alias "${ALIAS}" | grep -E 'Alias name:|Entry type:|Valid from:'
+else
+  echo "Keystore metadata (existing):"
+  keytool -list -v -keystore "${KEYSTORE_FILE}" -storepass "${STOREPASS}" -alias "${ALIAS}" | grep -E 'Alias name:|Entry type:|Valid from:' || true
+fi
 
 # ====== 2. Base64 encode keystore for GitHub secret ======
-# macOS base64 does not wrap lines by default; GNU coreutils may.
+# Ensure no line breaks on all platforms
 if base64 --help 2>&1 | grep -q -- "-w "; then
   B64_CONTENT="$(base64 -w0 "${KEYSTORE_FILE}")"
 else
-  B64_CONTENT="$(base64 < "${KEYSTORE_FILE}")"
+  B64_CONTENT="$(base64 < "${KEYSTORE_FILE}" | tr -d '\n')"
 fi
 
 # ====== 3. Create / update GitHub secrets with gh ======
@@ -56,14 +82,7 @@ cat <<EOF
 
 Done.
 
-Add/confirm in workflow:
-  env:
-    ANDROID_KEYSTORE_PASSWORD: \${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-    ANDROID_KEY_ALIAS: \${{ secrets.ANDROID_KEY_ALIAS }}
-    ANDROID_KEY_PASSWORD: \${{ secrets.ANDROID_KEY_PASSWORD }}
-(Already present in your main.yml.)
-
-The workflow already decodes:
-  echo "\${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > \$RUNNER_TEMP/keystore.jks
+Tip: Force regenerate locally:
+  ./scripts/keystore.sh -f
 
 EOF

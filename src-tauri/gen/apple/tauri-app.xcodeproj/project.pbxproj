@@ -24,32 +24,42 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		17F6417277634994A2AB63D0 /* mod.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = mod.rs; sourceTree = "<group>"; };
 		234C7D371C7B526F7E893B15 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
-		3102362C60B47FA163D2157C /* intro.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = intro.rs; sourceTree = "<group>"; };
-		35F3362944B6E6905741330A /* navigation.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = navigation.rs; sourceTree = "<group>"; };
+		3B27E1B0A4D3B87F3168D7D7 /* commands.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = commands.rs; sourceTree = "<group>"; };
 		415CE9B61EE711FB11882F1B /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
+		437CF15B45110A5F8A6B30D4 /* commands.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = commands.rs; sourceTree = "<group>"; };
 		46600E42EDBD4E2F9CFFB94E /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		4D86BED7C04FA29A575350D3 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
+		52D2167F31104DE0F2BAC639 /* commands.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = commands.rs; sourceTree = "<group>"; };
 		5384EE0C649F19A31B462538 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		6B62CCFCDED0CBE851A51E4F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		75C0A66A4769E0B428DFFE16 /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
+		766FC249DCEF887F7A6AE8E8 /* mod.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = mod.rs; sourceTree = "<group>"; };
 		7A62F8DA3ACF6DA66CB9785D /* tauri-app_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "tauri-app_iOS.entitlements"; sourceTree = "<group>"; };
-		7D65C889520AFC13FF7D4A90 /* navigation_manager.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = navigation_manager.rs; sourceTree = "<group>"; };
+		7B5A89CADDAD563D3DF6C814 /* mod.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = mod.rs; sourceTree = "<group>"; };
 		84E625C1ABDB2D39CB77BF29 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		9B11C2C873FB5A7B97B0605A /* Red Siren.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Red Siren.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		9C1DC7E685759CC32B54DE1C /* commands.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = commands.rs; sourceTree = "<group>"; };
+		A9E3D882AA427AC30D8C83B3 /* engine.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = engine.rs; sourceTree = "<group>"; };
 		AC56A11F310BBFF30CCFEB63 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		B8DBF813DB5FCB214283D94D /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
 		BA38F7BF7C28E04DBA849965 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		BDD4DE43C17E2A67EC873F25 /* gates.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = gates.rs; sourceTree = "<group>"; };
+		C20447022CFF96C7281BC5BF /* engine.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = engine.rs; sourceTree = "<group>"; };
 		C42C09CE350D0304EDF85C59 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		CA1A066F7EDD869BC014BB9C /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
-		CDF49D501CC578AF2DF705B1 /* setup_mac_window.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = setup_mac_window.rs; sourceTree = "<group>"; };
+		CD7383D59B15B37B02D6B100 /* navigation_manager.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = navigation_manager.rs; sourceTree = "<group>"; };
 		CF0F15D9837DA9743995496A /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 		CFDCAF660F4CA93110C8FB02 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D96C5A0C6EF1CFC067A1C008 /* main.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = main.rs; sourceTree = "<group>"; };
 		DB3B174CDC5BCDBBC25AC2C3 /* health.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = health.rs; sourceTree = "<group>"; };
-		E29598F2D0F92FABA917A888 /* setup.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = setup.rs; sourceTree = "<group>"; };
+		DF52CDB3A526DFF00328AC57 /* .gitkeep */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitkeep; sourceTree = "<group>"; };
 		E486419C84C58B66E0FC1383 /* lib.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = lib.rs; sourceTree = "<group>"; };
 		E50E0C8A55BFC5056C3C1116 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
+		EA185CDC9938FB132C59EDD4 /* mod.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = mod.rs; sourceTree = "<group>"; };
+		EDFA040AF62A50A32FDE9072 /* setup_mac_window.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = setup_mac_window.rs; sourceTree = "<group>"; };
+		F9AF5DFD79C8FE65D30CB053 /* stream.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = stream.rs; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -73,9 +83,30 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		178D440F9BC29C66833B35F5 /* setup */ = {
+			isa = PBXGroup;
+			children = (
+				52D2167F31104DE0F2BAC639 /* commands.rs */,
+				17F6417277634994A2AB63D0 /* mod.rs */,
+				EDFA040AF62A50A32FDE9072 /* setup_mac_window.rs */,
+			);
+			path = setup;
+			sourceTree = "<group>";
+		};
+		231C0BDDF9D6D99C7293E11B /* intro */ = {
+			isa = PBXGroup;
+			children = (
+				437CF15B45110A5F8A6B30D4 /* commands.rs */,
+				C20447022CFF96C7281BC5BF /* engine.rs */,
+				7B5A89CADDAD563D3DF6C814 /* mod.rs */,
+			);
+			path = intro;
+			sourceTree = "<group>";
+		};
 		2ECFA35AFF2D5945783C3B8D /* Externals */ = {
 			isa = PBXGroup;
 			children = (
+				DF52CDB3A526DFF00328AC57 /* .gitkeep */,
 			);
 			path = Externals;
 			sourceTree = "<group>";
@@ -92,13 +123,12 @@
 			isa = PBXGroup;
 			children = (
 				DB3B174CDC5BCDBBC25AC2C3 /* health.rs */,
-				3102362C60B47FA163D2157C /* intro.rs */,
 				E486419C84C58B66E0FC1383 /* lib.rs */,
 				D96C5A0C6EF1CFC067A1C008 /* main.rs */,
-				7D65C889520AFC13FF7D4A90 /* navigation_manager.rs */,
-				35F3362944B6E6905741330A /* navigation.rs */,
-				CDF49D501CC578AF2DF705B1 /* setup_mac_window.rs */,
-				E29598F2D0F92FABA917A888 /* setup.rs */,
+				8905449127B417195535CE73 /* instrument */,
+				231C0BDDF9D6D99C7293E11B /* intro */,
+				A1663B645ED6B0637700D845 /* navigation */,
+				178D440F9BC29C66833B35F5 /* setup */,
 			);
 			name = src;
 			path = ../../src;
@@ -129,6 +159,17 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		8905449127B417195535CE73 /* instrument */ = {
+			isa = PBXGroup;
+			children = (
+				3B27E1B0A4D3B87F3168D7D7 /* commands.rs */,
+				A9E3D882AA427AC30D8C83B3 /* engine.rs */,
+				EA185CDC9938FB132C59EDD4 /* mod.rs */,
+				F9AF5DFD79C8FE65D30CB053 /* stream.rs */,
+			);
+			path = instrument;
+			sourceTree = "<group>";
+		};
 		90B7B06659AD5A7A7EE39662 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
@@ -144,6 +185,17 @@
 				5FCA5E244F4BE4C93672F978 /* bindings */,
 			);
 			path = "tauri-app";
+			sourceTree = "<group>";
+		};
+		A1663B645ED6B0637700D845 /* navigation */ = {
+			isa = PBXGroup;
+			children = (
+				9C1DC7E685759CC32B54DE1C /* commands.rs */,
+				BDD4DE43C17E2A67EC873F25 /* gates.rs */,
+				766FC249DCEF887F7A6AE8E8 /* mod.rs */,
+				CD7383D59B15B37B02D6B100 /* navigation_manager.rs */,
+			);
+			path = navigation;
 			sourceTree = "<group>";
 		};
 		A17B869C1C261C5F8DF765C9 /* tauri-app_iOS */ = {
@@ -310,12 +362,9 @@
 					"$(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)",
 				);
 				MARKETING_VERSION = 1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.anvlkv.red-siren.app;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.anvlkv.red-siren.app";
 				PRODUCT_NAME = "Red Siren";
 				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = "arm64  x86_64";
 			};
@@ -481,12 +530,9 @@
 					"$(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)",
 				);
 				MARKETING_VERSION = 1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.anvlkv.red-siren.app;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.anvlkv.red-siren.app";
 				PRODUCT_NAME = "Red Siren";
 				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = "arm64  x86_64";
 			};

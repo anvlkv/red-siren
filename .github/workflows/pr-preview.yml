@@ -3,6 +3,7 @@ name: PR Preview
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  workflow_dispatch:
 
 jobs:
   build-desktop-preview:
@@ -170,7 +171,11 @@ jobs:
             - 📱 Android APK
 
             This is an automated preview build. Artifacts will be cleaned up periodically.
-          files: artifacts/**/*
+          files: |
+            artifacts/**/appimage/*.AppImage
+            artifacts/**/deb/*.deb
+            artifacts/**/rpm/*.rpm
+            artifacts/**/*.apk
           draft: true
           prerelease: true
           fail_on_unmatched_files: false

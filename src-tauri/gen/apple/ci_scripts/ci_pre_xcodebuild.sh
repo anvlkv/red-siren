@@ -28,6 +28,9 @@ export PATH="$CARGO_HOME/bin:$PATH"
 
 # Build WASM/frontend assets (release mode). Adjust/dist output is handled by trunk defaults
 # or any Trunk.toml present in the project.
+# Move to repository root so Trunk.toml is discovered (script runs from ci_scripts/)
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../../../.. && pwd)"
+cd "$REPO_ROOT"
 trunk build --release
 
 echo "[pre-xcodebuild] Frontend assets built."

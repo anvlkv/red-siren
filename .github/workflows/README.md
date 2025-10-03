@@ -25,6 +25,7 @@ Generates preview builds for pull requests with limited platform support for fas
 
 **Features:**
 - **Limited platforms:** Only Ubuntu desktop and Android mobile (for speed)
+- **Signed APK support:** Automatically signs Android APK when keystore secrets are available
 - **Draft releases:** Creates draft releases marked as pre-release
 - **PR comments:** Posts download links directly in PR comments
 - **Short retention:** 7-day artifact retention for cleanup
@@ -33,8 +34,7 @@ Generates preview builds for pull requests with limited platform support for fas
 
 | Platform | Main Branch | PR Preview |
 |----------|-------------|------------|
-| macOS ARM64 | ✅ | ❌ |
-| macOS x64 | ✅ | ❌ |
+| macOS Universal (ARM64 + x64) | ✅ | ❌ |
 | Ubuntu x64 | ✅ | ✅ |
 | Windows x64 | ✅ | ❌ |
 | Android | ✅ | ✅ |
@@ -77,9 +77,10 @@ Every push to the `main` branch automatically:
 ### PR Previews
 Every pull request automatically:
 1. Builds Ubuntu desktop and Android mobile only
-2. Creates a draft pre-release with tag `preview-pr-{number}-{run}`
-3. Posts download links in PR comments
-4. Cleans up artifacts after 7 days
+2. Signs Android APK if keystore secrets are available
+3. Creates a draft pre-release with tag `preview-pr-{number}-{run}`
+4. Posts download links in PR comments
+5. Cleans up artifacts after 7 days
 
 ## Local Development
 

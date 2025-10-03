@@ -19,9 +19,7 @@ set -euo pipefail
 
 echo "[post-xcodebuild] Collecting build artifacts (no checks)..."
 
-# Ensure cargo bin path available (harmless if already set).
-export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
-export PATH="$CARGO_HOME/bin:$PATH"
+
 
 # Working directory anchor (assumes script sourced from repo root wrapper).
 WORKROOT="$(pwd)"

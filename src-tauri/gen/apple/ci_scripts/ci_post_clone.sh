@@ -21,48 +21,27 @@ curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --profi
 # Ensure cargo is available on PATH for Xcode build phase
 export PATH="$CARGO_HOME/bin:$PATH"
 
-# Create cargo wrapper to handle CI environment path issues
-echo "[post-clone] Creating cargo wrapper for Xcode build compatibility..."
-mkdir -p /Users/local/.cargo/bin 2>/dev/null || sudo mkdir -p /Users/local/.cargo/bin
-cat > /tmp/cargo_wrapper << 'EOF'
-#!/bin/bash
-# Find and execute the real cargo binary
-REAL_CARGO=$(which cargo 2>/dev/null || find /home /Users -name cargo -type f -executable 2>/dev/null | head -1)
-if [ -z "$REAL_CARGO" ]; then
-    echo "Error: cargo not found" >&2
+# Verify cargo installation and set up environment
+echo "[post-clone] Verifying cargo installation..."
+if [ -f "$CARGO_HOME/bin/cargo" ]; then
+    echo "[post-clone] Cargo found at $CARGO_HOME/bin/cargo"
+    "$CARGO_HOME/bin/cargo" --version
+else
+    echo "[post-clone] ERROR: Cargo not found at expected location"
     exit 1
 fi
-exec "$REAL_CARGO" "$@"
-EOF
-chmod +x /tmp/cargo_wrapper
-sudo cp /tmp/cargo_wrapper /Users/local/.cargo/bin/cargo 2>/dev/null || cp /tmp/cargo_wrapper /Users/local/.cargo/bin/cargo 2>/dev/null || true
-rm /tmp/cargo_wrapper
 
-# Add environment variables to shell profiles for Xcode build access
-echo "export RUSTUP_HOME=\"$RUSTUP_HOME\"" >> "$HOME/.bash_profile" 2>/dev/null || true
-echo "export CARGO_HOME=\"$CARGO_HOME\"" >> "$HOME/.bash_profile" 2>/dev/null || true
-echo "export PATH=\"$CARGO_HOME/bin:\$PATH\"" >> "$HOME/.bash_profile" 2>/dev/null || true
-echo "export RUSTUP_HOME=\"$RUSTUP_HOME\"" >> "$HOME/.zshrc" 2>/dev/null || true
-echo "export CARGO_HOME=\"$CARGO_HOME\"" >> "$HOME/.zshrc" 2>/dev/null || true
-echo "export PATH=\"$CARGO_HOME/bin:\$PATH\"" >> "$HOME/.zshrc" 2>/dev/null || true
 
-# Verify cargo installation
-echo "[post-clone] Verifying cargo installation..."
-"$CARGO_HOME/bin/cargo" --version
-/Users/local/.cargo/bin/cargo --version 2>/dev/null || echo "[post-clone] Warning: wrapper cargo not accessible"
 
 echo "[post-clone] Adding required Rust targets..."
-rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-darwin x86_64-apple-darwin || true
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin wasm32-unknown-unknown || true
 
 echo "[post-clone] Installing trunk (ignore if already installed)..."
 cargo install trunk --locked || true
 
-echo "[post-clone] Installing tauri-cli (ignore if already installed)..."
-cargo install tauri-cli --locked || true
 
-echo "[post-clone] Installing Node (Homebrew) and dependencies (npm ci)..."
-brew update >/dev/null 2>&1 || true
-brew install node >/dev/null 2>&1 || true
+
+echo "[post-clone] Installing dependencies (npm ci)..."
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../../../.. && pwd)"
 cd "$REPO_ROOT"
@@ -85,7 +64,6 @@ chmod +x "$HOME/.local/bin/tailwindcss"
 
 # Add to PATH so trunk finds our wrapper
 export PATH="$HOME/.local/bin:$PATH"
-echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$HOME/.bash_profile" 2>/dev/null || true
-echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$HOME/.zshrc" 2>/dev/null || true
+
 
 echo "[post-clone] Done."

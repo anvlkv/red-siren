@@ -1,14 +1,12 @@
-mod animation;
 mod composition;
+mod consts;
 mod static_path;
 // mod suns; // removed as it is currently unused
+mod hooks;
 mod wavering;
 
-use crate::{
-    components::intro::animation::IntroTransformSnapshot,
-    util::layout_context::{expect_layout_contex, LayoutContextReturn},
-};
-use keyframe::{keyframes, AnimationSequence};
+use crate::components::intro::consts::*;
+use crate::util::layout_context::{expect_layout_contex, LayoutContextReturn};
 use leptos::prelude::*;
 
 use composition::IntroComp;
@@ -26,137 +24,326 @@ use std::str::FromStr;
 
 use std::collections::HashMap;
 
-pub struct IntroContext {
-    // --- Instrument properties ---
-    pub left_string_style: Memo<String>,
-    pub right_string_style: Memo<String>,
-    pub key_styles: Memo<HashMap<(u8, u8), String>>,
-    pub band_styles: Memo<HashMap<(u8, u8), String>>,
-    // --- Tuner properties ---
-    // TODO: add properties with tuner
-}
+use composition::IntroComp;
+use leptos::leptos_dom::helpers::set_timeout;
 
 #[component]
 pub fn Intro(children: ChildrenFn) -> impl IntoView {
-    // Intro animation now uses a pure tweenable snapshot (IntroTransformSnapshot)
-    // instead of an internal runtime/timeline.
-    //
-    // We keep:
-    // - instrument_layout (when available)
-    // - Option<IntroTransformSnapshot> for the current state
-    // - a top-level CSS var string (intro_vars) rebuilt on RAF
-    // - static transform style templates referencing primitive CSS vars
-    //
-    // Future: external keyframe sequencing will interpolate snapshots.
-    // Currently we emit the baseline (identity) snapshot once per RAF.
-    //
-    // Translation (tx/ty) remains 0 until real layout mapping is integrated.
+    // Intro: CSS-only animation (unique @keyframes per element). Collapsed → natural layout. Reverse supported via animation-direction.
 
-    let hidden_svgs = RwSignal::new(false);
+    // Hidden flag (legacy name preserved for minimal downstream impact)
+    let intro_hidden = RwSignal::new(false);
 
     // Instrument layout (used to size runtime); if absent we delay animation start.
     let LayoutContextReturn {
-        space,
-        orientation,
-        left_string_position,
-        right_string_position,
-        key_radius,
-        key_band_length,
-        key_band_breadth,
-        safe_area_padding,
-        key_bands_gap,
-        groups_gap,
-        num_keys_per_group,
-        num_groups,
-        first_group_channel,
-        scale,
+        space: _space,
+        orientation: _orientation,
+        left_string_position: _left_string_position,
+        right_string_position: _right_string_position,
+        key_radius: _key_radius,
+        key_band_length: _key_band_length,
+        key_band_breadth: _key_band_breadth,
+        safe_area_padding: _safe_area_padding,
+        key_bands_gap: _key_bands_gap,
+        groups_gap: _groups_gap,
+        num_keys_per_group: _num_keys_per_group,
+        num_groups: _num_groups,
+        first_group_channel: _first_group_channel,
+        scale: _scale,
         complete_layout,
+        iter_keys: _iter_keys,
+        key_centers: _key_centers,
+        first_key_center: _first_key_center,
+        key_pad_main: _key_pad_main,
+        key_pad_aux: _key_pad_aux,
     } = expect_layout_contex();
 
+    // Animation state signals (new CSS-based system)
+    let keyframes_css = RwSignal::new(String::new());
+    let key_styles_signal = RwSignal::new(HashMap::<(u8, u8), String>::new());
+    let band_styles_signal = RwSignal::new(HashMap::<(u8, u8), String>::new());
+    let left_string_style_signal = RwSignal::new(String::new());
+    let right_string_style_signal = RwSignal::new(String::new());
+    let picture_style_signal = RwSignal::new(String::new());
+    let direction_reverse = RwSignal::new(false);
+    let rerun_counter = RwSignal::new(0u32);
+
     // Initialize animation sequence with dummy snapshot aligned to intro composition.
-    let animation_seq = RwSignal::<AnimationSequence<IntroTransformSnapshot>>::new(keyframes![(
-        IntroTransformSnapshot::dummy_with_layout(complete_layout()),
-        0.0
-    )]);
+    // Legacy animation_seq removed (CSS animations now handle progression)
 
-    let intro_vars = Signal::derive(move || {
-        animation_seq()
-            .now_strict()
-            .map(|s| s.emit_css_vars())
-            .unwrap_or_default()
+    // Build animations once layout is complete.
+    Effect::new(move |_| {
+        let layout = complete_layout();
+        let num_groups = layout.num_groups.get();
+        let num_keys = layout.num_keys_per_group.get();
+        // Basic guard: do nothing if zero (should not happen)
+        if num_groups == 0 || num_keys == 0 {
+            return;
+        }
+        // DURATIONS
+        let forward_ms = INTRO_ANIM_DURATION_MS;
+        // Percent -> keyframe markers
+        let k1_5 = PHASE_FADE_OVERSHOOT_PCT;
+        let k2 = PHASE_COLLAPSE_LINE_PCT;
+        let k3 = PHASE_TRAVEL_PCT;
+        let k4 = PHASE_REFINE_PCT;
+        // Placeholder translations (TODO: compute real collapsed sun & axis offsets)
+        // For now all elements translate from (0,0) -> (0,0) so only scale / radius animates.
+        let mut css = String::new();
+        let mut key_styles = HashMap::new();
+        let mut band_styles = HashMap::new();
+        // Keys
+        //
+        // We need to inject per-key collapsed translations (sun + axis) before
+        // pushing keyframe strings. The current snippet you provided ends
+        // right at the start of the keyframe construction, but the tail of
+        // the original `css.push_str(&format!( ... ))` block (with all the
+        // percentage frames and closing braces) is not included in the edit
+        // window, so I cannot safely rewrite the inner format without the
+        // exact trailing lines (the old_text must match exactly).
+        //
+        // Please provide the remaining lines of this keyframe construction
+        // (through the end of the "@keyframes" format for keys and the
+        // similar block for bands) so I can replace them with the version
+        // that includes:
+        //   0%: translate(sun_tx, sun_ty)
+        //   {k2}%: translate(axis_tx, axis_ty)
+        //   {k3}% / {k4}% / 100%: translate(0,0)
+        //
+        // Additionally I will add analogous logic for bands (with overshoot)
+        // and leave strings rotation-only as requested.
+        for (g, k) in layout.iter_keys() {
+            // Utilize shared helpers from Layout
+            let (final_cx, final_cy) = layout.key_center(g, k);
+            let (first_cx, first_cy) = layout.first_key_center();
+            let sun_cx = (INTRO_SUN_CX / INTRO_ART_WIDTH) * layout.space.x;
+            let sun_cy = (INTRO_SUN_CY / INTRO_ART_HEIGHT) * layout.space.y;
+            let sun_tx = sun_cx - final_cx;
+            let sun_ty = sun_cy - final_cy;
+            let axis_tx = first_cx - final_cx;
+            let axis_ty = first_cy - final_cy;
+            let fmt = |v: f32| {
+                if (v.fract()).abs() < 0.0005 {
+                    format!("{:.0}", v)
+                } else {
+                    format!("{:.3}", v)
+                }
+            };
+
+            let anim_name = format!("key-anim-g-{g}-k-{k}");
+            css.push_str(&format!(
+                "@keyframes {name}{{\
+        0%{{transform:translate({stx}px,{sty}px) scale({ks});}}\
+        {k2}%{{transform:translate({atx}px,{aty}px) scale({mid});}}\
+        {k3}%{{transform:translate(0px,0px) scale(1);}}\
+        {k4}%{{transform:translate(0px,0px) scale(1);}}\
+        100%{{transform:translate(0px,0px) scale(1);}}}}",
+                name = anim_name,
+                ks = KEY_START_SCALE,
+                mid = (KEY_START_SCALE + 1.0) * 0.5,
+                k2 = k2,
+                k3 = k3,
+                k4 = k4,
+                stx = fmt(sun_tx),
+                sty = fmt(sun_ty),
+                atx = fmt(axis_tx),
+                aty = fmt(axis_ty)
+            ));
+            let style = format!(
+                "animation:{name} {dur}ms {ease} 1 both;animation-direction:{{DIR}};",
+                name = anim_name,
+                dur = forward_ms,
+                ease = EASE_MAIN
+            );
+            key_styles.insert((g, k), style);
+
+            // Band animation
+            let band_anim = format!("band-anim-g-{g}-k-{k}");
+            css.push_str(&format!(
+                "@keyframes {name}{{\
+        0%{{transform:translate({stx}px,{sty}px) scale({bs});border-radius:{brc}px;}}\
+        {k1_5}%{{transform:translate({stx}px,{sty}px) scale({bo});border-radius:{brc}px;}}\
+        {k2}%{{transform:translate({atx}px,{aty}px) scale({bc});border-radius:{brc}px;}}\
+        {k3}%{{transform:translate(0px,0px) scale({bf});border-radius:{brc}px;}}\
+        {k4}%{{transform:translate(0px,0px) scale({bf});border-radius:0px;}}\
+        100%{{transform:translate(0px,0px) scale({bf});border-radius:0px;}}}}",
+                name = band_anim,
+                bs = BAND_START_SCALE,
+                bo = BAND_OVERSHOOT_SCALE,
+                bc = BAND_AXIS_COLLAPSE_SCALE,
+                bf = BAND_REFINE_SCALE,
+                brc = BAND_CIRCLE_RADIUS_PX,
+                k1_5 = k1_5,
+                k2 = k2,
+                k3 = k3,
+                k4 = k4,
+                stx = fmt(sun_tx),
+                sty = fmt(sun_ty),
+                atx = fmt(axis_tx),
+                aty = fmt(axis_ty)
+            ));
+            let bstyle = format!(
+                "animation:{name} {dur}ms {ease} 1 both;animation-direction:{{DIR}};",
+                name = band_anim,
+                dur = forward_ms,
+                ease = EASE_MAIN
+            );
+            band_styles.insert((g, k), bstyle);
+        }
+        // Strings (left/right) - rotation only; no collapsed translation for now
+        css.push_str(&format!(
+            "@keyframes string-anim-left{{0%{{transform:translate(0px,0px) rotate({start}deg);}}\
+        {k2}%{{transform:translate(0px,0px) rotate({mid}deg);}}\
+        {k3}%{{transform:translate(0px,0px) rotate(0deg);}}\
+        100%{{transform:translate(0px,0px) rotate(0deg);}}}}",
+            start = STRING_START_ROT_DEG,
+            mid = STRING_START_ROT_DEG * 0.35,
+            k2 = k2,
+            k3 = k3
+        ));
+        css.push_str(&format!(
+            "@keyframes string-anim-right{{0%{{transform:translate(0px,0px) rotate({start}deg);}}\
+        {k2}%{{transform:translate(0px,0px) rotate({mid}deg);}}\
+        {k3}%{{transform:translate(0px,0px) rotate(0deg);}}\
+        100%{{transform:translate(0px,0px) rotate(0deg);}}}}",
+            start = STRING_START_ROT_DEG,
+            mid = STRING_START_ROT_DEG * 0.35,
+            k2 = k2,
+            k3 = k3
+        ));
+        let str_style_left = format!(
+            "animation:string-anim-left {dur}ms {ease} 1 both;animation-direction:{{DIR}};",
+            dur = forward_ms,
+            ease = EASE_MAIN
+        );
+        let str_style_right = format!(
+            "animation:string-anim-right {dur}ms {ease} 1 both;animation-direction:{{DIR}};",
+            dur = forward_ms,
+            ease = EASE_MAIN
+        );
+        // Picture fade
+        css.push_str(&format!(
+                    "@keyframes intro-picture-fade{{0%{{opacity:1;}}{k1_5}%{{opacity:.25;}}{k2}%{{opacity:0;}}100%{{opacity:0;}}}}",
+                    k1_5 = k1_5,
+                    k2 = k2
+                ));
+        let picture_anim = format!(
+            "animation:intro-picture-fade {}ms {} 1 forwards;animation-direction:{{DIR}};",
+            percent_to_time_ms(PICTURE_FADE_OUT_PCT),
+            EASE_FADE
+        );
+        // Commit signals
+        keyframes_css.set(css);
+        key_styles_signal.set(key_styles);
+        band_styles_signal.set(band_styles);
+        left_string_style_signal.set(str_style_left);
+        right_string_style_signal.set(str_style_right);
+        picture_style_signal.set(picture_anim);
+        // Schedule hide (forward only)
+        let hide_ms = hide_intro_at_ms();
+        let hidden = intro_hidden;
+        let dir_flag = direction_reverse;
+        set_timeout(
+            move || {
+                if !dir_flag.get_untracked() {
+                    hidden.set(true);
+                }
+            },
+            std::time::Duration::from_millis(hide_ms as u64),
+        );
     });
 
-    // Whether transform style templates are currently mounted (animation running)
-    let (transform_templates_enabled, set_transform_templates_enabled) = signal(false);
+    // Animation direction reactive signal (used to rewrite animation-direction in styles)
 
-    // Build key style templates (only when layout changes OR templates toggled)
-    let key_styles = Memo::new(move |old| {
-        let mut map = HashMap::new();
-        if !transform_templates_enabled() {
-            return old.cloned().unwrap_or(map);
-        }
-        let num_groups = num_groups();
-        let num_keys_per_group = num_keys_per_group();
-
-        for g in 0..num_groups {
-            for k in 0..num_keys_per_group {
-                map.insert(
-                        (g, k),
-                        format!(
-                            "transform: translate(var(--key-{g}-{k}-tx,0px), var(--key-{g}-{k}-ty,0px)) rotate(var(--key-{g}-{k}-rot,0deg)) scale(var(--key-{g}-{k}-sx,1), var(--key-{g}-{k}-sy,1));"
-                        ),
-                    );
-            }
-        }
-        map
-    });
-
-    // Band style templates
-    let band_styles = Memo::new(move |old| {
-        let mut map = HashMap::new();
-        if !transform_templates_enabled() {
-            return old.cloned().unwrap_or(map);
-        }
-        let num_groups = num_groups();
-        let num_keys_per_group = num_keys_per_group();
-        for g in 0..num_groups {
-            for k in 0..num_keys_per_group {
-                map.insert(
-                        (g, k),
-                        format!(
-                            "transform: translate(var(--band-{g}-{k}-tx,0px), var(--band-{g}-{k}-ty,0px)) rotate(var(--band-{g}-{k}-rot,0deg)) scale(var(--band-{g}-{k}-sx,1), var(--band-{g}-{k}-sy,1)); border-radius: calc(var(--band-{g}-{k}-round,0) * 9999px);"
-                        ),
-                    );
-            }
-        }
-        map
-    });
-
-    // Strings (only left for now; right mirrors left if desired)
-    let left_string_style = Memo::new(move |_| {
-        if transform_templates_enabled() {
-            "transform: translate(var(--left-string-tx,0px), var(--left-string-ty,0px)) rotate(var(--left-string-rot,0deg)) scale(var(--left-string-sx,1), var(--left-string-sy,1));"
-                    .to_string()
+    // Derive effective styles by injecting current direction (simple string replace {DIR})
+    let key_styles_memo = Memo::new(move |_| {
+        let dir = if direction_reverse.get() {
+            "reverse"
         } else {
-            String::new()
-        }
+            "normal"
+        };
+        key_styles_signal()
+            .into_iter()
+            .map(|(k, v)| {
+                let replaced = v.replace("{DIR}", dir);
+                (k, replaced)
+            })
+            .collect::<HashMap<_, _>>()
     });
-    let right_string_style = Memo::new(move |_| {
-        // Placeholder (same as left or empty)
-        if transform_templates_enabled() {
-            "transform: translate(var(--right-string-tx,0px), var(--right-string-ty,0px)) rotate(var(--right-string-rot,0deg)) scale(var(--right-string-sx,1), var(--right-string-sy,1));".to_string()
+    // removed legacy right_string_transform memo (obsolete)
+
+    let band_styles_memo = Memo::new(move |_| {
+        let dir = if direction_reverse.get() {
+            "reverse"
         } else {
-            String::new()
-        }
+            "normal"
+        };
+        band_styles_signal()
+            .into_iter()
+            .map(|(k, v)| {
+                let replaced = v.replace("{DIR}", dir);
+                (k, replaced)
+            })
+            .collect::<HashMap<_, _>>()
     });
 
     // Provide context (non-reactive to per-frame updates)
-    provide_context(IntroContext {
-        left_string_style,
-        right_string_style,
-        key_styles,
-        band_styles,
+    let picture_style_memo = Memo::new(move |_| {
+        let dir = if direction_reverse.get() {
+            "reverse"
+        } else {
+            "normal"
+        };
+        picture_style_signal().replace("{DIR}", dir)
     });
+    let left_string_style_memo = Memo::new(move |_| {
+        let dir = if direction_reverse.get() {
+            "reverse"
+        } else {
+            "normal"
+        };
+        left_string_style_signal().replace("{DIR}", dir)
+    });
+    let right_string_style_memo = Memo::new(move |_| {
+        let dir = if direction_reverse.get() {
+            "reverse"
+        } else {
+            "normal"
+        };
+        right_string_style_signal().replace("{DIR}", dir)
+    });
+    // Provide new animation context (hooks consume this, see hooks.rs)
+    provide_context(crate::components::intro::hooks::IntroAnimationContext {
+        key_styles: key_styles_memo,
+        band_styles: band_styles_memo,
+        left_string_style: left_string_style_memo,
+        right_string_style: right_string_style_memo,
+        direction_reverse,
+        rerun_counter,
+    });
+    // Collapsed translation computation IMPLEMENTATION ENTRY POINT:
+    //
+    // We will compute per-key (g,k) final centers using the same math
+    // the keyboard component applies implicitly through CSS grid + gaps.
+    // From those centers we derive two translation vectors:
+    //
+    //   sun_tx,  sun_ty  = (sun_center - key_center)
+    //   axis_tx, axis_ty = (first_key_center - key_center)
+    //
+    // These will feed into keyframes:
+    //   0%   translate(sun_tx, sun_ty)
+    //   {k2}% translate(axis_tx, axis_ty)
+    //   {k3}% / {k4}% / 100% translate(0,0)
+    //
+    // The actual code integrating this lives inside the keyframe
+    // generation Effect further above; if that block still shows
+    // translate(0px,0px) literals you need to supply the lines of
+    // that section so we can patch them precisely (unique line
+    // numbers required for replacement in this editing protocol).
+    //
+    // ACTION NEEDED: Please provide the lines (with numbers) of the
+    // keyframe construction (the css.push_str calls for keys/bands)
+    // so we can replace the hardcoded (0px,0px) with computed values.
 
     // Start animation automatically once layout arrives (placeholder trigger)
     Effect::new(move |_| {
@@ -177,18 +364,7 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
     });
 
     // RAF driver
-    let _raf = use_raf_fn_with_options(
-        {
-            move |UseRafFnCallbackArgs { delta, .. }| {
-                animation_seq.update(|s| {
-                    let rem = s.duration() - s.time();
-                    let clamp_d = delta.min(rem);
-                    s.advance_by(clamp_d);
-                });
-            }
-        },
-        UseRafFnOptions::default().immediate(true),
-    );
+    // No RAF loop needed now (CSS handles progression).
 
     // // ========== External Context & Resources ==========
 
@@ -471,9 +647,13 @@ pub fn Intro(children: ChildrenFn) -> impl IntoView {
     // Top-level style string providing primitive CSS vars (empty when idle)
 
     view! {
-        <div class="contents" style=intro_vars>
-            <Show when=move || !hidden_svgs()>
-                <IntroComp />
+        <div class="contents">
+            // Inject generated keyframes stylesheet once ready
+            <Show when=move || !keyframes_css().is_empty()>
+                <style inner_html=keyframes_css />
+            </Show>
+            <Show when=move || !intro_hidden()>
+                <IntroComp attr:style=picture_style_memo />
             </Show>
             {move || children()}
         </div>

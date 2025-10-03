@@ -40,7 +40,7 @@ bands recover padding
 
 ### the end
 
-animation cleared, intro composition hidden with [@intro.rs (387:387)](file:///Users/anvlkv/Projects/red-siren/src/components/intro.rs#L387:387)
+animation cleared, intro composition hidden with <Show></Show>
 
 
 ### effectively back: instrument -> intro comp

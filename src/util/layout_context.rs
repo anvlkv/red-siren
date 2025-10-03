@@ -36,7 +36,18 @@ pub struct LayoutContextReturn {
     pub num_groups: Memo<u8>,
     pub first_group_channel: Memo<GroupChanel>,
     pub scale: Memo<Scale>,
-    pub complete_layout: Memo<common::instrument::Layout>,
+    pub complete_layout: Memo<shared::instrument::Layout>,
+    // Newly exposed helpers derived from complete layout:
+    /// Iterator over (g,k) pairs (group-major order)
+    pub iter_keys: Memo<Vec<(u8, u8)>>,
+    /// Per-key centers map (g,k) -> (cx, cy)
+    pub key_centers: Memo<Vec<((u8, u8), (f32, f32))>>,
+    /// First key center (g=0,k=0)
+    pub first_key_center: Memo<(f32, f32)>,
+    /// Main-axis padding (groups axis) used to center grouped bands
+    pub key_pad_main: Memo<f32>,
+    /// Aux-axis padding (within-group keys axis)
+    pub key_pad_aux: Memo<f32>,
 }
 
 pub fn expect_layout_contex() -> LayoutContextReturn {
@@ -127,6 +138,36 @@ pub fn expect_layout_contex() -> LayoutContextReturn {
         (prop, has_changed)
     });
 
+    // Derived helpers
+    let iter_keys = Memo::new(move |_| {
+        let l = layout();
+        l.iter_keys().collect::<Vec<(u8, u8)>>()
+    });
+    let key_centers = Memo::new(move |_| {
+        let l = layout();
+        l.iter_keys()
+            .map(|(g, k)| ((g, k), l.key_center(g, k)))
+            .collect::<Vec<((u8, u8), (f32, f32))>>()
+    });
+    let first_key_center = Memo::new_owning(move |old| {
+        let l = layout.get();
+        let center = l.first_key_center();
+        let changed = old.map(|c| c != center).unwrap_or(true);
+        (center, changed)
+    });
+    let key_pad_main = Memo::new_owning(move |old| {
+        let l = layout.get();
+        let prop = l.key_pad_main();
+        let changed = Some(prop) != old;
+        (prop, changed)
+    });
+    let key_pad_aux = Memo::new_owning(move |old| {
+        let l = layout.get();
+        let prop = l.key_pad_aux();
+        let changed = Some(prop) != old;
+        (prop, changed)
+    });
+
     LayoutContextReturn {
         complete_layout: layout,
         space,
@@ -143,5 +184,10 @@ pub fn expect_layout_contex() -> LayoutContextReturn {
         num_groups,
         first_group_channel,
         scale,
+        iter_keys,
+        key_centers,
+        first_key_center,
+        key_pad_main,
+        key_pad_aux,
     }
 }

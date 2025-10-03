@@ -71,6 +71,141 @@ impl Default for Layout {
 
 impl Eq for Layout {}
 
+/// Helper / utility methods shared by intro animation & instrument layout
+impl Layout {
+    // (Removed intro artwork sun constants; intro-specific values now live in intro::consts)
+
+    /// Number of groups as f32
+    #[inline]
+    fn groups_f(&self) -> f32 {
+        self.num_groups.get() as f32
+    }
+
+    /// Number of keys per group as f32
+    #[inline]
+    fn keys_f(&self) -> f32 {
+        self.num_keys_per_group.get() as f32
+    }
+
+    /// Main–axis (groups axis) padding used to center the grouped bands.
+    #[inline]
+    pub fn key_pad_main(&self) -> f32 {
+        let safe_len = self
+            .orientation
+            .safe_length(self.space, self.safe_area_padding);
+        let groups = self.groups_f();
+        if groups <= 0.0 {
+            return 0.0;
+        }
+        let required = groups * self.key_band_length + (groups - 1.0) * self.groups_gap;
+        ((safe_len - required) / 2.0).max(0.0)
+    }
+
+    /// Auxiliary–axis (within-group keys axis) padding.
+    #[inline]
+    pub fn key_pad_aux(&self) -> f32 {
+        let safe_breadth = self
+            .orientation
+            .safe_breadth(self.space, self.safe_area_padding);
+        let keys = self.keys_f();
+        if keys <= 0.0 {
+            return 0.0;
+        }
+        let total_span = keys * self.key_band_breadth + (keys - 1.0) * self.key_bands_gap;
+        ((safe_breadth - total_span) / 2.0).max(0.0)
+    }
+
+    /// Center (x,y) of the (g,k) key/band in layout space.
+    ///
+    /// g = group index (0..num_groups-1)
+    /// k = key index within group (0..num_keys_per_group-1)
+    pub fn key_center(&self, g: u8, k: u8) -> (f32, f32) {
+        use mint::Point2;
+        let g_f = g as f32;
+        let k_f = k as f32;
+        let pad_main = self.key_pad_main();
+        let pad_aux = self.key_pad_aux();
+        let sa = self.safe_area_padding;
+        let start_len = self
+            .orientation
+            .safe_length_start_point(Point2 { x: 0.0, y: 0.0 }, sa);
+        let start_brd = self
+            .orientation
+            .safe_breadth_start_point(Point2 { x: 0.0, y: 0.0 }, sa);
+
+        match self.orientation {
+            crate::orientation::LayoutOrientation::Horizontal => {
+                // main axis = X (groups), aux axis = Y (keys)
+                let cx = start_len.x
+                    + pad_main
+                    + g_f * (self.key_band_length + self.groups_gap)
+                    + self.key_band_length / 2.0;
+                let cy = start_brd.y
+                    + pad_aux
+                    + k_f * (self.key_band_breadth + self.key_bands_gap)
+                    + self.key_band_breadth / 2.0;
+                (cx, cy)
+            }
+            crate::orientation::LayoutOrientation::Vertical => {
+                // main axis = Y (groups), aux axis = X (keys)
+                let cy = start_len.y
+                    + pad_main
+                    + g_f * (self.key_band_length + self.groups_gap)
+                    + self.key_band_length / 2.0;
+                let cx = start_brd.x
+                    + pad_aux
+                    + k_f * (self.key_band_breadth + self.key_bands_gap)
+                    + self.key_band_breadth / 2.0;
+                (cx, cy)
+            }
+        }
+    }
+
+    /// Center of the first key (g=0,k=0).
+    #[inline]
+    pub fn first_key_center(&self) -> (f32, f32) {
+        self.key_center(0, 0)
+    }
+
+    // (sun_center removed; intro code computes sun position using intro::consts)
+
+    /// Iterator over all (g,k) pairs.
+    pub fn iter_keys(&self) -> KeyIter {
+        KeyIter {
+            g: 0,
+            k: 0,
+            g_end: self.num_groups.get(),
+            k_end: self.num_keys_per_group.get(),
+        }
+    }
+}
+
+/// Iterator yielding every (g,k) combination in row-major (group-major) order.
+#[derive(Clone)]
+pub struct KeyIter {
+    g: u8,
+    k: u8,
+    g_end: u8,
+    k_end: u8,
+}
+
+impl Iterator for KeyIter {
+    type Item = (u8, u8);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.g >= self.g_end {
+            return None;
+        }
+        let out = (self.g, self.k);
+        self.k += 1;
+        if self.k >= self.k_end {
+            self.k = 0;
+            self.g += 1;
+        }
+        Some(out)
+    }
+}
+
 const LAYOUT_PRIMES: const_primes::Primes<54> = const_primes::Primes::new();
 
 const MIN_KEY_RADIUS: f32 = 16.0;

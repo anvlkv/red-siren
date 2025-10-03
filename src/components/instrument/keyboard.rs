@@ -19,6 +19,7 @@ pub fn Keyboard() -> impl IntoView {
         key_bands_gap,
         key_band_breadth,
         key_radius,
+        key_pad_main,
         ..
     } = expect_layout_contex();
 
@@ -32,6 +33,7 @@ pub fn Keyboard() -> impl IntoView {
         let key_bands_gap = key_bands_gap();
         let key_band_breadth = key_band_breadth();
         let key_radius = key_radius();
+        let pad_main = key_pad_main();
 
         // Map the orientation-dependent safe area format into CSS box-model (top,right,bottom,left)
         let (safe_top, safe_right, safe_bottom, safe_left) = match orientation {
@@ -45,15 +47,6 @@ pub fn Keyboard() -> impl IntoView {
                 let sa = safe_area_padding;
                 (sa[1], sa[2], sa[3], sa[0])
             }
-        };
-
-        let safe_length = orientation.safe_length(space, safe_area_padding);
-
-        let pad_main = {
-            let groups = num_groups as f32;
-            let required_length = groups * key_band_length + ((groups - 1.0) * groups_gap);
-
-            ((safe_length - required_length) / 2.0).max(0.0)
         };
 
         let mut defs = match orientation {

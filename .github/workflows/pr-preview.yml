@@ -221,12 +221,6 @@ jobs:
             let comment = `Preview build: PR #${prNumber} (${commit})\n${releaseUrl}\n\nArtifacts:\n- Linux desktop\n`;
             if (androidBuilt) comment += "- Android APK\n";
 
-
-
-
-
-
-
             github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,

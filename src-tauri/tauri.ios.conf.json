@@ -13,9 +13,20 @@
   },
   "bundle": {
     "iOS": {
+      "bundleVersion": "1",
+      "developmentTeam": "M59X77GZ2V",
       "minimumSystemVersion": "15.6",
-      "frameworks": ["CoreAudio.framework", "AVFoundation.framework"],
-      "bundleVersion": "1"
+      "frameworks": [
+        "CoreGraphics",
+        "Metal",
+        "MetalKit",
+        "QuartzCore",
+        "Security",
+        "UIKit",
+        "CoreAudio",
+        "AVFoundation",
+        "WebKit"
+      ]
     }
   }
 }

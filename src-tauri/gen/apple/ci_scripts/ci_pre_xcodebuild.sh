@@ -102,16 +102,15 @@ fi
 
 cd "$REPO_ROOT"
 
-# Disable Tauri CLI dev server and file watching on CI/mobile to avoid socket connections
-export TAURI_CLI_NO_DEV_SERVER=1
-export TAURI_CLI_NO_DEV_SERVER_WAIT=1
-export TAURI_CLI_NO_WATCH=1
+# Set production environment variables
+export NODE_ENV=production
+export TAURI_ENV=production
+export TAURI_PLATFORM=ios
+export TAURI_ARCH=aarch64
+export TAURI_FAMILY=mobile
+export TAURI_PLATFORM_TYPE=mobile
+export TAURI_DEBUG=false
 export TAURI_SKIP_DEVSERVER_CHECK=true
-export CI=1
-export XCODE_CLOUD=1
-# Force release mode to avoid dev server
-export TAURI_ENV_TARGET_TRIPLE="aarch64-apple-ios"
-export TAURI_MOBILE=true
 
 # Pin Trunk to the Tailwind version matching package.json to avoid mismatches
 export TRUNK_TOOLS_TAILWINDCSS="4.1.13"
@@ -156,24 +155,7 @@ else
   tailwindcss --version || true
 fi
 
-# Workaround: pre-create Tauri CLI dev server addr file to avoid panic in Xcode Cloud
-# See error: failed to read missing addr file /Volumes/workspace/tmp/com.anvlkv.red-siren.app-server-addr
-TMP_BASE="${TMPDIR:-/tmp}"
-if [ -d "/Volumes/workspace/tmp" ]; then
-  TMP_BASE="/Volumes/workspace/tmp"
-fi
-
-# Create addr file with localhost address to satisfy Tauri's IPC check
-ADDR_FILE="$TMP_BASE/com.anvlkv.red-siren.app-server-addr"
-mkdir -p "$TMP_BASE"
-# Write localhost with port 0 - server won't actually be running but prevents file read error
-echo "127.0.0.1:0" > "$ADDR_FILE"
-echo "Created Tauri addr file at: $ADDR_FILE with localhost:0"
-
-# Also create a lock file that might be checked
-LOCK_FILE="$TMP_BASE/com.anvlkv.red-siren.app-server.lock"
-touch "$LOCK_FILE"
-echo "Created lock file at: $LOCK_FILE"
+# No addr file creation needed for production builds
 
 # 3) Verify trunk is available.
 if ! command -v trunk >/dev/null 2>&1; then
@@ -185,5 +167,7 @@ fi
 # Optional: show trunk version for logs
 trunk --version || true
 
-# 4) Build
+# 4) Build frontend in production mode
+echo "Building frontend with trunk in production mode..."
 trunk build --release
+echo "Frontend build complete"

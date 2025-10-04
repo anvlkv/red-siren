@@ -12,6 +12,10 @@ settingGroups:
     base:
       PRODUCT_NAME: Red Siren
       PRODUCT_BUNDLE_IDENTIFIER: com.anvlkv.red-siren.app
+      DEVELOPMENT_TEAM: M59X77GZ2V
+      CODE_SIGN_STYLE: Automatic
+      MARKETING_VERSION: 0.1.0
+      CURRENT_PROJECT_VERSION: 1
 targetTemplates:
   app:
     type: application
@@ -53,8 +57,16 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         CFBundleShortVersionString: 0.1.0
         CFBundleVersion: "0.1.0"
+        CFBundleName: Red Siren
+        CFBundleDisplayName: Red Siren
+        LSApplicationCategoryType: public.app-category.music
+        ITSAppUsesNonExemptEncryption: false
     entitlements:
       path: tauri-app_iOS/tauri-app_iOS.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.files.user-selected.read-write: true
     scheme:
       environmentVariables:
         RUST_BACKTRACE: full
@@ -68,6 +80,9 @@ targets:
         LIBRARY_SEARCH_PATHS[arch=arm64]: $(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)
         ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: true
         EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
+        TARGETED_DEVICE_FAMILY: 1,2
+        SUPPORTS_MACCATALYST: false
+        IPHONEOS_DEPLOYMENT_TARGET: 15.6
       groups: [app]
     dependencies:
       - framework: libapp.a
@@ -82,8 +97,99 @@ targets:
       - sdk: AVFoundation.framework
       - sdk: WebKit.framework
     preBuildScripts:
-      - script: '"${SRCROOT}/tauri-ios-build-wrapper.sh" -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}'
+      - script: cargo tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
         name: Build Rust Code
+        basedOnDependencyAnalysis: false
+        outputFiles:
+          - $(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a
+          - $(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a
+  tauri-app_iOS_XcodeCloud:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: Assets.xcassets
+      - path: Externals
+      - path: tauri-app_iOS
+      - path: assets
+        buildPhase: resources
+        type: folder
+      - path: LaunchScreen.storyboard
+    info:
+      path: tauri-app_iOS/Info.plist
+      properties:
+        LSRequiresIPhoneOS: true
+        UILaunchStoryboardName: LaunchScreen
+        UIRequiredDeviceCapabilities: [arm64, metal]
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        CFBundleShortVersionString: 0.1.0
+        CFBundleVersion: "0.1.0"
+        CFBundleName: Red Siren
+        CFBundleDisplayName: Red Siren
+        LSApplicationCategoryType: public.app-category.music
+        ITSAppUsesNonExemptEncryption: false
+    entitlements:
+      path: tauri-app_iOS/tauri-app_iOS.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.files.user-selected.read-write: true
+    scheme:
+      environmentVariables:
+        RUST_BACKTRACE: full
+        RUST_LOG: info
+        NODE_ENV: production
+        TAURI_ENV: production
+        TAURI_SKIP_DEVSERVER_CHECK: true
+    settings:
+      base:
+        ENABLE_BITCODE: false
+        ARCHS: [arm64, x86_64]
+        VALID_ARCHS: arm64  x86_64
+        LIBRARY_SEARCH_PATHS[arch=x86_64]: $(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)
+        LIBRARY_SEARCH_PATHS[arch=arm64]: $(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)
+        ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: true
+        EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
+        TARGETED_DEVICE_FAMILY: 1,2
+        SUPPORTS_MACCATALYST: false
+        IPHONEOS_DEPLOYMENT_TARGET: 15.6
+      groups: [app]
+    dependencies:
+      - framework: libapp.a
+        embed: false
+      - sdk: CoreGraphics.framework
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
+      - sdk: QuartzCore.framework
+      - sdk: Security.framework
+      - sdk: UIKit.framework
+      - sdk: CoreAudio.framework
+      - sdk: AVFoundation.framework
+      - sdk: WebKit.framework
+    preBuildScripts:
+      - script: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          cd "${SRCROOT}/../src-tauri"
+          if [ "${CONFIGURATION}" = "Debug" ]; then
+            cargo build --target aarch64-apple-ios --lib
+          else
+            cargo build --release --target aarch64-apple-ios --lib
+          fi
+          mkdir -p "${SRCROOT}/Externals/arm64/${CONFIGURATION}"
+          if [ "${CONFIGURATION}" = "Release" ]; then
+            cp "target/aarch64-apple-ios/release/libapp.a" "${SRCROOT}/Externals/arm64/${CONFIGURATION}/libapp.a"
+          else
+            cp "target/aarch64-apple-ios/debug/libapp.a" "${SRCROOT}/Externals/arm64/${CONFIGURATION}/libapp.a"
+          fi
+        name: Build Rust Code (Production)
         basedOnDependencyAnalysis: false
         outputFiles:
           - $(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a

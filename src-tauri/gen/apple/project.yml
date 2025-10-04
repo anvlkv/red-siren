@@ -177,12 +177,12 @@ targets:
     preBuildScripts:
       - script: |
           export PATH="$HOME/.cargo/bin:$PATH"
-          cd "${SRCROOT}/../src-tauri"
+          cd "${SRCROOT}/../.."
           # Always build in release mode for XcodeCloud
           cargo build --release --target aarch64-apple-ios --lib
           mkdir -p "${SRCROOT}/Externals/arm64/${CONFIGURATION}"
-          # Always copy from release directory
-          cp "target/aarch64-apple-ios/release/libapp.a" "${SRCROOT}/Externals/arm64/${CONFIGURATION}/libapp.a"
+          # Always copy from release directory (library name is tauri_app_lib)
+          cp "target/aarch64-apple-ios/release/libtauri_app_lib.a" "${SRCROOT}/Externals/arm64/${CONFIGURATION}/libapp.a"
         name: Build Rust Code (Production)
         basedOnDependencyAnalysis: false
         outputFiles:

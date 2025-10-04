@@ -106,6 +106,12 @@ cd "$REPO_ROOT"
 export TAURI_CLI_NO_DEV_SERVER=1
 export TAURI_CLI_NO_DEV_SERVER_WAIT=1
 export TAURI_CLI_NO_WATCH=1
+export TAURI_SKIP_DEVSERVER_CHECK=true
+export CI=1
+export XCODE_CLOUD=1
+# Force release mode to avoid dev server
+export TAURI_ENV_TARGET_TRIPLE="aarch64-apple-ios"
+export TAURI_MOBILE=true
 
 # Pin Trunk to the Tailwind version matching package.json to avoid mismatches
 export TRUNK_TOOLS_TAILWINDCSS="4.1.13"
@@ -156,14 +162,18 @@ TMP_BASE="${TMPDIR:-/tmp}"
 if [ -d "/Volumes/workspace/tmp" ]; then
   TMP_BASE="/Volumes/workspace/tmp"
 fi
+
+# Create addr file with localhost address to satisfy Tauri's IPC check
 ADDR_FILE="$TMP_BASE/com.anvlkv.red-siren.app-server-addr"
 mkdir -p "$TMP_BASE"
-if [ ! -f "$ADDR_FILE" ]; then
-  echo "127.0.0.1:65532" > "$ADDR_FILE"
-  echo "Created Tauri addr file at: $ADDR_FILE"
-else
-  echo "Tauri addr file exists: $ADDR_FILE"
-fi
+# Write localhost with port 0 - server won't actually be running but prevents file read error
+echo "127.0.0.1:0" > "$ADDR_FILE"
+echo "Created Tauri addr file at: $ADDR_FILE with localhost:0"
+
+# Also create a lock file that might be checked
+LOCK_FILE="$TMP_BASE/com.anvlkv.red-siren.app-server.lock"
+touch "$LOCK_FILE"
+echo "Created lock file at: $LOCK_FILE"
 
 # 3) Verify trunk is available.
 if ! command -v trunk >/dev/null 2>&1; then

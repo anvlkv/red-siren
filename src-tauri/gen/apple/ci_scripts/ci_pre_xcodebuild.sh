@@ -12,6 +12,16 @@ else
   export PATH="$HOME/.cargo/bin:$PATH"
 fi
 
+# Symlink Cargo-related binaries into /usr/local/bin so Xcode build phases can find them
+BIN_DIR="$HOME/.cargo/bin"
+DEST_DIR="/usr/local/bin"
+mkdir -p "$DEST_DIR"
+for bin in cargo rustc rustup tauri cargo-tauri trunk; do
+  if [ -x "$BIN_DIR/$bin" ]; then
+    ln -sf "$BIN_DIR/$bin" "$DEST_DIR/$bin" || true
+  fi
+done
+
 # 2) Find the repository root (directory containing Trunk.toml).
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 

@@ -66,35 +66,41 @@ jobs:
         run: |
           if [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ] || [ -z "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ] || [ -z "${{ secrets.ANDROID_KEY_ALIAS }}" ] || [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ]; then
             echo "built=false" >> $GITHUB_OUTPUT
-            echo "Android signing secrets missing. Skipping Android preview build."
-            exit 0
+            echo "Android signing secrets missing. Skipping Android preview job steps."
           else
             echo "built=true" >> $GITHUB_OUTPUT
           fi
-      - uses: actions/checkout@v4
+      - if: steps.evaluate.outputs.built == 'true'
+        uses: actions/checkout@v4
       - name: Rust cache
+        if: steps.evaluate.outputs.built == 'true'
         uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
 
       - name: Setup Node.js
+        if: steps.evaluate.outputs.built == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "lts/*"
           cache: "npm"
 
       - name: Install frontend dependencies
+        if: steps.evaluate.outputs.built == 'true'
         run: npm ci
 
       - name: Add node_modules/.bin to PATH
+        if: steps.evaluate.outputs.built == 'true'
         run: echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH
 
       - name: Install Trunk
+        if: steps.evaluate.outputs.built == 'true'
         uses: jetli/trunk-action@v0.4.0
         with:
           version: "latest"
 
       - name: Install Tauri CLI
+        if: steps.evaluate.outputs.built == 'true'
         uses: baptiste0928/cargo-install@v3
         with:
           crate: tauri-cli
@@ -102,41 +108,50 @@ jobs:
           cache-key: tauri-cli-v2
 
       - name: Setup Java
+        if: steps.evaluate.outputs.built == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: "temurin"
           java-version: "17"
 
       - name: Setup Android SDK
+        if: steps.evaluate.outputs.built == 'true'
         uses: android-actions/setup-android@v3
 
       - name: Install Android NDK
+        if: steps.evaluate.outputs.built == 'true'
         run: |
           ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "ndk;25.1.8937393"
 
       - name: Setup Android environment
+        if: steps.evaluate.outputs.built == 'true'
         run: |
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.1.8937393" >> $GITHUB_ENV
 
       - name: Check Android keystore availability
+        id: set-built
         run: |
           if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
             echo "KEYSTORE_AVAILABLE=true" >> $GITHUB_ENV
+            echo "built=true" >> $GITHUB_OUTPUT
           else
             echo "KEYSTORE_AVAILABLE=false" >> $GITHUB_ENV
+            echo "built=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Setup Android signing keystore
-        if: env.KEYSTORE_AVAILABLE == 'true'
+        if: env.KEYSTORE_AVAILABLE == 'true' && steps.evaluate.outputs.built == 'true'
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > ${{ runner.temp }}/keystore.jks
           echo "ANDROID_KEYSTORE_PATH=${{ runner.temp }}/keystore.jks" >> $GITHUB_ENV
 
       - name: Initialize Android platform
+        if: steps.evaluate.outputs.built == 'true'
         run: cargo tauri android init
 
       - name: Build Android app
+        if: env.KEYSTORE_AVAILABLE == 'true' && steps.evaluate.outputs.built == 'true'
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -144,6 +159,7 @@ jobs:
         run: cargo tauri android build --apk
 
       - name: Upload Android artifacts
+        if: env.KEYSTORE_AVAILABLE == 'true' && steps.evaluate.outputs.built == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: preview-android-mobile-${{ github.event.pull_request.number }}

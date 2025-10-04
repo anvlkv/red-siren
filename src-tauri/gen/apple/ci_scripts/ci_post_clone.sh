@@ -16,10 +16,10 @@ rustup target add aarch64-apple-ios
 
 
 # install trunk
-cargo binstall trunk
+cargo binstall trunk -y
 
 # install tauri-cli
-cargo binstall tauri-cli --version "^2.0.0" --locked
+cargo binstall tauri-cli --version "^2.0.0" --locked -y
 
 
 # node and npm

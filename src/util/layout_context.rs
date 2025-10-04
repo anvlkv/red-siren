@@ -36,7 +36,7 @@ pub struct LayoutContextReturn {
     pub num_groups: Memo<u8>,
     pub first_group_channel: Memo<GroupChanel>,
     pub scale: Memo<Scale>,
-    pub complete_layout: Memo<shared::instrument::Layout>,
+    pub complete_layout: Memo<common::instrument::Layout>,
     pub key_pad_main: Memo<f32>,
 }
 

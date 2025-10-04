@@ -29,8 +29,8 @@ pub fn CompactMenu(
         trigger: trigger_inset_update,
         error: _inset_error,
         ..
-    } = use_invoke_with_args::<shared::safe_area::SafeArea, ()>(
-        shared::commands::setup::UI_SAFE_AREA_INSETS_APPLY,
+    } = use_invoke_with_args::<common::safe_area::SafeArea, ()>(
+        common::commands::setup::UI_SAFE_AREA_INSETS_APPLY,
     );
 
     // Track previous inset values to prevent unnecessary updates and loops

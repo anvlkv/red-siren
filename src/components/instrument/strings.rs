@@ -1,8 +1,8 @@
-use leptos::prelude::*;
 use common::{
     instrument::GroupChanel,
     instrument::{StringSnoopDataRequest, StringSnoopDataResponse},
 };
+use leptos::prelude::*;
 use tauri_use::{use_invoke, UseTauriReturn};
 
 use crate::util::layout_context::{expect_layout_contex, LayoutContextReturn};
@@ -39,7 +39,7 @@ pub fn InstrumentStrings() -> impl IntoView {
                         .filter(|g| {
                             matches!(
                                 first_group_channel.nth_channel_from_first(*g as usize),
-                                shared::instrument::GroupChanel::Left
+                                common::instrument::GroupChanel::Left
                             )
                         })
                         .flat_map(|g: u8| {
@@ -76,7 +76,7 @@ pub fn InstrumentStrings() -> impl IntoView {
                         .filter(|g| {
                             matches!(
                                 first_group_channel.nth_channel_from_first(*g as usize),
-                                shared::instrument::GroupChanel::Right
+                                common::instrument::GroupChanel::Right
                             )
                         })
                         .flat_map(|g: u8| {

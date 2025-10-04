@@ -2,9 +2,9 @@ mod commands;
 #[cfg(target_os = "macos")]
 mod setup_mac_window;
 
+use common::error::{AppError, Result, SetupError};
 use parking_lot::Mutex;
 use serde_json::Value;
-use common::error::{AppError, Result, SetupError};
 use tauri::{App, Manager};
 use tauri_plugin_store::StoreExt;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
@@ -20,8 +20,8 @@ pub struct Window {
     pub override_dark: Option<bool>,
     pub width: f64,
     pub height: f64,
-    pub ui_safe_area: shared::safe_area::SafeArea,
-    pub system_safe_area: shared::safe_area::SafeArea,
+    pub ui_safe_area: common::safe_area::SafeArea,
+    pub system_safe_area: common::safe_area::SafeArea,
 }
 
 pub type WindowState = Mutex<Window>;
@@ -62,13 +62,13 @@ pub fn app_setup(app: &mut App) -> Result<()> {
         height: size.height as f64,
         dark: state_dark_mode,
         override_dark,
-        ui_safe_area: shared::safe_area::SafeArea {
+        ui_safe_area: common::safe_area::SafeArea {
             top: 0.0,
             right: 0.0,
             bottom: 0.0,
             left: 0.0,
         },
-        system_safe_area: shared::safe_area::SafeArea {
+        system_safe_area: common::safe_area::SafeArea {
             top: 0.0,
             right: 0.0,
             bottom: 0.0,

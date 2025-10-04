@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use shared::safe_area::SafeArea;
+use common::safe_area::SafeArea;
 
 use crate::{
     components::{Button, UiSize},
@@ -168,18 +168,18 @@ fn Group(g: usize) -> impl IntoView {
 fn KeyboardElement(
     g: usize,
     k: usize,
-    first_group_channel: shared::instrument::GroupChanel,
-    orientation: shared::orientation::LayoutOrientation,
+    first_group_channel: common::instrument::GroupChanel,
+    orientation: common::orientation::LayoutOrientation,
 ) -> impl IntoView {
     let key_code = (g, k);
     let channel_alignment = match first_group_channel.nth_channel_from_first(g) {
-        shared::instrument::GroupChanel::Left => {
+        common::instrument::GroupChanel::Left => {
             r#"
             top: 0;
             left: 0;
             "#
         }
-        shared::instrument::GroupChanel::Right => {
+        common::instrument::GroupChanel::Right => {
             r#"
             bottom: 0;
             right: 0;
@@ -194,7 +194,7 @@ fn KeyboardElement(
                 id=format!("key-band-{g}-{k}")
                 role="presentation"
                 style=match orientation {
-                    shared::orientation::LayoutOrientation::Vertical => {
+                    common::orientation::LayoutOrientation::Vertical => {
                         format!(
                             r#"
                         width: var(--keyboard-band-length);
@@ -203,7 +203,7 @@ fn KeyboardElement(
                         "#,
                         )
                     }
-                    shared::orientation::LayoutOrientation::Horizontal => {
+                    common::orientation::LayoutOrientation::Horizontal => {
                         format!(
                             r#"
                         width: var(--keyboard-band-breadth);

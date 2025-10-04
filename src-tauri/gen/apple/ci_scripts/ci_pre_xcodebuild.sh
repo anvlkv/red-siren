@@ -70,6 +70,36 @@ if [ -z "${REPO_ROOT:-}" ]; then
   exit 1
 fi
 
+# Detect and rebuild cargo-tauri if CPU arch mismatches (fixes "Bad CPU type in executable")
+CARGO_TAURI_BIN="$HOME/.cargo/bin/cargo-tauri"
+if [ -x "$CARGO_TAURI_BIN" ]; then
+  HOST_ARCH="$(uname -m)"
+  BIN_INFO="$(file -b "$CARGO_TAURI_BIN" 2>/dev/null || true)"
+  NEED_REBUILD=0
+  case "$HOST_ARCH" in
+    arm64)
+      case "$BIN_INFO" in
+        *arm64*) ;;
+        *) NEED_REBUILD=1 ;;
+      esac
+      ;;
+    x86_64)
+      case "$BIN_INFO" in
+        *x86_64*) ;;
+        *) NEED_REBUILD=1 ;;
+      esac
+      ;;
+  esac
+  if [ "$NEED_REBUILD" -eq 1 ]; then
+    echo "cargo-tauri arch mismatch: host=$HOST_ARCH, bin='$BIN_INFO'. Rebuilding tauri-cli natively..."
+    cargo install tauri-cli --version "^2.0.0" --locked -f
+    # Refresh symlink for Xcode
+    if [ -x "$BIN_DIR/cargo-tauri" ]; then
+      ln -sf "$BIN_DIR/cargo-tauri" "$DEST_DIR/cargo-tauri" || true
+    fi
+  fi
+fi
+
 cd "$REPO_ROOT"
 
 # Pin Trunk to the Tailwind version matching package.json to avoid mismatches

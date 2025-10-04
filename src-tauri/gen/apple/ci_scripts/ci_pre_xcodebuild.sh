@@ -62,6 +62,49 @@ fi
 
 cd "$REPO_ROOT"
 
+# Pin Trunk to the Tailwind version matching package.json to avoid mismatches
+export TRUNK_TOOLS_TAILWINDCSS="4.1.13"
+
+# Create a shim so Trunk uses the project's Tailwind CLI instead of its cached binary
+# Determine Trunk cache directory (macOS default, XDG if set, Linux fallback)
+if [ -n "${XDG_CACHE_HOME:-}" ]; then
+  TRUNK_CACHE_DIR="$XDG_CACHE_HOME/dev.trunkrs.trunk"
+elif [ "$(uname)" = "Darwin" ]; then
+  TRUNK_CACHE_DIR="$HOME/Library/Caches/dev.trunkrs.trunk"
+else
+  TRUNK_CACHE_DIR="$HOME/.cache/dev.trunkrs.trunk"
+fi
+
+TW_VER="${TRUNK_TOOLS_TAILWINDCSS:-4.1.13}"
+TW_DIR="$TRUNK_CACHE_DIR/tailwindcss-$TW_VER"
+TW_PATH="$TW_DIR/tailwindcss"
+mkdir -p "$TW_DIR"
+
+# Write shim that delegates to the project's node_modules Tailwind CLI
+cat > "$TW_PATH" <<EOF
+#!/bin/sh
+exec "$REPO_ROOT/node_modules/.bin/tailwindcss" "\$@"
+EOF
+chmod +x "$TW_PATH"
+
+# Prepend project-local Node bin to PATH so Trunk uses the local Tailwind CLI
+export PATH="$REPO_ROOT/node_modules/.bin:$PATH"
+
+# Verify Tailwind resolves to project-local binary
+TAILWIND_BIN="$(command -v tailwindcss || true)"
+if [ -z "$TAILWIND_BIN" ]; then
+  echo "Warning: tailwindcss not found on PATH after adding node_modules/.bin"
+else
+  echo "Using tailwindcss at: $TAILWIND_BIN"
+  case "$TAILWIND_BIN" in
+    "$REPO_ROOT"/node_modules/*) ;;
+    *)
+      echo "Warning: tailwindcss is not resolving from project node_modules; current: $TAILWIND_BIN"
+      ;;
+  esac
+  tailwindcss --version || true
+fi
+
 # 3) Verify trunk is available.
 if ! command -v trunk >/dev/null 2>&1; then
   echo "Error: trunk is not on PATH. Ensure it was installed (post-clone) and Cargo env is sourced."

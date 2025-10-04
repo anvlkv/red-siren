@@ -1,5 +1,5 @@
 # install rust and cargo
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -y -- --profile minimal --default-toolchain nightly
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --profile minimal --default-toolchain nightly -y
 
 
 # install cargo-binstall

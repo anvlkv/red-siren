@@ -37,7 +37,6 @@ impl From<ActivationSource> for u8 {
     }
 }
 
-// Ack timeout for control messages.
 const CONTROL_INVOKE_TIMEOUT_MS: u64 = 500;
 const FADE_DURATION_MS: u64 = 120;
 const FOLLOW_RESPONSE_SECS: f32 = 0.01;
@@ -191,15 +190,9 @@ impl Inner {
                     op: "shutdown".into(),
                 })?;
             match ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS)) {
-                Ok(ControlInvocationResult::OkChanged | ControlInvocationResult::NoOp) => {}
-                Ok(ControlInvocationResult::Error(e)) => {
+                Ok(ControlInvocationResult::Ok(_)) => {}
+                Ok(ControlInvocationResult::Err(e)) => {
                     return Err(InstrumentError::BuildStream { detail: e }.into())
-                }
-                Ok(ControlInvocationResult::BackendMissing) => {
-                    return Err(InstrumentError::BackendMissing {
-                        op: "shutdown".into(),
-                    }
-                    .into())
                 }
                 Err(_) => {
                     return Err(InstrumentError::AckTimeout {
@@ -274,11 +267,8 @@ impl Inner {
         tx.send(Control::Pause(ack_tx))
             .map_err(|_| ControlError::ChannelSend { op: "pause".into() })?;
         match ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS)) {
-            Ok(ControlInvocationResult::OkChanged | ControlInvocationResult::NoOp) => Ok(true),
-            Ok(ControlInvocationResult::BackendMissing) => {
-                Err(ControlError::BackendMissing { op: "pause".into() }.into())
-            }
-            Ok(ControlInvocationResult::Error(e)) => {
+            Ok(ControlInvocationResult::Ok(_)) => Ok(true),
+            Ok(ControlInvocationResult::Err(e)) => {
                 Err(ControlError::BuildStream { detail: e }.into())
             }
             Err(_) => Err(ControlError::AckTimeout { op: "pause".into() }.into()),
@@ -309,15 +299,11 @@ impl Inner {
                 op: "resume".into(),
             })?;
         match ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS)) {
-            Ok(ControlInvocationResult::OkChanged | ControlInvocationResult::NoOp) => {
+            Ok(ControlInvocationResult::Ok(_)) => {
                 self.fade_in();
                 Ok(true)
             }
-            Ok(ControlInvocationResult::BackendMissing) => Err(ControlError::BackendMissing {
-                op: "resume".into(),
-            }
-            .into()),
-            Ok(ControlInvocationResult::Error(e)) => {
+            Ok(ControlInvocationResult::Err(e)) => {
                 Err(ControlError::BuildStream { detail: e }.into())
             }
             Err(_) => Err(ControlError::AckTimeout {

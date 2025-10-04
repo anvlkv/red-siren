@@ -7,13 +7,7 @@ use cpal::{SampleFormat, Stream, StreamConfig, SupportedStreamConfig};
 use common::error::InstrumentError;
 
 /// Result of a control invocation, sent back to the caller per request.
-#[derive(Debug)]
-pub enum ControlInvocationResult {
-    OkChanged,
-    NoOp,
-    BackendMissing,
-    Error(String),
-}
+pub type ControlInvocationResult = Result<(), String>;
 
 /// Control messages for the stream owner.
 pub enum Control {
@@ -70,22 +64,26 @@ where
         while let Ok(msg) = rx.recv() {
             match msg {
                 Control::Pause(ret) => {
-                    match stream.pause() {
-                        Ok(_) => ret.send(ControlInvocationResult::OkChanged),
-                        Err(e) => ret.send(ControlInvocationResult::Error(e.to_string())),
+                    _ = match stream.pause() {
+                        Ok(_) => ret.send(ControlInvocationResult::Ok(())),
+                        Err(e) => ret.send(ControlInvocationResult::Err(e.to_string())),
                     }
-                    .ok();
+                    .inspect_err(|e| {
+                        log::error!("erro sending control result: {e}");
+                    });
                 }
                 Control::Resume(ret) => {
-                    match stream.play() {
-                        Ok(_) => ret.send(ControlInvocationResult::OkChanged),
-                        Err(e) => ret.send(ControlInvocationResult::Error(e.to_string())),
+                    _ = match stream.play() {
+                        Ok(_) => ret.send(ControlInvocationResult::Ok(())),
+                        Err(e) => ret.send(ControlInvocationResult::Err(e.to_string())),
                     }
-                    .ok();
+                    .inspect_err(|e| {
+                        log::error!("erro sending control result: {e}");
+                    });
                 }
                 Control::Shutdown(ret) => {
                     drop(stream);
-                    let _ = ret.send(ControlInvocationResult::OkChanged);
+                    let _ = ret.send(ControlInvocationResult::Ok(()));
                     break;
                 }
             }

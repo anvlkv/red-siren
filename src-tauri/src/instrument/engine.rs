@@ -2,8 +2,7 @@ use common::error::{ControlError, InstrumentError, Result as AppResult};
 use common::instrument::Config as InstrumentConfig;
 use common::instrument::Layout as InstrumentLayout;
 
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::SampleFormat;
+use cpal::traits::{DeviceTrait, HostTrait};
 use fundsp::hacker::prelude::*;
 use mint::Vector2;
 use parking_lot::RwLock;
@@ -12,9 +11,6 @@ use std::{
     thread,
     time::Duration,
 };
-
-// Ack timeout for control messages.
-const CONTROL_INVOKE_TIMEOUT_MS: u64 = 500;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActivationSource {
@@ -41,20 +37,12 @@ impl From<ActivationSource> for u8 {
     }
 }
 
-#[derive(Debug)]
-enum ControlInvocationResult {
-    OkChanged,
-    NoOp,
-    BackendMissing,
-    Error(String),
-}
+// Ack timeout for control messages.
+const CONTROL_INVOKE_TIMEOUT_MS: u64 = 500;
+const FADE_DURATION_MS: u64 = 120;
+const FOLLOW_RESPONSE_SECS: f32 = 0.01;
 
-// Control channel messages with per‑invocation response sender.
-enum Control {
-    Pause(Sender<ControlInvocationResult>),
-    Resume(Sender<ControlInvocationResult>),
-    Shutdown(Sender<ControlInvocationResult>),
-}
+use super::stream::{spawn_owner, Control, ControlInvocationResult};
 
 #[derive(Default)]
 pub struct InstrumentEngine {
@@ -72,8 +60,9 @@ pub(super) struct Inner {
     dsp_primary_node_id: RwLock<Option<NodeId>>,
     // Device/output sample rate (Hz) captured at stream start.
     sample_rate: RwLock<Option<f64>>,
+    gain_param: RwLock<Option<fundsp::hacker32::Shared>>,
     control_tx: RwLock<Option<Sender<Control>>>,
-    join: RwLock<Option<std::thread::JoinHandle<()>>>,
+    join: RwLock<Option<thread::JoinHandle<()>>>,
 }
 
 impl Inner {
@@ -140,7 +129,14 @@ impl Inner {
 
         let main_node_id = net.push(Box::new(subnet));
 
-        net.pipe_output(main_node_id);
+        // Insert smoothed gain after the main node
+        let gain_param = fundsp::hacker32::shared(1.0f32);
+        let gain_node = (fundsp::hacker32::var(&gain_param)
+            >> fundsp::hacker32::follow(FOLLOW_RESPONSE_SECS))
+            * fundsp::hacker32::pass();
+        let gain_id = net.push(Box::new(gain_node));
+        net.pipe_all(main_node_id, gain_id);
+        net.pipe_output(gain_id);
 
         // Split (retain front-end for later mutation).
         let mut backend = net.backend();
@@ -148,52 +144,21 @@ impl Inner {
 
         // Prepare CPAL stream config
         let stream_cfg: cpal::StreamConfig = default_cfg.clone().into();
-        let channels = stream_cfg.channels as usize;
-
-        // Control channel root
-        let (tx, rx) = mpsc::channel::<Control>();
 
         // Store front-end & primary node id.
         {
             *self.dsp_net_frontend.write() = Some(front);
             *self.dsp_primary_node_id.write() = Some(main_node_id);
+            *self.gain_param.write() = Some(gain_param.clone());
         }
 
-        let next_value = move || backend.get_stereo();
+        // Create and start the stream in the dedicated owner thread.
+        let (tx, handle) = spawn_owner(device, default_cfg, stream_cfg, move || {
+            let next_value = move || backend.get_stereo();
 
-        // Build output stream (per-format handlers; simple, no generic helper).
-        let stream_result = Self::run(&device, &stream_cfg, &default_cfg, next_value);
-
-        let stream = stream_result.map_err(|e| InstrumentError::StartFailed {
-            detail: Some(e.to_string()),
+            let boxed: Box<dyn FnMut() -> (f32, f32) + Send> = Box::new(next_value);
+            boxed
         })?;
-
-        stream.play().map_err(|e| InstrumentError::StartFailed {
-            detail: Some(e.to_string()),
-        })?;
-
-        // Spawn thread to own the stream and process control messages.
-        let handle = thread::spawn(move || {
-            while let Ok(msg) = rx.recv() {
-                match msg {
-                    Control::Pause(ret) => {
-                        // TODO: implement real backend pause; currently always changed.
-                        let _ = ret.send(ControlInvocationResult::OkChanged);
-                    }
-                    Control::Resume(ret) => {
-                        // TODO: implement real backend resume.
-                        let _ = ret.send(ControlInvocationResult::OkChanged);
-                    }
-                    Control::Shutdown(ret) => {
-                        let _ = ret.send(ControlInvocationResult::OkChanged);
-                        break;
-                    }
-                }
-            }
-            // stream & backend dropped here.
-        });
-
-        // Publish control channel + join handle
         {
             *self.control_tx.write() = Some(tx);
             *self.join.write() = Some(handle);
@@ -202,76 +167,6 @@ impl Inner {
         *self.playing.write() = true;
 
         Ok(true)
-    }
-
-    fn run<F>(
-        device: &cpal::Device,
-        config: &cpal::StreamConfig,
-        default_cfg: &cpal::SupportedStreamConfig,
-        mut next_sample: F,
-    ) -> common::error::Result<cpal::Stream>
-    where
-        F: FnMut() -> (f32, f32) + Send + Sync + 'static,
-    {
-        let err_cb = |err| log::error!("instrument playback stream error: {err}");
-
-        match default_cfg.sample_format() {
-            SampleFormat::F32 => device.build_output_stream(
-                config,
-                move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    Self::write_data(data, 2, &mut next_sample)
-                },
-                err_cb,
-                None,
-            ),
-            SampleFormat::I16 => device.build_output_stream(
-                config,
-                move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
-                    Self::write_data(data, 2, &mut next_sample)
-                },
-                err_cb,
-                None,
-            ),
-            SampleFormat::U16 => device.build_output_stream(
-                config,
-                move |data: &mut [u16], _: &cpal::OutputCallbackInfo| {
-                    Self::write_data(data, 2, &mut next_sample)
-                },
-                err_cb,
-                None,
-            ),
-            other => {
-                return Err(InstrumentError::UnsupportedSampleFormat(format!(
-                    "unsupported_sample_format:{other:?}"
-                ))
-                .into())
-            }
-        }
-        .map_err(|e| {
-            InstrumentError::BuildStream {
-                detail: e.to_string(),
-            }
-            .into()
-        })
-    }
-
-    fn write_data<T>(output: &mut [T], channels: usize, next_sample: &mut dyn FnMut() -> (f32, f32))
-    where
-        T: cpal::SizedSample + cpal::FromSample<f64>,
-    {
-        for frame in output.chunks_mut(channels) {
-            let sample = next_sample();
-            let left: T = T::from_sample(sample.0 as f64);
-            let right: T = T::from_sample(sample.1 as f64);
-
-            for (channel, sample) in frame.iter_mut().enumerate() {
-                if channel & 1 == 0 {
-                    *sample = left;
-                } else {
-                    *sample = right;
-                }
-            }
-        }
     }
 
     pub fn stop_playback(&self) -> AppResult<bool> {
@@ -285,6 +180,8 @@ impl Inner {
             }
             *playing = false;
         }
+
+        self.fade_out();
 
         let tx_opt = self.control_tx.write().take();
         if let Some(tx) = tx_opt {
@@ -315,19 +212,27 @@ impl Inner {
             return Ok(false);
         }
 
-        if let Some(handle) = self.join.write().take() {
-            if let Err(_e) = handle.join() {
-                return Err(InstrumentError::ThreadJoin {
-                    op: "shutdown".into(),
-                }
-                .into());
-            }
-        }
+        *self.join.write() = None;
 
         self.dsp_net_frontend.write().take();
         self.dsp_primary_node_id.write().take();
+        self.gain_param.write().take();
 
         Ok(true)
+    }
+
+    fn fade_out(&self) {
+        if let Some(p) = self.gain_param.read().as_ref().cloned() {
+            p.set(0.0);
+        }
+        std::thread::sleep(Duration::from_millis(FADE_DURATION_MS));
+    }
+
+    fn fade_in(&self) {
+        if let Some(p) = self.gain_param.read().as_ref().cloned() {
+            p.set(1.0);
+        }
+        std::thread::sleep(Duration::from_millis(FADE_DURATION_MS));
     }
 
     pub fn playing(&self) -> bool {
@@ -359,6 +264,8 @@ impl Inner {
             }
             *playing = false;
         }
+
+        self.fade_out();
 
         let Some(tx) = self.control_tx.read().as_ref().cloned() else {
             return Err(ControlError::BackendMissing { op: "pause".into() }.into());
@@ -402,7 +309,10 @@ impl Inner {
                 op: "resume".into(),
             })?;
         match ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS)) {
-            Ok(ControlInvocationResult::OkChanged | ControlInvocationResult::NoOp) => Ok(true),
+            Ok(ControlInvocationResult::OkChanged | ControlInvocationResult::NoOp) => {
+                self.fade_in();
+                Ok(true)
+            }
             Ok(ControlInvocationResult::BackendMissing) => Err(ControlError::BackendMissing {
                 op: "resume".into(),
             }

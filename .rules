@@ -1,3 +1,7 @@
+# Red Siren
+
+## Code bestpractices
+
 ### using `tauri_use::use_invoke` and `tauri_use::use_command`
 
 
@@ -152,3 +156,21 @@ async fn update_config(state: tauri::State<'_, AppState>, new_config: Config) {
     *config = new_config;
 }
 ```
+
+
+## Project structure
+
+### Rust docs of 3rd party crates
+
+All rust docs are generated and stored in `docs/rust/doc`.
+
+Docs are .gitignored, so might be not easily accessible via tools.
+
+Do not regenerate.
+
+
+### Workspace crates
+
+- `common` - shared types, errors, utils, constants, etc.
+- `src-tauri` - Tauri backend application code
+- `src` - Leptos frontend application code

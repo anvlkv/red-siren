@@ -12,5 +12,15 @@
     },
     "reveal": "always",
     "use_new_terminal": true
+  },
+  {
+    "label": "Cargo docs",
+    "command": "cargo doc --target-dir docs/rust --workspace",
+    "reveal": "never"
+  },
+  {
+    "label": "Docs static server",
+    "command": "open http://localhost:1984/tauri_app_ui/index.html & python3 -m http.server --directory docs/rust/doc 1984",
+    "reveal": "never"
   }
 ]

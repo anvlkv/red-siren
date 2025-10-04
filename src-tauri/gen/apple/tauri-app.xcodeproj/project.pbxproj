@@ -379,7 +379,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "export PATH=\"$HOME/.cargo/bin:$PATH\"\ncd \"${SRCROOT}/../src-tauri\"\nif [ \"${CONFIGURATION}\" = \"Debug\" ]; then\n  cargo build --target aarch64-apple-ios --lib\nelse\n  cargo build --release --target aarch64-apple-ios --lib\nfi\nmkdir -p \"${SRCROOT}/Externals/arm64/${CONFIGURATION}\"\nif [ \"${CONFIGURATION}\" = \"Release\" ]; then\n  cp \"target/aarch64-apple-ios/release/libapp.a\" \"${SRCROOT}/Externals/arm64/${CONFIGURATION}/libapp.a\"\nelse\n  cp \"target/aarch64-apple-ios/debug/libapp.a\" \"${SRCROOT}/Externals/arm64/${CONFIGURATION}/libapp.a\"\nfi\n";
+			shellScript = "export PATH=\"$HOME/.cargo/bin:$PATH\"\ncd \"${SRCROOT}/../src-tauri\"\n# Always build in release mode for XcodeCloud\ncargo build --release --target aarch64-apple-ios --lib\nmkdir -p \"${SRCROOT}/Externals/arm64/${CONFIGURATION}\"\n# Always copy from release directory\ncp \"target/aarch64-apple-ios/release/libapp.a\" \"${SRCROOT}/Externals/arm64/${CONFIGURATION}/libapp.a\"\n";
 		};
 		4CFF21EFA1FFE4D2AB9D6998 /* Build Rust Code */ = {
 			isa = PBXShellScriptBuildPhase;

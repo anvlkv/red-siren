@@ -178,17 +178,11 @@ targets:
       - script: |
           export PATH="$HOME/.cargo/bin:$PATH"
           cd "${SRCROOT}/../src-tauri"
-          if [ "${CONFIGURATION}" = "Debug" ]; then
-            cargo build --target aarch64-apple-ios --lib
-          else
-            cargo build --release --target aarch64-apple-ios --lib
-          fi
+          # Always build in release mode for XcodeCloud
+          cargo build --release --target aarch64-apple-ios --lib
           mkdir -p "${SRCROOT}/Externals/arm64/${CONFIGURATION}"
-          if [ "${CONFIGURATION}" = "Release" ]; then
-            cp "target/aarch64-apple-ios/release/libapp.a" "${SRCROOT}/Externals/arm64/${CONFIGURATION}/libapp.a"
-          else
-            cp "target/aarch64-apple-ios/debug/libapp.a" "${SRCROOT}/Externals/arm64/${CONFIGURATION}/libapp.a"
-          fi
+          # Always copy from release directory
+          cp "target/aarch64-apple-ios/release/libapp.a" "${SRCROOT}/Externals/arm64/${CONFIGURATION}/libapp.a"
         name: Build Rust Code (Production)
         basedOnDependencyAnalysis: false
         outputFiles:

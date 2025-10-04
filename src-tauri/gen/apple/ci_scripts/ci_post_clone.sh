@@ -1,83 +1,32 @@
-#!/usr/bin/env bash
+# install rust and cargo
+curl https://sh.rustup.rs -sSf | sh -s -- -y
+. "$HOME/.cargo/env"            # For sh/bash/zsh/ash/dash/pdksh
 
-# ci_post_clone.src.sh
-#
-# Source version of Xcode Cloud post-clone script for Red Siren.
-# Root wrapper 'ci_post_clone.sh' should `source` this file.
-#
-# Intent: prepare toolchains (Rust, Node deps) with zero branching / checks.
-# Philosophy: MAYA DRY KISS — simplest steps, no conditional logic.
+# install cargo-binstall
+curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
 
-set -euo pipefail
+# use toolchain nightly
+rustup toolchain install nightly
+rustup default nightly
 
-echo "[post-clone] Starting toolchain bootstrap (no checks)..."
-
-# Rust toolchain (always invoke installer; it is idempotent if already installed)
-export RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}"
-export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
-curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
-. "$CARGO_HOME/env"
-
-# Ensure cargo is available on PATH for Xcode build phase
-export PATH="$CARGO_HOME/bin:$PATH"
-
-# Verify cargo installation and set up environment
-echo "[post-clone] Verifying cargo installation..."
-if [ -f "$CARGO_HOME/bin/cargo" ]; then
-    echo "[post-clone] Cargo found at $CARGO_HOME/bin/cargo"
-    "$CARGO_HOME/bin/cargo" --version
-else
-    echo "[post-clone] ERROR: Cargo not found at expected location"
-    exit 1
-fi
+# add necessary targets
+rustup target add x86_64-apple-darwin
+rustup target add x86_64-apple-ios
+rustup target add aarch64-apple-darwin
+rustup target add aarch64-apple-ios-sim
+rustup target add aarch64-apple-ios
 
 
+# install trunk
+cargo binstall trunk
 
-echo "[post-clone] Adding required Rust targets..."
-rustup target add aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin x86_64-apple-darwin wasm32-unknown-unknown || true
-
-echo "[post-clone] Installing trunk (ignore if already installed)..."
-cargo install trunk --locked || true
-
+# install tauri-cli
+cargo binstall tauri-cli --version "^2.0.0" --locked
 
 
-echo "[post-clone] Installing dependencies (npm ci)..."
+# node and npm
+HOMEBREW_NO_AUTO_UPDATE=1
+brew install node
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../../../.. && pwd)"
-cd "$REPO_ROOT"
-# Ensure Node/npm via Volta (no sudo) and expose via ~/.local/bin
-export VOLTA_HOME="${VOLTA_HOME:-$HOME/.volta}"
-export PATH="$VOLTA_HOME/bin:$PATH"
-if ! command -v npm >/dev/null 2>&1; then
-  echo "[post-clone] Installing Node via Volta..."
-  curl https://get.volta.sh | bash -s -- --skip-setup
-  export PATH="$VOLTA_HOME/bin:$PATH"
-  "$VOLTA_HOME/bin/volta" install node@lts
-fi
-mkdir -p "$HOME/.local/bin"
-ln -sf "$VOLTA_HOME/bin/node" "$HOME/.local/bin/node" || true
-ln -sf "$VOLTA_HOME/bin/npm" "$HOME/.local/bin/npm" || true
-ln -sf "$VOLTA_HOME/bin/npx" "$HOME/.local/bin/npx" || true
-
+# dependencies
 npm ci
-
-echo "[post-clone] Setting up tailwindcss wrapper to use npm version..."
-# Create a wrapper script that trunk will find before it tries to download its own version
-mkdir -p "$HOME/.local/bin"
-
-# Store the current repo root for the wrapper script
-WRAPPER_REPO_ROOT="$REPO_ROOT"
-
-# Create the wrapper script
-cat > "$HOME/.local/bin/tailwindcss" << EOF
-#!/bin/bash
-cd "$WRAPPER_REPO_ROOT"
-exec npx --yes tailwindcss "\$@"
-EOF
-chmod +x "$HOME/.local/bin/tailwindcss"
-
-# Add to PATH so trunk finds our wrapper
-export PATH="$HOME/.local/bin:$PATH"
-
-
-echo "[post-clone] Done."

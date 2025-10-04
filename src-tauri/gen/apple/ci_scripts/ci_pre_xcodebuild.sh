@@ -102,6 +102,11 @@ fi
 
 cd "$REPO_ROOT"
 
+# Disable Tauri CLI dev server and file watching on CI/mobile to avoid socket connections
+export TAURI_CLI_NO_DEV_SERVER=1
+export TAURI_CLI_NO_DEV_SERVER_WAIT=1
+export TAURI_CLI_NO_WATCH=1
+
 # Pin Trunk to the Tailwind version matching package.json to avoid mismatches
 export TRUNK_TOOLS_TAILWINDCSS="4.1.13"
 

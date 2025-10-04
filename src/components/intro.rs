@@ -1,12 +1,9 @@
 mod composition;
 mod consts;
-mod hooks;
 mod static_path;
 mod wavering;
 
-use crate::components::intro::consts::*;
-use crate::util::layout_context::{expect_layout_contex, LayoutContextReturn};
-use leptos::leptos_dom::helpers::set_timeout;
+use composition::IntroComp;
 use leptos::prelude::*;
 
 use composition::IntroComp;
@@ -28,283 +25,21 @@ use composition::IntroComp;
 
 #[component]
 pub fn Intro(
-    #[prop(into)] nav_tx: Signal<Option<crate::components::NavigationTx>>,
     #[prop(into)] nav_started: Signal<Option<NavStartedPayload>>,
     #[prop(into)] current_route: Signal<RouteId>,
     children: ChildrenFn,
 ) -> impl IntoView {
-    // Intro animation component (controlled):
-    //   - All navigation signals are required props (no context fallbacks).
-    //   - Static content routes: intro visible, no animations.
-    //   - Forward: content -> Play/Tune (Leave tx toward Play/Tune).
-    //   - Reverse: Play/Tune -> content (Enter tx from Play/Tune).
+    let is_intro_fading = RwSignal::new(false);
 
-    // Visibility flag (hidden only after successful forward transition completes).
-    let intro_hidden = RwSignal::new(false);
-
-    // Layout context (we only need complete_layout + iter helpers here).
-    let LayoutContextReturn {
-        complete_layout, ..
-    } = expect_layout_contex();
-
-    // Animation state signals (CSS-driven)
-    let keyframes_css = RwSignal::new(String::new());
-    let key_styles_signal = RwSignal::new(HashMap::<(u8, u8), String>::new());
-    let band_styles_signal = RwSignal::new(HashMap::<(u8, u8), String>::new());
-    let left_string_style_signal = RwSignal::new(String::new());
-    let right_string_style_signal = RwSignal::new(String::new());
-    let picture_style_signal = RwSignal::new(String::new());
-    let direction_reverse = RwSignal::new(false);
-    let rerun_counter = RwSignal::new(0u32);
-    // Active only while a forward or reverse transition animation is running.
-    // For content routes (None/Home/About/Donate/Permissions) this stays false so
-    // the IntroComp renders statically with no fade (animation.md: intro comp load -> home).
-    let transition_active = RwSignal::new(false);
-    // Track last applied navigation animation (tx_id, reverse_flag)
-    let last_applied = RwSignal::new(None::<(u64, bool)>);
-
-    // Build keyframes & per-element animation styles once layout is available or changes.
     Effect::new(move |_| {
-        let layout = complete_layout();
-        let num_groups = layout.num_groups.get();
-        let num_keys = layout.num_keys_per_group.get();
-        if num_groups == 0 || num_keys == 0 {
-            return;
-        }
+        if let Some(NavStartedPayload { to, from, .. }) = nav_started() {
+            let is_exit = from.is_content() && !to.is_content();
 
-        let forward_ms = INTRO_ANIM_DURATION_MS;
-        let k1_5 = PHASE_FADE_OVERSHOOT_PCT;
-        let k2 = PHASE_COLLAPSE_LINE_PCT;
-        let k3 = PHASE_TRAVEL_PCT;
-        let k4 = PHASE_REFINE_PCT;
-
-        let mut css = String::new();
-        let mut key_styles = HashMap::new();
-        let mut band_styles = HashMap::new();
-
-        // Iterate keys
-        for (g, k) in layout.iter_keys() {
-            let (final_cx, final_cy) = layout.key_center(g, k);
-            let (first_cx, first_cy) = layout.first_key_center();
-            let sun_cx = (INTRO_SUN_CX / INTRO_ART_WIDTH) * layout.space.x;
-            let sun_cy = (INTRO_SUN_CY / INTRO_ART_HEIGHT) * layout.space.y;
-            let sun_tx = sun_cx - final_cx;
-            let sun_ty = sun_cy - final_cy;
-            let axis_tx = first_cx - final_cx;
-            let axis_ty = first_cy - final_cy;
-            let fmt = |v: f32| {
-                if (v.fract()).abs() < 0.0005 {
-                    format!("{:.0}", v)
-                } else {
-                    format!("{:.3}", v)
-                }
-            };
-
-            // Key animation
-            let anim_name = format!("key-anim-g-{g}-k-{k}");
-            css.push_str(&format!(
-                "@keyframes {name}{{\
- 0%{{transform:translate({stx}px,{sty}px) scale({ks});}}\
- {k2}%{{transform:translate({atx}px,{aty}px) scale({mid});}}\
- {k3}%{{transform:translate(0px,0px) scale(1);}}\
- {k4}%{{transform:translate(0px,0px) scale(1);}}\
- 100%{{transform:translate(0px,0px) scale(1);}}}}",
-                name = anim_name,
-                ks = KEY_START_SCALE,
-                mid = (KEY_START_SCALE + 1.0) * 0.5,
-                k2 = k2,
-                k3 = k3,
-                k4 = k4,
-                stx = fmt(sun_tx),
-                sty = fmt(sun_ty),
-                atx = fmt(axis_tx),
-                aty = fmt(axis_ty)
-            ));
-            let style = format!(
-                "animation:{name} {dur}ms {ease} 1 both;animation-direction:{{DIR}};",
-                name = anim_name,
-                dur = forward_ms,
-                ease = EASE_MAIN
-            );
-            key_styles.insert((g, k), style);
-
-            // Band animation
-            let band_anim = format!("band-anim-g-{g}-k-{k}");
-            css.push_str(&format!(
-                "@keyframes {name}{{\
- 0%{{transform:translate({stx}px,{sty}px) scale({bs});border-radius:{brc}px;}}\
- {k1_5}%{{transform:translate({stx}px,{sty}px) scale({bo});border-radius:{brc}px;}}\
- {k2}%{{transform:translate({atx}px,{aty}px) scale({bc});border-radius:{brc}px;}}\
- {k3}%{{transform:translate(0px,0px) scale({bf});border-radius:{brc}px;}}\
- {k4}%{{transform:translate(0px,0px) scale({bf});border-radius:0px;}}\
- 100%{{transform:translate(0px,0px) scale({bf});border-radius:0px;}}}}",
-                name = band_anim,
-                bs = BAND_START_SCALE,
-                bo = BAND_OVERSHOOT_SCALE,
-                bc = BAND_AXIS_COLLAPSE_SCALE,
-                bf = BAND_REFINE_SCALE,
-                brc = BAND_CIRCLE_RADIUS_PX,
-                k1_5 = k1_5,
-                k2 = k2,
-                k3 = k3,
-                k4 = k4,
-                stx = fmt(sun_tx),
-                sty = fmt(sun_ty),
-                atx = fmt(axis_tx),
-                aty = fmt(axis_ty)
-            ));
-            let bstyle = format!(
-                "animation:{name} {dur}ms {ease} 1 both;animation-direction:{{DIR}};",
-                name = band_anim,
-                dur = forward_ms,
-                ease = EASE_MAIN
-            );
-            band_styles.insert((g, k), bstyle);
-        }
-
-        // Strings (rotation only)
-        css.push_str(&format!(
-            "@keyframes string-anim-left{{0%{{transform:translate(0px,0px) rotate({start}deg);}}\
- {k2}%{{transform:translate(0px,0px) rotate({mid}deg);}}\
- {k3}%{{transform:translate(0px,0px) rotate(0deg);}}\
- 100%{{transform:translate(0px,0px) rotate(0deg);}}}}",
-            start = STRING_START_ROT_DEG,
-            mid = STRING_START_ROT_DEG * 0.35,
-            k2 = k2,
-            k3 = k3
-        ));
-        css.push_str(&format!(
-            "@keyframes string-anim-right{{0%{{transform:translate(0px,0px) rotate({start}deg);}}\
- {k2}%{{transform:translate(0px,0px) rotate({mid}deg);}}\
- {k3}%{{transform:translate(0px,0px) rotate(0deg);}}\
- 100%{{transform:translate(0px,0px) rotate(0deg);}}}}",
-            start = STRING_START_ROT_DEG,
-            mid = STRING_START_ROT_DEG * 0.35,
-            k2 = k2,
-            k3 = k3
-        ));
-        let str_style_left = format!(
-            "animation:string-anim-left {dur}ms {ease} 1 both;animation-direction:{{DIR}};",
-            dur = forward_ms,
-            ease = EASE_MAIN
-        );
-        let str_style_right = format!(
-            "animation:string-anim-right {dur}ms {ease} 1 both;animation-direction:{{DIR}};",
-            dur = forward_ms,
-            ease = EASE_MAIN
-        );
-
-        // Picture fade (forward only; reverse keeps hidden until we re-show explicitly)
-        css.push_str(&format!(
-            "@keyframes intro-picture-fade{{0%{{opacity:1;}}{k1_5}%{{opacity:.25;}}{k2}%{{opacity:0;}}100%{{opacity:0;}}}}",
-            k1_5 = k1_5,
-            k2 = k2
-        ));
-        let picture_anim = format!(
-            "animation:intro-picture-fade {}ms {} 1 forwards;animation-direction:{{DIR}};",
-            percent_to_time_ms(PICTURE_FADE_OUT_PCT),
-            EASE_FADE
-        );
-
-        // Commit signals
-        keyframes_css.set(css);
-        key_styles_signal.set(key_styles);
-        band_styles_signal.set(band_styles);
-        left_string_style_signal.set(str_style_left);
-        right_string_style_signal.set(str_style_right);
-        picture_style_signal.set(picture_anim);
-    });
-
-    // Direction-aware style resolution
-    let key_styles_memo = Memo::new(move |_| {
-        if !transition_active.get() {
-            return HashMap::new();
-        }
-        let dir = if direction_reverse.get() {
-            "reverse"
-        } else {
-            "normal"
-        };
-        key_styles_signal()
-            .into_iter()
-            .map(|(k, v)| (k, v.replace("{DIR}", dir)))
-            .collect::<HashMap<_, _>>()
-    });
-    let band_styles_memo = Memo::new(move |_| {
-        if !transition_active.get() {
-            return HashMap::new();
-        }
-        let dir = if direction_reverse.get() {
-            "reverse"
-        } else {
-            "normal"
-        };
-        band_styles_signal()
-            .into_iter()
-            .map(|(k, v)| (k, v.replace("{DIR}", dir)))
-            .collect::<HashMap<_, _>>()
-    });
-    let picture_style_memo = Memo::new(move |_| {
-        if !transition_active.get() {
-            // Static (no active transition): keep picture fully visible with explicit style.
-            "opacity:1;".to_string()
-        } else {
-            let dir = if direction_reverse.get() {
-                "reverse"
-            } else {
-                "normal"
-            };
-            // Always include a concrete style (opacity baseline) plus animation definition.
-            format!("opacity:1;{}", picture_style_signal().replace("{DIR}", dir))
-        }
-    });
-    let left_string_style_memo = Memo::new(move |_| {
-        if !transition_active.get() {
-            return String::new();
-        }
-        let dir = if direction_reverse.get() {
-            "reverse"
-        } else {
-            "normal"
-        };
-        left_string_style_signal().replace("{DIR}", dir)
-    });
-    let right_string_style_memo = Memo::new(move |_| {
-        if !transition_active.get() {
-            return String::new();
-        }
-        let dir = if direction_reverse.get() {
-            "reverse"
-        } else {
-            "normal"
-        };
-        right_string_style_signal().replace("{DIR}", dir)
-    });
-
-    // Provide context to intro subcomponents
-    provide_context(crate::components::intro::hooks::IntroAnimationContext {
-        key_styles: key_styles_memo,
-        band_styles: band_styles_memo,
-        left_string_style: left_string_style_memo,
-        right_string_style: right_string_style_memo,
-        direction_reverse,
-        rerun_counter,
-    });
-
-    // Initial static route handling (no animation) based on current_route prop.
-    // Instrument / tuner start hidden; other routes visible & idle.
-    Effect::new(move |_| match current_route() {
-        RouteId::Play | RouteId::Tune => {
-            intro_hidden.set(true);
-            transition_active.set(false);
-        }
-        _ => {
-            intro_hidden.set(false);
-            transition_active.set(false);
+            log::debug!("intro: nav_started: to={to:?}, is_exit={is_exit}");
+            is_intro_fading.set(is_exit);
         }
     });
 
-    // Navigation-driven animation triggering (forward & reverse) – props only (no legacy context)
     Effect::new(move |_| {
         // Direct props
         let nav_tx_val = nav_tx();
@@ -602,28 +337,7 @@ pub fn Intro(
 
     view! {
         <div class="contents">
-            <Show when=move || !keyframes_css().is_empty()>
-                <style inner_html=keyframes_css />
-            </Show>
-            <Show when=move || !intro_hidden()>
-                <IntroComp attr:style=picture_style_memo />
-            </Show>
-            <Show when=|| {
-                cfg!(debug_assertions)
-            }>
-                {move || {
-                    view! {
-                        <div class="fixed left-2 top-2 z-[9999] px-2 py-1 rounded bg-black/60 text-[10px] font-mono tracking-wide text-white pointer-events-none select-none">
-                            {if transition_active() {
-                                "intro transition: active"
-                            } else {
-                                "intro transition: idle"
-                            }}
-                        </div>
-                    }
-                }}
-            </Show>
-
+            <IntroComp exit=is_intro_fading />
             {move || children()}
         </div>
     }

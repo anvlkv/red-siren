@@ -29,12 +29,12 @@ pub fn CompactMenu(
         trigger: trigger_inset_update,
         error: _inset_error,
         ..
-    } = use_invoke_with_args::<common::commands::setup::SafeAreaInstestUiIncrementPayload, ()>(
-        common::commands::setup::UI_SAFE_AREA_INSETS_APPLY,
+    } = use_invoke_with_args::<shared::safe_area::SafeArea, ()>(
+        shared::commands::setup::UI_SAFE_AREA_INSETS_APPLY,
     );
 
     // Track previous inset values to prevent unnecessary updates and loops
-    let prev_insets = RwSignal::new(None::<SafeAreaInstestUiIncrementPayload>);
+    let prev_insets = RwSignal::new(None::<SafeArea>);
 
     // Update safe area insets when menu size or placement changes
     Effect::new(move |_| {
@@ -48,25 +48,25 @@ pub fn CompactMenu(
         }
 
         let new_insets = match placement {
-            UiPlacement::Bottom => SafeAreaInstestUiIncrementPayload {
+            UiPlacement::Bottom => SafeArea {
                 top: 0.0,
                 right: 0.0,
                 bottom: menu_height,
                 left: 0.0,
             },
-            UiPlacement::Top => SafeAreaInstestUiIncrementPayload {
+            UiPlacement::Top => SafeArea {
                 top: menu_height,
                 right: 0.0,
                 bottom: 0.0,
                 left: 0.0,
             },
-            UiPlacement::Left => SafeAreaInstestUiIncrementPayload {
+            UiPlacement::Left => SafeArea {
                 top: 0.0,
                 right: 0.0,
                 bottom: 0.0,
                 left: menu_width,
             },
-            UiPlacement::Right => SafeAreaInstestUiIncrementPayload {
+            UiPlacement::Right => SafeArea {
                 top: 0.0,
                 right: menu_width,
                 bottom: 0.0,

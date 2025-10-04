@@ -5,16 +5,9 @@ use tauri_use::{use_command, UseTauriWithReturn};
 use crate::util::raf_fn_fps::{use_raf_fn_with_fps, UseRafFnCallbackArgs};
 
 // Wave geometry (tiled, taller, centered under sun)
-// Sun center (107,164), radius 39 => bottom ≈ 203 -> start just below.
-// Wave tuning constants:
-// - WAVE_TOP_Y: anchor just below sun
-// - WAVE_VERTICAL_SPACING: distance between lines (increase to spread stack & lower bottom)
-// - WAVE_Y_OFFSET: pushes whole stack downward
-// - lengths[]: per-line half-width*2 (adjust individual widths; first narrower, last wider)
-// Adjust here to refine geometry.
 const WAVE_TOP_Y: f32 = 210.0; // anchor under sun
-const WAVE_VERTICAL_SPACING: f32 = 64.0; // was 24
-const WAVE_Y_OFFSET: f32 = 32.0; // pushes stack downward
+const WAVE_VERTICAL_SPACING: f32 = 64.0;
+const WAVE_Y_OFFSET: f32 = 32.0;
 const WAVE_AMPLITUDE_PX: f32 = 20.0;
 const WAVE_CENTER_X: f32 = 107.0;
 const WAVES_LENGHT: [f32; 11] = [
@@ -25,7 +18,8 @@ const LAST_WAVE_SCALE_X: f32 = 0.95;
 const STROKE_WIDTH: f32 = 3.5;
 
 #[component]
-pub fn Wavering() -> impl IntoView {
+pub fn Wavering(#[prop(into)] paused: Signal<bool>) -> impl IntoView {
+    // Commands (resume/pause sampling)
     let UseTauriWithReturn {
         trigger: trigger_resume,
         error: resume_error,
@@ -45,6 +39,7 @@ pub fn Wavering() -> impl IntoView {
         ..
     } = use_command::<IntroSnoopBatchPayload>(common::commands::intro::INTRO_NEXT_FRAME);
 
+    // Log errors for frame / pause / resume commands
     Effect::new(move |_| {
         if let Some(err) = frame_error() {
             log::error!(
@@ -52,14 +47,12 @@ pub fn Wavering() -> impl IntoView {
                 common::commands::intro::INTRO_NEXT_FRAME
             );
         }
-
         if let Some(err) = resume_error() {
             log::error!(
                 "Error invoking {}: {err}",
                 common::commands::intro::INTRO_RESUME
             );
         }
-
         if let Some(err) = pause_error() {
             log::error!(
                 "Error invoking {}: {err}",
@@ -68,19 +61,19 @@ pub fn Wavering() -> impl IntoView {
         }
     });
 
+    // Route‑aware pause/resume (MAYA DRY KISS: single reactive effect)
     Effect::new(move |_| {
-        trigger_resume(Some(()));
-    });
-
-    on_cleanup(move || {
-        trigger_pause(Some(()));
+        if paused() {
+            trigger_pause(Some(()));
+        } else {
+            trigger_resume(Some(()));
+        }
     });
 
     // Cache of 11 SVG path strings for the animated wave lines.
     let wave_paths = RwSignal::<Vec<(String, String, String)>>::new(
         (0..11)
             .map(|i| {
-                // Prepopulate with straight lines (flat at y=0)
                 let samples = vec![0.0; 32];
                 (
                     crate::util::wave::waveform_path_x(
@@ -97,6 +90,7 @@ pub fn Wavering() -> impl IntoView {
             .collect(),
     );
 
+    // RAF-driven waveform updates (paused/resumed by backend sampling commands)
     let _wave_raf = use_raf_fn_with_fps(
         move |UseRafFnCallbackArgs {
                   delta: _,
@@ -124,7 +118,6 @@ pub fn Wavering() -> impl IntoView {
                     }
                 });
             }
-
             fetch_frame(Some(()));
         },
         20.0,
@@ -132,13 +125,10 @@ pub fn Wavering() -> impl IntoView {
 
     view! {
         <g>
-
             {move || {
                 wave_paths()
                     .into_iter()
-                    .map(|(p, t, s)| {
-                        view! { <path d=p transform=t stroke-width=s /> }.into_any()
-                    })
+                    .map(|(p, t, s)| view! { <path d=p transform=t stroke-width=s /> }.into_any())
                     .collect_view()
             }}
             <g transform=format!(

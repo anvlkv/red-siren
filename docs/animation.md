@@ -6,31 +6,33 @@ no keyframes animation. composition visible as is.
 
 ### keyframe 1
 
-given the current layout all keys by `(k, g)` are same radius and same position as the sun (see commented out default for exact matches, with the view_port).
+scales of keyboard and strings computed to match viewBox'es of artwowrk composition (the scale is computed as `key` radius to `#sun` radius)
 
-all keys are aligned with the sun.
+given the current layout all keys by `(g, k)` are same radius and same position as the sun.
 
-all bands are same radius and are aligned with the sun.
+all keys are aligned with the sun. all bands are same **radius** and are aligned with the sun.
+effectively, all are collapsed in one circle - the sun the instrument keyboard is aligned with the top left of the screen
+ie. negative translation applies to stack them all under sun (uses individual translations)
 
-the strings are scaled and rotated to match with flute lines of the composition
+the strings are scaled and rotated 180 + x degrees to match with `#flute` lines of the composition.
+the instrument strings component is aligned with the bottom right of the screen
+
 
 ### keyframe 1.5
 
 the picture fades
 
-the bands are getting large varying radius increments greater than sun
+the bands are getting large varying radius increments greater than sun. effectively making the sun glare
 
 ### keyframe 2
 
-viewbox scaled to layout.space (see layout context)
+scale and translation of instrument parts to normal
 
 strings rotation to normal
 
-strings scale to normal
+position of keys and bands to collapsed on main axis of the insrument (g=max, k=max)
 
-position of keys and bands to collapsed on main axis of the insrument (k=0, g=0)
-
-bands radiuses back to match key radiuses
+bands radiuses back to match key radiuses (bands are still **circles**)
 
 ### keyframe 3
 
@@ -38,18 +40,18 @@ buttons, bands and groups move to correct positions
 
 ### keyframe 4
 
-bands recover width/height difference
+bands recover width/height difference, ¡only now becoming rounded rectangles!
 
 bands recover padding
 
 ### the end
 
-animation cleared, intro composition hidden with <Show></Show>
+animation cleared
 
 
 ### effectively back: instrument -> intro comp
 
-is building same animation keyframes as forward but then calling AnimationSequence::<..>.reverse() [@sequence.rs (316:317)](file:///Users/anvlkv/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/keyframe-1.1.1/src/sequence.rs#L316:317)
+is building same animation keyframes as forward but `animation-direction` reverse.
 
 
 
@@ -57,7 +59,7 @@ is building same animation keyframes as forward but then calling AnimationSequen
 
 ### keyframe 1
 
-given the current layout all sensors by `(k, g)` are same radius and same position as the sun (see commented out default for exact matches, with the view_port).
+given the current layout all sensors by `(g, k)` are same radius and same position as the sun (see commented out default for exact matches, with the view_port).
 
 all sensors are aligned with the sun.
 
@@ -97,7 +99,7 @@ animation cleared, intro composition hidden
 
 ### effectively back: tuner -> intro comp
 
-.reverse()
+reverse
 
 
 ## instrument -> tuner
@@ -105,7 +107,7 @@ animation cleared, intro composition hidden
 
 ### keyframe 1
 
-keys and sensors match (k,g)
+keys and sensors match (g,k)
 
 splits at 0
 
@@ -119,7 +121,7 @@ bands collapse to circles + padding
 
 bands collapse to circles of key diameter
 
-strings collapse into left string line [@layout.rs (19:20)](file:///Users/anvlkv/Projects/red-siren/shared/src/instrument/layout.rs#L19:20)
+all strings collapse into left string line
 
 ### keyframe 2
 
@@ -141,7 +143,7 @@ animation cleared, navigation commited
 
 ### effectively back: tuner -> instrument
 
-.reverse()
+reverse
 
 
 ## effectively cycle: we can transition between all states of the intro composition.

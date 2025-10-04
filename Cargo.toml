@@ -35,6 +35,8 @@ leptos-use = { version = "0.16.2", default-features = false, features = [
   "use_raf_fn",
   "use_window",
   "use_window_size",
+  "use_element_size",
+  "use_timeout_fn"
 ] }
 log = { workspace = true }
 mint = { workspace = true, features = ["serde"] }

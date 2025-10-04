@@ -24,33 +24,85 @@ pub fn InstrumentStrings() -> impl IntoView {
         let space = space();
         format!("0 0 {} {}", space.x, space.y)
     };
+
+    let left_strings = move || {
+        let num_groups = num_groups();
+        let num_keys_per_group = num_keys_per_group();
+        let first_group_channel = first_group_channel();
+        let orientation = orientation();
+        let left_string_position = left_string_position();
+
+        view! {
+            <g>
+                {move || {
+                    (0..num_groups)
+                        .filter(|g| {
+                            matches!(
+                                first_group_channel.nth_channel_from_first(*g as usize),
+                                shared::instrument::GroupChanel::Left
+                            )
+                        })
+                        .flat_map(|g: u8| {
+                            (0..num_keys_per_group)
+                                .map(move |k: u8| {
+                                    let k = k as usize;
+                                    let g = g as usize;
+                                    let ch = first_group_channel.nth_channel_from_first(g);
+                                    let orientation = orientation;
+
+                                    view! {
+                                        <StringView g k line=left_string_position orientation ch />
+                                    }
+                                })
+                        })
+                        .collect_view()
+                }}
+
+            </g>
+        }
+    };
+
+    let right_strings = move || {
+        let num_groups = num_groups();
+        let num_keys_per_group = num_keys_per_group();
+        let first_group_channel = first_group_channel();
+        let orientation = orientation();
+        let right_string_position = right_string_position();
+
+        view! {
+            <g>
+                {move || {
+                    (0..num_groups)
+                        .filter(|g| {
+                            matches!(
+                                first_group_channel.nth_channel_from_first(*g as usize),
+                                shared::instrument::GroupChanel::Right
+                            )
+                        })
+                        .flat_map(|g: u8| {
+                            (0..num_keys_per_group)
+                                .map(move |k: u8| {
+                                    let k = k as usize;
+                                    let g = g as usize;
+                                    let ch = first_group_channel.nth_channel_from_first(g);
+                                    let orientation = orientation;
+
+                                    view! {
+                                        <StringView g k line=right_string_position orientation ch />
+                                    }
+                                })
+                        })
+                        .collect_view()
+                }}
+
+            </g>
+        }
+    };
+
     view! {
         <svg viewBox=view_box fill="none" xmlns="http://www.w3.org/2000/svg">
-            {move || {
-                let num_groups = num_groups();
-                let num_keys_per_group = num_keys_per_group();
-                let first_group_channel = first_group_channel();
-                let orientation = orientation();
-                let left_string_position = left_string_position();
-                let right_string_position = right_string_position();
-                (0..num_groups)
-                    .flat_map(|g: u8| {
-                        (0..num_keys_per_group)
-                            .map(move |k: u8| {
-                                let k = k as usize;
-                                let g = g as usize;
-                                let ch = first_group_channel.nth_channel_from_first(g);
-                                let orientation = orientation;
-                                let line = match ch {
-                                    common::instrument::GroupChanel::Left => left_string_position,
-                                    common::instrument::GroupChanel::Right => right_string_position,
-                                };
-
-                                view! { <StringView g k line orientation ch /> }
-                            })
-                    })
-                    .collect_view()
-            }}
+            {left_strings}
+            {right_strings}
         </svg>
     }
 }

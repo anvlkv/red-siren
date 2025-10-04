@@ -1,6 +1,5 @@
-use common::commands::setup::SafeAreaInstestUiIncrementPayload;
-use common::error::{InstrumentError, Result};
-use common::instrument::{
+use shared::error::{InstrumentError, Result};
+use shared::instrument::{
     events::{ActivationSourcePayload, PlaybackStatePayload},
     Layout,
 };
@@ -210,7 +209,7 @@ pub fn instrument_layout(state: State<'_, InstrumentEngine>) -> Result<Layout> {
 }
 
 #[tauri::command]
-/// payload: `SafeAreaInstestUiIncrementPayload`
+/// payload: `SafeArea`
 pub fn ui_safe_area_insets_apply(
     top: f32,
     right: f32,
@@ -231,7 +230,7 @@ pub fn ui_safe_area_insets_apply(
     {
         // Persist UI safe area contribution in window state (non-additive override)
         let mut win = window_state.lock();
-        win.ui_safe_area = SafeAreaInstestUiIncrementPayload {
+        win.ui_safe_area = shared::safe_area::SafeArea {
             top,
             right,
             bottom,

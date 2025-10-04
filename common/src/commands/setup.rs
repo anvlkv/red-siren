@@ -34,5 +34,3 @@ pub struct UpdateWindowSizePayload {
     pub width: f64,
     pub height: f64,
 }
-
-pub use crate::events::setup::SafeAreaInstestUiIncrementPayload;

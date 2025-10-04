@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use shared::safe_area::SafeArea;
 
 use crate::{
     components::{Button, UiSize},
@@ -23,7 +24,7 @@ pub fn Keyboard() -> impl IntoView {
         ..
     } = expect_layout_contex();
 
-    let main_container_axis_style = Signal::derive(move || {
+    let main_container_axis_style = Memo::new(move |_| {
         let orientation = orientation();
         let space = space();
         let safe_area_padding = safe_area_padding();
@@ -36,18 +37,12 @@ pub fn Keyboard() -> impl IntoView {
         let pad_main = key_pad_main();
 
         // Map the orientation-dependent safe area format into CSS box-model (top,right,bottom,left)
-        let (safe_top, safe_right, safe_bottom, safe_left) = match orientation {
-            // Vertical: indices are [top, left, bottom, right]
-            common::orientation::LayoutOrientation::Vertical => {
-                let sa = safe_area_padding;
-                (sa[0], sa[3], sa[2], sa[1])
-            }
-            // Horizontal: indices are [left, top, right, bottom]
-            common::orientation::LayoutOrientation::Horizontal => {
-                let sa = safe_area_padding;
-                (sa[1], sa[2], sa[3], sa[0])
-            }
-        };
+        let SafeArea {
+            top: safe_top,
+            right: safe_right,
+            bottom: safe_bottom,
+            left: safe_left,
+        } = safe_area_padding;
 
         let mut defs = match orientation {
             common::orientation::LayoutOrientation::Vertical => format!(
@@ -159,69 +154,79 @@ fn Group(g: usize) -> impl IntoView {
                 (0..(num_keys_per_group as usize))
                     .rev()
                     .map(move |k| {
-                        let key_code = (g, k);
-                        let channel_alignment = match first_group_channel.nth_channel_from_first(g)
                         {
-                            common::instrument::GroupChanel::Left => {
-                                r#"
-                                top: 0;
-                                left: 0;
-                                "#
-                            }
-                            common::instrument::GroupChanel::Right => {
-                                r#"
-                                bottom: 0;
-                                right: 0;
-                                "#
-                            }
-                        };
-
-                        view! {
-                            <div class="relative">
-                                <div
-                                    class="absolute rounded-full bg-red dark:bg-black border-(length:--keyboard-band-stroke-width) border-black dark:border-red"
-                                    style=match orientation {
-                                        common::orientation::LayoutOrientation::Vertical => {
-                                            format!(
-                                                r#"
-                                            width: var(--keyboard-band-length);
-                                            height: var(--keyboard-band-breadth);
-
-                                            {channel_alignment}
-                                            "#,
-                                            )
-                                        }
-                                        common::orientation::LayoutOrientation::Horizontal => {
-                                            format!(
-                                                r#"
-                                            width: var(--keyboard-band-breadth);
-                                            height: var(--keyboard-band-length);
-
-                                            {channel_alignment}
-                                            "#,
-                                            )
-                                        }
-                                    }
-                                    role="presentation"
-                                ></div>
-                                <Button
-                                    class="border-none text-thin text-base"
-                                    size=UiSize::Sm
-                                    round=true
-                                    square=true
-                                    attr:style=r#"
-                                    width: var(--keyboard-key-diameter);
-                                    height: var(--keyboard-key-diameter);
-                                    margin: var(--keyboard-key-padding);
-                                    "#
-                                >
-                                    {format!("{key_code:?}")}
-                                </Button>
-                            </div>
+                            view! { <KeyboardElement g k first_group_channel orientation /> }
                         }
                     })
                     .collect_view()
             }}
+        </div>
+    }
+}
+
+#[component]
+fn KeyboardElement(
+    g: usize,
+    k: usize,
+    first_group_channel: shared::instrument::GroupChanel,
+    orientation: shared::orientation::LayoutOrientation,
+) -> impl IntoView {
+    let key_code = (g, k);
+    let channel_alignment = match first_group_channel.nth_channel_from_first(g) {
+        shared::instrument::GroupChanel::Left => {
+            r#"
+            top: 0;
+            left: 0;
+            "#
+        }
+        shared::instrument::GroupChanel::Right => {
+            r#"
+            bottom: 0;
+            right: 0;
+            "#
+        }
+    };
+
+    view! {
+        <div class="relative">
+            <div
+                class="absolute rounded-full bg-red dark:bg-black border-(length:--keyboard-band-stroke-width) border-black dark:border-red"
+                id=format!("key-band-{g}-{k}")
+                role="presentation"
+                style=match orientation {
+                    shared::orientation::LayoutOrientation::Vertical => {
+                        format!(
+                            r#"
+                        width: var(--keyboard-band-length);
+                        height: var(--keyboard-band-breadth);
+                        {channel_alignment}
+                        "#,
+                        )
+                    }
+                    shared::orientation::LayoutOrientation::Horizontal => {
+                        format!(
+                            r#"
+                        width: var(--keyboard-band-breadth);
+                        height: var(--keyboard-band-length);
+                        {channel_alignment}
+                        "#,
+                        )
+                    }
+                }
+            ></div>
+            <Button
+                class="border-none text-thin text-base"
+                size=UiSize::Sm
+                round=true
+                square=true
+                attr:id=format!("key-{g}-{k}")
+                attr:style="width: var(--keyboard-key-diameter);\
+                height: var(--keyboard-key-diameter);\
+                margin: var(--keyboard-key-padding);\
+                "
+            >
+                {format!("{key_code:?}")}
+            </Button>
         </div>
     }
 }

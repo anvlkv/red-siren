@@ -31,3 +31,9 @@ pub enum RouteId {
     #[strum(serialize = "/permissions")]
     Permissions,
 }
+
+impl RouteId {
+    pub fn is_content(&self) -> bool {
+        !matches!(self, Self::Play | Self::Tune)
+    }
+}

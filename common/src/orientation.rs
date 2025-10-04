@@ -34,15 +34,15 @@ impl LayoutOrientation {
 
     pub fn safe_length(&self, space: Vector2<f32>, safe_area: SafeArea) -> f32 {
         match self {
-            LayoutOrientation::Horizontal => space.x - safe_area[0] - safe_area[2],
-            LayoutOrientation::Vertical => space.y - safe_area[0] - safe_area[2],
+            LayoutOrientation::Horizontal => space.x - safe_area.left - safe_area.right,
+            LayoutOrientation::Vertical => space.y - safe_area.top - safe_area.bottom,
         }
     }
 
     pub fn safe_breadth(&self, space: Vector2<f32>, safe_area: SafeArea) -> f32 {
         match self {
-            LayoutOrientation::Horizontal => space.y - safe_area[1] - safe_area[3],
-            LayoutOrientation::Vertical => space.x - safe_area[1] - safe_area[3],
+            LayoutOrientation::Horizontal => space.y - safe_area.top - safe_area.bottom,
+            LayoutOrientation::Vertical => space.x - safe_area.left - safe_area.right,
         }
     }
 
@@ -50,10 +50,10 @@ impl LayoutOrientation {
         match self {
             LayoutOrientation::Vertical => Point2 {
                 x: point.x,
-                y: point.y + safe_area[0],
+                y: point.y + safe_area.top,
             },
             LayoutOrientation::Horizontal => Point2 {
-                x: point.x + safe_area[0],
+                x: point.x + safe_area.left,
                 y: point.y,
             },
         }
@@ -63,10 +63,10 @@ impl LayoutOrientation {
         match self {
             LayoutOrientation::Vertical => Point2 {
                 x: point.x,
-                y: point.y - safe_area[2],
+                y: point.y - safe_area.bottom,
             },
             LayoutOrientation::Horizontal => Point2 {
-                x: point.x - safe_area[2],
+                x: point.x - safe_area.right,
                 y: point.y,
             },
         }
@@ -75,12 +75,12 @@ impl LayoutOrientation {
     pub fn safe_breadth_start_point(&self, point: Point2<f32>, safe_area: SafeArea) -> Point2<f32> {
         match self {
             LayoutOrientation::Vertical => Point2 {
-                x: point.x + safe_area[1],
+                x: point.x + safe_area.left,
                 y: point.y,
             },
             LayoutOrientation::Horizontal => Point2 {
                 x: point.x,
-                y: point.y + safe_area[1],
+                y: point.y + safe_area.top,
             },
         }
     }
@@ -88,12 +88,12 @@ impl LayoutOrientation {
     pub fn safe_breadth_end_point(&self, point: Point2<f32>, safe_area: SafeArea) -> Point2<f32> {
         match self {
             LayoutOrientation::Vertical => Point2 {
-                x: point.x - safe_area[3],
+                x: point.x - safe_area.bottom,
                 y: point.y,
             },
             LayoutOrientation::Horizontal => Point2 {
                 x: point.x,
-                y: point.y - safe_area[3],
+                y: point.y - safe_area.right,
             },
         }
     }

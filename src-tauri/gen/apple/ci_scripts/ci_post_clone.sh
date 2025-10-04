@@ -1,13 +1,9 @@
 # install rust and cargo
-curl https://sh.rustup.rs -sSf | sh -s -- -y
-. "$HOME/.cargo/env"            # For sh/bash/zsh/ash/dash/pdksh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --profile minimal --default-toolchain nightly
+
 
 # install cargo-binstall
 curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-
-# use toolchain nightly
-rustup toolchain install nightly
-rustup default nightly
 
 # add necessary targets
 rustup target add x86_64-apple-darwin

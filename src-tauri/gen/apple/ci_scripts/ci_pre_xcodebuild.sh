@@ -145,6 +145,21 @@ else
   tailwindcss --version || true
 fi
 
+# Workaround: pre-create Tauri CLI dev server addr file to avoid panic in Xcode Cloud
+# See error: failed to read missing addr file /Volumes/workspace/tmp/com.anvlkv.red-siren.app-server-addr
+TMP_BASE="${TMPDIR:-/tmp}"
+if [ -d "/Volumes/workspace/tmp" ]; then
+  TMP_BASE="/Volumes/workspace/tmp"
+fi
+ADDR_FILE="$TMP_BASE/com.anvlkv.red-siren.app-server-addr"
+mkdir -p "$TMP_BASE"
+if [ ! -f "$ADDR_FILE" ]; then
+  echo "127.0.0.1:65532" > "$ADDR_FILE"
+  echo "Created Tauri addr file at: $ADDR_FILE"
+else
+  echo "Tauri addr file exists: $ADDR_FILE"
+fi
+
 # 3) Verify trunk is available.
 if ! command -v trunk >/dev/null 2>&1; then
   echo "Error: trunk is not on PATH. Ensure it was installed (post-clone) and Cargo env is sourced."

@@ -10,9 +10,13 @@
 		094A1ECD90ECD007825D95B3 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 84E625C1ABDB2D39CB77BF29 /* Security.framework */; };
 		1509339EBF87ED79DEE43430 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D86BED7C04FA29A575350D3 /* CoreAudio.framework */; };
 		1524BBF419A24C289873FCE0 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CA1A066F7EDD869BC014BB9C /* Metal.framework */; };
+		1587005CCD3A3B471DE72181 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D86BED7C04FA29A575350D4 /* AudioToolbox.framework */; };
+		1587005CCD3A3B471DE72182 /* AudioUnit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D86BED7C04FA29A575350D5 /* AudioUnit.framework */; };
 		1587005CCD3A3B471DE72180 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CF0F15D9837DA9743995496A /* WebKit.framework */; };
 		24DE5264819B8529069027FA /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E50E0C8A55BFC5056C3C1116 /* AVFoundation.framework */; };
 		2CCB812A8E75939FB4F09B39 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D86BED7C04FA29A575350D3 /* CoreAudio.framework */; };
+		2CCB812A8E75939FB4F09B40 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D86BED7C04FA29A575350D4 /* AudioToolbox.framework */; };
+		2CCB812A8E75939FB4F09B41 /* AudioUnit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D86BED7C04FA29A575350D5 /* AudioUnit.framework */; };
 		316A2D43373CDB2695883363 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = BA38F7BF7C28E04DBA849965 /* LaunchScreen.storyboard */; };
 		5DCFDCE0989E0655641185BE /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = BA38F7BF7C28E04DBA849965 /* LaunchScreen.storyboard */; };
 		5DDC8F8949AE56AB4B683F62 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5384EE0C649F19A31B462538 /* QuartzCore.framework */; };
@@ -45,6 +49,8 @@
 		437CF15B45110A5F8A6B30D4 /* commands.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = commands.rs; sourceTree = "<group>"; };
 		46600E42EDBD4E2F9CFFB94E /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		4D86BED7C04FA29A575350D3 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
+		4D86BED7C04FA29A575350D4 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
+		4D86BED7C04FA29A575350D5 /* AudioUnit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioUnit.framework; path = System/Library/Frameworks/AudioUnit.framework; sourceTree = SDKROOT; };
 		52D2167F31104DE0F2BAC639 /* commands.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = commands.rs; sourceTree = "<group>"; };
 		5384EE0C649F19A31B462538 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		60439CFBB3C5C24D8DE5A1E7 /* Red Siren.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Red Siren.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -90,6 +96,8 @@
 				F381161E8BB9B99F5E9C371C /* Security.framework in Frameworks */,
 				D7E7B1B6F0EA275063F380EF /* UIKit.framework in Frameworks */,
 				1509339EBF87ED79DEE43430 /* CoreAudio.framework in Frameworks */,
+				1587005CCD3A3B471DE72181 /* AudioToolbox.framework in Frameworks */,
+				1587005CCD3A3B471DE72182 /* AudioUnit.framework in Frameworks */,
 				24DE5264819B8529069027FA /* AVFoundation.framework in Frameworks */,
 				1587005CCD3A3B471DE72180 /* WebKit.framework in Frameworks */,
 			);
@@ -107,6 +115,8 @@
 				094A1ECD90ECD007825D95B3 /* Security.framework in Frameworks */,
 				6495EEEF2DFC12CB82351B2B /* UIKit.framework in Frameworks */,
 				2CCB812A8E75939FB4F09B39 /* CoreAudio.framework in Frameworks */,
+				2CCB812A8E75939FB4F09B40 /* AudioToolbox.framework in Frameworks */,
+				2CCB812A8E75939FB4F09B41 /* AudioUnit.framework in Frameworks */,
 				BC4084447113AF48EFC6EB1B /* AVFoundation.framework in Frameworks */,
 				824033B5A7F94F13A4C63E6E /* WebKit.framework in Frameworks */,
 			);
@@ -180,6 +190,8 @@
 			children = (
 				E50E0C8A55BFC5056C3C1116 /* AVFoundation.framework */,
 				4D86BED7C04FA29A575350D3 /* CoreAudio.framework */,
+				4D86BED7C04FA29A575350D4 /* AudioToolbox.framework */,
+				4D86BED7C04FA29A575350D5 /* AudioUnit.framework */,
 				AC56A11F310BBFF30CCFEB63 /* CoreGraphics.framework */,
 				46600E42EDBD4E2F9CFFB94E /* libapp.a */,
 				CA1A066F7EDD869BC014BB9C /* Metal.framework */,
@@ -428,6 +440,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CLANG_ENABLE_MODULES = YES;
+				SWIFT_VERSION = 5.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				ARCHS = (
 					arm64,
 					x86_64,
@@ -480,6 +495,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CLANG_ENABLE_MODULES = YES;
+				SWIFT_VERSION = 5.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				ARCHS = (
 					arm64,
 					x86_64,
@@ -651,6 +669,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CLANG_ENABLE_MODULES = YES;
+				SWIFT_VERSION = 5.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				ARCHS = (
 					arm64,
 					x86_64,
@@ -703,6 +724,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CLANG_ENABLE_MODULES = YES;
+				SWIFT_VERSION = 5.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				ARCHS = (
 					arm64,
 					x86_64,

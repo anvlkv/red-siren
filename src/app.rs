@@ -10,6 +10,7 @@ use tauri_use::{
 use crate::{
     routes::AppRoutes,
     util::layout_context::provide_layout_context,
+    util::playback_service::provide_playback_service,
     util::tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
 };
 
@@ -21,7 +22,7 @@ pub fn App() -> impl IntoView {
     } = use_command::<()>(common::commands::health::GUI_READY);
 
     let UseListenReturn {
-        event_id: app_ready,
+        event_id: _app_ready,
         open,
         error,
         close: close_app_ready,
@@ -113,17 +114,18 @@ pub fn App() -> impl IntoView {
     });
 
     provide_layout_context();
+    provide_playback_service();
 
     view! {
         <>
-        <leptos_styling::StyleSheets/>
-        <div class=window_appearance_class>
-            <main class="bg-red dark:bg-black font-serif text-black dark:text-red relative h-screen w-screen">
-                <Router>
-                    <AppRoutes />
-                </Router>
-            </main>
-        </div>
+            <leptos_styling::StyleSheets />
+            <div class=window_appearance_class>
+                <main class="bg-red dark:bg-black font-serif text-black dark:text-red relative h-screen w-screen">
+                    <Router>
+                        <AppRoutes />
+                    </Router>
+                </main>
+            </div>
         </>
     }
 }

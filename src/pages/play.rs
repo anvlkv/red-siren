@@ -1,26 +1,25 @@
-use leptos::prelude::*;
 use common::RouteId;
-use tauri_use::{
-    use_command, use_invoke, use_invoke_with_args, UseTauriReturn, UseTauriWithReturn,
-};
+use leptos::prelude::*;
 
 use crate::{
     components::{
-        ActivationSourceToggle, AppearanceToggle, CompactMenu, Icon, Instrument, MenuItem, Switch,
-        UiPlacement, UiSize,
+        ActivationSourceToggle, AppearanceToggle, CompactMenu, Instrument, MenuItem, UiPlacement,
     },
     util::{
         layout_context::{expect_layout_contex, LayoutContextReturn},
+        playback_service::{expect_playback_service, PlaybackService},
         tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
     },
 };
 
 #[component]
 pub fn Play() -> impl IntoView {
-    let UseTauriResourceReturn { data: playback, .. } =
-        use_tauri_resource::<common::instrument::events::PlaybackStatePayload>(
-            common::instrument::events::PLAYBACK_STATE,
-        );
+    let UseTauriResourceReturn {
+        data: playback_state,
+        ..
+    } = use_tauri_resource::<common::instrument::events::PlaybackStatePayload>(
+        common::instrument::events::PLAYBACK_STATE,
+    );
 
     // Derive compact menu placement from current instrument layout orientation
     let LayoutContextReturn { orientation, .. } = expect_layout_contex();
@@ -30,29 +29,12 @@ pub fn Play() -> impl IntoView {
         common::orientation::LayoutOrientation::Horizontal => UiPlacement::Bottom,
     });
 
-    let UseTauriWithReturn {
-        error: pause_error,
-        trigger: trigger_pause,
-        ..
-    } = use_command::<()>(common::instrument::commands::PLAYBACK_PAUSE);
-
-    let UseTauriWithReturn {
-        error: resume_error,
-        trigger: trigger_resume,
-        ..
-    } = use_command::<()>(common::instrument::commands::PLAYBACK_RESUME);
-
-    let UseTauriWithReturn {
-        error: start_error,
-        trigger: trigger_start,
-        ..
-    } = use_command::<()>(common::instrument::commands::PLAYBACK_START);
-
-    let UseTauriWithReturn {
-        error: stop_error,
-        trigger: trigger_stop,
-        ..
-    } = use_command::<()>(common::instrument::commands::PLAYBACK_STOP);
+    let PlaybackService {
+        start: cb_start,
+        pause: cb_pause,
+        resume: cb_resume,
+        stop: cb_stop,
+    } = expect_playback_service();
 
     let (menu_items, set_menu_items) = signal(vec![
         MenuItem::Action {
@@ -73,37 +55,8 @@ pub fn Play() -> impl IntoView {
     ]);
 
     Effect::new(move |_| {
-        if let Some(err) = pause_error() {
-            log::error!(
-                "Error invoking {}: {err}",
-                common::instrument::commands::PLAYBACK_PAUSE
-            );
-        }
-
-        if let Some(err) = resume_error() {
-            log::error!(
-                "Error invoking {}: {err}",
-                common::instrument::commands::PLAYBACK_RESUME
-            );
-        }
-
-        if let Some(err) = start_error() {
-            log::error!(
-                "Error invoking {}: {err}",
-                common::instrument::commands::PLAYBACK_START
-            );
-        }
-
-        if let Some(err) = stop_error() {
-            log::error!(
-                "Error invoking {}: {err}",
-                common::instrument::commands::PLAYBACK_STOP
-            );
-        }
-    });
-
-    Effect::new(move |_| {
-        if let Some(common::instrument::events::PlaybackStatePayload { playing }) = playback() {
+        if let Some(common::instrument::events::PlaybackStatePayload { playing }) = playback_state()
+        {
             log::debug!("Updating menu items, the playback is [{playing}]");
 
             if playing {
@@ -111,8 +64,10 @@ pub fn Play() -> impl IntoView {
                     m[0] = MenuItem::Action {
                         icon: "pause",
                         label: "Pause",
-                        action: Callback::new(move |_| {
-                            trigger_pause(Some(()));
+                        action: Callback::new({
+                            move |_| {
+                                cb_pause.run(());
+                            }
                         }),
                     }
                 });
@@ -121,7 +76,7 @@ pub fn Play() -> impl IntoView {
                     m[0] = MenuItem::Action {
                         icon: "resume",
                         label: "Play",
-                        action: Callback::new(move |_| trigger_resume(Some(()))),
+                        action: Callback::new(move |_| cb_resume.run(())),
                     }
                 });
             }
@@ -129,11 +84,11 @@ pub fn Play() -> impl IntoView {
     });
 
     Effect::new(move |_| {
-        trigger_start(Some(()));
+        cb_start.run(());
     });
 
     on_cleanup(move || {
-        trigger_stop(Some(()));
+        cb_stop.run(());
     });
 
     view! {

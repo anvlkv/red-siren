@@ -94,7 +94,7 @@ impl Layout {
     }
 }
 
-const LAYOUT_PRIMES: const_primes::Primes<54> = const_primes::Primes::new();
+const LAYOUT_PRIMES: const_primes::Primes<20> = const_primes::Primes::new();
 
 const MIN_KEY_RADIUS: f32 = 16.0;
 const MIN_BAND_PADDING: f32 = 8.0;
@@ -718,6 +718,12 @@ mod tests {
             k,
             groups.join(&gap)
         )
+    }
+
+    #[test]
+    fn print_primes() {
+        println!("Primes from array:");
+        println!("{LAYOUT_PRIMES:?}");
     }
 
     #[test]

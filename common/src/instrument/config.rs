@@ -254,6 +254,13 @@ impl Config {
         if self.0.is_empty() {
             return Err(InstrumentConfigError::Empty);
         }
+
+        let all_len = self.0.first().map_or(0, |g| g.nodes.len());
+
+        if self.0.iter().any(|g| g.nodes.len() != all_len) {
+            return Err(InstrumentConfigError::InvalidGroups);
+        }
+
         for (gi, g) in self.0.iter().enumerate() {
             g.validate(gi)?;
         }
@@ -280,6 +287,43 @@ impl Config {
             prev = Some(g.channel);
         }
         Ok(())
+    }
+
+    pub fn group_nth_channel(
+        &self,
+        channel: GroupChanel,
+        nth_in_channel: usize,
+    ) -> Option<&GroupConfig> {
+        self.0
+            .iter()
+            .filter(|g| g.channel == channel)
+            .nth(nth_in_channel)
+    }
+
+    pub fn num_groups_left(&self) -> usize {
+        self.0
+            .iter()
+            .filter(|g| matches!(g.channel, GroupChanel::Left))
+            .count()
+    }
+
+    pub fn num_groups_right(&self) -> usize {
+        self.0
+            .iter()
+            .filter(|g| matches!(g.channel, GroupChanel::Right))
+            .count()
+    }
+
+    pub fn num_groups(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn num_nodes_per_group(&self) -> usize {
+        self.0.first().map_or(0, |g| g.nodes.len())
+    }
+
+    pub fn num_nodes_total(&self) -> usize {
+        self.0.iter().map(|g| g.nodes.len()).sum()
     }
 }
 

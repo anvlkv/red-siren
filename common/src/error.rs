@@ -278,6 +278,9 @@ pub enum InstrumentConfigError {
     #[error("empty config")]
     Empty,
 
+    #[error("some groups have varying number of nodes")]
+    InvalidGroups,
+
     #[error("empty group")]
     EmptyGroup,
 

@@ -3,7 +3,7 @@ use common::instrument::Config as InstrumentConfig;
 use common::instrument::Layout as InstrumentLayout;
 
 use cpal::traits::{DeviceTrait, HostTrait};
-use fundsp::hacker::prelude::*;
+use fundsp::hacker32::prelude::*;
 use mint::Vector2;
 use parking_lot::RwLock;
 use std::{
@@ -54,12 +54,12 @@ pub(super) struct Inner {
     activation_source: RwLock<ActivationSource>,
     layout: RwLock<InstrumentLayout>,
     config: RwLock<InstrumentConfig>,
-    dsp_net_frontend: RwLock<Option<fundsp::hacker32::Net>>,
+    dsp_net_frontend: RwLock<Option<Net>>,
     // Primary oscillator node id for dynamic replacement.
     dsp_primary_node_id: RwLock<Option<NodeId>>,
     // Device/output sample rate (Hz) captured at stream start.
     sample_rate: RwLock<Option<f64>>,
-    gain_param: RwLock<Option<fundsp::hacker32::Shared>>,
+    gain_param: RwLock<Option<Shared>>,
     control_tx: RwLock<Option<Sender<Control>>>,
     join: RwLock<Option<thread::JoinHandle<()>>>,
 }
@@ -70,18 +70,17 @@ impl Inner {
     }
 
     /// Build a fresh network based on current config; returns (Net, primary_node_id).
-    fn create_network(&self, sample_rate: f64) -> fundsp::hacker32::Net {
-        let mut net = fundsp::hacker32::Net::new(0, 2);
+    fn create_network(&self, sample_rate: f64) -> Net {
+        let mut net = Net::new(0, 2);
         net.set_sample_rate(sample_rate);
-        let config_len = self.config.read().0.len();
-        let base_freq: f32 = (220.0 + (config_len as f64 * 5.0)) as f32;
+        // let config_len = self.config.read().0.len();
+        // let base_freq: f32 = (220.0 + (config_len as f64 * 5.0)) as f32;
 
-        // Left channel (primary tracked node)
-        let left_id = net.push(Box::new(sine_hz::<f32>(base_freq)));
-        net.pipe_output(left_id);
-        // Right channel slight detune
-        let right_id = net.push(Box::new(sine_hz::<f32>(base_freq * 1.01)));
-        net.pipe_output(right_id);
+        super::system::create_output_system(&self.config.read(), &mut net, 2);
+
+        net.allocate();
+
+        log::debug!("created network: {}", net.display());
 
         net
     }
@@ -103,6 +102,7 @@ impl Inner {
         let new_node = self.create_network(sr);
 
         net.crossfade(primary_id, Fade::Smooth, 0.3, Box::new(new_node));
+        net.check();
         net.commit();
         log::info!("Updated primary node (sr={sr})");
     }
@@ -129,13 +129,14 @@ impl Inner {
         let main_node_id = net.push(Box::new(subnet));
 
         // Insert smoothed gain after the main node
-        let gain_param = fundsp::hacker32::shared(1.0f32);
-        let gain_node = (fundsp::hacker32::var(&gain_param)
-            >> fundsp::hacker32::follow(FOLLOW_RESPONSE_SECS))
-            * fundsp::hacker32::pass();
+        let gain_param = shared(1.0f32);
+        let gain_node = (var(&gain_param) >> follow(FOLLOW_RESPONSE_SECS)) * pass();
         let gain_id = net.push(Box::new(gain_node));
         net.pipe_all(main_node_id, gain_id);
         net.pipe_output(gain_id);
+
+        net.allocate();
+        net.check();
 
         // Split (retain front-end for later mutation).
         let mut backend = net.backend();

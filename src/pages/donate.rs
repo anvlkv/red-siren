@@ -1,11 +1,10 @@
-use crate::components::ContentPage;
+use crate::components::{ContentPage, UiPlacement};
 use leptos::prelude::*;
-use common::RouteId;
 
 #[component]
 pub fn Donate() -> impl IntoView {
     view! {
-        <ContentPage route_id=RouteId::Donate title="Donate">
+        <ContentPage title="Donate" card_animation_direction=UiPlacement::Left>
             <div class="flex flex-col items-center justify-center gap-6">
                 <h2 class="text-2xl italic">"Support the Creator of Red Siren"</h2>
                 <p class="text-xl max-w-md lg:max-w-[42ch] ">

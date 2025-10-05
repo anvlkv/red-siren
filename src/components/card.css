@@ -1,0 +1,227 @@
+/* Card animations — 3D-only with card-level View Transitions
+   - Direction via `.card-card--from-*` (bottom selector first)
+   - Direction maps to `view-transition-name: card-from-*`
+   - No manual enter/leave classes; VT drives enter/leave
+*/
+
+/* Tunables */
+:root {
+    --card-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+    --card-duration: 700ms;
+    --card-tilt: 12deg;
+    --card-tilt-small: 6deg;
+    --card-depth: -10vmin;
+    --card-scale: 0.965;
+    --card-blur: 10px;
+    --card-shift-x: 100vw;
+    --card-shift-y: 100vh;
+    --card-leave-shift-x: 100vw;
+    --card-leave-shift-y: 100vh;
+    --card-leave-scale: 0.85;
+}
+
+/* Scene and base card */
+.card-scene {
+    perspective: 1200px;
+    perspective-origin: 50% 50%;
+    overflow: visible;
+}
+.card-card {
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
+    will-change: transform, filter;
+    transform-origin: center;
+}
+
+/* Map direction classes to card-level view-transition-name */
+.card-card.card-card--from-bottom {
+    view-transition-name: card-from-bottom;
+}
+.card-card.card-card--from-left {
+    view-transition-name: card-from-left;
+}
+.card-card.card-card--from-right {
+    view-transition-name: card-from-right;
+}
+.card-card.card-card--from-top {
+    view-transition-name: card-from-top;
+}
+
+/* Keyframes — ENTER (3D, subtle depth + tilt) */
+@keyframes card-3d-enter-from-left {
+    from {
+        opacity: 0.96;
+        transform: translate3d(
+                calc(-1 * var(--card-shift-x)),
+                0,
+                var(--card-depth)
+            )
+            rotateY(var(--card-tilt)) rotateX(var(--card-tilt-small))
+            scale(var(--card-scale));
+        filter: blur(var(--card-blur));
+    }
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) rotateY(0) rotateX(0) scale(1);
+        filter: blur(0px);
+    }
+}
+@keyframes card-3d-enter-from-right {
+    from {
+        opacity: 0.96;
+        transform: translate3d(var(--card-shift-x), 0, var(--card-depth))
+            rotateY(calc(-1 * var(--card-tilt))) rotateX(var(--card-tilt-small))
+            scale(var(--card-scale));
+        filter: blur(var(--card-blur));
+    }
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) rotateY(0) rotateX(0) scale(1);
+        filter: blur(0px);
+    }
+}
+@keyframes card-3d-enter-from-top {
+    from {
+        opacity: 0.96;
+        transform: translate3d(
+                0,
+                calc(-1 * var(--card-shift-y)),
+                var(--card-depth)
+            )
+            rotateX(var(--card-tilt)) rotateY(var(--card-tilt-small))
+            scale(var(--card-scale));
+        filter: blur(var(--card-blur));
+    }
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) rotateX(0) rotateY(0) scale(1);
+        filter: blur(0px);
+    }
+}
+@keyframes card-3d-enter-from-bottom {
+    from {
+        opacity: 0.96;
+        transform: translate3d(0, var(--card-shift-y), var(--card-depth))
+            rotateX(calc(-1 * var(--card-tilt))) rotateY(var(--card-tilt-small))
+            scale(var(--card-scale));
+        filter: blur(var(--card-blur));
+    }
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) rotateX(0) rotateY(0) scale(1);
+        filter: blur(0px);
+    }
+}
+
+/* Keyframes — LEAVE (3D, move into same direction) */
+@keyframes card-3d-leave-to-left {
+    from {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) rotateY(0) rotateX(0) scale(1);
+        filter: blur(0px);
+    }
+    to {
+        opacity: 0.92;
+        transform: translate3d(
+                calc(-1 * var(--card-leave-shift-x)),
+                0,
+                var(--card-depth)
+            )
+            rotateY(calc(-1 * var(--card-tilt))) rotateX(var(--card-tilt-small))
+            scale(var(--card-leave-scale));
+        filter: blur(var(--card-blur));
+    }
+}
+@keyframes card-3d-leave-to-right {
+    from {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) rotateY(0) rotateX(0) scale(1);
+        filter: blur(0px);
+    }
+    to {
+        opacity: 0.92;
+        transform: translate3d(var(--card-leave-shift-x), 0, var(--card-depth))
+            rotateY(var(--card-tilt)) rotateX(var(--card-tilt-small))
+            scale(var(--card-leave-scale));
+        filter: blur(var(--card-blur));
+    }
+}
+@keyframes card-3d-leave-to-top {
+    from {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) rotateX(0) rotateY(0) scale(1);
+        filter: blur(0px);
+    }
+    to {
+        opacity: 0.92;
+        transform: translate3d(
+                0,
+                calc(-1 * var(--card-leave-shift-y)),
+                var(--card-depth)
+            )
+            rotateX(calc(-1 * var(--card-tilt))) rotateY(var(--card-tilt-small))
+            scale(var(--card-leave-scale));
+        filter: blur(var(--card-blur));
+    }
+}
+@keyframes card-3d-leave-to-bottom {
+    from {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) rotateX(0) rotateY(0) scale(1);
+        filter: blur(0px);
+    }
+    to {
+        opacity: 0.92;
+        transform: translate3d(0, var(--card-leave-shift-y), var(--card-depth))
+            rotateX(var(--card-tilt)) rotateY(var(--card-tilt-small))
+            scale(var(--card-leave-scale));
+        filter: blur(var(--card-blur));
+    }
+}
+
+/* Card-level View Transitions: old/new for each card-from-* name
+   Semantics:
+   - ::view-transition-new(card-from-*) enters from that side (3D)
+   - ::view-transition-old(card-from-*) leaves toward that side (3D)
+*/
+::view-transition-new(card-from-bottom) {
+    animation: card-3d-enter-from-bottom var(--card-duration) var(--card-ease);
+}
+::view-transition-old(card-from-bottom) {
+    animation: card-3d-leave-to-bottom var(--card-duration) var(--card-ease);
+}
+
+::view-transition-new(card-from-left) {
+    animation: card-3d-enter-from-left var(--card-duration) var(--card-ease);
+}
+::view-transition-old(card-from-left) {
+    animation: card-3d-leave-to-left var(--card-duration) var(--card-ease);
+}
+
+::view-transition-new(card-from-right) {
+    animation: card-3d-enter-from-right var(--card-duration) var(--card-ease);
+}
+::view-transition-old(card-from-right) {
+    animation: card-3d-leave-to-right var(--card-duration) var(--card-ease);
+}
+
+::view-transition-new(card-from-top) {
+    animation: card-3d-enter-from-top var(--card-duration) var(--card-ease);
+}
+::view-transition-old(card-from-top) {
+    animation: card-3d-leave-to-top var(--card-duration) var(--card-ease);
+}
+
+/* Accessibility: Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    ::view-transition-new(card-from-bottom),
+    ::view-transition-old(card-from-bottom),
+    ::view-transition-new(card-from-left),
+    ::view-transition-old(card-from-left),
+    ::view-transition-new(card-from-right),
+    ::view-transition-old(card-from-right),
+    ::view-transition-new(card-from-top),
+    ::view-transition-old(card-from-top) {
+        animation: none !important;
+    }
+}

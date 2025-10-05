@@ -19,7 +19,7 @@ use crate::util::{
     animation::ReducedMotionState,
     tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
 };
-use common::{NavStartedPayload, RouteId};
+use common::RouteId;
 use std::str::FromStr;
 
 pub use animation::*;
@@ -54,12 +54,12 @@ pub fn Intro() -> impl IntoView {
 
     // ========== External Context & Resources ==========
 
-    // Navigation context
-    let nav_tx = expect_context::<Signal<Option<crate::components::NavigationTx>>>();
-    let nav_started = expect_context::<Signal<Option<NavStartedPayload>>>();
+    // Navigation handled client-side (use_location + prev path)
 
     // Current location for initial state
     let location = use_location();
+    // Previous path to compute direction and from/to
+    let (prev_path, set_prev_path) = signal(String::from("/"));
 
     // Instrument layout resource (fetched via invoke/event)
     let UseTauriResourceReturn {
@@ -189,22 +189,12 @@ pub fn Intro() -> impl IntoView {
         UseRafFnOptions::default().immediate(false),
     );
 
-    // ========== Navigation Transition Logic ==========
-
-    // Combine navigation state into a derived signal
-    let nav_transition = Signal::derive(move || {
-        let started = nav_started();
-        let tx = nav_tx();
-        match (started, tx) {
-            (Some(s), Some(t)) => Some((s, t)),
-            _ => None,
-        }
-    });
-
-    // Effect: Trigger animations based on navigation transitions
+    // ========== Navigation Transition Logic (client-side) ==========
+    // Drive Intro animations by comparing previous and current routes.
     Effect::new(move |_| {
-        // Only track the memo, not individual signals
-        let transition_data = nav_transition();
+        let current = location.pathname.get();
+        let from = RouteId::from_str(&prev_path.get_untracked()).unwrap_or(RouteId::Home);
+        let to = RouteId::from_str(&current).unwrap_or(RouteId::Home);
 
         // Cache the instrument layout to avoid multiple reactive accesses
         let cached_layout = instrument_layout.get_untracked();
@@ -217,82 +207,56 @@ pub fn Intro() -> impl IntoView {
             );
         }
 
-        if let Some((started, nav_state)) = transition_data {
-            log::debug!("Navigation started payload = {:?}", started);
-            match nav_state {
-                crate::components::NavigationTx::Leave(_)
-                    if is_content(started.from) && started.to == RouteId::Play =>
-                {
-                    log::debug!(
-                        "Detected Leave transition from content -> Play (from = {:?}, to = {:?})",
-                        started.from,
-                        started.to
-                    );
-                    // Use cached layout to avoid reactive dependency
-                    if let Some(layout) = cached_layout {
-                        log::debug!(
-                            "Instrument layout available; scheduling Intro -> Instrument animation"
-                        );
-                        let from_state = animation_state.get_untracked().now();
-                        let to_state =
-                            IntroAnimationState::from(IntroAnimationTarget::Instrument(layout));
-                        animation_state.set(animation_keyframes::intro_to_instrument(
-                            from_state, to_state,
-                        ));
-                        set_animation_pair.set(Some((
-                            IntroAnimationTarget::Intro,
-                            IntroAnimationTarget::Instrument(layout),
-                        )));
-                        completed.set(false);
-                        hidden_svgs.set(false);
-                        log::debug!(
-                            "Animation pair set to Intro -> Instrument; animation_state keyframes = {}",
-                            animation_state.get_untracked().keyframes()
-                        );
-                        // Let the should_animate effect handle resume
-                    } else {
-                        log::debug!("Instrument layout not available; cannot start Intro -> Instrument animation");
-                    }
-                }
-                crate::components::NavigationTx::Enter(_)
-                    if started.from == RouteId::Play && is_content(started.to) =>
-                {
-                    log::debug!(
-                        "Detected Enter transition from Play -> content (from = {:?}, to = {:?})",
-                        started.from,
-                        started.to
-                    );
-                    // Use cached layout to avoid reactive dependency
-                    if let Some(layout) = cached_layout {
-                        log::debug!(
-                            "Instrument layout available; scheduling Instrument -> Intro animation"
-                        );
-                        let from_state =
-                            IntroAnimationState::from(IntroAnimationTarget::Instrument(layout));
-                        let to_state = IntroAnimationState::from(IntroAnimationTarget::Intro);
-                        animation_state.set(animation_keyframes::instrument_to_intro(
-                            from_state, to_state,
-                        ));
-                        set_animation_pair.set(Some((
-                            IntroAnimationTarget::Instrument(layout),
-                            IntroAnimationTarget::Intro,
-                        )));
-                        completed.set(false);
-                        hidden_svgs.set(false);
-                        log::debug!(
-                            "Animation pair set to Instrument -> Intro; animation_state keyframes = {}",
-                            animation_state.get_untracked().keyframes()
-                        );
-                        // Let the should_animate effect handle resume
-                    } else {
-                        log::debug!("Instrument layout not available; cannot start Instrument -> Intro animation");
-                    }
-                }
-                _ => {
-                    // No matching transition for this navigation state
-                }
+        if is_content(from) && to == RouteId::Play {
+            log::debug!(
+                "Detected transition content -> Play (from = {:?}, to = {:?})",
+                from,
+                to
+            );
+            if let Some(layout) = cached_layout {
+                let from_state = animation_state.get_untracked().now();
+                let to_state = IntroAnimationState::from(IntroAnimationTarget::Instrument(layout));
+                animation_state.set(animation_keyframes::intro_to_instrument(
+                    from_state, to_state,
+                ));
+                set_animation_pair.set(Some((
+                    IntroAnimationTarget::Intro,
+                    IntroAnimationTarget::Instrument(layout),
+                )));
+                completed.set(false);
+                hidden_svgs.set(false);
+            } else {
+                log::debug!(
+                    "Instrument layout not available; cannot start Intro -> Instrument animation"
+                );
+            }
+        } else if from == RouteId::Play && is_content(to) {
+            log::debug!(
+                "Detected transition Play -> content (from = {:?}, to = {:?})",
+                from,
+                to
+            );
+            if let Some(layout) = cached_layout {
+                let from_state =
+                    IntroAnimationState::from(IntroAnimationTarget::Instrument(layout));
+                let to_state = IntroAnimationState::from(IntroAnimationTarget::Intro);
+                animation_state.set(animation_keyframes::instrument_to_intro(
+                    from_state, to_state,
+                ));
+                set_animation_pair.set(Some((
+                    IntroAnimationTarget::Instrument(layout),
+                    IntroAnimationTarget::Intro,
+                )));
+                completed.set(false);
+                hidden_svgs.set(false);
+            } else {
+                log::debug!(
+                    "Instrument layout not available; cannot start Instrument -> Intro animation"
+                );
             }
         }
+        // Update previous path after handling transition
+        set_prev_path.set(current);
         // TODO: Tuner transitions (Content <-> Tune) once tuner backend exists
     });
 

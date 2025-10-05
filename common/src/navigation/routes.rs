@@ -19,8 +19,6 @@ use serde::{Deserialize, Serialize};
 #[strum(serialize_all = "snake_case")]
 pub enum RouteId {
     #[strum(serialize = "/")]
-    None,
-    #[strum(serialize = "/home")]
     Home,
     #[strum(serialize = "/about")]
     About,

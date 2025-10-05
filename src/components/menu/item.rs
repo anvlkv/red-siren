@@ -1,5 +1,5 @@
+use common::RouteId;
 use leptos::prelude::*;
-use common::{commands::navigation::NavigateRequestPayload, RouteId};
 
 use crate::components::{Button, Icon, Tooltip, UiPlacement, UiSize};
 
@@ -43,7 +43,7 @@ impl Default for MenuItem {
     }
 }
 
-pub static DEFAULT_MENU_ITEMS: [MenuItem; 3] = [
+pub static DEFAULT_MENU_ITEMS: [MenuItem; 4] = [
     MenuItem::Navigate {
         route: RouteId::Play,
         icon: "play",
@@ -59,12 +59,17 @@ pub static DEFAULT_MENU_ITEMS: [MenuItem; 3] = [
         icon: "info",
         label: "About",
     },
+    MenuItem::Navigate {
+        route: RouteId::Donate,
+        icon: "donate",
+        label: "Help",
+    },
 ];
 
 #[component]
 pub fn MenuItemView(
     #[prop(into)] item: MenuItem,
-    trigger_navigate: WriteSignal<Option<NavigateRequestPayload>>,
+
     #[prop(into, optional)] compact: bool,
     #[prop(optional, into)] menu_placement: Signal<Option<UiPlacement>>,
 ) -> impl IntoView {
@@ -78,35 +83,60 @@ pub fn MenuItemView(
             .or(Some(UiPlacement::Top))
     });
     let on_click = move |_| match item {
-        MenuItem::Navigate { route, .. } => {
-            log::debug!("Trigger navigate to: {route}");
-            trigger_navigate(Some(NavigateRequestPayload { route }));
-        }
         MenuItem::Action { action, .. } => {
             log::info!("Action triggered: {label}");
             action.run(())
+        }
+        MenuItem::Navigate { .. } => {
+            // Navigation handled by <A> link; no-op for button click
         }
     };
 
     view! {
         <div class=move || if compact { "rounded-full" } else { "rounded-lg" } role="menuitem">
-            {if compact {
-                view! {
-                    <Tooltip text=label placement=tooltip_placement>
-                        <Button on:click=on_click square=true size>
-                            <Icon name=icon size />
-                        </Button>
-                    </Tooltip>
+            {match item {
+                MenuItem::Navigate { route, .. } => {
+                    let href: &'static str = route.into();
+                    if compact {
+
+                        view! {
+                            <Tooltip text=label placement=tooltip_placement>
+                                <Button href=route.as_ref() square=true size>
+                                    <Icon name=icon size=size />
+                                </Button>
+                            </Tooltip>
+                        }
+                            .into_any()
+                    } else {
+                        view! {
+                            <Button href=route.as_ref() class="w-full justify-between" size>
+                                <Icon name=icon size=size />
+                                <span class="inline-block flex-grow text-center">{label}</span>
+                            </Button>
+                        }
+                            .into_any()
+                    }
                 }
-                    .into_any()
-            } else {
-                view! {
-                    <Button on:click=on_click class="w-full justify-between" size>
-                        <Icon name=icon size />
-                        <span class="inline-block flex-grow text-center">{label}</span>
-                    </Button>
+                MenuItem::Action { .. } => {
+                    if compact {
+                        view! {
+                            <Tooltip text=label placement=tooltip_placement>
+                                <Button on:click=on_click square=true size>
+                                    <Icon name=icon size=size />
+                                </Button>
+                            </Tooltip>
+                        }
+                            .into_any()
+                    } else {
+                        view! {
+                            <Button on:click=on_click class="w-full justify-between" size>
+                                <Icon name=icon size=size />
+                                <span class="inline-block flex-grow text-center">{label}</span>
+                            </Button>
+                        }
+                            .into_any()
+                    }
                 }
-                    .into_any()
             }}
         </div>
     }

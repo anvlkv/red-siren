@@ -14,6 +14,8 @@ fn main() {
 
     log::info!("Mounting app");
 
+    leptos_styling::init();
+
     mount_to_body(|| {
         view! { <App /> }
     })

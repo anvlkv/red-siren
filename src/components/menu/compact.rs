@@ -1,13 +1,11 @@
+use common::{events::setup::SafeAreaInstestUiIncrementPayload, RouteId};
 use leptos::{html, prelude::*};
-use leptos_use::{use_element_size, use_window_size, UseElementSizeReturn};
-use common::{
-    commands::navigation::NavigateRequestPayload, events::setup::SafeAreaInstestUiIncrementPayload,
-    RouteId,
-};
+use leptos_router::components::A;
+use leptos_use::{use_element_size, UseElementSizeReturn};
 
 use tauri_use::use_invoke_with_args;
 
-use crate::components::{Card, CardAnimation, EdgeSide, NavigationTx, UiPlacement};
+use crate::components::{Button, Card, UiPlacement};
 
 use super::item::{MenuItem, MenuItemView};
 
@@ -17,13 +15,10 @@ pub fn CompactMenu(
     #[prop(into)] placement: Signal<UiPlacement>,
     children: Children,
 ) -> impl IntoView {
-    let nav_tx = expect_context::<Signal<Option<NavigationTx>>>();
     // Materialize children once
     let child_view = children();
 
     let el = NodeRef::<html::Div>::new();
-    // Track window size (reactive) for dynamic, non-hardcoded animation distances
-    let window_size = use_window_size();
 
     let UseElementSizeReturn {
         width: menu_width,
@@ -32,32 +27,10 @@ pub fn CompactMenu(
 
     let tauri_use::UseTauriWithReturn {
         trigger: trigger_inset_update,
-        error: inset_error,
+        error: _inset_error,
         ..
     } = use_invoke_with_args::<common::commands::setup::SafeAreaInstestUiIncrementPayload, ()>(
         common::commands::setup::UI_SAFE_AREA_INSETS_APPLY,
-    );
-
-    let tauri_use::UseTauriWithReturn {
-        trigger: trigger_navigate,
-        error,
-        ..
-    } = use_invoke_with_args::<NavigateRequestPayload, ()>(common::commands::navigation::NAVIGATE);
-
-    let tauri_use::UseTauriWithReturn {
-        trigger: enter_done_trigger,
-        error: enter_error,
-        ..
-    } = use_invoke_with_args::<common::commands::navigation::NavTxPayload, ()>(
-        common::commands::navigation::NAV_ENTER_DONE,
-    );
-
-    let tauri_use::UseTauriWithReturn {
-        trigger: leave_done_trigger,
-        error: leave_error,
-        ..
-    } = use_invoke_with_args::<common::commands::navigation::NavTxPayload, ()>(
-        common::commands::navigation::NAV_LEAVE_DONE,
     );
 
     // Track previous inset values to prevent unnecessary updates and loops
@@ -118,111 +91,7 @@ pub fn CompactMenu(
         }
     });
 
-    // Derived signals for layout-dependent values to prevent remounts
-    let side = Signal::derive(move || match placement() {
-        UiPlacement::Top => EdgeSide::Top,
-        UiPlacement::Bottom => EdgeSide::Bottom,
-        UiPlacement::Left => EdgeSide::Left,
-        UiPlacement::Right => EdgeSide::Right,
-    });
-
     let is_vertical = Signal::derive(move || placement().is_vertical());
-
-    // Animation parameters derived from placement and window size
-    let enter_anim_params = Signal::derive(move || {
-        let w = window_size.width.get() as f32;
-        let h = window_size.height.get() as f32;
-        match side() {
-            EdgeSide::Top | EdgeSide::Bottom => (h * 0.18, -w * 0.35, 0.0),
-            EdgeSide::Left => (w * 0.14, 0.0, -w * 0.15),
-            EdgeSide::Right => (w * 0.14, 0.0, -w * 0.15),
-        }
-    });
-
-    let leave_anim_params = Signal::derive(move || {
-        let w = window_size.width.get() as f32;
-        let h = window_size.height.get() as f32;
-        match side() {
-            EdgeSide::Top | EdgeSide::Bottom => (h * 0.22, -w * 0.32, 0.0),
-            EdgeSide::Left => (w * 0.18, 0.0, -w * 0.2),
-            EdgeSide::Right => (w * 0.18, 0.0, -w * 0.2),
-        }
-    });
-
-    let (docked, set_docked) = signal(false);
-
-    let menu_anim = Memo::new(move |_| {
-        let docked = docked();
-        let current_side = side();
-        let (offset_px_enter, depth_z_px_enter, yaw_deg_enter) = enter_anim_params();
-        let (offset_px_leave, depth_z_px_leave, yaw_deg_leave) = leave_anim_params();
-
-        let nav_tx = nav_tx();
-
-        if let Some(NavigationTx::Leave(_)) = nav_tx {
-            //leave
-            Some(CardAnimation::EdgeLeave3D {
-                side: current_side,
-                offset_px: offset_px_leave,
-                depth_z_px: depth_z_px_leave,
-                yaw_deg: yaw_deg_leave,
-            })
-        } else if docked {
-            None
-        } else {
-            // enter
-            Some(CardAnimation::EdgeEnter3D {
-                side: current_side,
-                offset_px: offset_px_enter,
-                depth_z_px: depth_z_px_enter,
-                yaw_deg: yaw_deg_enter,
-            })
-        }
-    });
-
-    // Animation completion callback
-    let on_anim_done = Callback::new(move |_| {
-        match nav_tx() {
-            Some(NavigationTx::Enter(tx_id)) => {
-                enter_done_trigger(Some(common::commands::navigation::NavTxPayload { tx_id }));
-            }
-            Some(NavigationTx::Leave(tx_id)) => {
-                leave_done_trigger(Some(common::commands::navigation::NavTxPayload { tx_id }));
-            }
-            None => {}
-        }
-        if !docked.get_untracked() {
-            set_docked(true);
-        }
-    });
-
-    // Error logging
-    Effect::new(move |_| {
-        if let Some(err) = error() {
-            log::error!(
-                "Error invoking {}: {err}",
-                common::commands::navigation::NAVIGATE
-            );
-        }
-        if let Some(err) = enter_error() {
-            log::error!(
-                "Error invoking {}: {err}",
-                common::commands::navigation::NAV_ENTER_DONE
-            );
-        }
-        if let Some(err) = leave_error() {
-            log::error!(
-                "Error invoking {}: {err}",
-                common::commands::navigation::NAV_LEAVE_DONE
-            );
-        }
-        if let Some(err) = inset_error() {
-            log::error!(
-                "Error invoking {}: {err}",
-                common::commands::setup::UI_SAFE_AREA_INSETS_APPLY
-            );
-        }
-    });
 
     // Derived CSS classes to prevent recalculation
     let edge_container_cls = Signal::derive(move || match placement() {
@@ -235,19 +104,34 @@ pub fn CompactMenu(
     });
 
     let card_variant = Signal::derive(move || {
-        let docked = docked();
         let place = placement();
-        if !docked {
-            "".to_string()
-        } else {
-            match place {
-                UiPlacement::Bottom => "rounded-b-none",
-                UiPlacement::Top => "rounded-t-none",
-                UiPlacement::Left => "rounded-l-none",
-                UiPlacement::Right => "rounded-r-none",
-            }
-            .to_string()
+        match place {
+            UiPlacement::Bottom => "rounded-b-none px-4",
+            UiPlacement::Top => "rounded-t-none px-4",
+            UiPlacement::Left => "rounded-l-none py-4",
+            UiPlacement::Right => "rounded-r-none py-4",
         }
+        .to_string()
+    });
+
+    let vt_name = Signal::derive(move || {
+        match placement() {
+            UiPlacement::Bottom => "page-slide-down",
+            UiPlacement::Top => "page-slide-up",
+            UiPlacement::Left => "page-slide-left",
+            UiPlacement::Right => "page-slide-right",
+        }
+        .to_string()
+    });
+
+    let card_animation_class = Signal::derive(move || {
+        match placement() {
+            UiPlacement::Bottom => "page-card--enter-from-bottom",
+            UiPlacement::Top => "page-card--enter-from-top",
+            UiPlacement::Left => "page-card--enter-from-left",
+            UiPlacement::Right => "page-card--enter-from-right",
+        }
+        .to_string()
     });
 
     let inner_flex_class = Signal::derive(move || {
@@ -271,31 +155,16 @@ pub fn CompactMenu(
 
     view! {
         <div class=edge_container_cls>
-            <Card
-
-                padding="Sm".to_string()
-                class=card_variant
-                start_animation=Signal::derive(menu_anim)
-                on_animation_done=on_anim_done
-            >
+            <Card padding="Sm".to_string() class=card_variant card_animation_direction=placement>
                 <div class=inner_flex_class>
-                    <button
-                        on:click=move |_| {
-                            trigger_navigate(
-                                Some(NavigateRequestPayload {
-                                    route: RouteId::Home,
-                                }),
-                            );
-                        }
-                        class="contents"
-                    >
+                    <A href=RouteId::Home.as_ref() attr:class="contents">
                         <h1
                             class="block text-3xl italic cursor-pointer hover:underline focus:underline"
                             style=title_style
                         >
                             "Red Siren"
                         </h1>
-                    </button>
+                    </A>
                     {child_view}
                     {move || {
                         items()
@@ -303,13 +172,9 @@ pub fn CompactMenu(
                             .copied()
                             .map(|item| {
                                 view! {
-                                    <MenuItemView
-                                        item
-                                        trigger_navigate
-                                        compact=true
-                                        menu_placement=placement
-                                    />
+                                    <MenuItemView item compact=true menu_placement=placement />
                                 }
+                                    .into_any()
                             })
                             .collect_view()
                     }}

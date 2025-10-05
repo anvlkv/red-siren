@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use leptos_router::components::A;
 
 use crate::components::{UiPlacement, UiSize, UiVariant};
 
@@ -24,10 +25,13 @@ use crate::components::{UiPlacement, UiSize, UiVariant};
 #[component]
 pub fn Button(
     // Content inside the button
-    children: Children,
+    children: ChildrenFn,
 
     #[prop(optional, into)] disabled: Signal<bool>,
     #[prop(optional, into)] class: Signal<String>,
+
+    // Optional link; when provided renders <A> instead of <button>
+    #[prop(optional, into)] href: Signal<Option<String>>,
 
     // Appearance
     #[prop(optional, into)] variant: Signal<UiVariant>,
@@ -108,8 +112,23 @@ pub fn Button(
     });
 
     view! {
-        <button class=class disabled=disabled style=button_style>
-            {children()}
-        </button>
+        {move || {
+            let children = children.clone();
+            if let Some(href) = href() {
+                view! {
+                    <A href=href attr:class=class attr:style=button_style attr:r#type="button">
+                        {children()}
+                    </A>
+                }
+                    .into_any()
+            } else {
+                view! {
+                    <button class=class disabled=disabled style=button_style>
+                        {children()}
+                    </button>
+                }
+                    .into_any()
+            }
+        }}
     }
 }

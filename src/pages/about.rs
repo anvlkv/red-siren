@@ -1,28 +1,11 @@
-use crate::components::{Button, ContentPage, Icon, UiSize};
-use common::{commands::navigation::NavigateRequestPayload, RouteId};
+use crate::components::{Button, ContentPage, Icon, UiPlacement, UiSize};
+use common::RouteId;
 use leptos::prelude::*;
-use tauri_use::{use_invoke_with_args, UseTauriWithReturn};
 
 #[component]
 pub fn About() -> impl IntoView {
-    let UseTauriWithReturn {
-        trigger: navigate_trigger,
-        error: navigate_error,
-        ..
-    } = use_invoke_with_args::<NavigateRequestPayload, ()>(common::commands::navigation::NAVIGATE);
-
-    Effect::new(move |_| {
-        if let Some(err) = navigate_error() {
-            log::error!(
-                "Error invoking {}: {}",
-                common::commands::navigation::NAVIGATE,
-                err
-            );
-        }
-    });
-
     view! {
-        <ContentPage route_id=RouteId::About title="About">
+        <ContentPage title="About" card_animation_direction=UiPlacement::Left>
             <div class="flex flex-col items-center justify-center gap-6">
                 <h2 class="text-2xl text-bold max-w-md lg:max-w-[42ch] italic">
                     "Red Siren is a noise chime"
@@ -45,19 +28,13 @@ pub fn About() -> impl IntoView {
                     </a>
                 </p>
                 <Button
-                    on:click=move |_| {
-                        navigate_trigger(
-                            Some(NavigateRequestPayload {
-                                route: RouteId::Donate,
-                            }),
-                        )
-                    }
+                    href=RouteId::Donate.as_ref()
                     attr:aria-label="Donations"
                     size=UiSize::Lg
                     class="w-full"
                 >
                     <Icon name="donate" size=UiSize::Lg />
-                    <span class="inline-block flex-grow text-center">"Donate"</span>
+                    <span class="inline-block flex-grow text-center">"Help me"</span>
                 </Button>
             </div>
         </ContentPage>

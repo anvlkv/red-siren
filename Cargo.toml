@@ -41,10 +41,12 @@ mint = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 strum = { workspace = true, features = ["derive"] }
+leptos_styling = { version = "0.2", features = ["csr"] }
 tauri-use = "0.2.2"
 thiserror = { workspace = true }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
+
 
 [dev-dependencies]
 common = { workspace = true, features = ["test"] }

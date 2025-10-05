@@ -1,7 +1,6 @@
 mod health;
 mod instrument;
 mod intro;
-mod navigation;
 mod setup;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -41,14 +40,6 @@ pub fn run() {
         setup::window_appearance_override,
         health::health_on_gui_ready,
         health::health_grant_mic_premission,
-        navigation::navigation_bootstrap,
-        navigation::navigation_request,
-        navigation::navigation_leave_done,
-        navigation::navigation_enter_done,
-        navigation::navigation_sync,
-        navigation::navigation_resume,
-        navigation::navigation_back,
-        navigation::navigation_can_go_back,
         intro::intro_pause,
         intro::intro_resume,
         intro::intro_next_frame,
@@ -71,7 +62,7 @@ pub fn run() {
 
         // Existing setup logic
         setup::app_setup(app)?;
-        navigation::setup(app)?;
+
         health::setup(app)?;
         intro::setup(app)?;
         instrument::setup(app)?;

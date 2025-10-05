@@ -1,7 +1,7 @@
-use crate::components::{Button, ContentPage, Icon, UiVariant};
+use crate::components::{Button, ContentPage, Icon, UiPlacement, UiVariant};
+use common::commands::health::MicPermissionPayload;
 use leptos::prelude::*;
-use common::{commands::health::MicPermissionPayload, RouteId};
-use tauri_use::{use_command, use_invoke, UseTauriReturn, UseTauriWithReturn};
+use tauri_use::{use_invoke, UseTauriReturn};
 
 #[component]
 pub fn Permissions() -> impl IntoView {
@@ -27,30 +27,8 @@ pub fn Permissions() -> impl IntoView {
         }
     });
 
-    let UseTauriWithReturn {
-        error: nav_resume_error,
-        trigger: nav_resume_trigger,
-        ..
-    } = use_command::<()>(common::commands::navigation::NAV_RESUME);
-
-    Effect::new(move |_| {
-        if let Some(err) = nav_resume_error() {
-            log::error!(
-                "Error invoking {}: {}",
-                common::commands::navigation::NAV_RESUME,
-                err
-            );
-        }
-    });
-
-    Effect::new(move |_| {
-        if mic_permission_data().is_some() {
-            nav_resume_trigger(Some(()));
-        }
-    });
-
     view! {
-        <ContentPage route_id=RouteId::Permissions title="Permissions">
+        <ContentPage title="Permissions" card_animation_direction=UiPlacement::Left>
             <div class="flex flex-col items-center justify-center gap-6">
                 <h2 class="text-2xl text-bold max-w-md lg:max-w-[42ch] italic">
                     "Why grant microphone access"

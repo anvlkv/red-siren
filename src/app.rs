@@ -1,7 +1,7 @@
+use common::commands::setup::{UpdateWindowAppearancePayload, UpdateWindowSizePayload};
 use leptos::prelude::*;
 use leptos_router::components::*;
 use leptos_use::{signal_debounced, use_preferred_dark, use_window_size, UseWindowSizeReturn};
-use common::commands::setup::{UpdateWindowAppearancePayload, UpdateWindowSizePayload};
 use tauri_use::{
     use_command, use_invoke, use_listen, EventType, UseListenReturn, UseTauriReturn,
     UseTauriWithReturn,
@@ -9,8 +9,8 @@ use tauri_use::{
 
 use crate::{
     routes::AppRoutes,
+    util::layout_context::provide_layout_context,
     util::tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
-    util::layout_context::provide_layout_context
 };
 
 #[component]
@@ -27,12 +27,6 @@ pub fn App() -> impl IntoView {
         close: close_app_ready,
         ..
     } = use_listen::<()>(EventType::Custom(common::events::health::APP_READY));
-
-    let UseTauriWithReturn {
-        error: nav_bootstrap_error,
-        trigger: bootstrap_trigger,
-        ..
-    } = use_command::<()>(common::commands::navigation::NAV_BOOTSTRAP);
 
     let UseTauriReturn {
         trigger: trigger_update_window_appearance,
@@ -87,12 +81,6 @@ pub fn App() -> impl IntoView {
             )
         }
 
-        if let Some(err) = nav_bootstrap_error() {
-            log::error!(
-                "Error invoking {}: {err}",
-                common::commands::navigation::NAV_BOOTSTRAP
-            );
-        }
         if let Some(err) = error_update_window_appearance() {
             log::error!(
                 "Error invoking {}: {err}",
@@ -104,12 +92,6 @@ pub fn App() -> impl IntoView {
                 "Error invoking {}: {err}",
                 common::commands::setup::UPDATE_WINDOW_SIZE
             );
-        }
-    });
-
-    Effect::new(move |_| {
-        if app_ready().is_some() {
-            bootstrap_trigger(Some(()));
         }
     });
 
@@ -133,6 +115,8 @@ pub fn App() -> impl IntoView {
     provide_layout_context();
 
     view! {
+        <>
+        <leptos_styling::StyleSheets/>
         <div class=window_appearance_class>
             <main class="bg-red dark:bg-black font-serif text-black dark:text-red relative h-screen w-screen">
                 <Router>
@@ -140,5 +124,6 @@ pub fn App() -> impl IntoView {
                 </Router>
             </main>
         </div>
+        </>
     }
 }

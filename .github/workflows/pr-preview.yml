@@ -143,7 +143,7 @@ jobs:
       - name: Setup Android signing keystore
         if: env.KEYSTORE_AVAILABLE == 'true' && steps.evaluate.outputs.built == 'true'
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > ${{ runner.temp }}/keystore.jks
+          printf '%s' "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode --ignore-garbage > ${{ runner.temp }}/keystore.jks
           echo "ANDROID_KEYSTORE_PATH=${{ runner.temp }}/keystore.jks" >> $GITHUB_ENV
 
       - name: Initialize Android platform

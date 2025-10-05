@@ -98,7 +98,6 @@ targets:
       - sdk: UIKit.framework
       - sdk: CoreAudio.framework
       - sdk: AudioToolbox.framework
-      - sdk: AudioUnit.framework
       - sdk: AVFoundation.framework
       - sdk: WebKit.framework
     preBuildScripts:
@@ -181,7 +180,6 @@ targets:
       - sdk: UIKit.framework
       - sdk: CoreAudio.framework
       - sdk: AudioToolbox.framework
-      - sdk: AudioUnit.framework
       - sdk: AVFoundation.framework
       - sdk: WebKit.framework
     preBuildScripts:

@@ -18,6 +18,7 @@ pub fn run() {
     {
         builder = builder.plugin(
             tauri_plugin_window_state::Builder::new()
+                .skip_initial_state("splashscreen")
                 .with_state_flags(
                     tauri_plugin_window_state::StateFlags::all()
                         & !tauri_plugin_window_state::StateFlags::VISIBLE,

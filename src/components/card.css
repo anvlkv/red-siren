@@ -30,7 +30,7 @@
 .card-card {
     transform-style: preserve-3d;
     backface-visibility: hidden;
-    will-change: transform, filter;
+    will-change: transform;
     transform-origin: center;
 }
 
@@ -48,69 +48,119 @@
     view-transition-name: card-from-top;
 }
 
+/* Special first appear: staged bottom-like enter without VT */
+.card-card.card-card--first-appear {
+    will-change: transform, filter;
+    animation: card-3d-enter-first var(--card-duration) var(--card-ease) both;
+}
+
 /* Keyframes — ENTER (3D, subtle depth + tilt) */
 @keyframes card-3d-enter-from-left {
-    from {
+    0% {
         opacity: 0.96;
         transform: translate3d(
                 calc(-1 * var(--card-shift-x)),
                 0,
                 var(--card-depth)
             )
-            rotateY(var(--card-tilt)) rotateX(var(--card-tilt-small))
-            scale(var(--card-scale));
-        filter: blur(var(--card-blur));
+            rotateY(calc(1.4 * var(--card-tilt)))
+            rotateX(var(--card-tilt-small)) scale(var(--card-scale));
     }
-    to {
+    10% {
+        opacity: 0.96;
+        transform: translate3d(
+                calc(-1 * var(--card-shift-x)),
+                0,
+                var(--card-depth)
+            )
+            rotateY(calc(1.4 * var(--card-tilt)))
+            rotateX(var(--card-tilt-small)) scale(var(--card-scale));
+    }
+    100% {
         opacity: 1;
         transform: translate3d(0, 0, 0) rotateY(0) rotateX(0) scale(1);
-        filter: blur(0px);
     }
 }
 @keyframes card-3d-enter-from-right {
-    from {
+    0% {
         opacity: 0.96;
         transform: translate3d(var(--card-shift-x), 0, var(--card-depth))
-            rotateY(calc(-1 * var(--card-tilt))) rotateX(var(--card-tilt-small))
-            scale(var(--card-scale));
-        filter: blur(var(--card-blur));
+            rotateY(calc(-1.4 * var(--card-tilt)))
+            rotateX(var(--card-tilt-small)) scale(var(--card-scale));
     }
-    to {
+    10% {
+        opacity: 0.96;
+        transform: translate3d(var(--card-shift-x), 0, var(--card-depth))
+            rotateY(calc(-1.4 * var(--card-tilt)))
+            rotateX(var(--card-tilt-small)) scale(var(--card-scale));
+    }
+    100% {
         opacity: 1;
         transform: translate3d(0, 0, 0) rotateY(0) rotateX(0) scale(1);
-        filter: blur(0px);
     }
 }
 @keyframes card-3d-enter-from-top {
-    from {
+    0% {
         opacity: 0.96;
         transform: translate3d(
                 0,
                 calc(-1 * var(--card-shift-y)),
                 var(--card-depth)
             )
-            rotateX(var(--card-tilt)) rotateY(var(--card-tilt-small))
-            scale(var(--card-scale));
-        filter: blur(var(--card-blur));
+            rotateX(var(--card-tilt))
+            rotateY(calc(1.4 * var(--card-tilt-small))) scale(var(--card-scale));
     }
-    to {
+    10% {
+        opacity: 0.96;
+        transform: translate3d(
+                0,
+                calc(-1 * var(--card-shift-y)),
+                var(--card-depth)
+            )
+            rotateX(var(--card-tilt))
+            rotateY(calc(1.4 * var(--card-tilt-small))) scale(var(--card-scale));
+    }
+    100% {
         opacity: 1;
         transform: translate3d(0, 0, 0) rotateX(0) rotateY(0) scale(1);
-        filter: blur(0px);
     }
 }
 @keyframes card-3d-enter-from-bottom {
-    from {
+    0% {
         opacity: 0.96;
         transform: translate3d(0, var(--card-shift-y), var(--card-depth))
-            rotateX(calc(-1 * var(--card-tilt))) rotateY(var(--card-tilt-small))
-            scale(var(--card-scale));
-        filter: blur(var(--card-blur));
+            rotateX(calc(-1 * var(--card-tilt)))
+            rotateY(calc(1.4 * var(--card-tilt-small))) scale(var(--card-scale));
     }
-    to {
+    10% {
+        opacity: 0.96;
+        transform: translate3d(0, var(--card-shift-y), var(--card-depth))
+            rotateX(calc(-1 * var(--card-tilt)))
+            rotateY(calc(1.4 * var(--card-tilt-small))) scale(var(--card-scale));
+    }
+    100% {
         opacity: 1;
         transform: translate3d(0, 0, 0) rotateX(0) rotateY(0) scale(1);
-        filter: blur(0px);
+    }
+}
+
+/* Special first appear keyframes: like bottom, with a slightly longer staged hold */
+@keyframes card-3d-enter-first {
+    0% {
+        opacity: 0.96;
+        transform: translate3d(0, var(--card-shift-y), var(--card-depth))
+            rotateX(calc(-1 * var(--card-tilt)))
+            rotateY(calc(1.4 * var(--card-tilt-small))) scale(var(--card-scale));
+    }
+    15% {
+        opacity: 0.96;
+        transform: translate3d(0, var(--card-shift-y), var(--card-depth))
+            rotateX(calc(-1 * var(--card-tilt)))
+            rotateY(calc(1.4 * var(--card-tilt-small))) scale(var(--card-scale));
+    }
+    100% {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) rotateX(0) rotateY(0) scale(1);
     }
 }
 
@@ -119,7 +169,6 @@
     from {
         opacity: 1;
         transform: translate3d(0, 0, 0) rotateY(0) rotateX(0) scale(1);
-        filter: blur(0px);
     }
     to {
         opacity: 0.92;
@@ -128,30 +177,26 @@
                 0,
                 var(--card-depth)
             )
-            rotateY(calc(-1 * var(--card-tilt))) rotateX(var(--card-tilt-small))
-            scale(var(--card-leave-scale));
-        filter: blur(var(--card-blur));
+            rotateY(calc(-1.4 * var(--card-tilt)))
+            rotateX(var(--card-tilt-small)) scale(var(--card-leave-scale));
     }
 }
 @keyframes card-3d-leave-to-right {
     from {
         opacity: 1;
         transform: translate3d(0, 0, 0) rotateY(0) rotateX(0) scale(1);
-        filter: blur(0px);
     }
     to {
         opacity: 0.92;
         transform: translate3d(var(--card-leave-shift-x), 0, var(--card-depth))
-            rotateY(var(--card-tilt)) rotateX(var(--card-tilt-small))
-            scale(var(--card-leave-scale));
-        filter: blur(var(--card-blur));
+            rotateY(calc(1.4 * var(--card-tilt)))
+            rotateX(var(--card-tilt-small)) scale(var(--card-leave-scale));
     }
 }
 @keyframes card-3d-leave-to-top {
     from {
         opacity: 1;
         transform: translate3d(0, 0, 0) rotateX(0) rotateY(0) scale(1);
-        filter: blur(0px);
     }
     to {
         opacity: 0.92;
@@ -160,23 +205,22 @@
                 calc(-1 * var(--card-leave-shift-y)),
                 var(--card-depth)
             )
-            rotateX(calc(-1 * var(--card-tilt))) rotateY(var(--card-tilt-small))
+            rotateX(calc(-1 * var(--card-tilt)))
+            rotateY(calc(1.4 * var(--card-tilt-small)))
             scale(var(--card-leave-scale));
-        filter: blur(var(--card-blur));
     }
 }
 @keyframes card-3d-leave-to-bottom {
     from {
         opacity: 1;
         transform: translate3d(0, 0, 0) rotateX(0) rotateY(0) scale(1);
-        filter: blur(0px);
     }
     to {
         opacity: 0.92;
         transform: translate3d(0, var(--card-leave-shift-y), var(--card-depth))
-            rotateX(var(--card-tilt)) rotateY(var(--card-tilt-small))
+            rotateX(var(--card-tilt))
+            rotateY(calc(1.4 * var(--card-tilt-small)))
             scale(var(--card-leave-scale));
-        filter: blur(var(--card-blur));
     }
 }
 
@@ -213,6 +257,23 @@
     animation: card-3d-leave-to-top var(--card-duration) var(--card-ease);
 }
 
+/* Suspend backdrop-blur on the live card only while a VT is active.
+   Toggle .vt-active on a common ancestor (e.g., body) for the duration of the transition. */
+.vt-active .card-card {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+/* During VT, disable filter/backdrop-filter on the transition group to avoid blur artifacts.
+   This ensures the card's own backdrop-blur is not captured in the snapshot. */
+::view-transition-group(card-from-bottom),
+::view-transition-group(card-from-left),
+::view-transition-group(card-from-right),
+::view-transition-group(card-from-top) {
+    filter: none !important;
+    backdrop-filter: none !important;
+}
+
 /* Accessibility: Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
     ::view-transition-new(card-from-bottom),
@@ -223,6 +284,15 @@
     ::view-transition-old(card-from-right),
     ::view-transition-new(card-from-top),
     ::view-transition-old(card-from-top) {
+        animation: none !important;
+    }
+
+    /* Disable appear animations on initial mount and special first appear */
+    .card-card.card-card--from-bottom,
+    .card-card.card-card--from-left,
+    .card-card.card-card--from-right,
+    .card-card.card-card--from-top,
+    .card-card.card-card--first-appear {
         animation: none !important;
     }
 }

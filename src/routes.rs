@@ -1,7 +1,7 @@
 use common::RouteId;
 use leptos::prelude::*;
 use leptos_router::components::*;
-use leptos_router::StaticSegment;
+use leptos_router::{hooks::use_location, location::Location, StaticSegment};
 
 use crate::{
     components::{AppError, ErrorTemplate, Intro},
@@ -10,6 +10,21 @@ use crate::{
 
 #[component]
 pub fn AppRoutes() -> impl IntoView {
+    // Provide a global in-app navigation stack (StoredValue) as context.
+    let nav_stack: StoredValue<Vec<String>> = StoredValue::new(Vec::new());
+    provide_context(nav_stack);
+
+    // Track path changes and push unique consecutive entries.
+    let Location { pathname, .. } = use_location();
+    Effect::new(move |_| {
+        let p = pathname();
+        nav_stack.update_value(|stack| {
+            if stack.last().map(|last| last != &p).unwrap_or(true) {
+                stack.push(p.clone());
+            }
+        });
+    });
+
     view! {
         <Intro>
             <div class="absolute h-full w-full overflow-hidden pointer-events-auto z-1" role="main">

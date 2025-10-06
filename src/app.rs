@@ -67,6 +67,8 @@ pub fn App() -> impl IntoView {
         }
     });
 
+    crate::util::view_transitions::provide_view_transition_class_toggler();
+
     Effect::new(move |_| {
         open();
 

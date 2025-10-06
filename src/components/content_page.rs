@@ -1,7 +1,6 @@
 use common::RouteId;
 use leptos::prelude::*;
 use leptos_router::{hooks::use_navigate, NavigateOptions};
-use leptos_use::use_window;
 
 use crate::components::{Button, Card, Icon, UiPlacement, UiSize, UiVariant};
 
@@ -19,25 +18,63 @@ pub fn ContentPage(
     #[prop(optional, into)]
     card_animation_direction: Signal<Option<UiPlacement>>,
 
+    /// Extra classes for the Card
+    #[prop(optional, into)]
+    card_class: Signal<String>,
+
+    /// Use special first-appear animation
+    #[prop(optional)]
+    first_appear: bool,
+
     #[prop(optional, into)] no_back_button: bool,
 ) -> impl IntoView {
-    let naviagte = use_navigate();
+    let navigate = use_navigate();
+
+    // Merge base card class with user-supplied class
+    let merged_card_class = Signal::derive(move || {
+        let extra = card_class();
+        if extra.is_empty() {
+            "max-h-screen".to_string()
+        } else {
+            format!("{} {}", "max-h-screen", extra)
+        }
+    });
+    let nav_stack = use_context::<StoredValue<Vec<String>>>();
 
     let go_back = Callback::new(move |_| {
-        if let Some(history) = use_window()
-            .as_ref()
-            .and_then(|w| w.history().ok())
-            .filter(|h| h.length().is_ok_and(|l| l > 0))
-        {
-            let _ = history.back();
-        } else {
-            naviagte(RouteId::Home.as_ref(), NavigateOptions::default())
+        if let Some(stack) = nav_stack.as_ref() {
+            // Pop current and navigate to the previous in-app path if present
+            let mut prev: Option<String> = None;
+            stack.update_value(|s| {
+                if s.len() > 1 {
+                    s.pop();
+                    prev = s.last().cloned();
+                }
+            });
+            if let Some(path) = prev {
+                navigate(
+                    &path,
+                    NavigateOptions {
+                        replace: true,
+                        ..Default::default()
+                    },
+                );
+                return;
+            }
         }
+        // Fallback to Home when no previous in-app entry exists
+        navigate(
+            RouteId::Home.as_ref(),
+            NavigateOptions {
+                replace: true,
+                ..Default::default()
+            },
+        );
     });
 
     view! {
         <div class="w-full h-full flex items-center justify-center">
-            <Card class="max-h-screen" card_animation_direction>
+            <Card class=merged_card_class card_animation_direction first_appear=first_appear>
                 <div class="flex items-center justify-between gap-4 mb-6">
                     <Show when=move || !no_back_button>
                         <Button

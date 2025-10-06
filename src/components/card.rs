@@ -33,6 +33,7 @@ pub fn Card(
     #[prop(optional)] interactive: bool,
 
     // Animation
+    #[prop(optional)] first_appear: bool,
     #[prop(optional, into)] card_animation_direction: Signal<Option<UiPlacement>>,
 ) -> impl IntoView {
     // Base layout and typography colors tuned to the existing theme
@@ -91,10 +92,16 @@ pub fn Card(
     };
 
     let class = Signal::derive(move || {
+        let first_class = if first_appear {
+            style_sheet_generated::ClassName::CARD_CARD_FIRST_APPEAR.to_string()
+        } else {
+            Default::default()
+        };
         format!(
-            "{base} {bg_and_border} {rounding} {padding_cls} {width_cls} {interactive_cls} {} {}",
+            "{base} {bg_and_border} {rounding} {padding_cls} {width_cls} {interactive_cls} {} {} {}",
             class(),
-            card_animation_class()
+            card_animation_class(),
+            first_class
         )
     });
 

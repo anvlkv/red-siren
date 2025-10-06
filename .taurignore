@@ -1,8 +1,8 @@
 /src
 /public
 /Cargo.toml
-/docs
-/references
+/docs/**/*.*
+/references/**/*.*
 /.zed
 /.github
 /scripts

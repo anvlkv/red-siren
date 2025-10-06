@@ -1,5 +1,5 @@
 mod composition;
-mod consts;
+pub mod consts;
 mod static_path;
 mod wavering;
 

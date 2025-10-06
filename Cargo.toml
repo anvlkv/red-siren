@@ -30,6 +30,7 @@ leptos_styling = { version = "0.2", features = ["csr"] }
 leptos-use = { version = "0.16.2", default-features = false, features = [
   "signal_debounced",
   "use_document",
+  "use_element_bounding",
   "use_element_size",
   "use_preferred_dark",
   "use_prefers_reduced_motion",

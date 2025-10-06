@@ -5,6 +5,7 @@ use common::{
 use leptos::prelude::*;
 use tauri_use::{use_invoke, UseTauriReturn};
 
+use crate::components::intro::consts::INTRO_SUN_RADIUS;
 use crate::util::layout_context::{expect_layout_contex, LayoutContextReturn};
 
 #[component]
@@ -17,8 +18,11 @@ pub fn InstrumentStrings() -> impl IntoView {
         orientation,
         left_string_position,
         right_string_position,
+        key_radius,
         ..
     } = expect_layout_contex();
+    let ctx_left = super::expect_instrument_context();
+    let ctx_right = ctx_left.clone();
 
     let view_box = move || {
         let space = space();
@@ -32,8 +36,38 @@ pub fn InstrumentStrings() -> impl IntoView {
         let orientation = orientation();
         let left_string_position = left_string_position();
 
+        // Animate only the channel <g>, not inner elements.
+        // Compute a simple channel-level bbox from the shared line endpoints and guard first-time.
+        let (start, end) = left_string_position;
+        let left = start.x.min(end.x);
+        let top = start.y.min(end.y);
+        let right = start.x.max(end.x);
+        let bottom = start.y.max(end.y);
+        let width = right - left;
+        let height = bottom - top;
+        let first_time = {
+            let bbox = super::context::Bounding {
+                x: left,
+                y: top,
+                width,
+                height,
+                top,
+                right,
+                bottom,
+                left,
+            };
+            // Use a fixed channel key (0 = left) for one-shot animation
+            ctx_left.upsert_strings_group_rect(0, bbox)
+        };
+        let class = if first_time {
+            super::instrument_animations::INSTRUMENT_STRINGS_GROUP_APPEAR.to_string()
+        } else {
+            String::new()
+        };
+        let scale = INTRO_SUN_RADIUS / key_radius();
+        let style = format!("--inst-strings-appear-delay: 0ms; --inst-strings-k1-tx: -{}px; --inst-strings-k1-ty: -{}px; --inst-strings-k1-scale: {};", left, top, scale);
         view! {
-            <g>
+            <g id="left-channel-strings" attr:class=class attr:style=style>
                 {move || {
                     (0..num_groups)
                         .filter(|g| {
@@ -69,8 +103,38 @@ pub fn InstrumentStrings() -> impl IntoView {
         let orientation = orientation();
         let right_string_position = right_string_position();
 
+        // Animate only the channel <g>, not inner elements.
+        // Compute a simple channel-level bbox from the shared line endpoints and guard first-time.
+        let (start, end) = right_string_position;
+        let left = start.x.min(end.x);
+        let top = start.y.min(end.y);
+        let right = start.x.max(end.x);
+        let bottom = start.y.max(end.y);
+        let width = right - left;
+        let height = bottom - top;
+        let first_time = {
+            let bbox = super::context::Bounding {
+                x: left,
+                y: top,
+                width,
+                height,
+                top,
+                right,
+                bottom,
+                left,
+            };
+            // Use a fixed channel key (1 = right) for one-shot animation
+            ctx_right.upsert_strings_group_rect(1, bbox)
+        };
+        let class = if first_time {
+            super::instrument_animations::INSTRUMENT_STRINGS_GROUP_APPEAR.to_string()
+        } else {
+            String::new()
+        };
+        let scale = INTRO_SUN_RADIUS / key_radius();
+        let style = format!("--inst-strings-appear-delay: 0ms; --inst-strings-k1-tx: -{}px; --inst-strings-k1-ty: -{}px; --inst-strings-k1-scale: {};", left, top, scale);
         view! {
-            <g>
+            <g id="right-channel-strings" attr:class=class attr:style=style>
                 {move || {
                     (0..num_groups)
                         .filter(|g| {

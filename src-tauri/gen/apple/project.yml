@@ -1,6 +1,6 @@
 name: tauri-app
 options:
-  bundleIdPrefix: com.anvlkv.red-siren.app
+  bundleIdPrefix: com.anvlkv.redsiren.app
   deploymentTarget:
     iOS: 15.6
 fileGroups: [../../src]
@@ -11,7 +11,7 @@ settingGroups:
   app:
     base:
       PRODUCT_NAME: Red Siren
-      PRODUCT_BUNDLE_IDENTIFIER: com.anvlkv.red-siren.app
+      PRODUCT_BUNDLE_IDENTIFIER: com.anvlkv.redsiren.app
       DEVELOPMENT_TEAM: M59X77GZ2V
       CODE_SIGN_STYLE: Automatic
       MARKETING_VERSION: 0.1.0

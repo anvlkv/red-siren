@@ -1,10 +1,14 @@
-use leptos::prelude::*;
 use common::safe_area::SafeArea;
+use leptos::prelude::*;
 
 use crate::{
     components::{Button, UiSize},
     util::layout_context::{expect_layout_contex, LayoutContextReturn},
 };
+
+use super::{expect_instrument_context, instrument_animations};
+use leptos::html::Div;
+use leptos_use::use_element_bounding;
 
 const BAND_STROKE_WIDTH: f32 = 4.0;
 
@@ -171,6 +175,127 @@ fn KeyboardElement(
     first_group_channel: common::instrument::GroupChanel,
     orientation: common::orientation::LayoutOrientation,
 ) -> impl IntoView {
+    let ctx = expect_instrument_context();
+    let LayoutContextReturn {
+        key_radius,
+        key_band_length,
+        key_band_breadth,
+        ..
+    } = expect_layout_contex();
+
+    // NodeRefs for band and key wrapper
+    let band_ref = NodeRef::<Div>::new();
+    let key_ref = NodeRef::<Div>::new();
+
+    // Measure band
+    let leptos_use::UseElementBoundingReturn {
+        x: band_x,
+        y: band_y,
+        top: band_top,
+        right: band_right,
+        bottom: band_bottom,
+        left: band_left,
+        width: band_width,
+        height: band_height,
+        ..
+    } = use_element_bounding(band_ref);
+
+    // Measure key (wrapper)
+    let leptos_use::UseElementBoundingReturn {
+        x: key_x,
+        y: key_y,
+        top: key_top,
+        right: key_right,
+        bottom: key_bottom,
+        left: key_left,
+        width: key_width,
+        height: key_height,
+        ..
+    } = use_element_bounding(key_ref);
+
+    // One-shot guards to attach animation classes only once per element
+    let band_should_animate = RwSignal::new(false);
+    let key_should_animate = RwSignal::new(false);
+
+    // Upsert band bbox; animate on first measurement
+    Effect::new({
+        let ctx = ctx.clone();
+        move |_| {
+            let w = band_width();
+            let h = band_height();
+            if w > 0.0 && h > 0.0 {
+                let bbox = super::context::Bounding {
+                    x: band_x() as f32,
+                    y: band_y() as f32,
+                    width: w as f32,
+                    height: h as f32,
+                    top: band_top() as f32,
+                    right: band_right() as f32,
+                    bottom: band_bottom() as f32,
+                    left: band_left() as f32,
+                };
+                if ctx.upsert_band_bbox((g, k), bbox) {
+                    band_should_animate.set(true);
+                }
+            }
+        }
+    });
+
+    // Upsert key bbox; animate on first measurement
+    Effect::new({
+        let ctx = ctx.clone();
+        move |_| {
+            let w = key_width();
+            let h = key_height();
+            if w > 0.0 && h > 0.0 {
+                let bbox = super::context::Bounding {
+                    x: key_x() as f32,
+                    y: key_y() as f32,
+                    width: w as f32,
+                    height: h as f32,
+                    top: key_top() as f32,
+                    right: key_right() as f32,
+                    bottom: key_bottom() as f32,
+                    left: key_left() as f32,
+                };
+                if ctx.upsert_key_bbox((g, k), bbox) {
+                    key_should_animate.set(true);
+                }
+            }
+        }
+    });
+
+    // no per-element animation delays; instrument synced globally
+
+    // Stage-1 alignment under sun: translate each key wrapper to origin (negative x/y) and scale down to sun radius
+    let key_stage1_vars = move || {
+        let scale = crate::components::intro::consts::INTRO_SUN_RADIUS / key_radius();
+        format!(
+            "--inst-key-k1-tx: -{}px; --inst-key-k1-ty: -{}px; --inst-key-k1-scale: {};",
+            key_x(),
+            key_y(),
+            scale
+        )
+    };
+
+    // Classes with one-shot appear animation
+    let key_wrapper_class = move || {
+        let base = "relative";
+        if key_should_animate() {
+            format!("{} {}", instrument_animations::INSTRUMENT_KEY_APPEAR, base)
+        } else {
+            base.to_string()
+        }
+    };
+    let band_class = move || {
+        let base = "absolute rounded-full bg-red dark:bg-black border-(length:--keyboard-band-stroke-width) border-black dark:border-red";
+        if band_should_animate() {
+            format!("{} {}", instrument_animations::INSTRUMENT_BAND_APPEAR, base)
+        } else {
+            base.to_string()
+        }
+    };
+
     let key_code = (g, k);
     let channel_alignment = match first_group_channel.nth_channel_from_first(g) {
         common::instrument::GroupChanel::Left => {
@@ -187,32 +312,60 @@ fn KeyboardElement(
         }
     };
 
-    view! {
-        <div class="relative">
-            <div
-                class="absolute rounded-full bg-red dark:bg-black border-(length:--keyboard-band-stroke-width) border-black dark:border-red"
-                id=format!("key-band-{g}-{k}")
-                role="presentation"
-                style=match orientation {
-                    common::orientation::LayoutOrientation::Vertical => {
-                        format!(
-                            r#"
+    // Orientation-dependent geometry CSS for the band
+    let band_geom_style = match orientation {
+        common::orientation::LayoutOrientation::Vertical => {
+            format!(
+                r#"
                         width: var(--keyboard-band-length);
                         height: var(--keyboard-band-breadth);
                         {channel_alignment}
-                        "#,
-                        )
-                    }
-                    common::orientation::LayoutOrientation::Horizontal => {
-                        format!(
-                            r#"
+                        "#
+            )
+        }
+        common::orientation::LayoutOrientation::Horizontal => {
+            format!(
+                r#"
                         width: var(--keyboard-band-breadth);
                         height: var(--keyboard-band-length);
                         {channel_alignment}
-                        "#,
-                        )
-                    }
-                }
+                        "#
+            )
+        }
+    };
+    // Make band base square at start by non-uniform scale; unfold to rectangular at 100%
+    let band_scale_vars = move || {
+        let ratio = (key_band_breadth() / key_band_length()).max(0.0);
+        match orientation {
+            common::orientation::LayoutOrientation::Vertical => {
+                format!(
+                    "--inst-band-k1-scale-x: {}; --inst-band-k1-scale-y: 1;",
+                    ratio
+                )
+            }
+            common::orientation::LayoutOrientation::Horizontal => {
+                format!(
+                    "--inst-band-k1-scale-x: 1; --inst-band-k1-scale-y: {};",
+                    ratio
+                )
+            }
+        }
+    };
+    let band_style = move || {
+        let mut s = String::new();
+        s.push_str(&band_scale_vars());
+        s.push_str(&band_geom_style);
+        s
+    };
+
+    view! {
+        <div class=key_wrapper_class node_ref=key_ref style=key_stage1_vars>
+            <div
+                class=band_class
+                node_ref=band_ref
+                id=format!("key-band-{g}-{k}")
+                role="presentation"
+                style=band_style
             ></div>
             <Button
                 class="border-none text-thin text-base"

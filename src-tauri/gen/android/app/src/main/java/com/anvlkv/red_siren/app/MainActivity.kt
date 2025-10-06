@@ -1,4 +1,4 @@
-package com.anvlkv.red_siren.app
+package com.anvlkv.redsiren.app
 
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge

@@ -1,0 +1,384 @@
+/* Instrument animations (foundation)
+   - Animation-only utilities; all layout/visual styling stays in Tailwind
+   - Keyframes use CSS variables; component sets per-element values via style attribute
+   - Sequences are multi-stage to mirror animation.md (stages 1, 1.5, 2, 3, 4)
+   - Strings animate per group (<g>), not per individual path
+   - View Transition: leave animations prepared for the instrument scene
+*/
+
+/* Tunables (defaults) */
+:root {
+    /* Global ease + timing */
+    --inst-instrument-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+    /* Appear */
+    --inst-appear-duration: 600ms;
+    --inst-appear-delay: 0ms;
+    --inst-appear-opacity-from: 0;
+    --inst-appear-opacity-to: 1;
+
+    /* Settle */
+    --inst-settle-duration: 300ms;
+    --inst-settle-delay: 0ms;
+
+    /* View transitions */
+    --inst-vt-leave-duration: 700ms;
+    --inst-vt-leave-ease: var(--inst-instrument-ease);
+    --inst-vt-leave-shift-x: 100vw;
+    --inst-vt-leave-shift-y: 100vh;
+    --inst-vt-leave-depth: -6vmin;
+    --inst-vt-leave-scale: 0.94;
+}
+
+/* -------------------------------------------------------------------------------------------------
+   KEYS — multi-stage appear + settle
+   Stages (variables must be provided per element to avoid restarts and match the composition):
+   - 0%   (Stage 1): collapse to composition origin (sun-aligned), rotated/scaled
+   - 30%  (Stage 1.5): flare-like overscale/offset
+   - 65%  (Stage 2): normalized scale/rotation but collapsed at main-axis terminal (g=max,k=max)
+   - 100% (Stage 3): final position (transform: none) + opacity 1
+-------------------------------------------------------------------------------------------------- */
+@keyframes instrument-key-appear-seq {
+    0% {
+        opacity: var(
+            --inst-key-appear-opacity-from,
+            var(--inst-appear-opacity-from)
+        );
+        transform: translate(var(--inst-key-k1-tx, 0), var(--inst-key-k1-ty, 0))
+            scale(var(--inst-key-k1-scale, 1));
+    }
+    25% {
+        opacity: var(
+            --inst-key-appear-opacity-from,
+            var(--inst-appear-opacity-from)
+        );
+        transform: translate(var(--inst-key-k1-tx, 0), var(--inst-key-k1-ty, 0))
+            scale(var(--inst-key-k1-scale, 1));
+    }
+    30% {
+        /* Stage 1.5 (glare) */
+        opacity: calc(
+            var(
+                    --inst-key-appear-opacity-from,
+                    var(--inst-appear-opacity-from)
+                ) +
+                0.04
+        );
+        transform: translate(
+                var(--inst-key-k15-tx, var(--inst-key-k1-tx, 0)),
+                var(--inst-key-k15-ty, var(--inst-key-k1-ty, 0))
+            )
+            scale(var(--inst-key-k15-scale, 1.06));
+    }
+    65% {
+        /* Stage 2 (normalized, but collapsed on axis) */
+        opacity: calc(
+            var(
+                    --inst-key-appear-opacity-from,
+                    var(--inst-appear-opacity-from)
+                ) +
+                0.08
+        );
+        transform: translate(var(--inst-key-k2-tx, 0), var(--inst-key-k2-ty, 0))
+            scale(var(--inst-key-k2-scale, 1));
+    }
+    100% {
+        opacity: var(
+            --inst-key-appear-opacity-to,
+            var(--inst-appear-opacity-to)
+        );
+        transform: translate(0, 0) scale(1);
+    }
+}
+
+/* Utility classes to apply the above key animations */
+.instrument-key--appear {
+    animation-name: instrument-key-appear-seq;
+    animation-duration: var(
+        --inst-key-appear-duration,
+        var(--inst-appear-duration)
+    );
+    animation-timing-function: var(
+        --inst-key-appear-ease,
+        var(--inst-instrument-ease)
+    );
+    animation-delay: var(--inst-key-appear-delay, var(--inst-appear-delay));
+    animation-fill-mode: both;
+    animation-iteration-count: 1;
+    will-change: transform, opacity;
+}
+
+/* -------------------------------------------------------------------------------------------------
+   BANDS — multi-stage appear + settle + circle->rounded-rect recovery at tail (Stage 4)
+   Notes:
+   - Border radius recovery is included late in the timeline (85%->100%)
+   - Width/height difference recovery is conceptual; final dimensions are provided by layout,
+     we only animate the shape via border-radius to hint "becoming a rounded rect now".
+-------------------------------------------------------------------------------------------------- */
+@keyframes instrument-band-appear-seq {
+    0% {
+        opacity: var(
+            --inst-band-appear-opacity-from,
+            var(--inst-appear-opacity-from)
+        );
+        transform: translate(
+                var(--inst-band-k1-tx, 0),
+                var(--inst-band-k1-ty, 0)
+            )
+            scale(
+                var(--inst-band-k1-scale-x, 1),
+                var(--inst-band-k1-scale-y, 1)
+            );
+        /* rounded-full via tailwind */
+    }
+    25% {
+        opacity: var(
+            --inst-band-appear-opacity-from,
+            var(--inst-appear-opacity-from)
+        );
+        transform: translate(
+                var(--inst-band-k1-tx, 0),
+                var(--inst-band-k1-ty, 0)
+            )
+            scale(
+                var(--inst-band-k1-scale-x, 1),
+                var(--inst-band-k1-scale-y, 1)
+            );
+        /* rounded-full via tailwind */
+    }
+    35% {
+        /* Stage 1.5 (glare: bigger circle) */
+        transform: translate(
+                var(--inst-band-k15-tx, var(--inst-band-k1-tx, 0)),
+                var(--inst-band-k15-ty, var(--inst-band-k1-ty, 0))
+            )
+            scale(
+                var(--inst-band-k15-scale-x, 1.08),
+                var(--inst-band-k15-scale-y, 1.08)
+            );
+        /* rounded-full via tailwind */
+    }
+    70% {
+        /* Stage 2 (normalized circle, collapsed on axis) */
+        opacity: calc(
+            var(
+                    --inst-band-appear-opacity-from,
+                    var(--inst-appear-opacity-from)
+                ) +
+                0.08
+        );
+        transform: translate(
+                var(--inst-band-k2-tx, 0),
+                var(--inst-band-k2-ty, 0)
+            )
+            scale(
+                var(--inst-band-k2-scale-x, 1),
+                var(--inst-band-k2-scale-y, 1)
+            );
+        /* rounded-full via tailwind */
+    }
+    85% {
+        /* Stage 3: in-place (still circle) */
+        opacity: var(
+            --inst-band-appear-opacity-to,
+            var(--inst-appear-opacity-to)
+        );
+        transform: translate(0, 0) scale(1, 1);
+        /* rounded-full via tailwind */
+    }
+    100% {
+        transform: translate(0, 0) scale(1, 1);
+        /* rounded-full via tailwind */
+    }
+}
+
+.instrument-band--appear {
+    animation-name: instrument-band-appear-seq;
+    animation-duration: var(
+        --inst-band-appear-duration,
+        var(--inst-appear-duration)
+    );
+    animation-timing-function: var(
+        --inst-band-appear-ease,
+        var(--inst-instrument-ease)
+    );
+    animation-delay: var(--inst-band-appear-delay, var(--inst-appear-delay));
+    animation-fill-mode: both;
+    animation-iteration-count: 1;
+    will-change: transform, opacity;
+}
+
+/* -------------------------------------------------------------------------------------------------
+   STRINGS (per group) — appear sequence
+   - Apply to <g> group container (e.g., #left-channel-strings, #right-channel-strings)
+   - Variables set per group to adapt rotation/scale/offset sequence:
+     Stage 1: rotated/flipped and placed to composition
+     Stage 2: rotation normalizes, still offset
+     Stage 3: in place
+   - Optional stroke-dash effect (if group-level stroke is used)
+-------------------------------------------------------------------------------------------------- */
+@keyframes instrument-strings-group-appear {
+    0% {
+        opacity: var(
+            --inst-strings-appear-opacity-from,
+            var(--inst-appear-opacity-from)
+        );
+        transform: translate(
+                var(--inst-strings-k1-tx, 0),
+                var(--inst-strings-k1-ty, 0)
+            )
+            scale(var(--inst-strings-k1-scale, 1));
+        stroke-dasharray: var(--inst-strings-k1-dash, 0);
+        stroke-dashoffset: var(--inst-strings-k1-dashoffset, 0);
+    }
+    40% {
+        opacity: calc(
+            var(
+                    --inst-strings-appear-opacity-from,
+                    var(--inst-appear-opacity-from)
+                ) +
+                0.06
+        );
+        transform: translate(
+                var(--inst-strings-k2-tx, 0),
+                var(--inst-strings-k2-ty, 0)
+            )
+            scale(var(--inst-strings-k2-scale, 1));
+        stroke-dasharray: var(
+            --inst-strings-k2-dash,
+            var(--inst-strings-k1-dash, 0)
+        );
+        stroke-dashoffset: var(
+            --inst-strings-k2-dashoffset,
+            var(--inst-strings-k1-dashoffset, 0)
+        );
+    }
+    100% {
+        opacity: var(
+            --inst-strings-appear-opacity-to,
+            var(--inst-appear-opacity-to)
+        );
+        transform: translate(0, 0) scale(1);
+        stroke-dasharray: var(
+            --inst-strings-final-dash,
+            var(--inst-strings-k2-dash, 0)
+        );
+        stroke-dashoffset: 0;
+    }
+}
+
+.instrument-strings-group--appear {
+    animation-name: instrument-strings-group-appear;
+    animation-duration: var(
+        --inst-strings-appear-duration,
+        var(--inst-appear-duration)
+    );
+    animation-timing-function: var(
+        --inst-strings-appear-ease,
+        var(--inst-instrument-ease)
+    );
+    animation-delay: var(--inst-strings-appear-delay, var(--inst-appear-delay));
+    animation-fill-mode: both;
+    animation-iteration-count: 1;
+    will-change: transform, opacity, stroke-dashoffset;
+}
+
+/* -------------------------------------------------------------------------------------------------
+   VIEW TRANSITIONS — leave animations for the instrument scene.
+   Apply one of these classes to the instrument scene container to assign a VT name.
+   Then the ::view-transition-old(...) rule will animate the leaving snapshot.
+-------------------------------------------------------------------------------------------------- */
+.instrument-scene--vt-left {
+    view-transition-name: instrument-leave-left;
+}
+.instrument-scene--vt-right {
+    view-transition-name: instrument-leave-right;
+}
+.instrument-scene--vt-top {
+    view-transition-name: instrument-leave-top;
+}
+.instrument-scene--vt-bottom {
+    view-transition-name: instrument-leave-bottom;
+}
+
+/* Leave keyframes */
+@keyframes instrument-vt-leave-to-left {
+    from {
+        opacity: 1;
+        transform: translate(0, 0) scale(1);
+    }
+    to {
+        opacity: 0.94;
+        transform: translate(calc(-1 * var(--inst-vt-leave-shift-x)), 0)
+            scale(var(--inst-vt-leave-scale));
+    }
+}
+@keyframes instrument-vt-leave-to-right {
+    from {
+        opacity: 1;
+        transform: translate(0, 0) scale(1);
+    }
+    to {
+        opacity: 0.94;
+        transform: translate(var(--inst-vt-leave-shift-x), 0)
+            scale(var(--inst-vt-leave-scale));
+    }
+}
+@keyframes instrument-vt-leave-to-top {
+    from {
+        opacity: 1;
+        transform: translate(0, 0) scale(1);
+    }
+    to {
+        opacity: 0.94;
+        transform: translate(0, calc(-1 * var(--inst-vt-leave-shift-y)))
+            scale(var(--inst-vt-leave-scale));
+    }
+}
+@keyframes instrument-vt-leave-to-bottom {
+    from {
+        opacity: 1;
+        transform: translate(0, 0) scale(1);
+    }
+    to {
+        opacity: 0.94;
+        transform: translate(0, var(--inst-vt-leave-shift-y))
+            scale(var(--inst-vt-leave-scale));
+    }
+}
+
+/* Map VT names to animations */
+::view-transition-old(instrument-leave-left) {
+    animation: instrument-vt-leave-to-left var(--inst-vt-leave-duration)
+        var(--inst-vt-leave-ease) both;
+}
+::view-transition-old(instrument-leave-right) {
+    animation: instrument-vt-leave-to-right var(--inst-vt-leave-duration)
+        var(--inst-vt-leave-ease) both;
+}
+::view-transition-old(instrument-leave-top) {
+    animation: instrument-vt-leave-to-top var(--inst-vt-leave-duration)
+        var(--inst-vt-leave-ease) both;
+}
+::view-transition-old(instrument-leave-bottom) {
+    animation: instrument-vt-leave-to-bottom var(--inst-vt-leave-duration)
+        var(--inst-vt-leave-ease) both;
+}
+
+/* -------------------------------------------------------------------------------------------------
+   Accessibility
+-------------------------------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+    .instrument-key--appear,
+    .instrument-band--appear,
+    .instrument-strings-group--appear {
+        animation: none !important;
+    }
+
+    ::view-transition-old(instrument-leave-left),
+    ::view-transition-old(instrument-leave-right),
+    ::view-transition-old(instrument-leave-top),
+    ::view-transition-old(instrument-leave-bottom) {
+        animation: none !important;
+    }
+}

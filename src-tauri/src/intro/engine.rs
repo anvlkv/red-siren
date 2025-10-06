@@ -115,11 +115,12 @@ impl FundspEngine {
         // Precompute depths (linear ramp)
         let depths: Vec<f32> = (0..cfg.num_snoops)
             .map(|i| {
-                (if cfg.num_snoops <= 1 {
+                ((if cfg.num_snoops <= 1 {
                     0.0
                 } else {
                     cfg.max_depth * (i as f32) / (cfg.num_snoops as f32 - 1.0)
-                }) + cfg.max_depth
+                }) + cfg.max_depth)
+                    * (if i.is_multiple_of(2) { -1.0 } else { 1.0 })
             })
             .collect();
 
@@ -138,13 +139,12 @@ impl FundspEngine {
             let idx = k as usize;
             let depth = depths_for_closure[idx];
             let snoop_be = backs[idx].clone();
-            // Apply branch-specific depth and amplitude modulation
+            let variation = if k.is_multiple_of(2) { 0.025 } else { 0.005 };
+            let separation = if k.is_multiple_of(2) { 0.015 } else { 0.0075 };
 
             ((pass() + ((pass() * depth) * pass())) * (amp * depth))
                 >> declick()
-                >> chorus(k, 0.015, 0.005, mod_freq)
-                // >> (pass() | constant(INTRO_MOD_FREQ_HZ * (k + 1) as f32) | constant(0.5))
-                // >> fresonator(Softsign(1.0 / (k + 1) as f32))
+                >> chorus(k, separation, variation, mod_freq)
                 >> snoop_be
         });
 

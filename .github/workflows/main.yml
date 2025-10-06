@@ -151,7 +151,7 @@ jobs:
           name: "Red Siren v${{ github.run_number }}"
           body: "Automated release from main branch"
           files: |
-            src-tauri/gen/android/app/build/outputs/apk/release/*.apk
+            src-tauri/gen/android/app/build/outputs/apk/*/release/*.apk
             src-tauri/gen/android/app/build/outputs/bundle/release/*.aab
           draft: false
           prerelease: false

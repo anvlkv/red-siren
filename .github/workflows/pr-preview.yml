@@ -163,7 +163,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: preview-android-mobile-${{ github.event.pull_request.number }}
-          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          path: src-tauri/gen/android/app/build/outputs/apk/*/release/*.apk
           if-no-files-found: warn
           retention-days: 7
 
@@ -213,7 +213,7 @@ jobs:
             artifacts/**/appimage/*.AppImage
             artifacts/**/deb/*.deb
             artifacts/**/rpm/*.rpm
-            artifacts/**/*.apk
+            artifacts/**/release/*.apk
           draft: true
           prerelease: true
           fail_on_unmatched_files: false

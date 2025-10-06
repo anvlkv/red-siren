@@ -135,6 +135,28 @@ jobs:
       - name: Initialize Android platform
         run: cargo tauri android init
 
+      - name: Configure Android signing
+        if: env.KEYSTORE_AVAILABLE == 'true'
+        run: |
+          cat >> src-tauri/gen/android/app/build.gradle.kts << 'EOF'
+
+          android {
+              signingConfigs {
+                  create("release") {
+                      storeFile = file(System.getenv("ANDROID_KEYSTORE_PATH") ?: "")
+                      storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                      keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                      keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+                  }
+              }
+              buildTypes {
+                  getByName("release") {
+                      signingConfig = signingConfigs.getByName("release")
+                  }
+              }
+          }
+          EOF
+
       - name: Build Android release
         if: env.KEYSTORE_AVAILABLE == 'true'
         env:

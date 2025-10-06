@@ -88,7 +88,7 @@ targets:
         IPHONEOS_DEPLOYMENT_TARGET: 15.6
       groups: [app]
     dependencies:
-      - framework: libapp.a
+      - framework: libtauri_app_lib.a
         embed: false
       - sdk: CoreGraphics.framework
       - sdk: Metal.framework
@@ -105,8 +105,8 @@ targets:
         name: Build Rust Code
         basedOnDependencyAnalysis: false
         outputFiles:
-          - $(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a
-          - $(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a
+          - $(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libtauri_app_lib.a
+          - $(SRCROOT)/Externals/arm64/${CONFIGURATION}/libtauri_app_lib.a
   tauri-app_iOS_XcodeCloud:
     type: application
     platform: iOS
@@ -170,7 +170,7 @@ targets:
         IPHONEOS_DEPLOYMENT_TARGET: 15.6
       groups: [app]
     dependencies:
-      - framework: libapp.a
+      - framework: libtauri_app_lib.a
         embed: false
       - sdk: CoreGraphics.framework
       - sdk: Metal.framework
@@ -191,9 +191,9 @@ targets:
           cargo build --release --target aarch64-apple-ios -p tauri-app --lib
           mkdir -p "${SRCROOT}/Externals/arm64/${CONFIGURATION}"
           # Copy from workspace root's target directory
-          cp "target/aarch64-apple-ios/release/libtauri_app_lib.a" "${SRCROOT}/Externals/arm64/${CONFIGURATION}/libapp.a"
+          cp "target/aarch64-apple-ios/release/libtauri_app_lib.a" "${SRCROOT}/Externals/arm64/${CONFIGURATION}/libtauri_app_lib.a"
         name: Build Rust Code (Production)
         basedOnDependencyAnalysis: false
         outputFiles:
-          - $(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a
-          - $(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a
+          - $(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libtauri_app_lib.a
+          - $(SRCROOT)/Externals/arm64/${CONFIGURATION}/libtauri_app_lib.a

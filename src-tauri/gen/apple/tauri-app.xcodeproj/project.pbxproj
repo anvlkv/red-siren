@@ -12,14 +12,14 @@
 		1524BBF419A24C289873FCE0 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CA1A066F7EDD869BC014BB9C /* Metal.framework */; };
 		1587005CCD3A3B471DE72180 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CF0F15D9837DA9743995496A /* WebKit.framework */; };
 		24DE5264819B8529069027FA /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E50E0C8A55BFC5056C3C1116 /* AVFoundation.framework */; };
-		28C2357F03584154062C0483 /* libtauri_app_lib.a in Resources */ = {isa = PBXBuildFile; fileRef = 0E9B0214A2E6686750A9979E /* libtauri_app_lib.a */; };
+
 		2CCB812A8E75939FB4F09B39 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D86BED7C04FA29A575350D3 /* CoreAudio.framework */; };
 		316A2D43373CDB2695883363 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = BA38F7BF7C28E04DBA849965 /* LaunchScreen.storyboard */; };
 		5DCFDCE0989E0655641185BE /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = BA38F7BF7C28E04DBA849965 /* LaunchScreen.storyboard */; };
 		5DDC8F8949AE56AB4B683F62 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5384EE0C649F19A31B462538 /* QuartzCore.framework */; };
 		6495EEEF2DFC12CB82351B2B /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C42C09CE350D0304EDF85C59 /* UIKit.framework */; };
-		7093C78D46FFF923EC249AF8 /* libtauri_app_lib.a in Resources */ = {isa = PBXBuildFile; fileRef = 0E9B0214A2E6686750A9979E /* libtauri_app_lib.a */; };
-		7425A66C523CC66EFF87A16E /* libtauri_app_lib.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 46600E42EDBD4E2F9CFFB94E /* libtauri_app_lib.a */; };
+
+
 		74C25A7912AFE30DBE96B590 /* assets in Resources */ = {isa = PBXBuildFile; fileRef = 234C7D371C7B526F7E893B15 /* assets */; };
 		7A50F9841502955D69915755 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B8DBF813DB5FCB214283D94D /* MetalKit.framework */; };
 		7E5D9DF6134425B5314935DE /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = 75C0A66A4769E0B428DFFE16 /* main.mm */; };
@@ -36,20 +36,20 @@
 		CA00951E60FA3594F396EEEC /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AC56A11F310BBFF30CCFEB63 /* CoreGraphics.framework */; };
 		D14065C9536D1B55FCBAAB9E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CFDCAF660F4CA93110C8FB02 /* Assets.xcassets */; };
 		D7E7B1B6F0EA275063F380EF /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C42C09CE350D0304EDF85C59 /* UIKit.framework */; };
-		E743A4C0BA3EB2A23EE051FB /* libtauri_app_lib.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 46600E42EDBD4E2F9CFFB94E /* libtauri_app_lib.a */; };
+
 		F381161E8BB9B99F5E9C371C /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 84E625C1ABDB2D39CB77BF29 /* Security.framework */; };
 		FBEF90481D7BFD305BC1FA9C /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CA1A066F7EDD869BC014BB9C /* Metal.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0E9B0214A2E6686750A9979E /* libtauri_app_lib.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libtauri_app_lib.a; sourceTree = "<group>"; };
+
 		17F6417277634994A2AB63D0 /* mod.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = mod.rs; sourceTree = "<group>"; };
 		234C7D371C7B526F7E893B15 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
 		2A412BE8DBB4F59EF80C8FC8 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
 		3B27E1B0A4D3B87F3168D7D7 /* commands.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = commands.rs; sourceTree = "<group>"; };
 		415CE9B61EE711FB11882F1B /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
 		437CF15B45110A5F8A6B30D4 /* commands.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = commands.rs; sourceTree = "<group>"; };
-		46600E42EDBD4E2F9CFFB94E /* libtauri_app_lib.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libtauri_app_lib.a; sourceTree = "<group>"; };
+
 		4D86BED7C04FA29A575350D3 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
 		52D2167F31104DE0F2BAC639 /* commands.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = commands.rs; sourceTree = "<group>"; };
 		5384EE0C649F19A31B462538 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
@@ -87,7 +87,7 @@
 		4BF9042374A17876719D8062 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
-				E743A4C0BA3EB2A23EE051FB /* libtauri_app_lib.a in Frameworks */,
+
 				7F32469B961E26BABBEF7A94 /* CoreGraphics.framework in Frameworks */,
 				FBEF90481D7BFD305BC1FA9C /* Metal.framework in Frameworks */,
 				8741FC057A7367CE4345B873 /* MetalKit.framework in Frameworks */,
@@ -103,7 +103,7 @@
 		6EEA0490763EB982F7701E3D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
-				7425A66C523CC66EFF87A16E /* libtauri_app_lib.a in Frameworks */,
+
 				CA00951E60FA3594F396EEEC /* CoreGraphics.framework in Frameworks */,
 				1524BBF419A24C289873FCE0 /* Metal.framework in Frameworks */,
 				7A50F9841502955D69915755 /* MetalKit.framework in Frameworks */,
@@ -142,7 +142,6 @@
 		2ECFA35AFF2D5945783C3B8D /* Externals */ = {
 			isa = PBXGroup;
 			children = (
-				85B4182209ABBF5B69BED744 /* arm64 */,
 			);
 			path = Externals;
 			sourceTree = "<group>";
@@ -179,22 +178,8 @@
 			path = bindings;
 			sourceTree = "<group>";
 		};
-		79B9EBA99EB870C794185462 /* debug */ = {
-			isa = PBXGroup;
-			children = (
-				0E9B0214A2E6686750A9979E /* libtauri_app_lib.a */,
-			);
-			path = debug;
-			sourceTree = "<group>";
-		};
-		85B4182209ABBF5B69BED744 /* arm64 */ = {
-			isa = PBXGroup;
-			children = (
-				79B9EBA99EB870C794185462 /* debug */,
-			);
-			path = arm64;
-			sourceTree = "<group>";
-		};
+
+
 		86E4D2974D6FC803E43026BD /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -202,7 +187,7 @@
 				E50E0C8A55BFC5056C3C1116 /* AVFoundation.framework */,
 				4D86BED7C04FA29A575350D3 /* CoreAudio.framework */,
 				AC56A11F310BBFF30CCFEB63 /* CoreGraphics.framework */,
-				46600E42EDBD4E2F9CFFB94E /* libtauri_app_lib.a */,
+
 				CA1A066F7EDD869BC014BB9C /* Metal.framework */,
 				B8DBF813DB5FCB214283D94D /* MetalKit.framework */,
 				5384EE0C649F19A31B462538 /* QuartzCore.framework */,
@@ -356,7 +341,7 @@
 				8A272DD02B0D36ACBCE73E26 /* Assets.xcassets in Resources */,
 				5DCFDCE0989E0655641185BE /* LaunchScreen.storyboard in Resources */,
 				74C25A7912AFE30DBE96B590 /* assets in Resources */,
-				7093C78D46FFF923EC249AF8 /* libtauri_app_lib.a in Resources */,
+
 			);
 		};
 		EF38998162A32E0A54389EE5 /* Resources */ = {
@@ -365,7 +350,7 @@
 				D14065C9536D1B55FCBAAB9E /* Assets.xcassets in Resources */,
 				316A2D43373CDB2695883363 /* LaunchScreen.storyboard in Resources */,
 				C1C55B388E70E077C8222D2D /* assets in Resources */,
-				28C2357F03584154062C0483 /* libtauri_app_lib.a in Resources */,
+
 			);
 		};
 /* End PBXResourcesBuildPhase section */
@@ -376,8 +361,6 @@
 			alwaysOutOfDate = 1;
 			name = "Build Rust Code (Production)";
 			outputPaths = (
-				"$(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libtauri_app_lib.a",
-				"$(SRCROOT)/Externals/arm64/${CONFIGURATION}/libtauri_app_lib.a",
 			);
 			shellPath = /bin/sh;
 			shellScript = (
@@ -398,8 +381,6 @@
 			alwaysOutOfDate = 1;
 			name = "Build Rust Code";
 			outputPaths = (
-				"$(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libtauri_app_lib.a",
-				"$(SRCROOT)/Externals/arm64/${CONFIGURATION}/libtauri_app_lib.a",
 			);
 			shellPath = /bin/sh;
 			shellScript = (
@@ -469,6 +450,9 @@
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				OTHER_LDFLAGS = (
+					"-ltauri_app_lib",
+				);
 				VALID_ARCHS = "arm64  x86_64";
 			};
 			name = debug;
@@ -516,6 +500,9 @@
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				OTHER_LDFLAGS = (
+					"-ltauri_app_lib",
+				);
 				VALID_ARCHS = "arm64  x86_64";
 			};
 			name = debug;
@@ -687,6 +674,9 @@
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				OTHER_LDFLAGS = (
+					"-ltauri_app_lib",
+				);
 				VALID_ARCHS = "arm64  x86_64";
 			};
 			name = release;

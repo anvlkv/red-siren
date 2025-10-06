@@ -69,8 +69,8 @@ pub fn AppearanceToggle(
             ]
             tooltips=vec![
                 "System theme (auto)".to_string(),
-                "In (bright)".to_string(),
-                "Yo (dark)".to_string(),
+                "Bright".to_string(),
+                "Dark".to_string(),
             ]
             current_state=dark_override_value
             on_change=on_appearance_override_change

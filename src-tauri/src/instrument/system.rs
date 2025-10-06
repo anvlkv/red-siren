@@ -1,7 +1,7 @@
 mod input;
 mod output;
 
-use fundsp::net::Net;
+use fundsp::{net::Net, shared::Shared};
 
 pub fn create_output_system(
     config: &common::instrument::Config,
@@ -24,4 +24,6 @@ pub fn create_output_system(
     }
 }
 
-pub fn create_input_system(config: &common::tuner::Data, net: &mut Net) {}
+pub fn create_input_system(config: &common::tuner::Data, net: &mut Net) -> Vec<Shared> {
+    vec![]
+}

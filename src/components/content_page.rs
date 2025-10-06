@@ -1,4 +1,6 @@
+use common::RouteId;
 use leptos::prelude::*;
+use leptos_router::{hooks::use_navigate, NavigateOptions};
 use leptos_use::use_window;
 
 use crate::components::{Button, Card, Icon, UiPlacement, UiSize, UiVariant};
@@ -19,9 +21,17 @@ pub fn ContentPage(
 
     #[prop(optional, into)] no_back_button: bool,
 ) -> impl IntoView {
+    let naviagte = use_navigate();
+
     let go_back = Callback::new(move |_| {
-        if let Some(history) = use_window().as_ref().and_then(|w| w.history().ok()) {
+        if let Some(history) = use_window()
+            .as_ref()
+            .and_then(|w| w.history().ok())
+            .filter(|h| h.length().is_ok_and(|l| l > 0))
+        {
             let _ = history.back();
+        } else {
+            naviagte(RouteId::Home.as_ref(), NavigateOptions::default())
         }
     });
 

@@ -7,6 +7,7 @@
 /* Tunables */
 :root {
     --card-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+    --card-enter-delay: 70ms;
     --card-duration: 700ms;
     --card-tilt: 12deg;
     --card-tilt-small: 6deg;

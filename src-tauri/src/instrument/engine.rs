@@ -1,15 +1,25 @@
-use common::error::{ControlError, InstrumentError, Result as AppResult};
-use common::instrument::Config as InstrumentConfig;
-use common::instrument::Layout as InstrumentLayout;
-
-use cpal::traits::{DeviceTrait, HostTrait};
-use fundsp::hacker32::prelude::*;
-use mint::Vector2;
-use parking_lot::RwLock;
 use std::{
     sync::mpsc::{self, Sender},
     thread,
     time::Duration,
+};
+
+use common::error::{ControlError, InstrumentError, Result as AppResult};
+use common::instrument::Config as InstrumentConfig;
+use common::instrument::Layout as InstrumentLayout;
+use cpal::traits::{DeviceTrait, HostTrait};
+use fundsp::hacker32::prelude::*;
+use mint::Vector2;
+use parking_lot::RwLock;
+use ringbuf::{
+    storage::Heap,
+    traits::{Consumer, Producer, Split},
+    SharedRb,
+};
+
+use super::stream::{
+    spawn_owned_input_stream, spawn_owned_noise_stream, spawn_owned_output_stream, Control,
+    ControlInvocationResult, GenType, ProdType,
 };
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,8 +50,7 @@ impl From<ActivationSource> for u8 {
 const CONTROL_INVOKE_TIMEOUT_MS: u64 = 500;
 const FADE_DURATION_MS: u64 = 120;
 const FOLLOW_RESPONSE_SECS: f32 = 0.01;
-
-use super::stream::{spawn_owner, Control, ControlInvocationResult};
+const BUFFER_DURATION_MS: u64 = 100;
 
 #[derive(Default)]
 pub struct InstrumentEngine {
@@ -70,7 +79,7 @@ impl Inner {
     }
 
     /// Build a fresh network based on current config; returns (Net, primary_node_id).
-    fn create_network(&self, sample_rate: f64) -> Net {
+    fn create_output_network(&self, sample_rate: f64) -> Net {
         let mut net = Net::new(0, 2);
         net.set_sample_rate(sample_rate);
         // let config_len = self.config.read().0.len();
@@ -99,7 +108,7 @@ impl Inner {
         };
 
         let sr = self.sample_rate.read().unwrap_or(44100.0);
-        let new_node = self.create_network(sr);
+        let new_node = self.create_output_network(sr);
 
         net.crossfade(primary_id, Fade::Smooth, 0.3, Box::new(new_node));
         net.check();
@@ -113,18 +122,93 @@ impl Inner {
         }
 
         let host = cpal::default_host();
-        let device = host
+        let output_device = host
             .default_output_device()
             .ok_or(InstrumentError::DeviceUnavailable)?;
-        let default_cfg = device
+        let output_default_cfg = output_device
             .default_output_config()
             .map_err(|_| InstrumentError::OutputConfigUnavailable)?;
 
-        let sample_rate = default_cfg.sample_rate().0 as f64;
-        *self.sample_rate.write() = Some(sample_rate);
-        let subnet = self.create_network(sample_rate);
-        let mut net = Net::new(0, 2);
-        net.set_sample_rate(sample_rate);
+        // FIXME: handle more than 2 channels
+        let output_channels = std::cmp::Ord::min(output_default_cfg.channels(), 2) as usize;
+
+        let activation_src = ActivationSource::from(self.activation_source());
+
+        let (act_sx, act_handle, activator_cons) =
+            if matches!(activation_src, ActivationSource::Mic) {
+                let input_device = host
+                    .default_input_device()
+                    .ok_or(InstrumentError::DeviceUnavailable)?;
+                let input_default_cfg = input_device
+                    .default_input_config()
+                    .map_err(|_| InstrumentError::InputConfigUnavailable)?;
+
+                // Prepare CPAL stream config
+                let stream_cfg: cpal::StreamConfig = input_default_cfg.clone().into();
+
+                let channels_in = stream_cfg.channels as usize;
+                let samples_per_ms = stream_cfg.sample_rate.0 as f64 / 1000.0;
+                let cap_samples = ((samples_per_ms * BUFFER_DURATION_MS as f64).ceil() as usize)
+                    .saturating_mul(channels_in);
+                let capacity = cap_samples.next_power_of_two();
+
+                let (mut buffer_prod, buffer_cons) = SharedRb::<Heap<f64>>::new(capacity).split();
+
+                let (sx, join) = spawn_owned_input_stream(
+                    input_device,
+                    input_default_cfg,
+                    stream_cfg,
+                    move || {
+                        // Downmix to mono before pushing into the ring buffer.
+                        let ch = channels_in;
+                        let mut mono = Vec::<f64>::new();
+
+                        let prod = move |sample: &[f64]| -> usize {
+                            if ch <= 1 {
+                                buffer_prod.push_slice(sample)
+                            } else {
+                                mono.clear();
+                                mono.reserve(sample.len() / ch);
+                                for frame in sample.chunks(ch) {
+                                    let sum: f64 = frame.iter().copied().sum();
+                                    mono.push(sum / ch as f64);
+                                }
+                                buffer_prod.push_slice(&mono)
+                            }
+                        };
+
+                        let boxed: Box<ProdType> = Box::new(prod);
+
+                        boxed
+                    },
+                )?;
+
+                (sx, join, buffer_cons)
+            } else {
+                let channels_in = 1usize;
+                let samples_per_ms = output_default_cfg.sample_rate().0 as f64 / 1000.0;
+                let cap_samples = ((samples_per_ms * BUFFER_DURATION_MS as f64).ceil() as usize)
+                    .saturating_mul(channels_in);
+                let capacity = cap_samples.next_power_of_two();
+
+                let (mut buffer_prod, buffer_cons) = SharedRb::<Heap<f64>>::new(capacity).split();
+
+                let (sx, join) = spawn_owned_noise_stream(move || {
+                    let prod = move |sample: &[f64]| buffer_prod.push_slice(sample);
+
+                    let boxed: Box<ProdType> = Box::new(prod);
+
+                    boxed
+                })?;
+
+                (sx, join, buffer_cons)
+            };
+
+        let output_sample_rate = output_default_cfg.sample_rate().0 as f64;
+        *self.sample_rate.write() = Some(output_sample_rate);
+        let subnet = self.create_output_network(output_sample_rate);
+        let mut net = Net::new(0, output_channels);
+        net.set_sample_rate(output_sample_rate);
 
         let main_node_id = net.push(Box::new(subnet));
 
@@ -133,6 +217,7 @@ impl Inner {
         let gain_node = (var(&gain_param) >> follow(FOLLOW_RESPONSE_SECS)) * pass();
         let gain_id = net.push(Box::new(gain_node));
         net.pipe_all(main_node_id, gain_id);
+        net.pipe_input(main_node_id);
         net.pipe_output(gain_id);
 
         net.allocate();
@@ -143,7 +228,7 @@ impl Inner {
         let front = net;
 
         // Prepare CPAL stream config
-        let stream_cfg: cpal::StreamConfig = default_cfg.clone().into();
+        let stream_cfg: cpal::StreamConfig = output_default_cfg.clone().into();
 
         // Store front-end & primary node id.
         {
@@ -153,12 +238,32 @@ impl Inner {
         }
 
         // Create and start the stream in the dedicated owner thread.
-        let (tx, handle) = spawn_owner(device, default_cfg, stream_cfg, move || {
-            let next_value = move || backend.get_stereo();
+        let (tx, handle) = spawn_owned_output_stream(
+            output_device,
+            output_default_cfg,
+            stream_cfg,
+            output_channels,
+            move || {
+                // Move the activator consumer into the generator closure scope.
+                let mut activator_cons = activator_cons;
 
-            let boxed: Box<dyn FnMut() -> (f32, f32) + Send> = Box::new(next_value);
-            boxed
-        })?;
+                let mut in_sample = [0_f32];
+                let mut out_sample = [0_f32, 0_f32];
+
+                // Ephemeral pop_iter per tick: borrow only within this call, avoiding non-Send references.
+                let next_value = move || {
+                    let mut tmp = [0.0f64; 1];
+                    if activator_cons.pop_slice(&mut tmp) > 0 {
+                        in_sample[0] = tmp[0] as f32;
+                    }
+                    backend.tick(&in_sample, &mut out_sample);
+                    (out_sample[0], out_sample[1])
+                };
+
+                let boxed: Box<GenType> = Box::new(next_value);
+                boxed
+            },
+        )?;
         {
             *self.control_tx.write() = Some(tx);
             *self.join.write() = Some(handle);
@@ -241,6 +346,13 @@ impl Inner {
         let mut src = self.activation_source.write();
         if *src != requested {
             *src = requested;
+
+            // recreate system with the selected activation source
+            if self.playing() {
+                _ = self.stop_playback()?;
+                _ = self.start_playback()?;
+            }
+
             Ok(true)
         } else {
             Ok(false)

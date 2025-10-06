@@ -196,6 +196,8 @@ pub enum InstrumentError {
     DeviceUnavailable,
     #[error("default output config unavailable")]
     OutputConfigUnavailable,
+    #[error("default input config unavailable")]
+    InputConfigUnavailable,
     #[error("unsupported sample format: {0}")]
     UnsupportedSampleFormat(String),
     #[error("stream build failed: {detail}")]

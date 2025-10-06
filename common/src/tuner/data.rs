@@ -42,12 +42,12 @@ use crate::{
 /// Represents the full tuner data set (layout + sensors + FFT mapping).
 #[derive(Debug, PartialEq, Clone)]
 pub struct Data {
-    layout: Layout,
-    sample_rate: f32,
-    fft_size: usize,
-    sensors: Vec<Sensor>,
+    pub layout: Layout,
+    pub sample_rate: f32,
+    pub fft_size: usize,
+    pub sensors: Vec<Sensor>,
     /// Cached min & max bins used (inclusive start, exclusive end overall)
-    global_bin_span: (usize, usize),
+    pub global_bin_span: (usize, usize),
 }
 
 impl Data {

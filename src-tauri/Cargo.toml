@@ -16,10 +16,13 @@ name = "tauri_app_lib"
 [dependencies]
 common = { workspace = true, features = ["tauri"] }
 cpal = "0.16"
+dasp_sample = "0.11.0"
+fastrand = "2.3.0"
 fundsp = "0.20"
 log = { workspace = true }
 mint = { workspace = true, features = ["serde"] }
 parking_lot = "0.12"
+ringbuf = "0.4.8"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 strum = { workspace = true, features = ["derive"] }

@@ -1,20 +1,13 @@
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
+use common::error::InstrumentError;
 use cpal::traits::{DeviceTrait, StreamTrait};
 use cpal::{SampleFormat, Stream, StreamConfig, SupportedStreamConfig};
 
-use common::error::InstrumentError;
+use super::{Control, ControlInvocationResult};
 
-/// Result of a control invocation, sent back to the caller per request.
-pub type ControlInvocationResult = Result<(), String>;
-
-/// Control messages for the stream owner.
-pub enum Control {
-    Pause(Sender<ControlInvocationResult>),
-    Resume(Sender<ControlInvocationResult>),
-    Shutdown(Sender<ControlInvocationResult>),
-}
+pub type GenType = dyn FnMut() -> (f32, f32) + Send;
 
 /// Spawn an owner thread that creates and owns the CPAL stream.
 /// The stream is created inside the owner thread and never moved across threads.
@@ -22,14 +15,15 @@ pub enum Control {
 ///
 /// - `device`, `default_cfg`, `stream_cfg` are consumed and moved into the owner.
 /// - `make_next` constructs the audio sample source within the owner thread to avoid cross-thread moves.
-pub fn spawn_owner<FMake>(
+pub fn spawn_owned_output_stream<FMake>(
     device: cpal::Device,
     default_cfg: SupportedStreamConfig,
     stream_cfg: StreamConfig,
+    channels: usize,
     make_next: FMake,
 ) -> Result<(Sender<Control>, thread::JoinHandle<()>), InstrumentError>
 where
-    FMake: Send + 'static + FnOnce() -> Box<dyn FnMut() -> (f32, f32) + Send>,
+    FMake: Send + 'static + FnOnce() -> Box<GenType>,
 {
     let (tx, rx): (Sender<Control>, Receiver<Control>) = mpsc::channel();
     // One-shot init channel so the caller learns whether stream creation succeeded.
@@ -40,7 +34,7 @@ where
         let next = make_next();
 
         // Build the stream in this thread; never move it elsewhere.
-        let stream = match run(&device, &stream_cfg, &default_cfg, next) {
+        let stream = match run_output(&device, &stream_cfg, &default_cfg, channels, next) {
             Ok(s) => s,
             Err(e) => {
                 let _ = init_tx.send(Err(InstrumentError::StartFailed {
@@ -103,13 +97,13 @@ where
     }
 }
 
-/// Moved from engine.rs (L172-178):
 /// Build output stream across supported sample formats.
-pub fn run(
+fn run_output(
     device: &cpal::Device,
     config: &StreamConfig,
     default_cfg: &SupportedStreamConfig,
-    mut next_sample: Box<dyn FnMut() -> (f32, f32) + Send>,
+    channels: usize,
+    mut next_sample: Box<GenType>,
 ) -> common::error::Result<Stream> {
     let err_cb = |err| log::error!("instrument playback stream error: {err}");
 
@@ -117,7 +111,7 @@ pub fn run(
         SampleFormat::F32 => device.build_output_stream(
             config,
             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                write_data(data, 2, &mut next_sample)
+                write_data(data, channels, &mut next_sample)
             },
             err_cb,
             None,
@@ -125,7 +119,7 @@ pub fn run(
         SampleFormat::I16 => device.build_output_stream(
             config,
             move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
-                write_data(data, 2, &mut next_sample)
+                write_data(data, channels, &mut next_sample)
             },
             err_cb,
             None,
@@ -133,7 +127,7 @@ pub fn run(
         SampleFormat::U16 => device.build_output_stream(
             config,
             move |data: &mut [u16], _: &cpal::OutputCallbackInfo| {
-                write_data(data, 2, &mut next_sample)
+                write_data(data, channels, &mut next_sample)
             },
             err_cb,
             None,
@@ -153,9 +147,8 @@ pub fn run(
     })
 }
 
-/// Moved from engine.rs (L223-224):
 /// Interleave stereo frames into the output buffer using next_sample.
-pub fn write_data<T>(output: &mut [T], channels: usize, next_sample: &mut dyn FnMut() -> (f32, f32))
+fn write_data<T>(output: &mut [T], channels: usize, next_sample: &mut GenType)
 where
     T: cpal::SizedSample + cpal::FromSample<f64>,
 {

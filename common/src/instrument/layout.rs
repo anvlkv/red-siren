@@ -4,7 +4,7 @@ use mint::{Point2, Vector2};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    instrument::GroupChanel,
+    instrument::GroupChannel,
     orientation::LayoutOrientation,
     safe_area::{SafeArea, DEFAULT_SAFE_AREA},
     Line,
@@ -37,7 +37,7 @@ pub struct Layout {
     /// Number of groups
     pub num_groups: NonZero<u8>,
     /// Channel of the first group in the layout
-    pub first_group_channel: super::GroupChanel,
+    pub first_group_channel: super::GroupChannel,
     /// Whether dark or bright scale is used
     ///
     /// `Scale::Yo` by default
@@ -62,9 +62,9 @@ impl Default for Layout {
             orientation: LayoutOrientation::Horizontal,
             left_string_position: (default_pt, default_pt),
             right_string_position: (default_pt, default_pt),
-            num_keys_per_group: NonZero::new(1).unwrap(),
-            num_groups: NonZero::new(1).unwrap(),
-            first_group_channel: GroupChanel::Right,
+            num_keys_per_group: NonZero::new(2).unwrap(),
+            num_groups: NonZero::new(2).unwrap(),
+            first_group_channel: GroupChannel::Right,
         }
     }
 }
@@ -157,7 +157,7 @@ impl Candidate {
             return None;
         }
 
-        let first_group_channel = GroupChanel::from_keys_groups(self.k, self.g)
+        let first_group_channel = GroupChannel::from_keys_groups(self.k, self.g)
             .nth_channel_from_first(
                 (orientation.safe_length(space, safe_area_padding).round() as usize) % 2,
             );
@@ -548,8 +548,8 @@ fn fallback(
         key_bands_gap: key_gap,
         groups_gap: group_gap,
         num_keys_per_group: NonZero::new(2).unwrap(),
-        num_groups: NonZero::new(1).unwrap(),
-        first_group_channel: GroupChanel::from_keys_groups(2, 1),
+        num_groups: NonZero::new(2).unwrap(),
+        first_group_channel: GroupChannel::from_keys_groups(2, 1),
         scale: super::Scale::default(),
     }
 }

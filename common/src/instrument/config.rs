@@ -12,7 +12,7 @@ pub struct Config(pub Vec<GroupConfig>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 /// Output chanel of the group
-pub enum GroupChanel {
+pub enum GroupChannel {
     Left,
     Right,
 }
@@ -21,7 +21,7 @@ fn fundamental_frequency(n: usize, v: f64, l: f64) -> f64 {
     (n as f64 * v) / (2.0 * l)
 }
 
-impl GroupChanel {
+impl GroupChannel {
     pub(crate) fn from_keys_groups(k: u32, g: u32) -> Self {
         match (g.is_multiple_of(2), k.is_multiple_of(2)) {
             (false, false) => Self::Left,
@@ -108,7 +108,7 @@ impl Scale {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GroupConfig {
     /// Output channel
-    pub channel: GroupChanel,
+    pub channel: GroupChannel,
     /// Group nodes
     pub nodes: Vec<NodeConfig>,
     /// Controls pause at zero crossings
@@ -279,7 +279,7 @@ impl Config {
     /// - Resonate in recommended frequencies
     /// - Total volume does not exceed max dB
     fn validate_channels(&self) -> Result<(), InstrumentConfigError> {
-        let mut prev: Option<GroupChanel> = None;
+        let mut prev: Option<GroupChannel> = None;
         for g in &self.0 {
             if prev == Some(g.channel) {
                 return Err(InstrumentConfigError::ChannelsConfigurationInvalid);
@@ -291,7 +291,7 @@ impl Config {
 
     pub fn group_nth_channel(
         &self,
-        channel: GroupChanel,
+        channel: GroupChannel,
         nth_in_channel: usize,
     ) -> Option<&GroupConfig> {
         self.0
@@ -303,14 +303,14 @@ impl Config {
     pub fn num_groups_left(&self) -> usize {
         self.0
             .iter()
-            .filter(|g| matches!(g.channel, GroupChanel::Left))
+            .filter(|g| matches!(g.channel, GroupChannel::Left))
             .count()
     }
 
     pub fn num_groups_right(&self) -> usize {
         self.0
             .iter()
-            .filter(|g| matches!(g.channel, GroupChanel::Right))
+            .filter(|g| matches!(g.channel, GroupChannel::Right))
             .count()
     }
 
@@ -397,14 +397,14 @@ fn build_group_nodes(
 /// - Even spread 0..2π across nodes
 /// - Per-group offset so groups are decorrelated
 /// - Per-channel offset to widen stereo image
-fn assign_node_phases(nodes: &mut [NodeConfig], group_index: usize, channel: GroupChanel) {
+fn assign_node_phases(nodes: &mut [NodeConfig], group_index: usize, channel: GroupChannel) {
     if nodes.is_empty() {
         return;
     }
     let group_offset = (group_index as f64) * std::f64::consts::PI / 3.0;
     let channel_offset = match channel {
-        GroupChanel::Left => 0.0,
-        GroupChanel::Right => std::f64::consts::FRAC_PI_4,
+        GroupChannel::Left => 0.0,
+        GroupChannel::Right => std::f64::consts::FRAC_PI_4,
     };
     let n = nodes.len() as f64;
     for (k, node) in nodes.iter_mut().enumerate() {
@@ -498,20 +498,20 @@ mod tests {
     #[test]
     fn test_group_channel_nth_channel_from_first() {
         assert_eq!(
-            GroupChanel::Left.nth_channel_from_first(0),
-            GroupChanel::Left
+            GroupChannel::Left.nth_channel_from_first(0),
+            GroupChannel::Left
         );
         assert_eq!(
-            GroupChanel::Left.nth_channel_from_first(1),
-            GroupChanel::Right
+            GroupChannel::Left.nth_channel_from_first(1),
+            GroupChannel::Right
         );
         assert_eq!(
-            GroupChanel::Right.nth_channel_from_first(0),
-            GroupChanel::Right
+            GroupChannel::Right.nth_channel_from_first(0),
+            GroupChannel::Right
         );
         assert_eq!(
-            GroupChanel::Right.nth_channel_from_first(1),
-            GroupChanel::Left
+            GroupChannel::Right.nth_channel_from_first(1),
+            GroupChannel::Left
         );
     }
 
@@ -556,7 +556,7 @@ mod tests {
             band_range: super::SOFT_MIN_FREQ_HZ..super::SOFT_MAX_FREQ_HZ,
         };
         let group = GroupConfig {
-            channel: GroupChanel::Left,
+            channel: GroupChannel::Left,
             nodes: vec![node],
             a_coef: 0.5,
         };
@@ -668,7 +668,7 @@ mod tests {
             band_range: SOFT_MIN_FREQ_HZ..SOFT_MAX_FREQ_HZ,
         };
         let group = GroupConfig {
-            channel: GroupChanel::Left,
+            channel: GroupChannel::Left,
             nodes: vec![dummy_node.clone(); excessive_nodes],
             a_coef: 0.5,
         };
@@ -685,7 +685,7 @@ mod tests {
         // Construct a config that is just at the limit
         let ok_nodes = MAX_DBS;
         let group_ok = GroupConfig {
-            channel: GroupChanel::Left,
+            channel: GroupChannel::Left,
             nodes: vec![dummy_node; ok_nodes],
             a_coef: 0.5,
         };

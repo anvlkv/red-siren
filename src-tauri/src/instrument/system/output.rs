@@ -1,4 +1,4 @@
-use common::instrument::{Config, GroupChanel, GroupConfig, NodeConfig};
+use common::instrument::{Config, GroupChannel, GroupConfig, NodeConfig};
 use fundsp::{
     hacker32::prelude::*,
     typenum::{UInt, UTerm, Unsigned, B1},
@@ -100,20 +100,19 @@ pub fn mono_system(config: &Config, net: &mut Net) {
     );
 }
 
-pub fn stereo_system(config: &Config, net: &mut Net) {
-    let nodes_count_per_group = config.num_nodes_per_group();
-    let groups_count_left = config.num_groups_left();
-    let groups_count_right = config.num_groups_right();
-
+fn one_channel_subsystem(
+    channel_groups: &[GroupConfig],
+    nodes_count_per_group: usize,
+    channel: GroupChannel,
+    net: &mut Net,
+) {
+    let channel_groups_count = channel_groups.len();
     u_num_it!(
         1..=36,
-        match groups_count_left {
+        match channel_groups_count {
             U => {
                 type GNum = NumType;
-                let groups = (0..GNum::to_usize())
-                    .filter_map(|gi| config.group_nth_channel(GroupChanel::Left, gi))
-                    .cloned()
-                    .collect::<Vec<_>>();
+
                 u_num_it!(
                     [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71],
                     match nodes_count_per_group {
@@ -121,11 +120,11 @@ pub fn stereo_system(config: &Config, net: &mut Net) {
                             type KNum = NumType;
 
                             create_channel_system::<GNum, KNum>(
-                                groups.as_slice(),
-                                GroupChanel::Left as usize,
+                                channel_groups,
+                                channel as usize,
                                 net,
                             );
-                            log::debug!("created stereo [left] channel system");
+                            log::info!("created stereo [{channel:?}] channel system: groups={channel_groups_count}, nodes={nodes_count_per_group}");
                         }
                         _ => {
                             panic!("unexpected number of nodes");
@@ -138,39 +137,33 @@ pub fn stereo_system(config: &Config, net: &mut Net) {
             }
         }
     );
-    u_num_it!(
-        1..=36,
-        match groups_count_right {
-            U => {
-                type GNum = NumType;
-                let groups = (0..GNum::to_usize())
-                    .filter_map(|gi| config.group_nth_channel(GroupChanel::Right, gi))
-                    .cloned()
-                    .collect::<Vec<_>>();
-                u_num_it!(
-                    [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71],
-                    match nodes_count_per_group {
-                        U => {
-                            type KNum = NumType;
+}
 
-                            create_channel_system::<GNum, KNum>(
-                                groups.as_slice(),
-                                GroupChanel::Right as usize,
-                                net,
-                            );
+pub fn stereo_system(config: &Config, net: &mut Net) {
+    let nodes_count_per_group = config.num_nodes_per_group();
+    let groups_count_left = config.num_groups_left();
+    let groups_count_right = config.num_groups_right();
 
-                            log::debug!("created stereo [right] channel system");
-                        }
-                        _ => {
-                            panic!("unexpected number of nodes");
-                        }
-                    }
-                );
-            }
-            _ => {
-                panic!("unexpected number of groups in right channel");
-            }
-        }
+    let left_groups = (0..groups_count_left)
+        .filter_map(|gi| config.group_nth_channel(GroupChannel::Left, gi))
+        .cloned()
+        .collect::<Vec<_>>();
+    let right_groups = (0..groups_count_right)
+        .filter_map(|gi| config.group_nth_channel(GroupChannel::Right, gi))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    one_channel_subsystem(
+        left_groups.as_slice(),
+        nodes_count_per_group,
+        GroupChannel::Left,
+        net,
+    );
+    one_channel_subsystem(
+        right_groups.as_slice(),
+        nodes_count_per_group,
+        GroupChannel::Right,
+        net,
     );
 }
 

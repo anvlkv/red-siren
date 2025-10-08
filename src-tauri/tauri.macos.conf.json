@@ -8,7 +8,7 @@
         "label": "main",
         "url": "/",
         "title": "Red Siren",
-        "decorations": false,
+        "decorations": true,
         "visible": false,
         "titleBarStyle": "Transparent",
         "width": 800,

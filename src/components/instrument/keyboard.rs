@@ -172,7 +172,7 @@ fn Group(g: usize) -> impl IntoView {
 fn KeyboardElement(
     g: usize,
     k: usize,
-    first_group_channel: common::instrument::GroupChanel,
+    first_group_channel: common::instrument::GroupChannel,
     orientation: common::orientation::LayoutOrientation,
 ) -> impl IntoView {
     let ctx = expect_instrument_context();
@@ -325,13 +325,13 @@ fn KeyboardElement(
 
     let key_code = (g, k);
     let channel_alignment = match first_group_channel.nth_channel_from_first(g) {
-        common::instrument::GroupChanel::Left => {
+        common::instrument::GroupChannel::Left => {
             r#"
             top: 0;
             left: 0;
             "#
         }
-        common::instrument::GroupChanel::Right => {
+        common::instrument::GroupChannel::Right => {
             r#"
             bottom: 0;
             right: 0;

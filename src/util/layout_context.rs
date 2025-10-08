@@ -1,5 +1,5 @@
 use common::{
-    instrument::{GroupChanel, Scale},
+    instrument::{GroupChannel, Scale},
     orientation::LayoutOrientation,
     safe_area::SafeArea,
     Line,
@@ -34,7 +34,7 @@ pub struct LayoutContextReturn {
     pub groups_gap: Memo<f32>,
     pub num_keys_per_group: Memo<u8>,
     pub num_groups: Memo<u8>,
-    pub first_group_channel: Memo<GroupChanel>,
+    pub first_group_channel: Memo<GroupChannel>,
     pub scale: Memo<Scale>,
     pub complete_layout: Memo<common::instrument::Layout>,
     pub key_pad_main: Memo<f32>,

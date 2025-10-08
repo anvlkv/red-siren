@@ -1,5 +1,5 @@
 use common::{
-    instrument::GroupChanel,
+    instrument::GroupChannel,
     instrument::{StringSnoopDataRequest, StringSnoopDataResponse},
 };
 use leptos::prelude::*;
@@ -89,7 +89,7 @@ pub fn InstrumentStrings() -> impl IntoView {
                         .filter(|g| {
                             matches!(
                                 first_group_channel.nth_channel_from_first(*g as usize),
-                                common::instrument::GroupChanel::Left
+                                common::instrument::GroupChannel::Left
                             )
                         })
                         .flat_map(|g: u8| {
@@ -170,7 +170,7 @@ pub fn InstrumentStrings() -> impl IntoView {
                         .filter(|g| {
                             matches!(
                                 first_group_channel.nth_channel_from_first(*g as usize),
-                                common::instrument::GroupChanel::Right
+                                common::instrument::GroupChannel::Right
                             )
                         })
                         .flat_map(|g: u8| {
@@ -207,7 +207,7 @@ pub fn StringView(
     k: usize,
     line: common::Line,
     orientation: common::orientation::LayoutOrientation,
-    ch: GroupChanel,
+    ch: GroupChannel,
 ) -> impl IntoView {
     let (start, end) = line;
 

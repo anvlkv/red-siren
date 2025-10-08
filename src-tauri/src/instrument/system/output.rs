@@ -70,34 +70,9 @@ where
 
 pub fn mono_system(config: &Config, net: &mut Net) {
     let nodes_count_per_group = config.num_nodes_per_group();
-    let groups_count = config.num_groups();
+    let groups = config.0.as_slice();
 
-    u_num_it!(
-        [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71],
-        match groups_count {
-            U => {
-                type GNum = NumType;
-                let groups = config.0.as_slice();
-                u_num_it!(
-                    [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71],
-                    match nodes_count_per_group {
-                        U => {
-                            type KNum = NumType;
-
-                            create_channel_system::<GNum, KNum>(groups, 0, net);
-                            log::debug!("created mono channel system");
-                        }
-                        _ => {
-                            panic!("unexpected number of nodes")
-                        }
-                    }
-                );
-            }
-            _ => {
-                panic!("unexpected number of groups")
-            }
-        }
-    );
+    one_channel_subsystem(groups, nodes_count_per_group, GroupChannel::Left, net);
 }
 
 fn one_channel_subsystem(

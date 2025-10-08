@@ -214,8 +214,10 @@ impl Inner {
 
         // Insert smoothed gain after the main node
         let gain_param = shared(1.0f32);
-        let gain_node = (var(&gain_param) >> follow(FOLLOW_RESPONSE_SECS)) * pass();
-        let gain_id = net.push(Box::new(gain_node));
+        let gain_id = net.push(Box::new(
+            ((var(&gain_param) >> follow(FOLLOW_RESPONSE_SECS)) * pass())
+                | ((var(&gain_param) >> follow(FOLLOW_RESPONSE_SECS)) * pass()),
+        ));
         net.pipe_all(main_node_id, gain_id);
         net.pipe_input(main_node_id);
         net.pipe_output(gain_id);

@@ -1,8 +1,10 @@
-/* Instrument animations (foundation)
+/* Instrument animations (foundation, staged sequence)
    - Animation-only utilities; all layout/visual styling stays in Tailwind
    - Keyframes use CSS variables; component sets per-element values via style attribute
-   - Sequences are multi-stage to mirror animation.md (stages 1, 1.5, 2, 3, 4)
-   - Strings animate per group (<g>), not per individual path
+   - Stages per docs/animation.md: 1, 1.5 (crossfade+glare), 2 (normalize+collapse), 3 (place), 4 (bands expand)
+   - Keys move breadth-axis first (still stacked), then length-axis (unstack)
+   - Bands: glare as random radiuses via per-element vars; remain circles until Stage 4
+   - Strings animate per group (<g>), with rotation/scale/translation to match flute constants
    - View Transition: leave animations prepared for the instrument scene
 */
 
@@ -11,7 +13,7 @@
     /* Global ease + timing */
     --inst-instrument-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 
-    /* Appear */
+    /* Appear (crossfade runs only until Stage 1.5, then opacity stays) */
     --inst-appear-duration: 600ms;
     --inst-appear-delay: 0ms;
     --inst-appear-opacity-from: 0;
@@ -31,23 +33,15 @@
 }
 
 /* -------------------------------------------------------------------------------------------------
-   KEYS — multi-stage appear + settle
-   Stages (variables must be provided per element to avoid restarts and match the composition):
-   - 0%   (Stage 1): collapse to composition origin (sun-aligned), rotated/scaled
-   - 30%  (Stage 1.5): flare-like overscale/offset
-   - 65%  (Stage 2): normalized scale/rotation but collapsed at main-axis terminal (g=max,k=max)
-   - 100% (Stage 3): final position (transform: none) + opacity 1
+   KEYS — staged sequence
+   - 0%..30% (Stage 1 -> 1.5): crossfade only; stay collapsed under sun; optional glare scale
+   - 30%..55%: move along breadth axis only (still stacked)
+   - 55%..85%: unstack along length (main) axis
+   - 85%..100%: arrive to final (transform: none)
 -------------------------------------------------------------------------------------------------- */
 @keyframes instrument-key-appear-seq {
     0% {
-        opacity: var(
-            --inst-key-appear-opacity-from,
-            var(--inst-appear-opacity-from)
-        );
-        transform: translate(var(--inst-key-k1-tx, 0), var(--inst-key-k1-ty, 0))
-            scale(var(--inst-key-k1-scale, 1));
-    }
-    25% {
+        /* Stage 1: collapsed under sun */
         opacity: var(
             --inst-key-appear-opacity-from,
             var(--inst-appear-opacity-from)
@@ -56,33 +50,46 @@
             scale(var(--inst-key-k1-scale, 1));
     }
     30% {
-        /* Stage 1.5 (glare) */
-        opacity: calc(
-            var(
-                    --inst-key-appear-opacity-from,
-                    var(--inst-appear-opacity-from)
-                ) +
-                0.04
+        /* Stage 1.5: glare peaking; no motion beyond scale; crossfade completes here */
+        opacity: var(
+            --inst-key-appear-opacity-to,
+            var(--inst-appear-opacity-to)
+        );
+        transform: translate(var(--inst-key-k1-tx, 0), var(--inst-key-k1-ty, 0))
+            scale(var(--inst-key-k15-scale, var(--inst-key-k1-scale, 1)));
+    }
+    55% {
+        /* Stage 2a: breadth-axis motion (still stacked along length) */
+        opacity: var(
+            --inst-key-appear-opacity-to,
+            var(--inst-appear-opacity-to)
         );
         transform: translate(
-                var(--inst-key-k15-tx, var(--inst-key-k1-tx, 0)),
-                var(--inst-key-k15-ty, var(--inst-key-k1-ty, 0))
+                var(--inst-key-breadth-tx, var(--inst-key-k2-tx, 0)),
+                var(--inst-key-breadth-ty, var(--inst-key-k2-ty, 0))
             )
-            scale(var(--inst-key-k15-scale, 1.06));
-    }
-    65% {
-        /* Stage 2 (normalized, but collapsed on axis) */
-        opacity: calc(
-            var(
-                    --inst-key-appear-opacity-from,
-                    var(--inst-appear-opacity-from)
-                ) +
-                0.08
-        );
-        transform: translate(var(--inst-key-k2-tx, 0), var(--inst-key-k2-ty, 0))
             scale(var(--inst-key-k2-scale, 1));
     }
+    85% {
+        /* Stage 2b/3: unstack along length (main) axis */
+        opacity: var(
+            --inst-key-appear-opacity-to,
+            var(--inst-appear-opacity-to)
+        );
+        transform: translate(
+                var(
+                    --inst-key-length-tx,
+                    var(--inst-key-breadth-tx, var(--inst-key-k2-tx, 0))
+                ),
+                var(
+                    --inst-key-length-ty,
+                    var(--inst-key-breadth-ty, var(--inst-key-k2-ty, 0))
+                )
+            )
+            scale(1);
+    }
     100% {
+        /* Stage 3 end: final place */
         opacity: var(
             --inst-key-appear-opacity-to,
             var(--inst-appear-opacity-to)
@@ -109,14 +116,15 @@
 }
 
 /* -------------------------------------------------------------------------------------------------
-   BANDS — multi-stage appear + settle + circle->rounded-rect recovery at tail (Stage 4)
-   Notes:
-   - Border radius recovery is included late in the timeline (85%->100%)
-   - Width/height difference recovery is conceptual; final dimensions are provided by layout,
-     we only animate the shape via border-radius to hint "becoming a rounded rect now".
+   BANDS — staged sequence with glare and late expansion (Stage 4)
+   - 0%..30%: crossfade only; collapsed under sun; keep visual circle (square via non-uniform scale)
+   - 30%..55%: glare (uniform overscale), still no translation
+   - 55%..85%: breadth-axis motion (still stacked), remain circle (square)
+   - 85%..100%: final place + expand to actual rectangular dimensions (no longer square)
 -------------------------------------------------------------------------------------------------- */
 @keyframes instrument-band-appear-seq {
     0% {
+        /* Stage 1 */
         opacity: var(
             --inst-band-appear-opacity-from,
             var(--inst-appear-opacity-from)
@@ -125,70 +133,62 @@
                 var(--inst-band-k1-tx, 0),
                 var(--inst-band-k1-ty, 0)
             )
+            /* keep circle by making base square */
             scale(
                 var(--inst-band-k1-scale-x, 1),
                 var(--inst-band-k1-scale-y, 1)
             );
         /* rounded-full via tailwind */
     }
-    25% {
-        opacity: var(
-            --inst-band-appear-opacity-from,
-            var(--inst-appear-opacity-from)
-        );
-        transform: translate(
-                var(--inst-band-k1-tx, 0),
-                var(--inst-band-k1-ty, 0)
-            )
-            scale(
-                var(--inst-band-k1-scale-x, 1),
-                var(--inst-band-k1-scale-y, 1)
-            );
-        /* rounded-full via tailwind */
-    }
-    35% {
-        /* Stage 1.5 (glare: bigger circle) */
-        transform: translate(
-                var(--inst-band-k15-tx, var(--inst-band-k1-tx, 0)),
-                var(--inst-band-k15-ty, var(--inst-band-k1-ty, 0))
-            )
-            scale(
-                var(--inst-band-k15-scale-x, 1.08),
-                var(--inst-band-k15-scale-y, 1.08)
-            );
-        /* rounded-full via tailwind */
-    }
-    70% {
-        /* Stage 2 (normalized circle, collapsed on axis) */
-        opacity: calc(
-            var(
-                    --inst-band-appear-opacity-from,
-                    var(--inst-appear-opacity-from)
-                ) +
-                0.08
-        );
-        transform: translate(
-                var(--inst-band-k2-tx, 0),
-                var(--inst-band-k2-ty, 0)
-            )
-            scale(
-                var(--inst-band-k2-scale-x, 1),
-                var(--inst-band-k2-scale-y, 1)
-            );
-        /* rounded-full via tailwind */
-    }
-    85% {
-        /* Stage 3: in-place (still circle) */
+    30% {
+        /* Stage 1.5: glare (random radiuses via per-element vars); opacity locks here */
         opacity: var(
             --inst-band-appear-opacity-to,
             var(--inst-appear-opacity-to)
         );
-        transform: translate(0, 0) scale(1, 1);
+        transform: translate(
+                var(--inst-band-k1-tx, 0),
+                var(--inst-band-k1-ty, 0)
+            )
+            scale(
+                var(--inst-band-k15-scale-x, var(--inst-band-k1-scale-x, 1.08)),
+                var(--inst-band-k15-scale-y, var(--inst-band-k1-scale-y, 1.08))
+            );
+        /* rounded-full via tailwind */
+    }
+    55% {
+        /* Stage 2a: breadth-axis motion; stay circle (square base) */
+        opacity: var(
+            --inst-band-appear-opacity-to,
+            var(--inst-appear-opacity-to)
+        );
+        transform: translate(
+                var(--inst-band-breadth-tx, var(--inst-band-k2-tx, 0)),
+                var(--inst-band-breadth-ty, var(--inst-band-k2-ty, 0))
+            )
+            scale(
+                var(--inst-band-k1-scale-x, 1),
+                var(--inst-band-k1-scale-y, 1)
+            );
+        /* rounded-full via tailwind */
+    }
+    85% {
+        /* Stage 3: in place but still circular (square base) */
+        opacity: var(
+            --inst-band-appear-opacity-to,
+            var(--inst-appear-opacity-to)
+        );
+        transform: translate(0, 0)
+            scale(
+                var(--inst-band-k1-scale-x, 1),
+                var(--inst-band-k1-scale-y, 1)
+            );
         /* rounded-full via tailwind */
     }
     100% {
+        /* Stage 4: expand to rectangular (recover length) */
         transform: translate(0, 0) scale(1, 1);
-        /* rounded-full via tailwind */
+        /* rounded-full via tailwind -> pill-like rounded rectangle by actual dims */
     }
 }
 
@@ -209,13 +209,10 @@
 }
 
 /* -------------------------------------------------------------------------------------------------
-   STRINGS (per group) — appear sequence
-   - Apply to <g> group container (e.g., #left-channel-strings, #right-channel-strings)
-   - Variables set per group to adapt rotation/scale/offset sequence:
-     Stage 1: rotated/flipped and placed to composition
-     Stage 2: rotation normalizes, still offset
-     Stage 3: in place
-   - Optional stroke-dash effect (if group-level stroke is used)
+   STRINGS (per group) — staged sequence with rotation normalization
+   - 0%..30%: crossfade only; positioned/rotated to composition (flute) + scale to sun
+   - 30%..60%: rotation to normal (0deg) and scale normalize; still offset (collapsed along axis)
+   - 60%..100%: translate to final position
 -------------------------------------------------------------------------------------------------- */
 @keyframes instrument-strings-group-appear {
     0% {
@@ -223,26 +220,47 @@
             --inst-strings-appear-opacity-from,
             var(--inst-appear-opacity-from)
         );
+        transform-origin: var(--inst-strings-rot-origin-x, 0px)
+            var(--inst-strings-rot-origin-y, 0px);
         transform: translate(
                 var(--inst-strings-k1-tx, 0),
                 var(--inst-strings-k1-ty, 0)
             )
+            rotate(var(--inst-strings-k1-rot, 0deg))
             scale(var(--inst-strings-k1-scale, 1));
         stroke-dasharray: var(--inst-strings-k1-dash, 0);
         stroke-dashoffset: var(--inst-strings-k1-dashoffset, 0);
     }
-    40% {
-        opacity: calc(
-            var(
-                    --inst-strings-appear-opacity-from,
-                    var(--inst-appear-opacity-from)
-                ) +
-                0.06
+    30% {
+        /* End crossfade; no motion until now */
+        opacity: var(
+            --inst-strings-appear-opacity-to,
+            var(--inst-appear-opacity-to)
         );
+        transform-origin: var(--inst-strings-rot-origin-x, 0px)
+            var(--inst-strings-rot-origin-y, 0px);
         transform: translate(
-                var(--inst-strings-k2-tx, 0),
-                var(--inst-strings-k2-ty, 0)
+                var(--inst-strings-k1-tx, 0),
+                var(--inst-strings-k1-ty, 0)
             )
+            rotate(var(--inst-strings-k1-rot, 0deg))
+            scale(var(--inst-strings-k1-scale, 1));
+        stroke-dasharray: var(--inst-strings-k1-dash, 0);
+        stroke-dashoffset: var(--inst-strings-k1-dashoffset, 0);
+    }
+    60% {
+        /* Stage 2: rotation and scale normalize; still offset to axis-collapsed */
+        opacity: var(
+            --inst-strings-appear-opacity-to,
+            var(--inst-appear-opacity-to)
+        );
+        transform-origin: var(--inst-strings-rot-origin-x, 0px)
+            var(--inst-strings-rot-origin-y, 0px);
+        transform: translate(
+                var(--inst-strings-k2-tx, var(--inst-strings-k1-tx, 0)),
+                var(--inst-strings-k2-ty, var(--inst-strings-k1-ty, 0))
+            )
+            rotate(var(--inst-strings-k2-rot, 0deg))
             scale(var(--inst-strings-k2-scale, 1));
         stroke-dasharray: var(
             --inst-strings-k2-dash,
@@ -254,11 +272,14 @@
         );
     }
     100% {
+        /* Stage 3: final position */
         opacity: var(
             --inst-strings-appear-opacity-to,
             var(--inst-appear-opacity-to)
         );
-        transform: translate(0, 0) scale(1);
+        transform-origin: var(--inst-strings-rot-origin-x, 0px)
+            var(--inst-strings-rot-origin-y, 0px);
+        transform: translate(0, 0) rotate(0deg) scale(1);
         stroke-dasharray: var(
             --inst-strings-final-dash,
             var(--inst-strings-k2-dash, 0)

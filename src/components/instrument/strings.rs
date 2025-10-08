@@ -5,7 +5,9 @@ use common::{
 use leptos::prelude::*;
 use tauri_use::{use_invoke, UseTauriReturn};
 
-use crate::components::intro::consts::INTRO_SUN_RADIUS;
+use crate::components::intro::consts::{
+    INTRO_FLUTE_POS_X, INTRO_FLUTE_POS_Y, INTRO_FLUTE_ROT_DEG, INTRO_SUN_RADIUS,
+};
 use crate::util::layout_context::{expect_layout_contex, LayoutContextReturn};
 
 #[component]
@@ -65,7 +67,21 @@ pub fn InstrumentStrings() -> impl IntoView {
             String::new()
         };
         let scale = INTRO_SUN_RADIUS / key_radius();
-        let style = format!("--inst-strings-appear-delay: 0ms; --inst-strings-k1-tx: -{}px; --inst-strings-k1-ty: -{}px; --inst-strings-k1-scale: {};", left, top, scale);
+        let rot = 180.0 + INTRO_FLUTE_ROT_DEG;
+        let style = format!(
+            "--inst-strings-appear-delay: 0ms; \
+            --inst-strings-rot-origin-x: {}px; \
+            --inst-strings-rot-origin-y: {}px; \
+            --inst-strings-k1-rot: {}deg; \
+            --inst-strings-k1-tx: -{}px; \
+            --inst-strings-k1-ty: -{}px; \
+            --inst-strings-k1-scale: {}; \
+            --inst-strings-k2-tx: -{}px; \
+            --inst-strings-k2-ty: -{}px; \
+            --inst-strings-k2-scale: 1; \
+            --inst-strings-k2-rot: 0deg;",
+            INTRO_FLUTE_POS_X, INTRO_FLUTE_POS_Y, rot, left, top, scale, left, top
+        );
         view! {
             <g id="left-channel-strings" attr:class=class attr:style=style>
                 {move || {
@@ -132,7 +148,21 @@ pub fn InstrumentStrings() -> impl IntoView {
             String::new()
         };
         let scale = INTRO_SUN_RADIUS / key_radius();
-        let style = format!("--inst-strings-appear-delay: 0ms; --inst-strings-k1-tx: -{}px; --inst-strings-k1-ty: -{}px; --inst-strings-k1-scale: {};", left, top, scale);
+        let rot = 180.0 + INTRO_FLUTE_ROT_DEG;
+        let style = format!(
+            "--inst-strings-appear-delay: 0ms; \
+            --inst-strings-rot-origin-x: {}px; \
+            --inst-strings-rot-origin-y: {}px; \
+            --inst-strings-k1-rot: {}deg; \
+            --inst-strings-k1-tx: -{}px; \
+            --inst-strings-k1-ty: -{}px; \
+            --inst-strings-k1-scale: {}; \
+            --inst-strings-k2-tx: -{}px; \
+            --inst-strings-k2-ty: -{}px; \
+            --inst-strings-k2-scale: 1; \
+            --inst-strings-k2-rot: 0deg;",
+            INTRO_FLUTE_POS_X, INTRO_FLUTE_POS_Y, rot, left, top, scale, left, top
+        );
         view! {
             <g id="right-channel-strings" attr:class=class attr:style=style>
                 {move || {

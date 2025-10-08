@@ -91,9 +91,10 @@ on_cleanup(move || {
 #### in tauri backend
 
 ```rust
-fn feature_do_something(
-    state_lock: &MutexGuard<'_, FeatureState>,
-    app: &AppHandle,
+#[tauri::command]
+pub fn feature_do_something(
+    state_lock: State<'_, FeatureState>,
+    app: AppHandle,
 ) -> common::error::Result<()> {
     app.emit(common::events::feature::EVENT_NAME, FeaturePayloadStruct)
             .map_err(|e| FeatureError::Emit { event: common::events::feature::EVENT_NAME.to_string(), message: e.to_string() })?;

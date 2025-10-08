@@ -86,7 +86,9 @@ pub fn IntroComp(#[prop(into)] exit: Signal<bool>) -> impl IntoView {
                     y="576.054"
                     width="53.653"
                     height="8.25253"
-                    transform="rotate(-17.1246 48.3365 585.964)"
+                    transform=format!(
+                        "rotate({INTRO_FLUTE_ROT_DEG} {INTRO_FLUTE_POS_X}, {INTRO_FLUTE_POS_Y})",
+                    )
                     stroke-width="2"
                 />
             </svg>
@@ -99,9 +101,11 @@ pub fn IntroComp(#[prop(into)] exit: Signal<bool>) -> impl IntoView {
                 <rect
                     width="282.096"
                     height="4.25253"
-                    x="48.3365"
-                    y="585.964"
-                    transform="rotate(-17.1246 48.3365, 585.964)"
+                    x=INTRO_FLUTE_POS_X
+                    y=INTRO_FLUTE_POS_Y
+                    transform=format!(
+                        "rotate({INTRO_FLUTE_ROT_DEG} {INTRO_FLUTE_POS_X}, {INTRO_FLUTE_POS_Y})",
+                    )
                     stroke-width="2"
                 />
             </svg>

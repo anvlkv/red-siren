@@ -267,14 +267,41 @@ fn KeyboardElement(
 
     // no per-element animation delays; instrument synced globally
 
-    // Stage-1 alignment under sun: translate each key wrapper to origin (negative x/y) and scale down to sun radius
+    // Stage variables: collapse under sun (k1), glare (k15), then breadth-first and length unstack
     let key_stage1_vars = move || {
-        let scale = crate::components::intro::consts::INTRO_SUN_RADIUS / key_radius();
+        let sun_r = crate::components::intro::consts::INTRO_SUN_RADIUS;
+        let scale = sun_r / key_radius();
+
+        // Deterministic glare factor per (g,k) to avoid RNG
+        let seed = ((g as u32).wrapping_mul(1315423911)) ^ ((k as u32).wrapping_mul(2654435761));
+        let glare_step = (seed % 7) as f32; // 0..6
+        let glare = 1.06 + 0.01 * glare_step; // 1.06..1.12
+
+        let k1_tx = -key_x();
+        let k1_ty = -key_y();
+
+        // Breadth-first move: fix the axis orthogonal to main
+        let (breadth_tx, breadth_ty) = match orientation {
+            common::orientation::LayoutOrientation::Vertical => (0.0, k1_ty),
+            common::orientation::LayoutOrientation::Horizontal => (k1_tx, 0.0),
+        };
+
+        // Length (main) axis then unstack to final
+        let (length_tx, length_ty) = (0.0, 0.0);
+
         format!(
-            "--inst-key-k1-tx: -{}px; --inst-key-k1-ty: -{}px; --inst-key-k1-scale: {};",
-            key_x(),
-            key_y(),
-            scale
+            concat!(
+                "--inst-key-k1-tx: {}px;",
+                " --inst-key-k1-ty: {}px;",
+                " --inst-key-k1-scale: {};",
+                " --inst-key-k15-scale: {};",
+                " --inst-key-k2-scale: 1;",
+                " --inst-key-breadth-tx: {}px;",
+                " --inst-key-breadth-ty: {}px;",
+                " --inst-key-length-tx: {}px;",
+                " --inst-key-length-ty: {}px;"
+            ),
+            k1_tx, k1_ty, scale, glare, breadth_tx, breadth_ty, length_tx, length_ty,
         )
     };
 
@@ -333,20 +360,53 @@ fn KeyboardElement(
             )
         }
     };
-    // Make band base square at start by non-uniform scale; unfold to rectangular at 100%
+    // Make band base square at start by non-uniform scale; collapse under sun and provide glare + staged axis moves
     let band_scale_vars = move || {
         let ratio = (key_band_breadth() / key_band_length()).max(0.0);
+
+        // Deterministic glare per (g,k) — keep circle at Stage 1.5
+        let seed = ((g as u32).wrapping_mul(2246822519)) ^ ((k as u32).wrapping_mul(3266489917));
+        let glare_step = (seed % 9) as f32; // 0..8
+        let glare = 1.06 + 0.01 * glare_step; // 1.06..1.14
+
+        let k1_tx = -band_x();
+        let k1_ty = -band_y();
+
+        // Breadth-first move (keep stacked along length)
+        let (breadth_tx, breadth_ty) = match orientation {
+            common::orientation::LayoutOrientation::Vertical => (0.0, k1_ty),
+            common::orientation::LayoutOrientation::Horizontal => (k1_tx, 0.0),
+        };
+
         match orientation {
             common::orientation::LayoutOrientation::Vertical => {
                 format!(
-                    "--inst-band-k1-scale-x: {}; --inst-band-k1-scale-y: 1;",
-                    ratio
+                    concat!(
+                        "--inst-band-k1-tx: {}px;",
+                        " --inst-band-k1-ty: {}px;",
+                        " --inst-band-k1-scale-x: {};",
+                        " --inst-band-k1-scale-y: 1;",
+                        " --inst-band-k15-scale-x: {};",
+                        " --inst-band-k15-scale-y: {};",
+                        " --inst-band-breadth-tx: {}px;",
+                        " --inst-band-breadth-ty: {}px;"
+                    ),
+                    k1_tx, k1_ty, ratio, glare, glare, breadth_tx, breadth_ty
                 )
             }
             common::orientation::LayoutOrientation::Horizontal => {
                 format!(
-                    "--inst-band-k1-scale-x: 1; --inst-band-k1-scale-y: {};",
-                    ratio
+                    concat!(
+                        "--inst-band-k1-tx: {}px;",
+                        " --inst-band-k1-ty: {}px;",
+                        " --inst-band-k1-scale-x: 1;",
+                        " --inst-band-k1-scale-y: {};",
+                        " --inst-band-k15-scale-x: {};",
+                        " --inst-band-k15-scale-y: {};",
+                        " --inst-band-breadth-tx: {}px;",
+                        " --inst-band-breadth-ty: {}px;"
+                    ),
+                    k1_tx, k1_ty, ratio, glare, glare, breadth_tx, breadth_ty
                 )
             }
         }

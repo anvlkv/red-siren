@@ -5,10 +5,49 @@ use fundsp::{
 };
 use u_num_it::u_num_it;
 
-type NodeType = Pipe<Constant<UInt<UTerm, B1>>, Sine<f32>>;
+type S = f32;
+
+type NodeType = Pipe<
+    Unop<
+        Pipe<
+            Pipe<Pipe<Constant<UInt<UTerm, B1>>, Sine<S>>, Split<UInt<UInt<UTerm, B1>, B1>>>,
+            Binop<
+                FrameAdd<UInt<UTerm, B1>>,
+                Binop<
+                    FrameAdd<UInt<UTerm, B1>>,
+                    Unop<Resonator<S, UInt<UTerm, B1>>, FrameMulScalar<UInt<UTerm, B1>>>,
+                    Unop<Resonator<S, UInt<UTerm, B1>>, FrameMulScalar<UInt<UTerm, B1>>>,
+                >,
+                Unop<Resonator<S, UInt<UTerm, B1>>, FrameMulScalar<UInt<UTerm, B1>>>,
+            >,
+        >,
+        FrameMulScalar<UInt<UTerm, B1>>,
+    >,
+    FixedSvf<S, HighpassMode<S>>,
+>;
 
 fn create_node(config: &NodeConfig) -> An<NodeType> {
-    sine_hz(config.base_frequency as f32)
+    // Formant parameters
+    let f1 = 730.0;
+    let f2 = 1090.0;
+    let f3 = 2440.0;
+
+    // Bandwidths (in Hz) for more natural sound
+    let bw1 = 100.0;
+    let bw2 = 120.0;
+    let bw3 = 150.0;
+
+    // Source
+    let source = sine_hz::<S>(config.base_frequency as S) >> split::<U3>();
+
+    // Create resonator formants
+    let formants = source
+        >> ((resonator_hz(f1, bw1) * 1.0)
+            + (resonator_hz(f2, bw2) * 0.8)
+            + (resonator_hz(f3, bw3) * 0.6));
+
+    let vowel = formants * 0.25;
+    vowel >> highpass_hz(80.0, 1.0)
 }
 
 fn create_group_node<K>(config: &GroupConfig) -> An<MultiBus<K, NodeType>>
@@ -25,7 +64,7 @@ where
     K: Size<f32> + Size<NodeType>,
 {
     let node = busi::<G, _, _>(|i| create_group_node::<K>(&groups[i as usize]));
-    let node_id = net.push(Box::new(node >> declick::<f32>()));
+    let node_id = net.push(Box::new(node >> dcblock::<S>() >> declick::<S>()));
     net.connect_output(node_id, 0, channel);
 }
 

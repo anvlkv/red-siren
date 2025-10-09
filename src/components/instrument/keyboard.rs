@@ -136,6 +136,8 @@ fn Group(g: usize) -> impl IntoView {
         orientation,
         num_keys_per_group,
         first_group_channel,
+        key_band_length,
+        key_band_breadth,
         ..
     } = expect_layout_contex();
 
@@ -149,8 +151,21 @@ fn Group(g: usize) -> impl IntoView {
         )
     };
 
+    let group_band_dims_style = move || {
+        let len = key_band_length();
+        let br = key_band_breadth();
+        let square_size = br.min(len);
+        let (final_w, final_h) = match orientation() {
+            common::orientation::LayoutOrientation::Vertical => (len, br),
+            common::orientation::LayoutOrientation::Horizontal => (br, len),
+        };
+        format!(
+            "--inst-band-k1-width: {}px; --inst-band-k1-height: {}px; --inst-band-final-width: {}px; --inst-band-final-height: {}px;",
+            square_size, square_size, final_w, final_h
+        )
+    };
     view! {
-        <div class=class>
+        <div class=class style=group_band_dims_style>
             {move || {
                 let first_group_channel = first_group_channel();
                 let num_keys_per_group = num_keys_per_group();
@@ -178,8 +193,8 @@ fn KeyboardElement(
     let ctx = expect_instrument_context();
     let LayoutContextReturn {
         key_radius,
-        key_band_length,
-        key_band_breadth,
+        space,
+        num_keys_per_group,
         ..
     } = expect_layout_contex();
 
@@ -267,18 +282,34 @@ fn KeyboardElement(
 
     // no per-element animation delays; instrument synced globally
 
-    // Stage variables: collapse under sun (k1), glare (k15), then breadth-first and length unstack
+    // Stage variables: collapse under sun (k1), then breadth-first and length unstack
     let key_stage1_vars = move || {
         let sun_r = crate::components::intro::consts::INTRO_SUN_RADIUS;
+        let sun_x = crate::components::intro::consts::INTRO_SUN_POS_X;
+        let sun_y = crate::components::intro::consts::INTRO_SUN_POS_Y;
         let scale = sun_r / key_radius();
 
-        // Deterministic glare factor per (g,k) to avoid RNG
-        let seed = ((g as u32).wrapping_mul(1315423911)) ^ ((k as u32).wrapping_mul(2654435761));
-        let glare_step = (seed % 7) as f32; // 0..6
-        let glare = 1.06 + 0.01 * glare_step; // 1.06..1.12
+        // Map sun position from artwork space to screen space
+        let viewport_w = crate::components::intro::consts::INTRO_COMP_VIEWBOX_WIDTH;
+        let viewport_h = crate::components::intro::consts::INTRO_COMP_VIEWBOX_HEIGHT;
+        let layout_space = space();
+        let screen_w = layout_space.x;
+        let screen_h = layout_space.y;
 
-        let k1_tx = -key_x();
-        let k1_ty = -key_y();
+        // Scale factors for artwork to screen
+        let scale_x = screen_w / viewport_w;
+        let scale_y = screen_h / viewport_h;
+
+        // Use the smaller scale to maintain aspect ratio (fit within screen)
+        let viewport_scale = scale_x.min(scale_y);
+
+        // Calculate sun position in screen space
+        let sun_screen_x = sun_x * viewport_scale;
+        let sun_screen_y = sun_y * viewport_scale;
+
+        // Align with sun position in screen space (center-to-center)
+        let k1_tx = sun_screen_x - (key_x() as f32 + key_width() as f32 / 2.0);
+        let k1_ty = sun_screen_y - (key_y() as f32 + key_height() as f32 / 2.0);
 
         // Breadth-first move: fix the axis orthogonal to main
         let (breadth_tx, breadth_ty) = match orientation {
@@ -294,14 +325,13 @@ fn KeyboardElement(
                 "--inst-key-k1-tx: {}px;",
                 " --inst-key-k1-ty: {}px;",
                 " --inst-key-k1-scale: {};",
-                " --inst-key-k15-scale: {};",
                 " --inst-key-k2-scale: 1;",
                 " --inst-key-breadth-tx: {}px;",
                 " --inst-key-breadth-ty: {}px;",
                 " --inst-key-length-tx: {}px;",
                 " --inst-key-length-ty: {}px;"
             ),
-            k1_tx, k1_ty, scale, glare, breadth_tx, breadth_ty, length_tx, length_ty,
+            k1_tx, k1_ty, scale, breadth_tx, breadth_ty, length_tx, length_ty,
         )
     };
 
@@ -360,56 +390,21 @@ fn KeyboardElement(
             )
         }
     };
-    // Make band base square at start by non-uniform scale; collapse under sun and provide glare + staged axis moves
+    // Bands move with their wrapper; only glare scales are per-element
     let band_scale_vars = move || {
-        let ratio = (key_band_breadth() / key_band_length()).max(0.0);
-
-        // Deterministic glare per (g,k) — keep circle at Stage 1.5
-        let seed = ((g as u32).wrapping_mul(2246822519)) ^ ((k as u32).wrapping_mul(3266489917));
-        let glare_step = (seed % 9) as f32; // 0..8
-        let glare = 1.06 + 0.01 * glare_step; // 1.06..1.14
-
-        let k1_tx = -band_x();
-        let k1_ty = -band_y();
-
-        // Breadth-first move (keep stacked along length)
-        let (breadth_tx, breadth_ty) = match orientation {
-            common::orientation::LayoutOrientation::Vertical => (0.0, k1_ty),
-            common::orientation::LayoutOrientation::Horizontal => (k1_tx, 0.0),
-        };
-
-        match orientation {
-            common::orientation::LayoutOrientation::Vertical => {
-                format!(
-                    concat!(
-                        "--inst-band-k1-tx: {}px;",
-                        " --inst-band-k1-ty: {}px;",
-                        " --inst-band-k1-scale-x: {};",
-                        " --inst-band-k1-scale-y: 1;",
-                        " --inst-band-k15-scale-x: {};",
-                        " --inst-band-k15-scale-y: {};",
-                        " --inst-band-breadth-tx: {}px;",
-                        " --inst-band-breadth-ty: {}px;"
-                    ),
-                    k1_tx, k1_ty, ratio, glare, glare, breadth_tx, breadth_ty
-                )
-            }
-            common::orientation::LayoutOrientation::Horizontal => {
-                format!(
-                    concat!(
-                        "--inst-band-k1-tx: {}px;",
-                        " --inst-band-k1-ty: {}px;",
-                        " --inst-band-k1-scale-x: 1;",
-                        " --inst-band-k1-scale-y: {};",
-                        " --inst-band-k15-scale-x: {};",
-                        " --inst-band-k15-scale-y: {};",
-                        " --inst-band-breadth-tx: {}px;",
-                        " --inst-band-breadth-ty: {}px;"
-                    ),
-                    k1_tx, k1_ty, ratio, glare, glare, breadth_tx, breadth_ty
-                )
-            }
-        }
+        // Reverse glare sequencing: deeper (background) bands start earlier,
+        // foreground bands later, to respect stacking order.
+        let total = num_keys_per_group() as f32;
+        let glare_index = (total - 1.0 - k as f32).max(0.0);
+        let glare_start = 0.75 + 0.05 * glare_index;
+        let glare_peak = 1.5 + 0.1 * glare_index;
+        format!(
+            concat!(
+                "--inst-band-glare-scale: {};",
+                " --inst-band-glare-scale-peak: {};"
+            ),
+            glare_start, glare_peak
+        )
     };
     let band_style = move || {
         let mut s = String::new();

@@ -6,7 +6,8 @@ use leptos::prelude::*;
 use tauri_use::{use_invoke, UseTauriReturn};
 
 use crate::components::intro::consts::{
-    INTRO_FLUTE_POS_X, INTRO_FLUTE_POS_Y, INTRO_FLUTE_ROT_DEG, INTRO_SUN_RADIUS,
+    INTRO_COMP_VIEWBOX_HEIGHT, INTRO_COMP_VIEWBOX_WIDTH, INTRO_FLUTE_POS_X, INTRO_FLUTE_POS_Y,
+    INTRO_FLUTE_ROT_DEG,
 };
 use crate::util::layout_context::{expect_layout_contex, LayoutContextReturn};
 
@@ -20,15 +21,67 @@ pub fn InstrumentStrings() -> impl IntoView {
         orientation,
         left_string_position,
         right_string_position,
-        key_radius,
         ..
     } = expect_layout_contex();
-    let ctx_left = super::expect_instrument_context();
-    let ctx_right = ctx_left.clone();
 
+    // Root-level viewBox matches layout space; transforms use view-box coords via 'transform-box: view-box'
     let view_box = move || {
         let space = space();
         format!("0 0 {} {}", space.x, space.y)
+    };
+
+    // Inner: rotation animation origin + variables
+    let root_inner_style = move || {
+        // Map artwork (intro composition) coordinates to current layout space
+        let viewport_w = crate::components::intro::consts::INTRO_COMP_VIEWBOX_WIDTH;
+        let viewport_h = crate::components::intro::consts::INTRO_COMP_VIEWBOX_HEIGHT;
+        let layout = space();
+        let scale_x = layout.x / viewport_w;
+        let scale_y = layout.y / viewport_h;
+        let viewport_scale = scale_x.min(scale_y);
+        let viewport_scale_x = 1.0 - scale_x;
+        let viewport_scale_y = 1.0 - scale_y;
+
+        // Transform origin aligned with flute rotation pivot in screen/layout space, using bottom-right anchoring of the composition:
+        // - Scale = min(space/viewBox)
+        // - Top-left of the scaled composition in screen coords = (space.x - scaled_w, space.y - scaled_h)
+        // - Pivot in screen coords = offset + pivot_in_viewBox * scale
+        let scaled_w = viewport_w * viewport_scale;
+        let scaled_h = viewport_h * viewport_scale;
+        let offset_x = layout.x - scaled_w;
+        let offset_y = layout.y - scaled_h;
+        let origin_x = offset_x + INTRO_FLUTE_POS_X * viewport_scale;
+        let origin_y = offset_y + INTRO_FLUTE_POS_Y * viewport_scale;
+
+        // Start rotated to match flute angle, then normalize to 0deg
+        let k1_rot = INTRO_FLUTE_ROT_DEG;
+
+        // Compute initial translation so the strings group moves from the flute pivot to its final place.
+        // Anchor = midpoint between channel midpoints (in screen/layout space).
+        let (ls, le) = left_string_position();
+        let (rs, re) = right_string_position();
+        let left_mid_x = (ls.x + le.x) / 2.0;
+        let left_mid_y = (ls.y + le.y) / 2.0;
+        let right_mid_x = (rs.x + re.x) / 2.0;
+        let right_mid_y = (rs.y + re.y) / 2.0;
+        let anchor_x = (left_mid_x + right_mid_x) / 2.0;
+        let anchor_y = (left_mid_y + right_mid_y) / 2.0;
+
+        let k1_tx = origin_x - anchor_x;
+        let k1_ty = origin_y - anchor_y;
+
+        format!(
+            concat!(
+                "transform-box: view-box;",
+                " transform-origin: {}px {}px;",
+                " --inst-strings-k1-rot: {}deg;",
+                " --inst-strings-k1-tx: {}px;",
+                " --inst-strings-k1-ty: {}px;",
+                " --inst-strings-k1-scale-x: {};",
+                " --inst-strings-k1-scale-y: {};",
+            ),
+            origin_x, origin_y, k1_rot, k1_tx, k1_ty, viewport_scale_x, viewport_scale_y,
+        )
     };
 
     let left_strings = move || {
@@ -38,52 +91,8 @@ pub fn InstrumentStrings() -> impl IntoView {
         let orientation = orientation();
         let left_string_position = left_string_position();
 
-        // Animate only the channel <g>, not inner elements.
-        // Compute a simple channel-level bbox from the shared line endpoints and guard first-time.
-        let (start, end) = left_string_position;
-        let left = start.x.min(end.x);
-        let top = start.y.min(end.y);
-        let right = start.x.max(end.x);
-        let bottom = start.y.max(end.y);
-        let width = right - left;
-        let height = bottom - top;
-        let first_time = {
-            let bbox = super::context::Bounding {
-                x: left,
-                y: top,
-                width,
-                height,
-                top,
-                right,
-                bottom,
-                left,
-            };
-            // Use a fixed channel key (0 = left) for one-shot animation
-            ctx_left.upsert_strings_group_rect(0, bbox)
-        };
-        let class = if first_time {
-            super::instrument_animations::INSTRUMENT_STRINGS_GROUP_APPEAR.to_string()
-        } else {
-            String::new()
-        };
-        let scale = INTRO_SUN_RADIUS / key_radius();
-        let rot = 180.0 + INTRO_FLUTE_ROT_DEG;
-        let style = format!(
-            "--inst-strings-appear-delay: 0ms; \
-            --inst-strings-rot-origin-x: {}px; \
-            --inst-strings-rot-origin-y: {}px; \
-            --inst-strings-k1-rot: {}deg; \
-            --inst-strings-k1-tx: -{}px; \
-            --inst-strings-k1-ty: -{}px; \
-            --inst-strings-k1-scale: {}; \
-            --inst-strings-k2-tx: -{}px; \
-            --inst-strings-k2-ty: -{}px; \
-            --inst-strings-k2-scale: 1; \
-            --inst-strings-k2-rot: 0deg;",
-            INTRO_FLUTE_POS_X, INTRO_FLUTE_POS_Y, rot, left, top, scale, left, top
-        );
         view! {
-            <g id="left-channel-strings" attr:class=class attr:style=style>
+            <g id="left-channel-strings">
                 {move || {
                     (0..num_groups)
                         .filter(|g| {
@@ -99,7 +108,6 @@ pub fn InstrumentStrings() -> impl IntoView {
                                     let g = g as usize;
                                     let ch = first_group_channel.nth_channel_from_first(g);
                                     let orientation = orientation;
-
                                     view! {
                                         <StringView g k line=left_string_position orientation ch />
                                     }
@@ -107,7 +115,6 @@ pub fn InstrumentStrings() -> impl IntoView {
                         })
                         .collect_view()
                 }}
-
             </g>
         }
     };
@@ -119,52 +126,8 @@ pub fn InstrumentStrings() -> impl IntoView {
         let orientation = orientation();
         let right_string_position = right_string_position();
 
-        // Animate only the channel <g>, not inner elements.
-        // Compute a simple channel-level bbox from the shared line endpoints and guard first-time.
-        let (start, end) = right_string_position;
-        let left = start.x.min(end.x);
-        let top = start.y.min(end.y);
-        let right = start.x.max(end.x);
-        let bottom = start.y.max(end.y);
-        let width = right - left;
-        let height = bottom - top;
-        let first_time = {
-            let bbox = super::context::Bounding {
-                x: left,
-                y: top,
-                width,
-                height,
-                top,
-                right,
-                bottom,
-                left,
-            };
-            // Use a fixed channel key (1 = right) for one-shot animation
-            ctx_right.upsert_strings_group_rect(1, bbox)
-        };
-        let class = if first_time {
-            super::instrument_animations::INSTRUMENT_STRINGS_GROUP_APPEAR.to_string()
-        } else {
-            String::new()
-        };
-        let scale = INTRO_SUN_RADIUS / key_radius();
-        let rot = 180.0 + INTRO_FLUTE_ROT_DEG;
-        let style = format!(
-            "--inst-strings-appear-delay: 0ms; \
-            --inst-strings-rot-origin-x: {}px; \
-            --inst-strings-rot-origin-y: {}px; \
-            --inst-strings-k1-rot: {}deg; \
-            --inst-strings-k1-tx: -{}px; \
-            --inst-strings-k1-ty: -{}px; \
-            --inst-strings-k1-scale: {}; \
-            --inst-strings-k2-tx: -{}px; \
-            --inst-strings-k2-ty: -{}px; \
-            --inst-strings-k2-scale: 1; \
-            --inst-strings-k2-rot: 0deg;",
-            INTRO_FLUTE_POS_X, INTRO_FLUTE_POS_Y, rot, left, top, scale, left, top
-        );
         view! {
-            <g id="right-channel-strings" attr:class=class attr:style=style>
+            <g id="right-channel-strings">
                 {move || {
                     (0..num_groups)
                         .filter(|g| {
@@ -180,7 +143,6 @@ pub fn InstrumentStrings() -> impl IntoView {
                                     let g = g as usize;
                                     let ch = first_group_channel.nth_channel_from_first(g);
                                     let orientation = orientation;
-
                                     view! {
                                         <StringView g k line=right_string_position orientation ch />
                                     }
@@ -188,15 +150,25 @@ pub fn InstrumentStrings() -> impl IntoView {
                         })
                         .collect_view()
                 }}
-
             </g>
         }
     };
 
     view! {
-        <svg viewBox=view_box fill="none" xmlns="http://www.w3.org/2000/svg">
-            {left_strings}
-            {right_strings}
+        <svg
+            viewBox=view_box
+            class="absolute h-full w-auto top-auto left-auto bottom-0 right-0 stroke-black dark:stroke-red"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+        >
+            <g
+                id="strings-root"
+                class=super::instrument_animations::INSTRUMENT_STRINGS_ROOT_APPEAR
+                style=root_inner_style
+            >
+                {left_strings}
+                {right_strings}
+            </g>
         </svg>
     }
 }
@@ -223,7 +195,7 @@ pub fn StringView(
 
     // let _ = use_raf_fn_with_fps(move |UseRafFnCallbackArgs{ delta, timestamp }| {
     //     let (start, end) = line;
-
+    //
     //     if let Some(data) = data.get_untracked() {
     //         let path = match orientation {
     //             common::orientation::LayoutOrientation::Vertical => crate::util::wave::waveform_path_y(
@@ -241,9 +213,9 @@ pub fn StringView(
     //             WAVE_AMPLITUDE_PX,
     //         ),
     //         };
-
+    //
     //     }
-
+    //
     // }, 30);
 
     view! { <path d=path_def stroke-width="2" /> }

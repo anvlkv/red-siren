@@ -14,294 +14,156 @@
     --inst-instrument-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 
     /* Appear (crossfade runs only until Stage 1.5, then opacity stays) */
-    --inst-appear-duration: 600ms;
-    --inst-appear-delay: 0ms;
+    --inst-appear-duration: 1400ms;
+    --inst-crossfade-duration: 500ms; /* Set by instrument.rs from INTRO_FADE_DURATION_MS */
+
     --inst-appear-opacity-from: 0;
     --inst-appear-opacity-to: 1;
-
-    /* Settle */
-    --inst-settle-duration: 300ms;
-    --inst-settle-delay: 0ms;
 
     /* View transitions */
     --inst-vt-leave-duration: 700ms;
     --inst-vt-leave-ease: var(--inst-instrument-ease);
     --inst-vt-leave-shift-x: 100vw;
     --inst-vt-leave-shift-y: 100vh;
-    --inst-vt-leave-depth: -6vmin;
+
     --inst-vt-leave-scale: 0.94;
+    --inst-band-glare-max-peak: 1.35;
 }
 
 /* -------------------------------------------------------------------------------------------------
    KEYS — staged sequence
-   - 0%..30% (Stage 1 -> 1.5): crossfade only; stay collapsed under sun; optional glare scale
-   - 30%..55%: move along breadth axis only (still stacked)
-   - 55%..85%: unstack along length (main) axis
-   - 85%..100%: arrive to final (transform: none)
+   - Stage 1 -> 1.5: crossfade only (duration from --inst-crossfade-duration)
+   - Then: move along breadth axis only (still stacked)
+   - Then: unstack along length (main) axis
+   - Finally: arrive to final position
 -------------------------------------------------------------------------------------------------- */
-@keyframes instrument-key-appear-seq {
-    0% {
-        /* Stage 1: collapsed under sun */
-        opacity: var(
-            --inst-key-appear-opacity-from,
-            var(--inst-appear-opacity-from)
-        );
-        transform: translate(var(--inst-key-k1-tx, 0), var(--inst-key-k1-ty, 0))
-            scale(var(--inst-key-k1-scale, 1));
+@keyframes instrument-crossfade-opacity {
+    from {
+        opacity: var(--inst-appear-opacity-from);
     }
-    30% {
-        /* Stage 1.5: glare peaking; no motion beyond scale; crossfade completes here */
-        opacity: var(
-            --inst-key-appear-opacity-to,
-            var(--inst-appear-opacity-to)
-        );
-        transform: translate(var(--inst-key-k1-tx, 0), var(--inst-key-k1-ty, 0))
-            scale(var(--inst-key-k15-scale, var(--inst-key-k1-scale, 1)));
+    to {
+        opacity: var(--inst-appear-opacity-to);
+    }
+}
+@keyframes instrument-key-move-seq {
+    0% {
+        transform: translate(var(--inst-key-k1-tx), var(--inst-key-k1-ty))
+            scale(var(--inst-key-k1-scale));
     }
     55% {
-        /* Stage 2a: breadth-axis motion (still stacked along length) */
-        opacity: var(
-            --inst-key-appear-opacity-to,
-            var(--inst-appear-opacity-to)
-        );
         transform: translate(
-                var(--inst-key-breadth-tx, var(--inst-key-k2-tx, 0)),
-                var(--inst-key-breadth-ty, var(--inst-key-k2-ty, 0))
+                var(--inst-key-breadth-tx),
+                var(--inst-key-breadth-ty)
             )
-            scale(var(--inst-key-k2-scale, 1));
+            scale(var(--inst-key-k2-scale));
     }
     85% {
-        /* Stage 2b/3: unstack along length (main) axis */
-        opacity: var(
-            --inst-key-appear-opacity-to,
-            var(--inst-appear-opacity-to)
-        );
         transform: translate(
-                var(
-                    --inst-key-length-tx,
-                    var(--inst-key-breadth-tx, var(--inst-key-k2-tx, 0))
-                ),
-                var(
-                    --inst-key-length-ty,
-                    var(--inst-key-breadth-ty, var(--inst-key-k2-ty, 0))
-                )
+                var(--inst-key-length-tx),
+                var(--inst-key-length-ty)
             )
             scale(1);
     }
     100% {
-        /* Stage 3 end: final place */
-        opacity: var(
-            --inst-key-appear-opacity-to,
-            var(--inst-appear-opacity-to)
-        );
         transform: translate(0, 0) scale(1);
     }
 }
 
 /* Utility classes to apply the above key animations */
 .instrument-key--appear {
-    animation-name: instrument-key-appear-seq;
-    animation-duration: var(
-        --inst-key-appear-duration,
-        var(--inst-appear-duration)
-    );
-    animation-timing-function: var(
-        --inst-key-appear-ease,
-        var(--inst-instrument-ease)
-    );
-    animation-delay: var(--inst-key-appear-delay, var(--inst-appear-delay));
+    /* movement starts after crossfade; scene handles opacity */
+    animation-name: instrument-key-move-seq;
+    animation-duration: var(--inst-appear-duration);
+    animation-delay: var(--inst-crossfade-duration);
+    animation-timing-function: var(--inst-instrument-ease);
     animation-fill-mode: both;
-    animation-iteration-count: 1;
     will-change: transform, opacity;
 }
 
 /* -------------------------------------------------------------------------------------------------
    BANDS — staged sequence with glare and late expansion (Stage 4)
-   - 0%..30%: crossfade only; collapsed under sun; keep visual circle (square via non-uniform scale)
-   - 30%..55%: glare (uniform overscale), still no translation
-   - 55%..85%: breadth-axis motion (still stacked), remain circle (square)
-   - 85%..100%: final place + expand to actual rectangular dimensions (no longer square)
+   - Stage 1 -> 1.5: crossfade only (duration from --inst-crossfade-duration)
+   - Then: glare (uniform overscale), still no translation
+   - Then: breadth-axis motion (still stacked), remain circle (square)
+   - Finally: final place + expand to actual rectangular dimensions (no longer square)
 -------------------------------------------------------------------------------------------------- */
-@keyframes instrument-band-appear-seq {
+@keyframes instrument-band-glare {
+    from {
+        transform: scale(var(--inst-band-glare-scale));
+    }
+    to {
+        transform: scale(
+            min(
+                var(--inst-band-glare-scale-peak),
+                var(--inst-band-glare-max-peak)
+            )
+        );
+    }
+}
+@keyframes instrument-band-move-seq {
     0% {
-        /* Stage 1 */
-        opacity: var(
-            --inst-band-appear-opacity-from,
-            var(--inst-appear-opacity-from)
-        );
-        transform: translate(
-                var(--inst-band-k1-tx, 0),
-                var(--inst-band-k1-ty, 0)
-            )
-            /* keep circle by making base square */
-            scale(
-                var(--inst-band-k1-scale-x, 1),
-                var(--inst-band-k1-scale-y, 1)
-            );
-        /* rounded-full via tailwind */
-    }
-    30% {
-        /* Stage 1.5: glare (random radiuses via per-element vars); opacity locks here */
-        opacity: var(
-            --inst-band-appear-opacity-to,
-            var(--inst-appear-opacity-to)
-        );
-        transform: translate(
-                var(--inst-band-k1-tx, 0),
-                var(--inst-band-k1-ty, 0)
-            )
-            scale(
-                var(--inst-band-k15-scale-x, var(--inst-band-k1-scale-x, 1.08)),
-                var(--inst-band-k15-scale-y, var(--inst-band-k1-scale-y, 1.08))
-            );
-        /* rounded-full via tailwind */
-    }
-    55% {
-        /* Stage 2a: breadth-axis motion; stay circle (square base) */
-        opacity: var(
-            --inst-band-appear-opacity-to,
-            var(--inst-appear-opacity-to)
-        );
-        transform: translate(
-                var(--inst-band-breadth-tx, var(--inst-band-k2-tx, 0)),
-                var(--inst-band-breadth-ty, var(--inst-band-k2-ty, 0))
-            )
-            scale(
-                var(--inst-band-k1-scale-x, 1),
-                var(--inst-band-k1-scale-y, 1)
-            );
-        /* rounded-full via tailwind */
+        transform: scale(1);
+        width: var(--inst-band-k1-width);
+        height: var(--inst-band-k1-height);
     }
     85% {
-        /* Stage 3: in place but still circular (square base) */
-        opacity: var(
-            --inst-band-appear-opacity-to,
-            var(--inst-appear-opacity-to)
-        );
-        transform: translate(0, 0)
-            scale(
-                var(--inst-band-k1-scale-x, 1),
-                var(--inst-band-k1-scale-y, 1)
-            );
-        /* rounded-full via tailwind */
+        transform: scale(1);
+        width: var(--inst-band-k1-width);
+        height: var(--inst-band-k1-height);
     }
     100% {
-        /* Stage 4: expand to rectangular (recover length) */
-        transform: translate(0, 0) scale(1, 1);
-        /* rounded-full via tailwind -> pill-like rounded rectangle by actual dims */
+        transform: scale(1);
+        width: var(--inst-band-final-width);
+        height: var(--inst-band-final-height);
     }
 }
 
 .instrument-band--appear {
-    animation-name: instrument-band-appear-seq;
-    animation-duration: var(
-        --inst-band-appear-duration,
-        var(--inst-appear-duration)
-    );
-    animation-timing-function: var(
-        --inst-band-appear-ease,
-        var(--inst-instrument-ease)
-    );
-    animation-delay: var(--inst-band-appear-delay, var(--inst-appear-delay));
-    animation-fill-mode: both;
-    animation-iteration-count: 1;
-    will-change: transform, opacity;
+    /* 1) glare during crossfade; 2) move+expand after crossfade; scene handles opacity */
+    animation-name: instrument-band-glare, instrument-band-move-seq;
+    animation-duration:
+        var(--inst-crossfade-duration), var(--inst-appear-duration);
+    animation-delay: 0s, var(--inst-crossfade-duration);
+    animation-timing-function:
+        var(--inst-instrument-ease), var(--inst-instrument-ease);
+    animation-fill-mode: both, both;
+    transform-origin: center;
+    will-change: transform, opacity, width, height;
 }
 
 /* -------------------------------------------------------------------------------------------------
    STRINGS (per group) — staged sequence with rotation normalization
-   - 0%..30%: crossfade only; positioned/rotated to composition (flute) + scale to sun
-   - 30%..60%: rotation to normal (0deg) and scale normalize; still offset (collapsed along axis)
-   - 60%..100%: translate to final position
+   - Stage 1 -> 1.5: crossfade only (duration from --inst-crossfade-duration)
+   - Then: rotation to normal (0deg) and scale normalize; still offset (collapsed along axis)
+   - Finally: translate to final position
 -------------------------------------------------------------------------------------------------- */
-@keyframes instrument-strings-group-appear {
-    0% {
-        opacity: var(
-            --inst-strings-appear-opacity-from,
-            var(--inst-appear-opacity-from)
-        );
-        transform-origin: var(--inst-strings-rot-origin-x, 0px)
-            var(--inst-strings-rot-origin-y, 0px);
+@keyframes instrument-strings-move-to-rest {
+    from {
         transform: translate(
-                var(--inst-strings-k1-tx, 0),
-                var(--inst-strings-k1-ty, 0)
+                var(--inst-strings-k1-tx),
+                var(--inst-strings-k1-ty)
             )
-            rotate(var(--inst-strings-k1-rot, 0deg))
-            scale(var(--inst-strings-k1-scale, 1));
-        stroke-dasharray: var(--inst-strings-k1-dash, 0);
-        stroke-dashoffset: var(--inst-strings-k1-dashoffset, 0);
+            rotate(var(--inst-strings-k1-rot))
+            scale(
+                var(--inst-strings-k1-scale-x),
+                var(--inst-strings-k1-scale-y)
+            );
     }
-    30% {
-        /* End crossfade; no motion until now */
-        opacity: var(
-            --inst-strings-appear-opacity-to,
-            var(--inst-appear-opacity-to)
-        );
-        transform-origin: var(--inst-strings-rot-origin-x, 0px)
-            var(--inst-strings-rot-origin-y, 0px);
-        transform: translate(
-                var(--inst-strings-k1-tx, 0),
-                var(--inst-strings-k1-ty, 0)
-            )
-            rotate(var(--inst-strings-k1-rot, 0deg))
-            scale(var(--inst-strings-k1-scale, 1));
-        stroke-dasharray: var(--inst-strings-k1-dash, 0);
-        stroke-dashoffset: var(--inst-strings-k1-dashoffset, 0);
-    }
-    60% {
-        /* Stage 2: rotation and scale normalize; still offset to axis-collapsed */
-        opacity: var(
-            --inst-strings-appear-opacity-to,
-            var(--inst-appear-opacity-to)
-        );
-        transform-origin: var(--inst-strings-rot-origin-x, 0px)
-            var(--inst-strings-rot-origin-y, 0px);
-        transform: translate(
-                var(--inst-strings-k2-tx, var(--inst-strings-k1-tx, 0)),
-                var(--inst-strings-k2-ty, var(--inst-strings-k1-ty, 0))
-            )
-            rotate(var(--inst-strings-k2-rot, 0deg))
-            scale(var(--inst-strings-k2-scale, 1));
-        stroke-dasharray: var(
-            --inst-strings-k2-dash,
-            var(--inst-strings-k1-dash, 0)
-        );
-        stroke-dashoffset: var(
-            --inst-strings-k2-dashoffset,
-            var(--inst-strings-k1-dashoffset, 0)
-        );
-    }
-    100% {
-        /* Stage 3: final position */
-        opacity: var(
-            --inst-strings-appear-opacity-to,
-            var(--inst-appear-opacity-to)
-        );
-        transform-origin: var(--inst-strings-rot-origin-x, 0px)
-            var(--inst-strings-rot-origin-y, 0px);
+    to {
         transform: translate(0, 0) rotate(0deg) scale(1);
-        stroke-dasharray: var(
-            --inst-strings-final-dash,
-            var(--inst-strings-k2-dash, 0)
-        );
-        stroke-dashoffset: 0;
     }
 }
 
-.instrument-strings-group--appear {
-    animation-name: instrument-strings-group-appear;
-    animation-duration: var(
-        --inst-strings-appear-duration,
-        var(--inst-appear-duration)
-    );
-    animation-timing-function: var(
-        --inst-strings-appear-ease,
-        var(--inst-instrument-ease)
-    );
-    animation-delay: var(--inst-strings-appear-delay, var(--inst-appear-delay));
+.instrument-strings-group--appear,
+.instrument-strings-root--appear {
+    transform-box: view-box;
+    /* movement starts after crossfade; scene handles opacity */
+    animation-name: instrument-strings-move-to-rest;
+    animation-duration: var(--inst-appear-duration);
+    animation-delay: var(--inst-crossfade-duration);
+    animation-timing-function: var(--inst-instrument-ease);
     animation-fill-mode: both;
-    animation-iteration-count: 1;
-    will-change: transform, opacity, stroke-dashoffset;
+    will-change: transform, opacity;
 }
 
 /* -------------------------------------------------------------------------------------------------
@@ -370,20 +232,32 @@
 
 /* Map VT names to animations */
 ::view-transition-old(instrument-leave-left) {
-    animation: instrument-vt-leave-to-left var(--inst-vt-leave-duration)
-        var(--inst-vt-leave-ease) both;
+    animation-name: instrument-vt-leave-to-left;
+    animation-duration: var(--inst-vt-leave-duration);
+    animation-delay: 0s;
+    animation-timing-function: var(--inst-vt-leave-ease);
+    animation-fill-mode: both;
 }
 ::view-transition-old(instrument-leave-right) {
-    animation: instrument-vt-leave-to-right var(--inst-vt-leave-duration)
-        var(--inst-vt-leave-ease) both;
+    animation-name: instrument-vt-leave-to-right;
+    animation-duration: var(--inst-vt-leave-duration);
+    animation-delay: 0s;
+    animation-timing-function: var(--inst-vt-leave-ease);
+    animation-fill-mode: both;
 }
 ::view-transition-old(instrument-leave-top) {
-    animation: instrument-vt-leave-to-top var(--inst-vt-leave-duration)
-        var(--inst-vt-leave-ease) both;
+    animation-name: instrument-vt-leave-to-top;
+    animation-duration: var(--inst-vt-leave-duration);
+    animation-delay: 0s;
+    animation-timing-function: var(--inst-vt-leave-ease);
+    animation-fill-mode: both;
 }
 ::view-transition-old(instrument-leave-bottom) {
-    animation: instrument-vt-leave-to-bottom var(--inst-vt-leave-duration)
-        var(--inst-vt-leave-ease) both;
+    animation-name: instrument-vt-leave-to-bottom;
+    animation-duration: var(--inst-vt-leave-duration);
+    animation-delay: 0s;
+    animation-timing-function: var(--inst-vt-leave-ease);
+    animation-fill-mode: both;
 }
 
 /* -------------------------------------------------------------------------------------------------
@@ -402,4 +276,10 @@
     ::view-transition-old(instrument-leave-bottom) {
         animation: none !important;
     }
+}
+
+/* Instrument scene crossfade-in: ensures instrument starts fading in immediately with intro fade-out */
+.instrument-scene--enter {
+    animation: instrument-crossfade-opacity var(--inst-crossfade-duration)
+        linear both;
 }

@@ -43,7 +43,7 @@ pub fn IntroComp(#[prop(into)] exit: Signal<bool>) -> impl IntoView {
 
     view! {
         <div
-            class="absolute h-screen w-screen splash-picture overflow-hidden"
+            class="absolute h-screen w-screen splash-picture overflow-hidden pointer-events-none z-0"
             role="img"
             style=animation_style
         >
@@ -57,7 +57,7 @@ pub fn IntroComp(#[prop(into)] exit: Signal<bool>) -> impl IntoView {
                 <Wavering paused />
             </svg>
             <svg
-                viewBox="0 0 430 932"
+                viewBox=format!("0 0 {INTRO_COMP_VIEWBOX_WIDTH} {INTRO_COMP_VIEWBOX_HEIGHT}")
                 class="absolute h-full w-auto top-auto left-auto bottom-0 right-0 fill-red dark:fill-black stroke-black dark:stroke-red"
                 xmlns="http://www.w3.org/2000/svg"
                 id="stone"
@@ -65,7 +65,7 @@ pub fn IntroComp(#[prop(into)] exit: Signal<bool>) -> impl IntoView {
                 <path d=STONE_PATH stroke-width="3" />
             </svg>
             <svg
-                viewBox="0 0 430 932"
+                viewBox=format!("0 0 {INTRO_COMP_VIEWBOX_WIDTH} {INTRO_COMP_VIEWBOX_HEIGHT}")
                 class="absolute h-full w-auto top-auto left-auto bottom-0 right-0 fill-black dark:fill-red"
                 xmlns="http://www.w3.org/2000/svg"
                 id="siren"
@@ -75,7 +75,7 @@ pub fn IntroComp(#[prop(into)] exit: Signal<bool>) -> impl IntoView {
                 <path d=SIREN_PATH_3 />
             </svg>
             <svg
-                viewBox="0 0 430 932"
+                viewBox=format!("0 0 {INTRO_COMP_VIEWBOX_WIDTH} {INTRO_COMP_VIEWBOX_HEIGHT}")
                 fill="none"
                 class="absolute h-full w-auto top-auto left-auto bottom-0 right-0 stroke-red dark:stroke-black"
                 xmlns="http://www.w3.org/2000/svg"
@@ -93,7 +93,7 @@ pub fn IntroComp(#[prop(into)] exit: Signal<bool>) -> impl IntoView {
                 />
             </svg>
             <svg
-                viewBox="0 0 430 932"
+                viewBox=format!("0 0 {INTRO_COMP_VIEWBOX_WIDTH} {INTRO_COMP_VIEWBOX_HEIGHT}")
                 class="absolute h-full w-auto top-auto left-auto bottom-0 right-0 fill-red dark:fill-black stroke-black dark:stroke-red"
                 xmlns="http://www.w3.org/2000/svg"
                 id="flute"
@@ -110,7 +110,7 @@ pub fn IntroComp(#[prop(into)] exit: Signal<bool>) -> impl IntoView {
                 />
             </svg>
             <svg
-                viewBox="0 0 430 932"
+                viewBox=format!("0 0 {INTRO_COMP_VIEWBOX_WIDTH} {INTRO_COMP_VIEWBOX_HEIGHT}")
                 class="absolute h-full w-auto top-0 left-0 fill-black dark:fill-red"
                 xmlns="http://www.w3.org/2000/svg"
                 id="sun"
@@ -118,7 +118,7 @@ pub fn IntroComp(#[prop(into)] exit: Signal<bool>) -> impl IntoView {
                 <circle r=INTRO_SUN_RADIUS cx=INTRO_SUN_POS_X cy=INTRO_SUN_POS_Y />
             </svg>
             <svg
-                viewBox="0 0 430 932"
+                viewBox=format!("0 0 {INTRO_COMP_VIEWBOX_WIDTH} {INTRO_COMP_VIEWBOX_HEIGHT}")
                 class="absolute h-full w-auto top-auto left-auto bottom-0 right-0 fill-black dark:fill-red stroke-red dark:stroke-black"
                 xmlns="http://www.w3.org/2000/svg"
                 id="siren-arm"
@@ -126,7 +126,7 @@ pub fn IntroComp(#[prop(into)] exit: Signal<bool>) -> impl IntoView {
                 <path d=SIREN_ARM_PATH stroke-width="2" />
             </svg>
             <svg
-                viewBox="0 0 430 932"
+                viewBox=format!("0 0 {INTRO_COMP_VIEWBOX_WIDTH} {INTRO_COMP_VIEWBOX_HEIGHT}")
                 class="absolute h-full w-auto top-auto left-auto right-0 bottom-0 fill-black dark:fill-red"
                 xmlns="http://www.w3.org/2000/svg"
                 id="siren-front"

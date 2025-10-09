@@ -26,9 +26,13 @@ pub fn Instrument() -> impl IntoView {
                 "{} relative w-screen h-screen overflow-hidden",
                 instrument_animations::INSTRUMENT_SCENE_VT_BOTTOM,
             )
-            style=format!("--inst-appear-duration: {}ms;", INTRO_FADE_DURATION_MS)
+            style=format!(
+                "--inst-crossfade-duration: {}ms; animation: fadeIn {}ms forwards;",
+                INTRO_FADE_DURATION_MS / 2.0,
+                INTRO_FADE_DURATION_MS / 2.0,
+            )
         >
-            <InstrumentStrings attr:class="absolute right-0 bottom-0 stroke-black dark:stroke-red bg-none" />
+            <InstrumentStrings attr:class="absolute h-full w-auto right-0 bottom-0 stroke-black dark:stroke-red bg-none" />
             <Keyboard attr:class="absolute inset-0" />
         </div>
     }

@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     sync::mpsc::{self, Sender},
     thread,
     time::Duration,
@@ -63,6 +64,7 @@ pub(super) struct Inner {
     activation_source: RwLock<ActivationSource>,
     layout: RwLock<InstrumentLayout>,
     config: RwLock<InstrumentConfig>,
+    tuner_data: RwLock<common::tuner::TunerData>,
     dsp_net_frontend: RwLock<Option<Net>>,
     // Primary oscillator node id for dynamic replacement.
     dsp_primary_node_id: RwLock<Option<NodeId>>,
@@ -71,6 +73,14 @@ pub(super) struct Inner {
     gain_param: RwLock<Option<Shared>>,
     control_tx: RwLock<Option<Sender<Control>>>,
     join: RwLock<Option<thread::JoinHandle<()>>>,
+    // Deconstructed NodeHandles from output system
+    activation_snoops: RwLock<Vec<fundsp::snoop::Snoop>>,
+    output_snoops: RwLock<Vec<fundsp::snoop::Snoop>>,
+    siren_controls: RwLock<Vec<Shared>>,
+    band_controls: RwLock<Vec<Shared>>,
+    // Activation system handles
+    activation_sender: RwLock<Option<Sender<Control>>>,
+    activation_thread: RwLock<Option<thread::JoinHandle<()>>>,
 }
 
 impl Inner {
@@ -85,7 +95,40 @@ impl Inner {
         // let config_len = self.config.read().0.len();
         // let base_freq: f32 = (220.0 + (config_len as f64 * 5.0)) as f32;
 
-        super::system::create_output_system(&self.config.read(), &mut net, 2);
+        // Create output system and get handles
+        let node_handles = super::system::create_output_system(&self.config.read(), &mut net, 2);
+
+        // Deconstruct and store NodeHandles
+        {
+            let mut activation_snoops = self.activation_snoops.write();
+            let mut output_snoops = self.output_snoops.write();
+            let mut siren_controls = self.siren_controls.write();
+            let mut band_controls = self.band_controls.write();
+
+            activation_snoops.clear();
+            output_snoops.clear();
+            siren_controls.clear();
+            band_controls.clear();
+
+            // Create HashMap for siren controls to pass to input system
+            let mut sirens_map = std::collections::HashMap::new();
+
+            for handle in node_handles {
+                sirens_map.insert(handle.key, handle.siren_control.clone());
+                activation_snoops.push(handle.activation_snoop);
+                output_snoops.push(handle.output_snoop);
+                siren_controls.push(handle.siren_control);
+                band_controls.push(handle.band_control);
+            }
+
+            // TODO: Create input system when tuner data is ready
+            // For now, skip the input system creation as tuner data is being reworked
+            {
+                let tuner_data = self.tuner_data.read();
+
+                super::system::create_input_system(&tuner_data, &mut net, sirens_map);
+            }
+        }
 
         net.allocate();
 
@@ -96,24 +139,28 @@ impl Inner {
 
     /// Replace primary node oscillator based on current config (if playing).
     fn update_primary_node(&self) {
+        // Extract values with narrow lock scopes
         if !*self.playing.read() {
             return;
         }
-        let Some(primary_id) = *self.dsp_primary_node_id.read() else {
-            return;
+
+        let primary_id = match *self.dsp_primary_node_id.read() {
+            Some(id) => id,
+            None => return,
         };
+
+        let sample_rate = self.sample_rate.read().unwrap_or(44100.0);
+
+        // Create new node before acquiring write lock
+        let new_node = self.create_output_network(sample_rate);
+
+        // Now acquire write lock for minimal time
         let mut guard = self.dsp_net_frontend.write();
         let Some(net) = guard.as_mut() else {
             return;
         };
 
-        let sr = self.sample_rate.read().unwrap_or(44100.0);
-        let new_node = self.create_output_network(sr);
-
         net.crossfade(primary_id, Fade::Smooth, 0.3, Box::new(new_node));
-        net.check();
-        net.commit();
-        log::info!("Updated primary node (sr={sr})");
     }
 
     pub fn start_playback(&self) -> AppResult<bool> {
@@ -269,6 +316,8 @@ impl Inner {
         {
             *self.control_tx.write() = Some(tx);
             *self.join.write() = Some(handle);
+            *self.activation_sender.write() = Some(act_sx);
+            *self.activation_thread.write() = Some(act_handle);
         }
 
         *self.playing.write() = true;
@@ -313,24 +362,46 @@ impl Inner {
             return Ok(false);
         }
 
+        // Shutdown activation system
+        if let Some(act_tx) = self.activation_sender.write().take() {
+            let (ack_tx, ack_rx) = mpsc::channel();
+            if act_tx.send(Control::Shutdown(ack_tx)).is_ok() {
+                // Wait for activation thread ack, but don't error if it fails
+                let _ = ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS));
+            }
+        }
+
         *self.join.write() = None;
+        *self.activation_thread.write() = None;
 
         self.dsp_net_frontend.write().take();
         self.dsp_primary_node_id.write().take();
         self.gain_param.write().take();
 
+        // Clear stored handles
+        {
+            self.activation_snoops.write().clear();
+            self.output_snoops.write().clear();
+            self.siren_controls.write().clear();
+            self.band_controls.write().clear();
+        }
+
         Ok(true)
     }
 
     fn fade_out(&self) {
-        if let Some(p) = self.gain_param.read().as_ref().cloned() {
+        // Extract param before sleeping
+        let param = self.gain_param.read().as_ref().cloned();
+        if let Some(p) = param {
             p.set(0.0);
         }
         std::thread::sleep(Duration::from_millis(FADE_DURATION_MS));
     }
 
     fn fade_in(&self) {
-        if let Some(p) = self.gain_param.read().as_ref().cloned() {
+        // Extract param before sleeping
+        let param = self.gain_param.read().as_ref().cloned();
+        if let Some(p) = param {
             p.set(1.0);
         }
         std::thread::sleep(Duration::from_millis(FADE_DURATION_MS));
@@ -345,16 +416,23 @@ impl Inner {
     }
 
     pub fn set_activation_source(&self, requested: ActivationSource) -> AppResult<bool> {
-        let mut src = self.activation_source.write();
-        if *src != requested {
-            *src = requested;
+        // Narrow lock scope - check and update in minimal scope
+        let needs_update = {
+            let mut src = self.activation_source.write();
+            if *src != requested {
+                *src = requested;
+                true
+            } else {
+                false
+            }
+        };
 
+        if needs_update {
             // recreate system with the selected activation source
             if self.playing() {
                 _ = self.stop_playback()?;
                 _ = self.start_playback()?;
             }
-
             Ok(true)
         } else {
             Ok(false)
@@ -429,6 +507,7 @@ impl Inner {
     }
 
     pub fn set_is_dark(&self, is_dark: bool) -> common::error::Result<()> {
+        // Narrow lock scope - derive config outside of lock
         let new_config = {
             let mut layout = self.layout.write();
             layout.scale = if is_dark {
@@ -438,6 +517,8 @@ impl Inner {
             };
             common::instrument::Config::try_from(*layout)?
         };
+
+        // Separate lock scope for config update
         {
             let mut config = self.config.write();
             *config = new_config;
@@ -447,11 +528,13 @@ impl Inner {
                 *config
             );
         }
+
         self.update_primary_node();
         Ok(())
     }
 
     pub fn set_size(&self, width: f64, height: f64) -> common::error::Result<()> {
+        // Narrow lock scope - update layout and derive config
         let new_config = {
             let mut layout = self.layout.write();
             let scale = layout.scale;
@@ -498,7 +581,7 @@ impl Inner {
             let mut config = self.config.write();
             *config = new_config;
             log::info!(
-                "Updated config after safe area change [top: {top}, right: {right}, bottom: {bottom}, left: {left}] (len={}): {:#?}",
+                "Created new config for size change (len={}): {:#?}",
                 config.0.len(),
                 *config
             );
@@ -506,4 +589,27 @@ impl Inner {
         self.update_primary_node();
         Ok(())
     }
+
+    // Helper methods for accessing stored node handles
+    pub fn get_siren_control(&self, index: usize) -> Option<Shared> {
+        let controls = self.siren_controls.read();
+        controls.get(index).cloned()
+    }
+
+    pub fn get_band_control(&self, index: usize) -> Option<Shared> {
+        let controls = self.band_controls.read();
+        controls.get(index).cloned()
+    }
+
+    pub fn get_all_siren_controls(&self) -> Vec<Shared> {
+        self.siren_controls.read().clone()
+    }
+
+    pub fn get_all_band_controls(&self) -> Vec<Shared> {
+        self.band_controls.read().clone()
+    }
+
+    // Note: Snoop doesn't implement Clone, so we can't return cloned instances
+    // These methods are removed until we find a better way to expose snoops
+    // The snoops are stored internally and can be accessed directly during processing
 }

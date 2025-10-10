@@ -1,6 +1,6 @@
 use std::num::NonZero;
 
-use mint::Vector2;
+use mint::{Point2, Vector2};
 use serde::{Deserialize, Serialize};
 
 use crate::{orientation::LayoutOrientation, safe_area::SafeArea, Line};
@@ -25,6 +25,20 @@ pub struct Layout {
 }
 
 impl Eq for Layout {}
+
+impl Default for Layout {
+    fn default() -> Self {
+        Self {
+            space: Vector2 { x: 320.0, y: 240.0 },
+            orientation: LayoutOrientation::Horizontal,
+            safe_area_padding: SafeArea::default(),
+            line_position: (Point2 { x: 20.0, y: 120.0 }, Point2 { x: 300.0, y: 120.0 }),
+            sensor_radius: 10.0,
+            sensor_max_range: Vector2 { x: 20.0, y: 200.0 },
+            num_sensors: NonZero::new(12).unwrap(),
+        }
+    }
+}
 
 impl From<crate::instrument::Layout> for Layout {
     fn from(value: crate::instrument::Layout) -> Self {

@@ -21,12 +21,8 @@ use std::collections::{BTreeMap, HashSet};
 pub struct InstrumentContext {
     key_bboxes: RwSignal<BTreeMap<(usize, usize), Bounding>>,
     band_bboxes: RwSignal<BTreeMap<(usize, usize), Bounding>>,
-    strings_group_rects: RwSignal<BTreeMap<usize, Bounding>>,
-    strings_rect: RwSignal<Option<Bounding>>,
-
     animated_keys: RwSignal<HashSet<(usize, usize)>>,
     animated_bands: RwSignal<HashSet<(usize, usize)>>,
-    animated_string_groups: RwSignal<HashSet<usize>>,
 }
 
 impl InstrumentContext {
@@ -34,12 +30,8 @@ impl InstrumentContext {
         Self {
             key_bboxes: RwSignal::new(BTreeMap::new()),
             band_bboxes: RwSignal::new(BTreeMap::new()),
-            strings_group_rects: RwSignal::new(BTreeMap::new()),
-            strings_rect: RwSignal::new(None),
-
             animated_keys: RwSignal::new(HashSet::new()),
             animated_bands: RwSignal::new(HashSet::new()),
-            animated_string_groups: RwSignal::new(HashSet::new()),
         }
     }
 
@@ -63,20 +55,6 @@ impl InstrumentContext {
         first_time
     }
 
-    pub fn key_bbox(&self, id: (usize, usize)) -> Option<Bounding> {
-        self.key_bboxes.get_untracked().get(&id).copied()
-    }
-
-    pub fn all_key_bboxes(&self) -> BTreeMap<(usize, usize), Bounding> {
-        self.key_bboxes.get_untracked()
-    }
-
-    pub fn has_animated_key(&self, id: (usize, usize)) -> bool {
-        self.animated_keys.get_untracked().contains(&id)
-    }
-
-    // --- Bands ---
-
     /// Insert or update a band's bounding box.
     /// Returns true if this is the first time (suitable to run appear animation once).
     pub fn upsert_band_bbox(&self, id: (usize, usize), bbox: Bounding) -> bool {
@@ -93,66 +71,6 @@ impl InstrumentContext {
             }
         });
         first_time
-    }
-
-    pub fn band_bbox(&self, id: (usize, usize)) -> Option<Bounding> {
-        self.band_bboxes.get_untracked().get(&id).copied()
-    }
-
-    pub fn all_band_bboxes(&self) -> BTreeMap<(usize, usize), Bounding> {
-        self.band_bboxes.get_untracked()
-    }
-
-    pub fn has_animated_band(&self, id: (usize, usize)) -> bool {
-        self.animated_bands.get_untracked().contains(&id)
-    }
-
-    // --- Strings (per group) ---
-
-    /// Insert or update a strings group's bounding box.
-    /// Returns true only the first time this group is seen (to run group-level appear animation).
-    pub fn upsert_strings_group_rect(&self, group: usize, bbox: Bounding) -> bool {
-        self.strings_group_rects.update(|m| {
-            m.insert(group, bbox);
-        });
-
-        let mut first_time = false;
-        self.animated_string_groups.update(|s| {
-            if !s.contains(&group) && bbox.is_non_empty() {
-                s.insert(group);
-                first_time = true;
-            }
-        });
-        first_time
-    }
-
-    pub fn strings_group_rect(&self, group: usize) -> Option<Bounding> {
-        self.strings_group_rects
-            .get_untracked()
-            .get(&group)
-            .copied()
-    }
-
-    pub fn all_strings_group_rects(&self) -> BTreeMap<usize, Bounding> {
-        self.strings_group_rects.get_untracked()
-    }
-
-    pub fn has_animated_strings_group(&self, group: usize) -> bool {
-        self.animated_string_groups.get_untracked().contains(&group)
-    }
-
-    // --- Strings (overall) ---
-
-    /// Set the overall strings rectangle (e.g., SVG viewport measured box).
-    /// Returns true if this is the first time it becomes Some(..).
-    pub fn set_strings_rect(&self, bbox: Bounding) -> bool {
-        let was_none = self.strings_rect.get_untracked().is_none();
-        self.strings_rect.set(Some(bbox));
-        was_none && bbox.is_non_empty()
-    }
-
-    pub fn strings_rect(&self) -> Option<Bounding> {
-        self.strings_rect.get_untracked()
     }
 }
 

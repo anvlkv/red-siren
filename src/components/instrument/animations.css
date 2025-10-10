@@ -278,7 +278,7 @@
     }
 }
 
-/* Instrument scene crossfade-in: ensures instrument starts fading in immediately with intro fade-out */
+/* Instrument scene crossfade-in (style_sheet const: INSTRUMENT_SCENE_ENTER) */
 .instrument-scene--enter {
     animation: instrument-crossfade-opacity var(--inst-crossfade-duration)
         linear both;

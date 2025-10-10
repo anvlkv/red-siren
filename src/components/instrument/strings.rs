@@ -5,10 +5,7 @@ use common::{
 use leptos::prelude::*;
 use tauri_use::{use_invoke, UseTauriReturn};
 
-use crate::components::intro::consts::{
-    INTRO_COMP_VIEWBOX_HEIGHT, INTRO_COMP_VIEWBOX_WIDTH, INTRO_FLUTE_POS_X, INTRO_FLUTE_POS_Y,
-    INTRO_FLUTE_ROT_DEG,
-};
+use crate::components::intro::consts::{INTRO_FLUTE_POS_X, INTRO_FLUTE_POS_Y, INTRO_FLUTE_ROT_DEG};
 use crate::util::layout_context::{expect_layout_contex, LayoutContextReturn};
 
 #[component]

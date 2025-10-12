@@ -1,13 +1,10 @@
 mod input;
 mod output;
-mod siren;
 
 use std::collections::HashMap;
 
+use common::NodeKey;
 use fundsp::{net::Net, shared::Shared, snoop::Snoop};
-
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct NodeKey(pub u8, pub u8);
 
 pub struct NodeHandles {
     pub key: NodeKey,
@@ -33,8 +30,9 @@ pub fn create_output_system(
 }
 
 pub fn create_input_system(
-    config: &common::tuner::TunerData,
+    config: &common::tuner::Config,
     net: &mut Net,
-    sirens: HashMap<NodeKey, Shared>,
+    sirens: &HashMap<NodeKey, Shared>,
 ) {
+    input::sensors_system(config, net, sirens);
 }

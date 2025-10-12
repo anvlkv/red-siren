@@ -5,9 +5,12 @@ use std::{
     time::Duration,
 };
 
-use common::error::{ControlError, InstrumentError, Result as AppResult};
 use common::instrument::Config as InstrumentConfig;
 use common::instrument::Layout as InstrumentLayout;
+use common::{
+    error::{ControlError, InstrumentError, Result as AppResult},
+    NodeKey,
+};
 use cpal::traits::{DeviceTrait, HostTrait};
 use fundsp::hacker32::prelude::*;
 use mint::Vector2;
@@ -64,7 +67,7 @@ pub(super) struct Inner {
     activation_source: RwLock<ActivationSource>,
     layout: RwLock<InstrumentLayout>,
     config: RwLock<InstrumentConfig>,
-    tuner_data: RwLock<common::tuner::TunerData>,
+    tuner_data: RwLock<common::tuner::Config>,
     dsp_net_frontend: RwLock<Option<Net>>,
     // Primary oscillator node id for dynamic replacement.
     dsp_primary_node_id: RwLock<Option<NodeId>>,
@@ -74,10 +77,10 @@ pub(super) struct Inner {
     control_tx: RwLock<Option<Sender<Control>>>,
     join: RwLock<Option<thread::JoinHandle<()>>>,
     // Deconstructed NodeHandles from output system
-    activation_snoops: RwLock<Vec<fundsp::snoop::Snoop>>,
-    output_snoops: RwLock<Vec<fundsp::snoop::Snoop>>,
-    siren_controls: RwLock<Vec<Shared>>,
-    band_controls: RwLock<Vec<Shared>>,
+    activation_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
+    output_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
+    siren_controls: RwLock<HashMap<NodeKey, Shared>>,
+    band_controls: RwLock<HashMap<NodeKey, Shared>>,
     // Activation system handles
     activation_sender: RwLock<Option<Sender<Control>>>,
     activation_thread: RwLock<Option<thread::JoinHandle<()>>>,
@@ -89,8 +92,8 @@ impl Inner {
     }
 
     /// Build a fresh network based on current config; returns (Net, primary_node_id).
-    fn create_output_network(&self, sample_rate: f64) -> Net {
-        let mut net = Net::new(0, 2);
+    fn create_network(&self, sample_rate: f64) -> Net {
+        let mut net = Net::new(1, 2);
         net.set_sample_rate(sample_rate);
         // let config_len = self.config.read().0.len();
         // let base_freq: f32 = (220.0 + (config_len as f64 * 5.0)) as f32;
@@ -111,14 +114,12 @@ impl Inner {
             band_controls.clear();
 
             // Create HashMap for siren controls to pass to input system
-            let mut sirens_map = std::collections::HashMap::new();
 
             for handle in node_handles {
-                sirens_map.insert(handle.key, handle.siren_control.clone());
-                activation_snoops.push(handle.activation_snoop);
-                output_snoops.push(handle.output_snoop);
-                siren_controls.push(handle.siren_control);
-                band_controls.push(handle.band_control);
+                activation_snoops.insert(handle.key, handle.activation_snoop);
+                output_snoops.insert(handle.key, handle.output_snoop);
+                siren_controls.insert(handle.key, handle.siren_control);
+                band_controls.insert(handle.key, handle.band_control);
             }
 
             // TODO: Create input system when tuner data is ready
@@ -126,7 +127,7 @@ impl Inner {
             {
                 let tuner_data = self.tuner_data.read();
 
-                super::system::create_input_system(&tuner_data, &mut net, sirens_map);
+                super::system::create_input_system(&tuner_data, &mut net, &siren_controls);
             }
         }
 
@@ -146,21 +147,27 @@ impl Inner {
 
         let primary_id = match *self.dsp_primary_node_id.read() {
             Some(id) => id,
-            None => return,
+            None => {
+                log::warn!("No primary node id to update");
+                return;
+            }
         };
 
         let sample_rate = self.sample_rate.read().unwrap_or(44100.0);
 
         // Create new node before acquiring write lock
-        let new_node = self.create_output_network(sample_rate);
+        let new_node = self.create_network(sample_rate);
 
         // Now acquire write lock for minimal time
         let mut guard = self.dsp_net_frontend.write();
         let Some(net) = guard.as_mut() else {
+            log::warn!("No DSP network frontend to update");
             return;
         };
 
         net.crossfade(primary_id, Fade::Smooth, 0.3, Box::new(new_node));
+        net.check();
+        net.commit();
     }
 
     pub fn start_playback(&self) -> AppResult<bool> {
@@ -253,8 +260,8 @@ impl Inner {
 
         let output_sample_rate = output_default_cfg.sample_rate().0 as f64;
         *self.sample_rate.write() = Some(output_sample_rate);
-        let subnet = self.create_output_network(output_sample_rate);
-        let mut net = Net::new(0, output_channels);
+        let subnet = self.create_network(output_sample_rate);
+        let mut net = Net::new(1, output_channels);
         net.set_sample_rate(output_sample_rate);
 
         let main_node_id = net.push(Box::new(subnet));
@@ -590,26 +597,45 @@ impl Inner {
         Ok(())
     }
 
-    // Helper methods for accessing stored node handles
-    pub fn get_siren_control(&self, index: usize) -> Option<Shared> {
-        let controls = self.siren_controls.read();
-        controls.get(index).cloned()
+    pub fn snapshot_output_snoop(&self, group: usize, key: usize) -> Vec<f32> {
+        let key = NodeKey(group as u8, key as u8);
+
+        let mut out = Vec::new();
+        let mut snoops = self.output_snoops.write();
+        if let Some(snoop) = snoops.get_mut(&key) {
+            snoop.update();
+            let cap = snoop.capacity();
+            out.reserve(cap + 2);
+            for rev in (0..cap).rev() {
+                out.push(snoop.at(rev));
+            }
+        }
+        out
     }
 
-    pub fn get_band_control(&self, index: usize) -> Option<Shared> {
-        let controls = self.band_controls.read();
-        controls.get(index).cloned()
-    }
+    pub fn snapshot_all_output_snoops(&self) -> Vec<(u8, u8, Vec<f32>)> {
+        let layout = self.layout();
+        let num_groups = layout.num_groups.get() as usize;
+        let keys_per_group = layout.num_keys_per_group.get() as usize;
 
-    pub fn get_all_siren_controls(&self) -> Vec<Shared> {
-        self.siren_controls.read().clone()
-    }
+        let mut result = Vec::with_capacity(num_groups * keys_per_group);
+        let mut snoops = self.output_snoops.write();
 
-    pub fn get_all_band_controls(&self) -> Vec<Shared> {
-        self.band_controls.read().clone()
-    }
+        for g in 0..num_groups {
+            for k in 0..keys_per_group {
+                let key = NodeKey(g as u8, k as u8);
+                if let Some(snoop) = snoops.get_mut(&key) {
+                    snoop.update();
+                    let cap = snoop.capacity();
+                    let mut samples = Vec::with_capacity(cap + 2);
+                    for rev in (0..cap).rev() {
+                        samples.push(snoop.at(rev));
+                    }
+                    result.push((g as u8, k as u8, samples));
+                }
+            }
+        }
 
-    // Note: Snoop doesn't implement Clone, so we can't return cloned instances
-    // These methods are removed until we find a better way to expose snoops
-    // The snoops are stored internally and can be accessed directly during processing
+        result
+    }
 }

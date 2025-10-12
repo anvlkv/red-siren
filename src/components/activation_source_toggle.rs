@@ -1,4 +1,6 @@
+use common::RouteId;
 use leptos::prelude::*;
+use leptos_router::hooks::use_navigate;
 use tauri_use::{use_invoke, UseTauriReturn};
 
 use crate::{
@@ -9,6 +11,7 @@ use crate::{
 #[component]
 pub fn ActivationSourceToggle(
     #[prop(into, optional)] placement: Signal<Option<UiPlacement>>,
+    #[prop(into, optional)] mic_permission: Signal<Option<bool>>,
 ) -> impl IntoView {
     let UseTauriResourceReturn {
         data: activation_source,
@@ -25,7 +28,18 @@ pub fn ActivationSourceToggle(
         common::instrument::commands::SET_ACTIVATION_SRC,
     );
 
+    let navigate = use_navigate();
+
     let on_activation_source_change = Callback::new(move |source: usize| {
+        // If trying to switch to mic (source 1) and permission is Some(false), redirect
+        if source == 1 {
+            if let Some(false) = mic_permission() {
+                log::info!("Mic permission denied, redirecting to Permissions");
+                navigate(&RouteId::Permissions.as_ref(), Default::default());
+                return;
+            }
+        }
+
         trigger_set_activation_source(Some((
             common::instrument::commands::ActivationSourcePayload {
                 source: source as u8,

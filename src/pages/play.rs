@@ -1,5 +1,6 @@
 use common::RouteId;
 use leptos::prelude::*;
+use leptos_router::hooks::use_navigate;
 
 use crate::{
     components::{
@@ -20,6 +21,38 @@ pub fn Play() -> impl IntoView {
     } = use_tauri_resource::<common::instrument::events::PlaybackStatePayload>(
         common::instrument::events::PLAYBACK_STATE,
     );
+
+    // Get navigation function
+    let navigate = use_navigate();
+
+    // Get setup state to check mic permission
+    let UseTauriResourceReturn {
+        data: setup_state,
+        error: setup_state_error,
+        ..
+    } = use_tauri_resource::<common::commands::health::SetupStatePayload>(
+        common::commands::health::SETUP_STATE,
+    );
+
+    // Check mic permission on mount and redirect if needed
+    Effect::new({
+        let navigate = navigate.clone();
+        move |_| {
+            if let Some(err) = setup_state_error() {
+                log::error!("Error getting setup state: {err}");
+            }
+
+            if let Some(state) = setup_state() {
+                if state.mic_permission.is_none() {
+                    log::info!("Mic permission not set, redirecting to Permissions");
+                    navigate(&RouteId::Permissions.as_ref(), Default::default());
+                }
+            }
+        }
+    });
+
+    // Derive mic permission state for ActivationSourceToggle
+    let mic_permission = Signal::derive(move || setup_state().and_then(|s| s.mic_permission));
 
     // Derive compact menu placement from current instrument layout orientation
     let LayoutContextReturn { orientation, .. } = expect_layout_contex();
@@ -95,7 +128,7 @@ pub fn Play() -> impl IntoView {
         <div>
             <Instrument />
             <CompactMenu items=menu_items placement>
-                <ActivationSourceToggle placement />
+                <ActivationSourceToggle placement mic_permission />
                 <AppearanceToggle placement />
             </CompactMenu>
         </div>

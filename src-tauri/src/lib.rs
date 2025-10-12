@@ -41,6 +41,7 @@ pub fn run() {
         setup::window_appearance_override,
         health::health_on_gui_ready,
         health::health_grant_mic_premission,
+        health::health_setup_state,
         intro::intro_pause,
         intro::intro_resume,
         intro::intro_next_frame,
@@ -53,6 +54,8 @@ pub fn run() {
         instrument::instrument_set_activation_source,
         instrument::instrument_layout,
         instrument::ui_safe_area_insets_apply,
+        instrument::instrument_string_snoop_data,
+        instrument::instrument_all_string_snoops,
     ]);
 
     // Setup logic

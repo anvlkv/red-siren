@@ -2,6 +2,7 @@ mod commands;
 mod engine;
 mod stream;
 mod system;
+mod util;
 
 use common::error::{AppError, Result, SetupError};
 use tauri::{async_runtime::spawn, App, Emitter, Listener, Manager};

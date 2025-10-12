@@ -8,6 +8,8 @@ pub use input::*;
 pub use output::*;
 pub use random::*;
 
+const STREAM_TIMEOUT_S: u64 = 10;
+
 /// Result of a control invocation, sent back to the caller per request.
 pub type ControlInvocationResult = Result<(), String>;
 

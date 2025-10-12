@@ -22,9 +22,10 @@ fundsp = "0.20"
 log = { workspace = true }
 mint = { workspace = true, features = ["serde"] }
 parking_lot = "0.12"
-ringbuf = "0.4.8"
+ringbuf = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+spectrum-analyzer = "1.7.0"
 strum = { workspace = true, features = ["derive"] }
 tauri = { workspace = true, features = ["rustls-tls"] }
 tauri-plugin-log = "2"

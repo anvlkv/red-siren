@@ -1,6 +1,7 @@
 use std::{
     sync::mpsc::{channel, Receiver, Sender},
     thread,
+    time::Duration,
 };
 
 use common::error::InstrumentError;
@@ -114,26 +115,29 @@ fn run_input(
         SampleFormat::F32 => device.build_input_stream(
             config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                log::trace!("input stream tick: {} samples", data.len());
                 write_data(data, &mut data_buff, &mut produce_sample)
             },
             err_cb,
-            None,
+            Some(Duration::from_secs(super::STREAM_TIMEOUT_S)),
         ),
         SampleFormat::I16 => device.build_input_stream(
             config,
             move |data: &[i16], _: &cpal::InputCallbackInfo| {
+                log::trace!("input stream tick: {} samples", data.len());
                 write_data(data, &mut data_buff, &mut produce_sample)
             },
             err_cb,
-            None,
+            Some(Duration::from_secs(super::STREAM_TIMEOUT_S)),
         ),
         SampleFormat::U16 => device.build_input_stream(
             config,
             move |data: &[u16], _: &cpal::InputCallbackInfo| {
+                log::trace!("input stream tick: {} samples", data.len());
                 write_data(data, &mut data_buff, &mut produce_sample)
             },
             err_cb,
-            None,
+            Some(Duration::from_secs(super::STREAM_TIMEOUT_S)),
         ),
         other => {
             return Err(InstrumentError::UnsupportedSampleFormat(format!(

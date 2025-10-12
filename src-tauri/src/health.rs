@@ -21,10 +21,21 @@ pub fn setup(app: &mut App) -> tauri_plugin_store::Result<()> {
 
     let mic_permission = store.get(MIC_PEMISSION_KEY).and_then(|v: Value| v.as_bool());
 
-    app.manage(Mutex::new(SetupState {
+    let initial_state = SetupState {
         mic_permission,
         ..Default::default()
-    }));
+    };
+
+    // Emit initial setup state
+    app.emit(
+        common::events::health::SETUP_STATE,
+        common::commands::health::SetupStatePayload {
+            gui_ready: initial_state.gui_ready,
+            mic_permission: initial_state.mic_permission,
+        },
+    ).ok(); // Ignore error during setup
+
+    app.manage(Mutex::new(initial_state));
 
     Ok(())
 }
@@ -144,6 +155,19 @@ pub async fn health_grant_mic_premission(
 
     health_state.mic_permission = Some(check_result);
 
+    // Emit the updated setup state
+    app.emit(
+        common::events::health::SETUP_STATE,
+        common::commands::health::SetupStatePayload {
+            gui_ready: health_state.gui_ready,
+            mic_permission: health_state.mic_permission,
+        },
+    )
+    .map_err(|e| HealthError::Emit {
+        event: common::events::health::SETUP_STATE.to_string(),
+        message: e.to_string(),
+    })?;
+
     let store = app.store(HEALTH_STORE_NAME).unwrap();
 
     store.set(MIC_PEMISSION_KEY, check_result);
@@ -162,9 +186,44 @@ pub async fn health_on_gui_ready(
     let mut state_lock = state.lock();
     state_lock.gui_ready = true;
 
+    // Emit the updated setup state
+    app.emit(
+        common::events::health::SETUP_STATE,
+        common::commands::health::SetupStatePayload {
+            gui_ready: state_lock.gui_ready,
+            mic_permission: state_lock.mic_permission,
+        },
+    )
+    .map_err(|e| HealthError::Emit {
+        event: common::events::health::SETUP_STATE.to_string(),
+        message: e.to_string(),
+    })?;
+
     maybe_toggle_windows(&state_lock, &app)?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn health_setup_state(
+    app: AppHandle,
+    state: State<'_, Mutex<SetupState>>,
+) -> common::error::Result<common::commands::health::SetupStatePayload> {
+    let state_lock = state.lock();
+
+    let payload = common::commands::health::SetupStatePayload {
+        gui_ready: state_lock.gui_ready,
+        mic_permission: state_lock.mic_permission,
+    };
+
+    // Also emit the current state
+    app.emit(common::events::health::SETUP_STATE, payload.clone())
+        .map_err(|e| HealthError::Emit {
+            event: common::events::health::SETUP_STATE.to_string(),
+            message: e.to_string(),
+        })?;
+
+    Ok(payload)
 }
 
 /// Check if both GUI and backend are ready

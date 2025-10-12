@@ -1,9 +1,6 @@
-use common::{
-    instrument::GroupChannel,
-    instrument::{StringSnoopDataRequest, StringSnoopDataResponse},
-};
+use common::instrument::GroupChannel;
 use leptos::prelude::*;
-use tauri_use::{use_invoke, UseTauriReturn};
+use tauri_use::{use_command, UseTauriWithReturn};
 
 use crate::components::intro::consts::{INTRO_FLUTE_POS_X, INTRO_FLUTE_POS_Y, INTRO_FLUTE_ROT_DEG};
 use crate::util::layout_context::{expect_layout_contex, LayoutContextReturn};
@@ -18,8 +15,39 @@ pub fn InstrumentStrings() -> impl IntoView {
         orientation,
         left_string_position,
         right_string_position,
+        complete_layout,
         ..
     } = expect_layout_contex();
+
+    let string_wave_amplitude = Memo::new(move |_| complete_layout().instrument_breadth * 0.55);
+
+    // Instrument snoop batch stream (pull model).
+    let UseTauriWithReturn {
+        trigger: fetch_batch,
+        data: batch_data,
+        error: batch_error,
+        ..
+    } = use_command::<common::instrument::data::StringSnoopBatchPayload>(
+        common::instrument::data::GET_ALL_STRING_SNOOPS,
+    );
+
+    // Log errors for the batch command
+    Effect::new(move |_| {
+        if let Some(err) = batch_error() {
+            log::error!(
+                "Error invoking {}: {err}",
+                common::instrument::data::GET_ALL_STRING_SNOOPS
+            );
+        }
+    });
+
+    // Drive periodic fetch (20 FPS)
+    let _raf = crate::util::raf_fn_fps::use_raf_fn_with_fps(
+        move |_| {
+            fetch_batch(Some(()));
+        },
+        20.0,
+    );
 
     // Root-level viewBox matches layout space; transforms use view-box coords via 'transform-box: view-box'
     let view_box = move || {
@@ -85,7 +113,6 @@ pub fn InstrumentStrings() -> impl IntoView {
         let num_groups = num_groups();
         let num_keys_per_group = num_keys_per_group();
         let first_group_channel = first_group_channel();
-        let orientation = orientation();
         let left_string_position = left_string_position();
 
         view! {
@@ -103,10 +130,21 @@ pub fn InstrumentStrings() -> impl IntoView {
                                 .map(move |k: u8| {
                                     let k = k as usize;
                                     let g = g as usize;
-                                    let ch = first_group_channel.nth_channel_from_first(g);
-                                    let orientation = orientation;
+                                    let samples = Signal::derive(move || {
+                                        batch_data()
+                                            .and_then(|b| {
+                                                b.snoops
+                                                    .iter()
+                                                    .find(|e| e.group as usize == g && e.key as usize == k)
+                                                    .map(|e| e.samples.clone())
+                                            })
+                                    });
                                     view! {
-                                        <StringView g k line=left_string_position orientation ch />
+                                        <StringView
+                                            line=left_string_position
+                                            samples=samples
+                                            amplitude=string_wave_amplitude
+                                        />
                                     }
                                 })
                         })
@@ -120,7 +158,6 @@ pub fn InstrumentStrings() -> impl IntoView {
         let num_groups = num_groups();
         let num_keys_per_group = num_keys_per_group();
         let first_group_channel = first_group_channel();
-        let orientation = orientation();
         let right_string_position = right_string_position();
 
         view! {
@@ -138,10 +175,21 @@ pub fn InstrumentStrings() -> impl IntoView {
                                 .map(move |k: u8| {
                                     let k = k as usize;
                                     let g = g as usize;
-                                    let ch = first_group_channel.nth_channel_from_first(g);
-                                    let orientation = orientation;
+                                    let samples = Signal::derive(move || {
+                                        batch_data()
+                                            .and_then(|b| {
+                                                b.snoops
+                                                    .iter()
+                                                    .find(|e| e.group as usize == g && e.key as usize == k)
+                                                    .map(|e| e.samples.clone())
+                                            })
+                                    });
                                     view! {
-                                        <StringView g k line=right_string_position orientation ch />
+                                        <StringView
+                                            line=right_string_position
+                                            samples=samples
+                                            amplitude=string_wave_amplitude
+                                        />
                                     }
                                 })
                         })
@@ -172,48 +220,24 @@ pub fn InstrumentStrings() -> impl IntoView {
 
 #[component]
 pub fn StringView(
-    g: usize,
-    k: usize,
     line: common::Line,
-    orientation: common::orientation::LayoutOrientation,
-    ch: GroupChannel,
+    #[prop(into)] samples: Signal<Option<Vec<f32>>>,
+    #[prop(into)] amplitude: Signal<f32>,
 ) -> impl IntoView {
-    let (start, end) = line;
-
-    let path_def = Signal::derive(move || format!("M{},{} L{},{}", start.x, start.y, end.x, end.y));
-
-    let UseTauriReturn {
-        data,
-        error,
-        trigger,
-    } = use_invoke::<StringSnoopDataRequest, (), StringSnoopDataResponse>(
-        common::instrument::data::GET_STRING_SNOOP_DATA,
-    );
-
-    // let _ = use_raf_fn_with_fps(move |UseRafFnCallbackArgs{ delta, timestamp }| {
-    //     let (start, end) = line;
-    //
-    //     if let Some(data) = data.get_untracked() {
-    //         let path = match orientation {
-    //             common::orientation::LayoutOrientation::Vertical => crate::util::wave::waveform_path_y(
-    //             samples,
-    //             WAVES_LENGHT[i],
-    //             WAVE_CENTER_X,
-    //             base_y,
-    //             WAVE_AMPLITUDE_PX,
-    //         ),
-    //             common::orientation::LayoutOrientation::Horizontal => crate::util::wave::waveform_path_x(
-    //             samples,
-    //             WAVES_LENGHT[i],
-    //             WAVE_CENTER_X,
-    //             base_y,
-    //             WAVE_AMPLITUDE_PX,
-    //         ),
-    //         };
-    //
-    //     }
-    //
-    // }, 30);
+    let path_def = Signal::derive(move || {
+        let (start, end) = line;
+        if let Some(samples) = samples.get() {
+            if !samples.is_empty() {
+                return crate::util::wave::waveform_path_along_line(
+                    &samples,
+                    start,
+                    end,
+                    amplitude(),
+                );
+            }
+        }
+        format!("M{},{} L{},{}", start.x, start.y, end.x, end.y)
+    });
 
     view! { <path d=path_def stroke-width="2" /> }
 }

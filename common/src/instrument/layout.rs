@@ -20,6 +20,8 @@ pub struct Layout {
     pub left_string_position: Line,
     /// Start and end postions of **right** channel string
     pub right_string_position: Line,
+    /// Distance between strings
+    pub instrument_breadth: f32,
     /// Radius of each key
     pub key_radius: f32,
     /// Length of the `track` of key's band
@@ -58,6 +60,7 @@ impl Default for Layout {
             groups_gap: Default::default(),
             scale: Default::default(),
             // zero defaults
+            instrument_breadth: 0.0,
             space: Vector2 { x: 0.0, y: 0.0 },
             orientation: LayoutOrientation::Horizontal,
             left_string_position: (default_pt, default_pt),
@@ -170,6 +173,7 @@ impl Candidate {
             orientation,
             left_string_position: string_positions(orientation, space, true, instrument_breadth),
             right_string_position: string_positions(orientation, space, false, instrument_breadth),
+            instrument_breadth,
             key_radius: self.r,
             key_band_length: band_length,
             key_band_breadth: self.band_breadth,
@@ -526,21 +530,14 @@ fn fallback(
     let band_length =
         (orientation.safe_breadth(space, safe_area_padding) / 2.0) - instrument_breadth;
 
+    let instrument_breadth = band_breadth * (1.0 + 2.0 * STRING_TO_BAND_MIN_GAP_RATIO);
+
     Layout {
         space,
         orientation,
-        left_string_position: string_positions(
-            orientation,
-            space,
-            true,
-            band_breadth * (1.0 + 2.0 * STRING_TO_BAND_MIN_GAP_RATIO),
-        ),
-        right_string_position: string_positions(
-            orientation,
-            space,
-            false,
-            band_breadth * (1.0 + 2.0 * STRING_TO_BAND_MIN_GAP_RATIO),
-        ),
+        instrument_breadth,
+        left_string_position: string_positions(orientation, space, true, instrument_breadth),
+        right_string_position: string_positions(orientation, space, false, instrument_breadth),
         key_radius: r,
         key_band_length: band_length,
         key_band_breadth: band_breadth,

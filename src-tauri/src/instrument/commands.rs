@@ -227,7 +227,7 @@ pub fn ui_safe_area_insets_apply(
         left
     );
 
-    {
+    let (top, right, bottom, left) = {
         // Persist UI safe area contribution in window state (non-additive override)
         let mut win = window_state.lock();
         win.ui_safe_area = common::safe_area::SafeArea {
@@ -236,7 +236,14 @@ pub fn ui_safe_area_insets_apply(
             bottom,
             left,
         };
-    }
+
+        (
+            win.system_safe_area.top + top,
+            win.system_safe_area.right + right,
+            win.system_safe_area.bottom + bottom,
+            win.system_safe_area.left + left,
+        )
+    };
 
     // Get current layout before changes
     let old_layout = state.inner.layout();
@@ -277,4 +284,44 @@ pub fn ui_safe_area_insets_apply(
     }
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn instrument_string_snoop_data(
+    group: usize,
+    key: usize,
+    state: tauri::State<'_, crate::instrument::engine::InstrumentEngine>,
+) -> common::error::Result<common::instrument::data::StringSnoopDataResponse> {
+    let samples = state.inner.snapshot_output_snoop(group, key);
+    Ok(common::instrument::data::StringSnoopDataResponse { samples })
+}
+
+#[tauri::command]
+pub fn instrument_all_string_snoops(
+    state: tauri::State<'_, crate::instrument::engine::InstrumentEngine>,
+) -> common::error::Result<common::instrument::data::StringSnoopBatchPayload> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let entries = state
+        .inner
+        .snapshot_all_output_snoops()
+        .into_iter()
+        .map(
+            |(group, key, samples)| common::instrument::data::StringSnoopEntry {
+                group,
+                key,
+                samples,
+            },
+        )
+        .collect::<Vec<_>>();
+
+    let t_unix_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+
+    Ok(common::instrument::data::StringSnoopBatchPayload {
+        t_unix_ms,
+        snoops: entries,
+    })
 }

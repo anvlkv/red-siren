@@ -67,7 +67,7 @@ pub(super) struct Inner {
     pub activation_source: RwLock<ActivationSource>,
     pub layout: RwLock<InstrumentLayout>,
     pub config: RwLock<InstrumentConfig>,
-    pub tuner_data: RwLock<common::tuner::Config>,
+    pub tuner_config: RwLock<common::tuner::Config>,
     pub dsp_net_frontend: RwLock<Option<Net>>,
     // Primary oscillator node id for dynamic replacement.
     pub dsp_primary_node_id: RwLock<Option<NodeId>>,
@@ -105,7 +105,7 @@ impl Default for Inner {
             activation_source: RwLock::new(ActivationSource::default()),
             layout: RwLock::new(InstrumentLayout::default()),
             config: RwLock::new(InstrumentConfig::default()),
-            tuner_data: RwLock::new(common::tuner::Config::default()),
+            tuner_config: RwLock::new(common::tuner::Config::default()),
             dsp_net_frontend: RwLock::new(None),
             dsp_primary_node_id: RwLock::new(None),
             sample_rate: RwLock::new(None),
@@ -168,7 +168,7 @@ impl Inner {
 
             // Create input system with tuner analyzer
             {
-                let tuner_data = self.tuner_data.read();
+                let tuner_data = self.tuner_config.read();
                 let analyzer =
                     super::system::create_input_system(&tuner_data, &mut net, &siren_controls);
 
@@ -728,7 +728,7 @@ impl Inner {
 
         // Create a simple FFT analyzer for tuner mode
         let sample_rate = input_default_cfg.sample_rate().0 as f64;
-        let tuner_data = self.tuner_data.read().clone();
+        let tuner_data = self.tuner_config.read().clone();
 
         // Create standalone FFT analyzer
         let analyzer = Box::new(

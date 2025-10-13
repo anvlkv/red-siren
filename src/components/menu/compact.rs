@@ -33,19 +33,11 @@ pub fn CompactMenu(
         common::commands::setup::UI_SAFE_AREA_INSETS_APPLY,
     );
 
-    // Track previous inset values to prevent unnecessary updates and loops
-    let prev_insets = RwSignal::new(None::<SafeArea>);
-
     // Update safe area insets when menu size or placement changes
-    Effect::new(move |_| {
+    Effect::new(move |prev_insets: Option<SafeArea>| {
         let menu_height = menu_height() as f32;
         let menu_width = menu_width() as f32;
         let placement = placement();
-
-        // Skip if dimensions are invalid
-        if menu_height <= 0.0 && menu_width <= 0.0 {
-            return;
-        }
 
         let new_insets = match placement {
             UiPlacement::Bottom => SafeArea {
@@ -75,7 +67,7 @@ pub fn CompactMenu(
         };
 
         // Only trigger if values have changed significantly (>1px threshold)
-        let should_update = match prev_insets() {
+        let should_update = match prev_insets {
             None => true,
             Some(prev) => {
                 (new_insets.top - prev.top).abs() > 1.0
@@ -86,9 +78,11 @@ pub fn CompactMenu(
         };
 
         if should_update {
-            prev_insets.set(Some(new_insets));
+            log::debug!("updating UI, safe area insets");
             trigger_inset_update(Some(new_insets));
         }
+
+        new_insets
     });
 
     let is_vertical = Signal::derive(move || placement().is_vertical());
@@ -114,26 +108,6 @@ pub fn CompactMenu(
         .to_string()
     });
 
-    let vt_name = Signal::derive(move || {
-        match placement() {
-            UiPlacement::Bottom => "page-slide-down",
-            UiPlacement::Top => "page-slide-up",
-            UiPlacement::Left => "page-slide-left",
-            UiPlacement::Right => "page-slide-right",
-        }
-        .to_string()
-    });
-
-    let card_animation_class = Signal::derive(move || {
-        match placement() {
-            UiPlacement::Bottom => "page-card--enter-from-bottom",
-            UiPlacement::Top => "page-card--enter-from-top",
-            UiPlacement::Left => "page-card--enter-from-left",
-            UiPlacement::Right => "page-card--enter-from-right",
-        }
-        .to_string()
-    });
-
     let inner_flex_class = Signal::derive(move || {
         format!(
             "flex {} gap-4 pointer-events-auto",
@@ -154,7 +128,7 @@ pub fn CompactMenu(
     });
 
     view! {
-        <div class=edge_container_cls>
+        <div class=edge_container_cls node_ref=el>
             <Card padding="Sm".to_string() class=card_variant card_animation_direction=placement>
                 <div class=inner_flex_class>
                     <A href=RouteId::Home.as_ref() attr:class="contents">

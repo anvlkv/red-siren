@@ -68,12 +68,7 @@ pub fn app_setup(app: &mut App) -> Result<()> {
             bottom: 0.0,
             left: 0.0,
         },
-        system_safe_area: common::safe_area::SafeArea {
-            top: 0.0,
-            right: 0.0,
-            bottom: 0.0,
-            left: 0.0,
-        },
+        system_safe_area: common::safe_area::SafeArea::default(),
     };
 
     app.manage(Mutex::new(initial_state));

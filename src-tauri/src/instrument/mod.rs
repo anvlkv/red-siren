@@ -36,10 +36,10 @@ pub fn setup(app: &mut App) -> Result<()> {
                     let layout = state.inner.layout();
 
                     // Initialize tuner config from instrument layout
-                    let tuner_config: TunerConfig = layout.into();
+                    let new_config: TunerConfig = layout.into();
                     {
-                        let mut tuner_data = state.inner.tuner_data.write();
-                        *tuner_data = tuner_config.clone();
+                        let mut tuner_config = state.inner.tuner_config.write();
+                        *tuner_config = new_config.clone();
                     }
 
                     if let Err(e) = base_handle_new.emit(common::instrument::events::LAYOUT, layout) {
@@ -47,7 +47,7 @@ pub fn setup(app: &mut App) -> Result<()> {
                     }
 
                     // Emit initial tuner config
-                    if let Err(e) = base_handle_new.emit(common::events::tuner::CONFIG, tuner_config) {
+                    if let Err(e) = base_handle_new.emit(common::events::tuner::CONFIG, new_config) {
                         log::error!("Failed emitting initial tuner config: {e}");
                     }
                 }
@@ -97,7 +97,7 @@ pub fn setup(app: &mut App) -> Result<()> {
                     // Update tuner config when layout changes
                     let tuner_config: TunerConfig = layout.into();
                     {
-                        let mut tuner_data = state.inner.tuner_data.write();
+                        let mut tuner_data = state.inner.tuner_config.write();
                         *tuner_data = tuner_config.clone();
                     }
 

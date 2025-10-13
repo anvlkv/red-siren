@@ -3,6 +3,7 @@ use common::instrument::{
     events::{ActivationSourcePayload, PlaybackStatePayload},
     Layout,
 };
+use common::tuner::Config as TunerConfig;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::{
@@ -267,10 +268,22 @@ pub fn ui_safe_area_insets_apply(
             bottom,
             left
         );
+        // Initialize tuner config from instrument layout
+        let new_config: TunerConfig = new_layout.into();
+        {
+            let mut tuner_config = state.inner.tuner_config.write();
+            *tuner_config = new_config.clone();
+        }
 
         app.emit(common::instrument::events::LAYOUT, new_layout)
             .map_err(|e| InstrumentError::Emit {
                 event: common::instrument::events::LAYOUT.to_string(),
+                message: e.to_string(),
+            })?;
+
+        app.emit(common::events::tuner::CONFIG, new_config)
+            .map_err(|e| InstrumentError::Emit {
+                event: common::events::tuner::CONFIG.to_string(),
                 message: e.to_string(),
             })?;
     } else {

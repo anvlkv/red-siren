@@ -171,8 +171,20 @@ impl Candidate {
         Some(Layout {
             space,
             orientation,
-            left_string_position: string_positions(orientation, space, true, instrument_breadth),
-            right_string_position: string_positions(orientation, space, false, instrument_breadth),
+            left_string_position: string_positions(
+                orientation,
+                space,
+                safe_area_padding,
+                true,
+                instrument_breadth,
+            ),
+            right_string_position: string_positions(
+                orientation,
+                space,
+                safe_area_padding,
+                false,
+                instrument_breadth,
+            ),
             instrument_breadth,
             key_radius: self.r,
             key_band_length: band_length,
@@ -191,39 +203,44 @@ impl Candidate {
 fn string_positions(
     orientation: LayoutOrientation,
     space: Vector2<f32>,
+    safe_area: SafeArea,
     left: bool,
     instrument_breadth: f32,
 ) -> Line {
     match orientation {
         LayoutOrientation::Vertical => {
-            // Strings run along Y: two vertical lines that outline the instrument_breadth
-            // and are centered in the available width (space.x).
-            let center_x = space.x / 2.0;
+            // Strings run along Y. Center along auxiliary axis (X) within safe area.
+            let safe_x_start = safe_area.left;
+            let safe_x_end = (space.x - safe_area.right).max(safe_x_start);
+            let center_x = safe_x_start + (safe_x_end - safe_x_start) / 2.0;
             let half_b = instrument_breadth / 2.0;
-            let left_x = (center_x - half_b).clamp(0.0, space.x);
-            let right_x = (center_x + half_b).clamp(0.0, space.x);
+            let left_x = (center_x - half_b).clamp(safe_x_start, safe_x_end);
+            let right_x = (center_x + half_b).clamp(safe_x_start, safe_x_end);
 
             let x = if left { left_x } else { right_x };
             (
                 Point2 { x, y: 0.0 },
                 Point2 {
                     x,
+                    // Do not apply safe area along main axis
                     y: orientation.length(space),
                 },
             )
         }
         LayoutOrientation::Horizontal => {
-            // Strings run along X: two horizontal lines that outline the instrument_breadth
-            // and are centered in the available height (space.y).
-            let center_y = space.y / 2.0;
+            // Strings run along X. Center along auxiliary axis (Y) within safe area.
+            let safe_y_start = safe_area.top;
+            let safe_y_end = (space.y - safe_area.bottom).max(safe_y_start);
+            let center_y = safe_y_start + (safe_y_end - safe_y_start) / 2.0;
             let half_b = instrument_breadth / 2.0;
-            let top_y = (center_y - half_b).clamp(0.0, space.y);
-            let bottom_y = (center_y + half_b).clamp(0.0, space.y);
+            let top_y = (center_y - half_b).clamp(safe_y_start, safe_y_end);
+            let bottom_y = (center_y + half_b).clamp(safe_y_start, safe_y_end);
 
             let y = if left { top_y } else { bottom_y };
             (
                 Point2 { x: 0.0, y },
                 Point2 {
+                    // Do not apply safe area along main axis
                     x: orientation.length(space),
                     y,
                 },
@@ -536,8 +553,20 @@ fn fallback(
         space,
         orientation,
         instrument_breadth,
-        left_string_position: string_positions(orientation, space, true, instrument_breadth),
-        right_string_position: string_positions(orientation, space, false, instrument_breadth),
+        left_string_position: string_positions(
+            orientation,
+            space,
+            safe_area_padding,
+            true,
+            instrument_breadth,
+        ),
+        right_string_position: string_positions(
+            orientation,
+            space,
+            safe_area_padding,
+            false,
+            instrument_breadth,
+        ),
         key_radius: r,
         key_band_length: band_length,
         key_band_breadth: band_breadth,

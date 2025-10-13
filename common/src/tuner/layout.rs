@@ -40,28 +40,36 @@ impl Default for Layout {
 impl From<crate::instrument::Layout> for Layout {
     fn from(value: crate::instrument::Layout) -> Self {
         let total_keys = (value.num_groups.get() as u32) * (value.num_keys_per_group.get() as u32);
-        let safe_len = value
-            .orientation
-            .safe_length(value.space, value.safe_area_padding);
-        let safe_breadth = value
-            .orientation
-            .safe_breadth(value.space, value.safe_area_padding);
-        let per_sensor_len = safe_len / (total_keys as f32).max(1.0);
-        let _sensor_max_range = match value.orientation {
-            LayoutOrientation::Horizontal => Vector2 {
-                x: per_sensor_len,
-                y: safe_breadth,
-            },
-            LayoutOrientation::Vertical => Vector2 {
-                x: safe_breadth,
-                y: per_sensor_len,
-            },
+
+        // Compute spectrum baseline from safe-area: bottom-most for Horizontal, left-most for Vertical
+        let baseline = match value.orientation {
+            LayoutOrientation::Horizontal => {
+                let y = (value.space.y - value.safe_area_padding.bottom).clamp(0.0, value.space.y);
+                (
+                    Point2 { x: 0.0, y },
+                    Point2 {
+                        x: value.space.x,
+                        y,
+                    },
+                )
+            }
+            LayoutOrientation::Vertical => {
+                let x = (value.safe_area_padding.left).clamp(0.0, value.space.x);
+                (
+                    Point2 { x, y: 0.0 },
+                    Point2 {
+                        x,
+                        y: value.space.y,
+                    },
+                )
+            }
         };
+
         Self {
             space: value.space,
             orientation: value.orientation,
             safe_area_padding: value.safe_area_padding,
-            line_position: value.left_string_position,
+            line_position: baseline,
             sensor_radius: value.key_radius,
             num_sensors: NonZero::new(total_keys).expect("total_keys > 0"),
         }

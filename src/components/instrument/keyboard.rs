@@ -51,25 +51,43 @@ pub fn Keyboard() -> impl IntoView {
         let mut defs = match orientation {
             common::orientation::LayoutOrientation::Vertical => format!(
                 r#"
-                --keyboard-rows: repeat({0}, minmax(0, 1fr));
-                --keyboard-cols: repeat({1}, minmax(0, 1fr));
-                --keyboard-row-gap: {2}px;
-                --keyboard-col-gap: {3}px;
-                --keyboard-pad-x: {4}px;
-                --keyboard-pad-y: {5}px;
+                --keyboard-rows: repeat({rows}, minmax(0, 1fr));
+                --keyboard-cols: repeat({cols}, minmax(0, 1fr));
+                --keyboard-row-gap: {row_gap}px;
+                --keyboard-col-gap: {col_gap}px;
+                --keyboard-pad-left: {pad_left}px;
+                --keyboard-pad-right: {pad_right}px;
+                --keyboard-pad-top: {pad_top}px;
+                --keyboard-pad-bottom: {pad_bottom}px;
                 "#,
-                num_groups, 1, groups_gap, 0, 0, pad_main
+                rows = num_groups,
+                cols = 1,
+                row_gap = groups_gap,
+                col_gap = 0,
+                pad_left = safe_left,
+                pad_right = safe_right,
+                pad_top = pad_main.max(safe_top),
+                pad_bottom = pad_main.max(safe_bottom)
             ),
             common::orientation::LayoutOrientation::Horizontal => format!(
                 r#"
-                --keyboard-rows: repeat({0}, minmax(0, 1fr));
-                --keyboard-cols: repeat({1}, minmax(0, 1fr));
-                --keyboard-row-gap: {2}px;
-                --keyboard-col-gap: {3}px;
-                --keyboard-pad-x: {4}px;
-                --keyboard-pad-y: {5}px;
+                --keyboard-rows: repeat({rows}, minmax(0, 1fr));
+                --keyboard-cols: repeat({cols}, minmax(0, 1fr));
+                --keyboard-row-gap: {row_gap}px;
+                --keyboard-col-gap: {col_gap}px;
+                --keyboard-pad-left: {pad_left}px;
+                --keyboard-pad-right: {pad_right}px;
+                --keyboard-pad-top: {pad_top}px;
+                --keyboard-pad-bottom: {pad_bottom}px;
                 "#,
-                1, num_groups, 0, groups_gap, pad_main, 0
+                rows = 1,
+                cols = num_groups,
+                row_gap = 0,
+                col_gap = groups_gap,
+                pad_left = pad_main.max(safe_left),
+                pad_right = pad_main.max(safe_right),
+                pad_top = safe_top,
+                pad_bottom = safe_bottom
             ),
         };
 
@@ -115,7 +133,7 @@ pub fn Keyboard() -> impl IntoView {
 
     view! {
         <div style=main_container_axis_style class="flex items-center justify-center">
-            <div class="grid items-center justify-center grid-rows-(--keyboard-rows) grid-cols-(--keyboard-cols) gap-y-(--keyboard-row-gap) gap-x-(--keyboard-col-gap) p-x-(length:--keyboard-pad-x) p-y-(length:--keyboard-pad-y) w-full h-full">
+            <div class="grid items-center justify-center grid-rows-(--keyboard-rows) grid-cols-(--keyboard-cols) gap-y-(--keyboard-row-gap) gap-x-(--keyboard-col-gap) p-t-(length:--keyboard-pad-top) p-b-(length:--keyboard-pad-bottom) p-l-(length:--keyboard-pad-left) p-r-(length:--keyboard-pad-right) w-full h-full">
                 {move || {
                     let num_groups = num_groups();
                     (0..num_groups as usize)

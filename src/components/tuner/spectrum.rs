@@ -219,7 +219,7 @@ fn ActivationBars(
     let bar_width = line_length / (num_sensors as f32);
     let bar_spacing = bar_width * 0.1; // 10% spacing between bars
 
-    for (i, sensor) in config.sensor_data.iter().enumerate() {
+    for (i, _) in config.sensor_data.iter().enumerate() {
         if i >= activations.len() {
             break;
         }

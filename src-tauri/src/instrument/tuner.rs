@@ -10,7 +10,7 @@ use super::InstrumentState;
 /// Get current tuner configuration
 #[tauri::command]
 pub fn tuner_config(state: State<'_, InstrumentState>) -> Result<Config> {
-    let config = state.inner.tuner_data.read().clone();
+    let config = state.inner.tuner_config.read().clone();
     Ok(config)
 }
 
@@ -59,7 +59,7 @@ pub fn tuner_update_sensor(
 ) -> Result<()> {
     // Update tuner config
     {
-        let mut config = state.inner.tuner_data.write();
+        let mut config = state.inner.tuner_config.write();
 
         // Validate index
         if index >= config.sensor_data.len() {
@@ -97,7 +97,7 @@ pub fn tuner_reset_config(state: State<'_, InstrumentState>, app: AppHandle) -> 
 
     // Update tuner config
     {
-        let mut config = state.inner.tuner_data.write();
+        let mut config = state.inner.tuner_config.write();
         *config = new_config.clone();
     }
 
@@ -218,7 +218,7 @@ pub fn start_spectrum_streaming(_state: &InstrumentState, app: AppHandle) -> Res
                             let sensor_activations = analyzer.get_sensor_activations();
 
                             // Convert HashMap to Vec for sensor activations
-                            let config = state.inner.tuner_data.read();
+                            let config = state.inner.tuner_config.read();
                             let mut activation_vec = vec![0.0f32; config.sensor_data.len()];
                             for (key, value) in sensor_activations {
                                 // Find index of this key in sensor_data

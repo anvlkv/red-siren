@@ -2,6 +2,7 @@ mod health;
 mod instrument;
 mod intro;
 mod setup;
+mod tuner;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -48,12 +49,13 @@ pub fn run() {
         instrument::instrument_playback_start,
         instrument::instrument_playback_stop,
         instrument::instrument_playback_state,
-        instrument::tuner::tuner_config,
-        instrument::tuner::tuner_spectrum_data,
-        instrument::tuner::tuner_update_sensor,
-        instrument::tuner::tuner_reset_config,
-        instrument::tuner::tuner_start_stream,
-        instrument::tuner::tuner_stop_stream,
+        tuner::tuner_config,
+        tuner::tuner_layout,
+        tuner::tuner_spectrum_data,
+        tuner::tuner_update_sensor,
+        tuner::tuner_reset_config,
+        tuner::tuner_start_stream,
+        tuner::tuner_stop_stream,
         instrument::instrument_playback_pause,
         instrument::instrument_playback_resume,
         instrument::instrument_activation_source,
@@ -76,6 +78,7 @@ pub fn run() {
         health::setup(app)?;
         intro::setup(app)?;
         instrument::setup(app)?;
+        tuner::setup(app)?;
 
         Ok(())
     });

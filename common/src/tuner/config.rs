@@ -7,7 +7,6 @@ use crate::NodeKey;
 /// Represents the full tuner data set (layout + sensors + FFT mapping).
 #[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
-    pub layout: Layout,
     pub sensor_data: Vec<SensorData>,
     pub fft_size: usize,
     pub sample_rate: f32,
@@ -25,13 +24,14 @@ pub struct SensorData {
 impl Config {
     pub fn frequency_magnitude_to_space(
         &self,
+        layout: &Layout,
         frequency: f32,
         magnitude: f32,
     ) -> mint::Point2<f32> {
         let Vector2 {
             x: space_width,
             y: space_height,
-        } = self.layout.space;
+        } = layout.space;
 
         // Map frequency to 0-1 range based on sample rate
         let nyquist = self.sample_rate / 2.0;
@@ -39,7 +39,7 @@ impl Config {
 
         // Magnitude is already normalized 0-1
 
-        let (x, y) = match self.layout.orientation {
+        let (x, y) = match layout.orientation {
             crate::orientation::LayoutOrientation::Vertical => {
                 let x = magnitude * space_width;
                 let y = freq_ratio * space_height;
@@ -55,11 +55,15 @@ impl Config {
         Point2 { x, y }
     }
 
-    pub fn space_to_frequency_magnitude(&self, point: mint::Point2<f32>) -> (f32, f32) {
+    pub fn space_to_frequency_magnitude(
+        &self,
+        layout: &Layout,
+        point: mint::Point2<f32>,
+    ) -> (f32, f32) {
         let Vector2 {
             x: space_width,
             y: space_height,
-        } = self.layout.space;
+        } = layout.space;
 
         if space_width == 0.0 || space_height == 0.0 {
             return (0.0, 0.0);
@@ -70,7 +74,7 @@ impl Config {
 
         let nyquist = self.sample_rate / 2.0;
 
-        let (magnitude, freq_ratio) = match self.layout.orientation {
+        let (magnitude, freq_ratio) = match layout.orientation {
             crate::orientation::LayoutOrientation::Vertical => {
                 let magnitude = (x / space_width).clamp(0.0, 1.0);
                 let freq_ratio = (y / space_height).clamp(0.0, 1.0);
@@ -95,14 +99,12 @@ impl From<crate::instrument::Layout> for Config {
         let tuner_layout: Layout = layout.into();
 
         // Calculate total keys from layout
-        let total_keys =
-            (layout.num_groups.get() as usize) * (layout.num_keys_per_group.get() as usize);
+        let total_keys = tuner_layout.num_sensors.get() as usize;
 
         // Generate logarithmically spaced frequency ranges
         let sensor_data = generate_default_sensors(total_keys, &layout);
 
         Config {
-            layout: tuner_layout,
             sensor_data,
             fft_size: 2048,
             sample_rate: 48000.0,

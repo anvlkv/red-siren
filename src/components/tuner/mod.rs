@@ -11,7 +11,7 @@ use tauri_use::{use_invoke, use_listen, UseListenReturn, UseTauriReturn};
 
 use crate::util::tauri_resource::{use_tauri_resource, UseTauriResourceReturn};
 
-use common::tuner::{Config, SpectrumData, UpdateSensorPayload};
+use common::tuner::{Config, Layout as TunerLayout, SpectrumData, UpdateSensorPayload};
 use common::RouteId;
 
 pub use context::{provide_tuner_context, use_tuner_context, TunerContextProvider};
@@ -27,9 +27,18 @@ pub fn Tuner() -> impl IntoView {
     let UseTauriResourceReturn {
         data: config,
         error: config_error,
-        refetch: refetch_config,
+        refetch: _refetch_config,
         ..
     } = use_tauri_resource::<Config>(common::commands::tuner::CONFIG);
+
+    // Get tuner layout resource (safe-area-aware baseline, orientation, etc.)
+
+    // Get tuner layout resource (safe-area-aware baseline, orientation, etc.)
+    let UseTauriResourceReturn {
+        data: tuner_layout,
+        error: tuner_layout_error,
+        ..
+    } = use_tauri_resource::<TunerLayout>(common::commands::tuner::LAYOUT);
 
     // Listen for config updates
     let UseListenReturn {
@@ -94,7 +103,7 @@ pub fn Tuner() -> impl IntoView {
             if let Some(state) = setup_state() {
                 if state.mic_permission.is_none() {
                     log::info!("Mic permission not set, redirecting to Permissions");
-                    navigate(&RouteId::Permissions.as_ref(), Default::default());
+                    navigate(RouteId::Permissions.as_ref(), Default::default());
                 }
             }
         }
@@ -125,6 +134,9 @@ pub fn Tuner() -> impl IntoView {
         }
         if let Some(err) = config_update_error() {
             log::error!("Error listening to config updates: {err}");
+        }
+        if let Some(err) = tuner_layout_error() {
+            log::error!("Error loading tuner layout: {err}");
         }
         if let Some(err) = spectrum_error() {
             log::error!("Error listening to spectrum data: {err}");
@@ -182,20 +194,19 @@ pub fn Tuner() -> impl IntoView {
 
     // Derived signals for visualization
     let config_signal = Signal::derive(move || context.config.get());
+    let layout_signal: Signal<Option<TunerLayout>> = Signal::derive(move || tuner_layout());
     let spectrum_signal = Signal::derive(move || context.spectrum.get());
     let active_sensor_signal = Signal::derive(move || context.active_sensor.get());
 
     view! {
         <div class="relative w-full h-full overflow-hidden">
-            // Background layer
-            <div class="absolute inset-0 bg-white dark:bg-black" />
-
             // Spectrum visualization layer
-            <SpectrumVisualizer config=config_signal spectrum=spectrum_signal />
+            <SpectrumVisualizer spectrum=spectrum_signal layout=layout_signal />
 
             // Sensor handles layer
             <SensorHandles
                 config=config_signal
+                layout=Signal::derive(move || tuner_layout())
                 on_update=on_update_sensor
                 active_sensor=active_sensor_signal
                 on_select=on_select_sensor

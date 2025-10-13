@@ -14,11 +14,8 @@ use tauri_use::{use_invoke, UseTauriReturn};
 #[component]
 pub fn Tune() -> impl IntoView {
     // Tuner config resource
-    let UseTauriResourceReturn {
-        data: config,
-        refetch,
-        ..
-    } = use_tauri_resource::<common::tuner::Config>(common::commands::tuner::CONFIG);
+    let UseTauriResourceReturn { refetch, .. } =
+        use_tauri_resource::<common::tuner::Config>(common::commands::tuner::CONFIG);
 
     // Reset command
     let UseTauriReturn {

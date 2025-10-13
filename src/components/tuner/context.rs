@@ -21,9 +21,9 @@ impl TunerContext {
     /// Create a new tuner context
     pub fn new() -> Self {
         Self {
-            config: create_rw_signal(None),
-            spectrum: create_rw_signal(None),
-            active_sensor: create_rw_signal(None),
+            config: RwSignal::new(None),
+            spectrum: RwSignal::new(None),
+            active_sensor: RwSignal::new(None),
         }
     }
 }

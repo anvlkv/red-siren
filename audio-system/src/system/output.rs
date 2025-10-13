@@ -1,4 +1,5 @@
 mod channel;
+mod formant;
 mod node;
 mod siren;
 
@@ -9,7 +10,6 @@ use fundsp::hacker32::prelude::*;
 
 use super::NodeHandles;
 
-#[allow(dead_code)]
 struct InnerHandles {
     key: NodeKey,
     activation_snoop: An<SnoopBackend>,

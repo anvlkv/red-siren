@@ -5,10 +5,13 @@ edition = "2021"
 
 [workspace]
 resolver = "2"
-members = ["common", "src-tauri"]
+members = ["audio-system", "common", "src-tauri"]
 
 [workspace.dependencies]
+audio-system = { path = "audio-system" }
 common = { path = "common" }
+fastrand = "2.3.0"
+fundsp = "0.20"
 leptos_router = { version = "0.8", features = ["nightly"] }
 log = "0.4"
 mint = { version = "0.5.9", features = ["serde"] }

@@ -1,6 +1,6 @@
-mod input;
-mod output;
-mod random;
+pub mod input;
+pub mod output;
+pub mod random;
 
 use std::sync::mpsc::Sender;
 
@@ -8,7 +8,7 @@ pub use input::*;
 pub use output::*;
 pub use random::*;
 
-const STREAM_TIMEOUT_S: u64 = 10;
+pub const STREAM_TIMEOUT_S: u64 = 10;
 
 /// Result of a control invocation, sent back to the caller per request.
 pub type ControlInvocationResult = Result<(), String>;

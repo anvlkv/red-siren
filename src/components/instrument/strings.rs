@@ -12,7 +12,6 @@ pub fn InstrumentStrings() -> impl IntoView {
         num_groups,
         num_keys_per_group,
         first_group_channel,
-        orientation,
         left_string_position,
         right_string_position,
         complete_layout,

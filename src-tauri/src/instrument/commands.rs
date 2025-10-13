@@ -3,7 +3,6 @@ use common::instrument::{
     events::{ActivationSourcePayload, PlaybackStatePayload},
     Layout,
 };
-use common::tuner::Config as TunerConfig;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::{
@@ -67,7 +66,9 @@ pub fn instrument_playback_state(
     state: State<'_, InstrumentEngine>,
 ) -> Result<PlaybackStatePayload> {
     log::debug!("instrument_playback_state called");
+
     let playing = state.inner.playing();
+
     log::debug!("Returning playback state: {}", playing);
     Ok(PlaybackStatePayload { playing })
 }
@@ -80,7 +81,9 @@ pub fn instrument_activation_source(
     log::debug!("instrument_activation_source called");
     let source = state.inner.activation_source();
     log::debug!("Current activation source (enum): {:?}", source);
-    Ok(ActivationSourcePayload { source })
+    Ok(ActivationSourcePayload {
+        source: source.into(),
+    })
 }
 
 #[tauri::command]
@@ -182,6 +185,7 @@ pub fn instrument_playback_resume(
 ) -> Result<()> {
     log::debug!("instrument_playback_resume called");
 
+    #[cfg(feature = "cpal_audio")]
     match state.inner.resume_playback()? {
         true => {
             log::info!("Resuming playback");
@@ -268,22 +272,10 @@ pub fn ui_safe_area_insets_apply(
             bottom,
             left
         );
-        // Initialize tuner config from instrument layout
-        let new_config: TunerConfig = new_layout.into();
-        {
-            let mut tuner_config = state.inner.tuner_config.write();
-            *tuner_config = new_config.clone();
-        }
 
         app.emit(common::instrument::events::LAYOUT, new_layout)
             .map_err(|e| InstrumentError::Emit {
                 event: common::instrument::events::LAYOUT.to_string(),
-                message: e.to_string(),
-            })?;
-
-        app.emit(common::events::tuner::CONFIG, new_config)
-            .map_err(|e| InstrumentError::Emit {
-                event: common::events::tuner::CONFIG.to_string(),
                 message: e.to_string(),
             })?;
     } else {

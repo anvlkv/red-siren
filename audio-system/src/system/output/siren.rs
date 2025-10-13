@@ -1,6 +1,6 @@
 use fundsp::hacker32::prelude::*;
 
-use crate::instrument::util::hash_str;
+use crate::util::hash_str;
 
 const SIREN_ID: u64 = hash_str(concat!(module_path!(), "::Siren"));
 const SIREN_BASE_HZ: f32 = 0.5;
@@ -42,6 +42,8 @@ impl AudioNode for Siren {
 
         // Output using accumulated phase
         let output = sin(self.phase * self.freq * std::f32::consts::TAU);
+
+        log::trace!("siren output: {output}");
 
         [output].into()
     }

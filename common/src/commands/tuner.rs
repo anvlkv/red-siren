@@ -3,6 +3,9 @@
 /// Get/emit tuner config (shared name for use_tauri_resource)
 pub const CONFIG: &str = "tuner_config";
 
+/// Get/emit tuner layout (shared name for use_tauri_resource)
+pub const LAYOUT: &str = "tuner_layout";
+
 /// Get/emit spectrum data (shared name for use_tauri_resource)
 pub const SPECTRUM_DATA: &str = "tuner_spectrum_data";
 

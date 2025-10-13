@@ -4,7 +4,7 @@ use common::{tuner::Config, NodeKey};
 use fundsp::hacker32::prelude::*;
 use spectrum_analyzer::{samples_fft_to_spectrum, windows::hann_window, FrequencyLimit};
 
-use crate::instrument::util::hash_str;
+use crate::util::hash_str;
 
 const ANALYZER_ID: u64 = hash_str(concat!(module_path!(), "::FFTAnalyzer"));
 const ACTIVATION_THRESHOLD: f32 = 0.1; // Minimum magnitude to consider for activation
@@ -283,7 +283,6 @@ mod tests {
                 min_magnitude: 0.01,
                 max_magnitude: 1.0,
             }],
-            ..Default::default()
         };
 
         // Create siren controls
@@ -318,7 +317,6 @@ mod tests {
                 min_magnitude: 0.05,
                 max_magnitude: 0.5,
             }],
-            ..Default::default()
         };
 
         let mut siren_controls = HashMap::new();

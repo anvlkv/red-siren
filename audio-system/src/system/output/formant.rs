@@ -1,0 +1,58 @@
+use fundsp::hacker32::prelude::*;
+
+use crate::util::hash_str;
+
+const FORMANT_ID: u64 = hash_str(concat!(module_path!(), "::Formant"));
+
+#[derive(Clone)]
+pub struct Formant<const D: u8> {
+    base: f32,
+    control: Var,
+    resonator: Resonator<f32, U3>,
+}
+
+impl<const D: u8> AudioNode for Formant<D> {
+    const ID: u64 = FORMANT_ID;
+
+    type Inputs = U1;
+
+    type Outputs = U1;
+
+    fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
+        // Map control to [0, 1]
+        let v = self.control.value().clamp(0.0, 1.0);
+
+        // Reasonable Q mapping: broader at low control, narrower at high control
+        // Q in [1.0, 10.0]
+        let q = 1.0 + v * 9.0;
+
+        // Keep a consistent spacing between adjacent formants using semitone steps.
+        // D indexes the formant band; apply a fixed step and a small detune from control.
+        let step_semitones = 5.0; // distance between adjacent formants
+        let detune_semitones = (v - 0.5) * 2.0; // +/- 1 semitone sweep by control
+        let semitones = (D as f32 - 1.0) * step_semitones + detune_semitones;
+
+        // Center frequency derived from base by semitone offset
+        let center = self.base * 2f32.powf(semitones / 12.0);
+
+        self.resonator.tick(&[input[0], center, q].into())
+    }
+
+    fn reset(&mut self) {
+        self.resonator.reset();
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f64) {
+        self.resonator.set_sample_rate(sample_rate);
+    }
+}
+
+pub fn formant<const D: u8>(control: Var, base: f32) -> An<Formant<D>> {
+    let formant = Formant {
+        control,
+        base,
+        resonator: Resonator::new(base, 1.0),
+    };
+
+    An(formant)
+}

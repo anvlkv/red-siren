@@ -2,27 +2,26 @@
 
 use leptos::prelude::*;
 
-use common::tuner::{Config, SpectrumData};
+use common::tuner::{Layout as TunerLayout, SpectrumData};
 
 /// Spectrum visualizer with three opacity layers
 #[component]
 pub fn SpectrumVisualizer(
     /// Spectrum data signal
     spectrum: Signal<Option<SpectrumData>>,
-    /// Tuner configuration
-    config: Signal<Option<Config>>,
+
+    /// Tuner layout (space, orientation, baseline, sensors count)
+    layout: Signal<Option<TunerLayout>>,
 ) -> impl IntoView {
-    // Get baseline from config
+    // Get baseline from layout
     let baseline = Memo::new(move |_| {
-        config.with(|c| {
-            c.as_ref()
-                .map(|cfg| cfg.layout.line_position)
-                .unwrap_or_else(|| {
-                    (
-                        mint::Point2 { x: 20.0, y: 120.0 },
-                        mint::Point2 { x: 300.0, y: 120.0 },
-                    )
-                })
+        layout.with(|l| {
+            l.as_ref().map(|lay| lay.line_position).unwrap_or_else(|| {
+                (
+                    mint::Point2 { x: 20.0, y: 120.0 },
+                    mint::Point2 { x: 300.0, y: 120.0 },
+                )
+            })
         })
     });
 
@@ -30,12 +29,13 @@ pub fn SpectrumVisualizer(
     let current_path = Memo::new(move |_| {
         spectrum.with(|data| {
             data.as_ref().and_then(|d| {
-                config.with(|c| {
-                    c.as_ref().map(|cfg| {
+                layout.with(|l| {
+                    l.as_ref().map(|lay| {
                         generate_spectrum_path(
                             &d.current_magnitudes,
                             &d.frequencies,
-                            cfg,
+                            lay,
+                            d.sample_rate,
                             baseline.get(),
                         )
                     })
@@ -48,12 +48,13 @@ pub fn SpectrumVisualizer(
     let max_path = Memo::new(move |_| {
         spectrum.with(|data| {
             data.as_ref().and_then(|d| {
-                config.with(|c| {
-                    c.as_ref().map(|cfg| {
+                layout.with(|l| {
+                    l.as_ref().map(|lay| {
                         generate_spectrum_path(
                             &d.max_magnitudes,
                             &d.frequencies,
-                            cfg,
+                            lay,
+                            d.sample_rate,
                             baseline.get(),
                         )
                     })
@@ -96,16 +97,14 @@ pub fn SpectrumVisualizer(
                         .with(|data| {
                             data.as_ref()
                                 .and_then(|d| {
-                                    config
-                                        .with(|c| {
-                                            c.as_ref()
-                                                .map(|cfg| {
-
-                                                    // generate_activation_bars(&d.sensor_activations, cfg, baseline.get())
+                                    layout
+                                        .with(|l| {
+                                            l.as_ref()
+                                                .map(|lay| {
                                                     view! {
                                                         <ActivationBars
                                                             activations=d.sensor_activations.clone()
-                                                            config=cfg.clone()
+                                                            layout=lay.clone()
                                                             baseline=baseline.get()
                                                         />
                                                     }
@@ -123,7 +122,8 @@ pub fn SpectrumVisualizer(
 fn generate_spectrum_path(
     magnitudes: &[f32],
     frequencies: &[f32],
-    config: &Config,
+    layout: &TunerLayout,
+    sample_rate: f32,
     baseline: common::Line,
 ) -> String {
     use common::orientation::LayoutOrientation;
@@ -138,7 +138,7 @@ fn generate_spectrum_path(
     path.push_str(&format!("M {} {} ", baseline.0.x, baseline.0.y));
 
     // Calculate path points based on orientation
-    match config.layout.orientation {
+    match layout.orientation {
         LayoutOrientation::Horizontal => {
             // Frequency on X axis, magnitude on Y axis
             let baseline_y = baseline.0.y;
@@ -147,16 +147,12 @@ fn generate_spectrum_path(
             for (i, &mag) in magnitudes.iter().enumerate() {
                 if i < frequencies.len() {
                     // Map frequency to position along baseline
-                    let freq_ratio = frequencies[i] / (config.sample_rate / 2.0);
+                    let freq_ratio = frequencies[i] / (sample_rate / 2.0);
                     let x = baseline.0.x + (freq_ratio * line_length);
                     // Magnitude extends from baseline
-                    let y = baseline_y - (mag * config.layout.space.y * 0.5); // Scale to half height
+                    let y = baseline_y - (mag * layout.space.y * 0.5); // Scale to half height
 
-                    if i == 0 {
-                        path.push_str(&format!("L {} {} ", x, y));
-                    } else {
-                        path.push_str(&format!("L {} {} ", x, y));
-                    }
+                    path.push_str(&format!("L {} {} ", x, y));
                 }
             }
 
@@ -172,16 +168,12 @@ fn generate_spectrum_path(
             for (i, &mag) in magnitudes.iter().enumerate() {
                 if i < frequencies.len() {
                     // Map frequency to position along baseline
-                    let freq_ratio = frequencies[i] / (config.sample_rate / 2.0);
+                    let freq_ratio = frequencies[i] / (sample_rate / 2.0);
                     let y = baseline.0.y + (freq_ratio * line_length);
                     // Magnitude extends from baseline
-                    let x = baseline_x + (mag * config.layout.space.x * 0.5); // Scale to half width
+                    let x = baseline_x + (mag * layout.space.x * 0.5); // Scale to half width
 
-                    if i == 0 {
-                        path.push_str(&format!("L {} {} ", x, y));
-                    } else {
-                        path.push_str(&format!("L {} {} ", x, y));
-                    }
+                    path.push_str(&format!("L {} {} ", x, y));
                 }
             }
 
@@ -198,7 +190,7 @@ fn generate_spectrum_path(
 #[component]
 fn ActivationBars(
     #[prop(into)] activations: Vec<f32>,
-    #[prop(into)] config: Config,
+    #[prop(into)] layout: TunerLayout,
     #[prop(into)] baseline: common::Line,
 ) -> impl IntoView {
     use common::orientation::LayoutOrientation;
@@ -206,41 +198,42 @@ fn ActivationBars(
     let mut bars = Vec::new();
 
     // Calculate bar dimensions based on number of sensors
-    let num_sensors = config.layout.num_sensors.get() as usize;
-    if num_sensors == 0 || activations.len() < num_sensors {
+    let num_sensors = layout.num_sensors.get() as usize;
+    if num_sensors == 0 {
         return bars;
     }
 
-    let line_length = match config.layout.orientation {
+    let line_length = match layout.orientation {
         LayoutOrientation::Horizontal => (baseline.1.x - baseline.0.x).abs(),
         LayoutOrientation::Vertical => (baseline.1.y - baseline.0.y).abs(),
     };
 
-    let bar_width = line_length / (num_sensors as f32);
+    let bar_count = activations.len().min(num_sensors);
+    if bar_count == 0 {
+        return bars;
+    }
+
+    let bar_width = line_length / (bar_count as f32);
     let bar_spacing = bar_width * 0.1; // 10% spacing between bars
 
-    for (i, _) in config.sensor_data.iter().enumerate() {
-        if i >= activations.len() {
-            break;
-        }
-
+    for i in 0..bar_count {
         let activation = activations[i];
         if activation <= 0.0 {
             continue; // Skip inactive sensors
         }
 
         // Calculate bar position and size based on orientation
-        let (x, y, width, height) = match config.layout.orientation {
+        let (x, y, width, height) = match layout.orientation {
             LayoutOrientation::Horizontal => {
                 let x = baseline.0.x + (i as f32 * bar_width) + bar_spacing / 2.0;
-                let bar_height = activation * config.layout.space.y * 0.3; // Scale to 30% of space
+                let bar_height = activation * layout.space.y * 0.3; // Scale to 30% of space
                 let y = baseline.0.y - bar_height;
                 let width = bar_width - bar_spacing;
                 (x, y, width, bar_height)
             }
             LayoutOrientation::Vertical => {
                 let y = baseline.0.y + (i as f32 * bar_width) + bar_spacing / 2.0;
-                let bar_width_actual = activation * config.layout.space.x * 0.3; // Scale to 30% of space
+                let bar_width_actual = activation * layout.space.x * 0.3; // Scale to 30% of space
                 let x = baseline.0.x;
                 let height = bar_width - bar_spacing;
                 (x, y, bar_width_actual, height)

@@ -1,0 +1,15 @@
+[package]
+name = "audio-system"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+common = { workspace = true }
+fastrand = { workspace = true }
+fundsp = { workspace = true }
+log = { workspace = true }
+spectrum-analyzer = "1.7.0"
+u-num-it = "0.3.1"
+
+[features]
+js = ["fastrand/js"]

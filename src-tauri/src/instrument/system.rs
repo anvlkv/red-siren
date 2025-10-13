@@ -1,4 +1,4 @@
-mod input;
+pub mod input;
 mod output;
 
 use std::collections::HashMap;
@@ -33,6 +33,6 @@ pub fn create_input_system(
     config: &common::tuner::Config,
     net: &mut Net,
     sirens: &HashMap<NodeKey, Shared>,
-) {
-    input::sensors_system(config, net, sirens);
+) -> Option<Box<input::analyzer::FFTAnalyzer>> {
+    input::sensors_system(config, net, sirens)
 }

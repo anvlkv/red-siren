@@ -32,6 +32,10 @@ pub struct FFTAnalyzer {
 
     // Smoothed activation values for each sensor
     sensor_activations: HashMap<NodeKey, f32>,
+
+    // Spectrum data storage
+    spectrum_magnitudes: Vec<f32>,
+    spectrum_frequencies: Vec<f32>,
 }
 
 impl FFTAnalyzer {
@@ -62,7 +66,26 @@ impl FFTAnalyzer {
             config,
             siren_controls,
             sensor_activations,
+            spectrum_magnitudes: Vec::new(),
+            spectrum_frequencies: Vec::new(),
         }
+    }
+
+    /// Get the latest spectrum data (frequencies and magnitudes)
+    pub fn get_spectrum_data(&self) -> Option<(Vec<f32>, Vec<f32>)> {
+        if self.spectrum_magnitudes.is_empty() {
+            None
+        } else {
+            Some((
+                self.spectrum_frequencies.clone(),
+                self.spectrum_magnitudes.clone(),
+            ))
+        }
+    }
+
+    /// Get current sensor activation levels
+    pub fn get_sensor_activations(&self) -> HashMap<NodeKey, f32> {
+        self.sensor_activations.clone()
     }
 
     fn perform_fft_analysis(&mut self) {
@@ -85,6 +108,14 @@ impl FFTAnalyzer {
 
         // Get spectrum data
         let spectrum_data = spectrum.data();
+
+        // Store spectrum data for external access
+        self.spectrum_magnitudes.clear();
+        self.spectrum_frequencies.clear();
+        for (frequency, magnitude) in spectrum_data {
+            self.spectrum_frequencies.push(frequency.val());
+            self.spectrum_magnitudes.push(magnitude.val());
+        }
 
         // Process sensor activations
         for sensor in &self.config.sensor_data {
@@ -207,6 +238,10 @@ impl AudioUnit for FFTAnalyzer {
         for siren_control in self.siren_controls.values() {
             siren_control.set_value(0.0);
         }
+
+        // Clear spectrum data
+        self.spectrum_magnitudes.clear();
+        self.spectrum_frequencies.clear();
     }
 
     fn allocate(&mut self) {

@@ -8,6 +8,7 @@ use tauri_use::{
 };
 
 use crate::{
+    components::provide_tuner_context,
     routes::AppRoutes,
     util::layout_context::provide_layout_context,
     util::playback_service::provide_playback_service,
@@ -117,6 +118,7 @@ pub fn App() -> impl IntoView {
 
     provide_layout_context();
     provide_playback_service();
+    provide_tuner_context();
 
     view! {
         <>

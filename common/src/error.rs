@@ -39,6 +39,10 @@ pub enum AppError {
     #[error("{0}")]
     Instrument(#[from] InstrumentError),
 
+    /// Tuner domain errors.
+    #[error("{0}")]
+    Tuner(#[from] TunerError),
+
     /// A generic internal error (catch‑all). Prefer more specific variants when reasonable.
     #[error("internal error: {message}")]
     Internal { message: String },
@@ -297,6 +301,28 @@ impl From<InstrumentConfigError> for AppError {
     fn from(value: InstrumentConfigError) -> Self {
         AppError::Instrument(value.into())
     }
+}
+
+/// Tuner-specific errors
+#[derive(Debug, Error, Serialize, Deserialize)]
+pub enum TunerError {
+    #[error("invalid sensor index: {index}")]
+    InvalidSensorIndex { index: usize },
+
+    #[error("failed to emit event {event}: {message}")]
+    Emit { event: String, message: String },
+
+    #[error("spectrum data not available")]
+    SpectrumDataUnavailable,
+
+    #[error("FFT analysis failed: {message}")]
+    FFTAnalysisFailed { message: String },
+
+    #[error("invalid frequency range: {min_freq} to {max_freq}")]
+    InvalidFrequencyRange { min_freq: f32, max_freq: f32 },
+
+    #[error("invalid magnitude range: {min_mag} to {max_mag}")]
+    InvalidMagnitudeRange { min_mag: f32, max_mag: f32 },
 }
 
 impl InstrumentConfigError {

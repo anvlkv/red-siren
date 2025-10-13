@@ -12,6 +12,7 @@ mod intro;
 mod menu;
 mod switch;
 mod tooltip;
+mod tuner;
 
 pub use activation_source_toggle::*;
 pub use appearance_toggle::*;
@@ -25,6 +26,7 @@ pub use intro::*;
 pub use menu::*;
 pub use switch::*;
 pub use tooltip::*;
+pub use tuner::*;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, strum::EnumString)]
 pub enum UiVariant {

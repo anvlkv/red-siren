@@ -4,12 +4,18 @@ mod stream;
 mod system;
 mod util;
 
+pub mod tuner;
+
 use common::error::{AppError, Result, SetupError};
+use common::tuner::Config as TunerConfig;
 use tauri::{async_runtime::spawn, App, Emitter, Listener, Manager};
+
+use crate::setup::WindowState;
 
 pub use commands::*;
 
-use crate::setup::WindowState;
+pub type InstrumentState = engine::InstrumentEngine;
+
 // pub(super)use stream::StreamWrapper;
 
 pub fn setup(app: &mut App) -> Result<()> {
@@ -28,8 +34,21 @@ pub fn setup(app: &mut App) -> Result<()> {
                 Ok(_) => {
                     log::debug!("Set initial instrument layout for window size: {}x{}", size.width, size.height);
                     let layout = state.inner.layout();
+
+                    // Initialize tuner config from instrument layout
+                    let tuner_config: TunerConfig = layout.into();
+                    {
+                        let mut tuner_data = state.inner.tuner_data.write();
+                        *tuner_data = tuner_config.clone();
+                    }
+
                     if let Err(e) = base_handle_new.emit(common::instrument::events::LAYOUT, layout) {
                         log::error!("Failed emitting initial instrument layout: {e}");
+                    }
+
+                    // Emit initial tuner config
+                    if let Err(e) = base_handle_new.emit(common::events::tuner::CONFIG, tuner_config) {
+                        log::error!("Failed emitting initial tuner config: {e}");
                     }
                 }
                 Err(e) => {
@@ -74,8 +93,21 @@ pub fn setup(app: &mut App) -> Result<()> {
                 Ok(_) => {
                     log::debug!("Updated instrument layout for new window size: {}x{}", window_state.width, window_state.height);
                     let layout = state.inner.layout();
+
+                    // Update tuner config when layout changes
+                    let tuner_config: TunerConfig = layout.into();
+                    {
+                        let mut tuner_data = state.inner.tuner_data.write();
+                        *tuner_data = tuner_config.clone();
+                    }
+
                     if let Err(e) = handle.emit(common::instrument::events::LAYOUT, layout) {
                         log::error!("Failed emitting instrument layout: {e}");
+                    }
+
+                    // Emit updated tuner config
+                    if let Err(e) = handle.emit(common::events::tuner::CONFIG, tuner_config) {
+                        log::error!("Failed emitting tuner config: {e}");
                     }
                 }
                 Err(e) => {

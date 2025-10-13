@@ -18,8 +18,6 @@ pub struct Layout {
     pub line_position: Line,
     /// Radius of each sensor (derived from instrument key radius)
     pub sensor_radius: f32,
-    /// Max range of each sensor (main-axis per-sensor length, cross-axis full breadth)
-    pub sensor_max_range: Vector2<f32>,
     /// Number of sensors (equals number of instrument keys = groups * keys per group)
     pub num_sensors: NonZero<u32>,
 }
@@ -34,7 +32,6 @@ impl Default for Layout {
             safe_area_padding: SafeArea::default(),
             line_position: (Point2 { x: 20.0, y: 120.0 }, Point2 { x: 300.0, y: 120.0 }),
             sensor_radius: 10.0,
-            sensor_max_range: Vector2 { x: 20.0, y: 200.0 },
             num_sensors: NonZero::new(12).unwrap(),
         }
     }
@@ -50,7 +47,7 @@ impl From<crate::instrument::Layout> for Layout {
             .orientation
             .safe_breadth(value.space, value.safe_area_padding);
         let per_sensor_len = safe_len / (total_keys as f32).max(1.0);
-        let sensor_max_range = match value.orientation {
+        let _sensor_max_range = match value.orientation {
             LayoutOrientation::Horizontal => Vector2 {
                 x: per_sensor_len,
                 y: safe_breadth,
@@ -66,7 +63,6 @@ impl From<crate::instrument::Layout> for Layout {
             safe_area_padding: value.safe_area_padding,
             line_position: value.left_string_position,
             sensor_radius: value.key_radius,
-            sensor_max_range,
             num_sensors: NonZero::new(total_keys).expect("total_keys > 0"),
         }
     }

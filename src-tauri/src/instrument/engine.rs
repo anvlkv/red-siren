@@ -7,6 +7,7 @@ use std::{
 
 use common::instrument::Config as InstrumentConfig;
 use common::instrument::Layout as InstrumentLayout;
+use common::tuner::SpectrumData;
 use common::{
     error::{ControlError, InstrumentError, Result as AppResult},
     NodeKey,
@@ -61,29 +62,72 @@ pub struct InstrumentEngine {
     pub(super) inner: Inner,
 }
 
-#[derive(Default)]
 pub(super) struct Inner {
-    playing: RwLock<bool>,
-    activation_source: RwLock<ActivationSource>,
-    layout: RwLock<InstrumentLayout>,
-    config: RwLock<InstrumentConfig>,
-    tuner_data: RwLock<common::tuner::Config>,
-    dsp_net_frontend: RwLock<Option<Net>>,
+    pub playing: RwLock<bool>,
+    pub activation_source: RwLock<ActivationSource>,
+    pub layout: RwLock<InstrumentLayout>,
+    pub config: RwLock<InstrumentConfig>,
+    pub tuner_data: RwLock<common::tuner::Config>,
+    pub dsp_net_frontend: RwLock<Option<Net>>,
     // Primary oscillator node id for dynamic replacement.
-    dsp_primary_node_id: RwLock<Option<NodeId>>,
+    pub dsp_primary_node_id: RwLock<Option<NodeId>>,
     // Device/output sample rate (Hz) captured at stream start.
-    sample_rate: RwLock<Option<f64>>,
-    gain_param: RwLock<Option<Shared>>,
-    control_tx: RwLock<Option<Sender<Control>>>,
-    join: RwLock<Option<thread::JoinHandle<()>>>,
+    pub sample_rate: RwLock<Option<f64>>,
+    pub gain_param: RwLock<Option<Shared>>,
+    pub control_tx: RwLock<Option<Sender<Control>>>,
+    pub join: RwLock<Option<thread::JoinHandle<()>>>,
     // Deconstructed NodeHandles from output system
-    activation_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
-    output_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
-    siren_controls: RwLock<HashMap<NodeKey, Shared>>,
-    band_controls: RwLock<HashMap<NodeKey, Shared>>,
+    pub activation_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
+    pub output_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
+    pub siren_controls: RwLock<HashMap<NodeKey, Shared>>,
+    pub band_controls: RwLock<HashMap<NodeKey, Shared>>,
     // Activation system handles
-    activation_sender: RwLock<Option<Sender<Control>>>,
-    activation_thread: RwLock<Option<thread::JoinHandle<()>>>,
+    pub activation_sender: RwLock<Option<Sender<Control>>>,
+    pub activation_thread: RwLock<Option<thread::JoinHandle<()>>>,
+
+    // Spectrum data for tuner visualization
+    pub spectrum_buffer: RwLock<Option<SpectrumData>>,
+    pub max_hold_buffer: RwLock<Vec<f32>>,
+    pub max_hold_decay_rate: RwLock<f32>, // 0.95 = slow decay, 0.5 = fast
+
+    // Tuner state
+    pub tuning_mode: RwLock<bool>,
+    pub fft_analyzer: RwLock<Option<Box<crate::instrument::system::input::analyzer::FFTAnalyzer>>>,
+    pub tuner_input_tx: RwLock<Option<Sender<Control>>>,
+    pub tuner_input_thread: RwLock<Option<thread::JoinHandle<()>>>,
+    pub tuner_audio_buffer: std::sync::Arc<RwLock<Vec<f32>>>,
+}
+
+impl Default for Inner {
+    fn default() -> Self {
+        Self {
+            playing: RwLock::new(false),
+            activation_source: RwLock::new(ActivationSource::default()),
+            layout: RwLock::new(InstrumentLayout::default()),
+            config: RwLock::new(InstrumentConfig::default()),
+            tuner_data: RwLock::new(common::tuner::Config::default()),
+            dsp_net_frontend: RwLock::new(None),
+            dsp_primary_node_id: RwLock::new(None),
+            sample_rate: RwLock::new(None),
+            gain_param: RwLock::new(None),
+            control_tx: RwLock::new(None),
+            join: RwLock::new(None),
+            activation_snoops: RwLock::new(HashMap::new()),
+            output_snoops: RwLock::new(HashMap::new()),
+            siren_controls: RwLock::new(HashMap::new()),
+            band_controls: RwLock::new(HashMap::new()),
+            activation_sender: RwLock::new(None),
+            activation_thread: RwLock::new(None),
+            spectrum_buffer: RwLock::new(None),
+            max_hold_buffer: RwLock::new(Vec::new()),
+            max_hold_decay_rate: RwLock::new(0.95),
+            tuning_mode: RwLock::new(false),
+            fft_analyzer: RwLock::new(None),
+            tuner_input_tx: RwLock::new(None),
+            tuner_input_thread: RwLock::new(None),
+            tuner_audio_buffer: std::sync::Arc::new(RwLock::new(Vec::new())),
+        }
+    }
 }
 
 impl Inner {
@@ -122,12 +166,16 @@ impl Inner {
                 band_controls.insert(handle.key, handle.band_control);
             }
 
-            // TODO: Create input system when tuner data is ready
-            // For now, skip the input system creation as tuner data is being reworked
+            // Create input system with tuner analyzer
             {
                 let tuner_data = self.tuner_data.read();
+                let analyzer =
+                    super::system::create_input_system(&tuner_data, &mut net, &siren_controls);
 
-                super::system::create_input_system(&tuner_data, &mut net, &siren_controls);
+                // Store the analyzer reference if we got one
+                if let Some(analyzer) = analyzer {
+                    *self.fft_analyzer.write() = Some(analyzer);
+                }
             }
         }
 
@@ -329,6 +377,9 @@ impl Inner {
 
         *self.playing.write() = true;
 
+        // Stop tuner input stream if it was running
+        self.stop_tuner_stream();
+
         Ok(true)
     }
 
@@ -336,6 +387,9 @@ impl Inner {
         if !*self.playing.read() {
             return Ok(false);
         }
+
+        // Clear FFT analyzer reference
+        *self.fft_analyzer.write() = None;
         {
             let mut playing = self.playing.write();
             if !*playing {
@@ -635,7 +689,167 @@ impl Inner {
                 }
             }
         }
-
         result
+    }
+
+    /// Start tuner input stream for spectrum analysis when not playing
+    pub fn start_tuner_stream(&self, _app_handle: tauri::AppHandle) -> AppResult<()> {
+        // Don't start if already playing or tuner stream is running
+        if *self.playing.read() || self.tuner_input_tx.read().is_some() {
+            return Ok(());
+        }
+
+        *self.tuning_mode.write() = true;
+
+        let host = cpal::default_host();
+        let input_device = host
+            .default_input_device()
+            .ok_or(InstrumentError::DeviceUnavailable)?;
+
+        // Log input device info
+        log::info!(
+            "Using input device: {}",
+            input_device
+                .name()
+                .unwrap_or_else(|_| "Unknown".to_string())
+        );
+
+        let input_default_cfg = input_device
+            .default_input_config()
+            .map_err(|_| InstrumentError::InputConfigUnavailable)?;
+
+        // Log input configuration
+        log::info!(
+            "Input config: channels={}, sample_rate={}, format={:?}",
+            input_default_cfg.channels(),
+            input_default_cfg.sample_rate().0,
+            input_default_cfg.sample_format()
+        );
+
+        // Create a simple FFT analyzer for tuner mode
+        let sample_rate = input_default_cfg.sample_rate().0 as f64;
+        let tuner_data = self.tuner_data.read().clone();
+
+        // Create standalone FFT analyzer
+        let analyzer = Box::new(
+            crate::instrument::system::input::analyzer::FFTAnalyzer::new(
+                Box::new(fundsp::hacker32::prelude::pass()),
+                crate::instrument::system::input::analyzer::FFT_WINDOW_SIZE,
+                tuner_data,
+                HashMap::new(), // No siren controls in tuner mode
+            ),
+        );
+
+        *self.fft_analyzer.write() = Some(analyzer);
+
+        // Set the sample rate so FFT analyzer knows the correct rate
+        if let Some(ref mut analyzer) = *self.fft_analyzer.write() {
+            analyzer.set_sample_rate(sample_rate);
+        }
+
+        // Prepare CPAL stream config
+        let stream_cfg: cpal::StreamConfig = input_default_cfg.clone().into();
+
+        log::info!(
+            "Stream config: channels={}, sample_rate={}",
+            stream_cfg.channels,
+            stream_cfg.sample_rate.0
+        );
+
+        // Clear and prepare audio buffer
+        self.tuner_audio_buffer.write().clear();
+
+        // Clone buffer reference for the input stream
+        let audio_buffer = self.tuner_audio_buffer.clone();
+
+        // Create input stream that feeds samples to the buffer and FFT analyzer
+        let (tx, join) = spawn_owned_input_stream(
+            input_device,
+            input_default_cfg,
+            stream_cfg,
+            move || {
+                let audio_buffer = audio_buffer.clone();
+                let mut first_sample = true;
+                let prod = move |samples: &[f64]| -> usize {
+                    // Log first batch of samples to verify input
+                    if first_sample && !samples.is_empty() {
+                        let max = samples.iter().fold(0.0f64, |a, &b| a.max(b.abs()));
+                        log::info!(
+                            "First audio batch: {} samples, max amplitude: {:.6}, first 5 values: {:?}",
+                            samples.len(),
+                            max,
+                            &samples[..std::cmp::Ord::min(samples.len(),5)]
+                        );
+                        first_sample = false;
+                    }
+
+                    // Convert to f32 and store in buffer
+                    let f32_samples: Vec<f32> = samples.iter().map(|&s| s as f32).collect();
+                    let len = f32_samples.len();
+
+                    // Log sample statistics for debugging
+                    if !f32_samples.is_empty() {
+                        let max_sample = f32_samples.iter().fold(0.0f32, |a, &b| a.max(b.abs()));
+                        let avg_sample = f32_samples.iter().map(|s| s.abs()).sum::<f32>()
+                            / f32_samples.len() as f32;
+                        log::trace!(
+                            "Tuner input: {} samples, max amplitude: {:.6}, avg amplitude: {:.6}",
+                            len,
+                            max_sample,
+                            avg_sample
+                        );
+                    }
+
+                    // Store samples in buffer for FFT processing
+                    {
+                        let mut buffer = audio_buffer.write();
+                        let prev_len = buffer.len();
+                        buffer.extend(f32_samples);
+                        // Keep only last 96000 samples (2 seconds at 48kHz)
+                        let buffer_len = buffer.len();
+                        if buffer_len > 96000 {
+                            buffer.drain(0..buffer_len - 96000);
+                        }
+                        log::trace!(
+                            "Tuner buffer: {} -> {} samples (added {})",
+                            prev_len,
+                            buffer.len(),
+                            len
+                        );
+                    }
+
+                    len
+                };
+
+                let boxed: Box<ProdType> = Box::new(prod);
+                boxed
+            },
+        )?;
+
+        *self.tuner_input_tx.write() = Some(tx);
+        *self.tuner_input_thread.write() = Some(join);
+
+        Ok(())
+    }
+
+    /// Stop the tuner input stream
+    pub fn stop_tuner_stream(&self) {
+        *self.tuning_mode.write() = false;
+
+        // Stop tuner input stream
+        if let Some(tx) = self.tuner_input_tx.write().take() {
+            let (ack_tx, ack_rx) = mpsc::channel();
+            let _ = tx.send(Control::Shutdown(ack_tx));
+            let _ = ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS));
+        }
+
+        if let Some(handle) = self.tuner_input_thread.write().take() {
+            let _ = handle.join();
+        }
+
+        // Clear FFT analyzer when stopping tuner
+        if !*self.playing.read() {
+            *self.fft_analyzer.write() = None;
+        }
     }
 }

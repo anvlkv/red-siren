@@ -1,10 +1,11 @@
 use mint::{Point2, Vector2};
+use serde::{Deserialize, Serialize};
 
 use crate::tuner::layout::Layout;
 use crate::NodeKey;
 
 /// Represents the full tuner data set (layout + sensors + FFT mapping).
-#[derive(Debug, PartialEq, Clone, Default)]
+#[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     pub layout: Layout,
     pub sensor_data: Vec<SensorData>,
@@ -12,7 +13,7 @@ pub struct Config {
     pub sample_rate: f32,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy, Default)]
+#[derive(Debug, PartialEq, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct SensorData {
     pub key: NodeKey,
     pub min_frequency: f32, // Hz
@@ -86,4 +87,70 @@ impl Config {
 
         (frequency, magnitude)
     }
+}
+
+impl From<crate::instrument::Layout> for Config {
+    fn from(layout: crate::instrument::Layout) -> Self {
+        // Use existing Layout conversion
+        let tuner_layout: Layout = layout.into();
+
+        // Calculate total keys from layout
+        let total_keys =
+            (layout.num_groups.get() as usize) * (layout.num_keys_per_group.get() as usize);
+
+        // Generate logarithmically spaced frequency ranges
+        let sensor_data = generate_default_sensors(total_keys, &layout);
+
+        Config {
+            layout: tuner_layout,
+            sensor_data,
+            fft_size: 2048,
+            sample_rate: 48000.0,
+        }
+    }
+}
+
+/// Generate default sensors with logarithmic frequency spacing
+fn generate_default_sensors(
+    total_keys: usize,
+    layout: &crate::instrument::Layout,
+) -> Vec<SensorData> {
+    let mut sensors = Vec::with_capacity(total_keys);
+
+    // Frequency range for sensors (20Hz to 20kHz covers human hearing)
+    let min_freq = 20.0_f32;
+    let max_freq = 20000.0_f32;
+
+    // Calculate logarithmic spacing
+    let log_min = min_freq.ln();
+    let log_max = max_freq.ln();
+    let log_step = (log_max - log_min) / (total_keys as f32);
+
+    // Default magnitude thresholds
+    let default_min_magnitude = 0.01;
+    let default_max_magnitude = 0.8;
+
+    // Generate sensors for each key
+    for group_idx in 0..layout.num_groups.get() {
+        for key_idx in 0..layout.num_keys_per_group.get() {
+            let sensor_idx = group_idx * layout.num_keys_per_group.get() + key_idx;
+
+            // Calculate frequency range for this sensor
+            let log_freq_start = log_min + (sensor_idx as f32) * log_step;
+            let log_freq_end = log_min + ((sensor_idx + 1) as f32) * log_step;
+
+            let sensor_min_freq = log_freq_start.exp();
+            let sensor_max_freq = log_freq_end.exp();
+
+            sensors.push(SensorData {
+                key: NodeKey(group_idx, key_idx),
+                min_frequency: sensor_min_freq,
+                max_frequency: sensor_max_freq,
+                min_magnitude: default_min_magnitude,
+                max_magnitude: default_max_magnitude,
+            });
+        }
+    }
+
+    sensors
 }

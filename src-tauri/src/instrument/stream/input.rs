@@ -116,7 +116,7 @@ fn run_input(
             config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
                 log::trace!("input stream tick: {} samples", data.len());
-                write_data(data, &mut data_buff, &mut produce_sample)
+                write_data(data, channels, &mut data_buff, &mut produce_sample)
             },
             err_cb,
             Some(Duration::from_secs(super::STREAM_TIMEOUT_S)),
@@ -125,7 +125,7 @@ fn run_input(
             config,
             move |data: &[i16], _: &cpal::InputCallbackInfo| {
                 log::trace!("input stream tick: {} samples", data.len());
-                write_data(data, &mut data_buff, &mut produce_sample)
+                write_data(data, channels, &mut data_buff, &mut produce_sample)
             },
             err_cb,
             Some(Duration::from_secs(super::STREAM_TIMEOUT_S)),
@@ -134,7 +134,7 @@ fn run_input(
             config,
             move |data: &[u16], _: &cpal::InputCallbackInfo| {
                 log::trace!("input stream tick: {} samples", data.len());
-                write_data(data, &mut data_buff, &mut produce_sample)
+                write_data(data, channels, &mut data_buff, &mut produce_sample)
             },
             err_cb,
             Some(Duration::from_secs(super::STREAM_TIMEOUT_S)),
@@ -154,23 +154,43 @@ fn run_input(
     })
 }
 
-/// Interleave stereo frames into the output buffer using produce_sample.
-fn write_data<T>(input: &[T], data_buff: &mut Vec<f64>, produce_sample: &mut ProdType)
-where
+/// Downmix multi-channel frames to mono before producing samples.
+fn write_data<T>(
+    input: &[T],
+    channels: usize,
+    data_buff: &mut Vec<f64>,
+    produce_sample: &mut ProdType,
+) where
     T: cpal::SizedSample + dasp_sample::ToSample<f64>,
 {
-    let needed = input.len();
+    let frames = if channels > 0 {
+        input.len() / channels
+    } else {
+        0
+    };
 
-    if data_buff.capacity() < needed {
-        data_buff.reserve(needed - data_buff.capacity());
+    if data_buff.capacity() < frames {
+        data_buff.reserve(frames - data_buff.capacity());
     }
 
     data_buff.clear();
-    data_buff.extend(input.iter().map(|s| s.to_sample()));
+    if channels <= 1 {
+        // Mono input
+        data_buff.extend(input.iter().map(|s| s.to_sample()));
+    } else {
+        // Downmix multi-channel input to mono by averaging channels per frame
+        for f in 0..frames {
+            let mut acc = 0.0f64;
+            for c in 0..channels {
+                acc += input[f * channels + c].to_sample::<f64>();
+            }
+            data_buff.push(acc / channels as f64);
+        }
+    }
 
     let took = produce_sample(data_buff.as_slice());
 
-    if let Some(remaining) = needed.checked_sub(took).filter(|r| *r > 0) {
+    if let Some(remaining) = frames.checked_sub(took).filter(|r| *r > 0) {
         log::warn!("input stream: produced {took} samples, {remaining} remaining");
     }
 }

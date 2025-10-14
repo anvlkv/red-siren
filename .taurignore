@@ -1,4 +1,4 @@
-/src
+/crates/frontend
 /public
 /Cargo.toml
 /docs/**/*.*

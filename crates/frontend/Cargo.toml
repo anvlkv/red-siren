@@ -1,0 +1,40 @@
+[package]
+name = "frontend"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+common = { workspace = true }
+console_error_panic_hook = "0.1.7"
+js-sys = "0.3"
+keyframe = "1.1.1"
+keyframe_derive = "1.0.0"
+leptos = { version = "0.8", features = ["csr", "nightly"] }
+leptos_router = { workspace = true }
+leptos_styling = { version = "0.2", features = ["csr"] }
+leptos-use = { version = "0.16.2", default-features = false, features = [
+  "signal_debounced",
+  "use_document",
+  "use_draggable",
+  "use_element_bounding",
+  "use_element_size",
+  "use_preferred_dark",
+  "use_prefers_reduced_motion",
+  "use_raf_fn",
+  "use_timeout_fn",
+  "use_window",
+  "use_window_size",
+] }
+log = { workspace = true }
+mint = { workspace = true, features = ["serde"] }
+serde = { workspace = true, features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+strum = { workspace = true, features = ["derive"] }
+tauri-use = "0.2.2"
+thiserror = { workspace = true }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = "*"
+
+[dev-dependencies]
+common = { workspace = true, features = ["test"] }

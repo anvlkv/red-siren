@@ -358,6 +358,37 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
+name = "backend"
+version = "0.1.0"
+dependencies = [
+ "audio-system",
+ "common",
+ "cpal",
+ "dasp_sample",
+ "fastrand",
+ "fundsp",
+ "log",
+ "mint",
+ "objc2 0.6.3",
+ "objc2-app-kit",
+ "objc2-foundation 0.3.2",
+ "parking_lot",
+ "raw-window-handle",
+ "ringbuf",
+ "serde",
+ "serde_json",
+ "strum",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-log",
+ "tauri-plugin-opener",
+ "tauri-plugin-prevent-default",
+ "tauri-plugin-store",
+ "tauri-plugin-window-state",
+ "tokio",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.76"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1576,6 +1607,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "frontend"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "console_error_panic_hook",
+ "js-sys",
+ "keyframe",
+ "keyframe_derive",
+ "leptos",
+ "leptos-use",
+ "leptos_router",
+ "leptos_styling",
+ "log",
+ "mint",
+ "serde",
+ "serde-wasm-bindgen",
+ "strum",
+ "tauri-use",
+ "thiserror 2.0.17",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -5812,62 +5868,6 @@ dependencies = [
  "webview2-com",
  "window-vibrancy",
  "windows 0.61.3",
-]
-
-[[package]]
-name = "tauri-app"
-version = "0.1.0"
-dependencies = [
- "audio-system",
- "common",
- "cpal",
- "dasp_sample",
- "fastrand",
- "fundsp",
- "log",
- "mint",
- "objc2 0.6.3",
- "objc2-app-kit",
- "objc2-foundation 0.3.2",
- "parking_lot",
- "raw-window-handle",
- "ringbuf",
- "serde",
- "serde_json",
- "strum",
- "tauri",
- "tauri-build",
- "tauri-plugin-log",
- "tauri-plugin-opener",
- "tauri-plugin-prevent-default",
- "tauri-plugin-store",
- "tauri-plugin-window-state",
- "tokio",
-]
-
-[[package]]
-name = "tauri-app-ui"
-version = "0.1.0"
-dependencies = [
- "common",
- "console_error_panic_hook",
- "js-sys",
- "keyframe",
- "keyframe_derive",
- "leptos",
- "leptos-use",
- "leptos_router",
- "leptos_styling",
- "log",
- "mint",
- "serde",
- "serde-wasm-bindgen",
- "strum",
- "tauri-use",
- "thiserror 2.0.17",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
 ]
 
 [[package]]

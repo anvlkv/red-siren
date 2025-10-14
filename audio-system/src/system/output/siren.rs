@@ -24,27 +24,28 @@ impl AudioNode for Siren {
     type Outputs = U1;
 
     fn tick(&mut self, _input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
-        // Get current modulation
-        let a = self.a_var.value();
+        // Smooth modulation to avoid clicks
+        let a_raw = self.a_var.value();
+        let dt = self.sample_duration.max(1.0 / DEFAULT_SR as f32);
+        let tau = 0.02; // ~20 ms smoothing
+        let alpha = dt / (tau + dt);
+        let a_s = self.prev_a + alpha * (a_raw - self.prev_a);
+        self.prev_a = a_s;
 
-        // Advance accumulated phase by integrating dphi/dt = 1 - a'(t) sin(2t) - 2a cos(2t)
-        let t = self.time;
-        let dt = self.sample_duration;
-        let a_prime = if dt > 0.0 {
-            (a - self.prev_a) / dt
-        } else {
-            0.0
-        };
-        let dphi = (1.0 - a_prime * sin(2.0 * t) - 2.0 * a * cos(2.0 * t)) * dt;
-        self.phase += dphi;
+        // Advance normalized time
         self.time += dt;
-        self.prev_a = a;
 
-        // Output using accumulated phase
-        let output = sin(self.phase * self.freq * std::f32::consts::TAU);
+        // Phi model: phi(t) = t - a(t) * sin(2 t)
+        let phi = self.time - a_s * (2.0 * self.time).sin();
 
-        log::trace!("siren output: {output}");
+        // Wrap phase argument to avoid numerical growth
+        let mut arg = phi * self.freq * std::f32::consts::TAU;
+        let two_pi = std::f32::consts::TAU;
+        if arg > two_pi || arg < -two_pi {
+            arg %= two_pi;
+        }
 
+        let output = arg.sin();
         [output].into()
     }
 

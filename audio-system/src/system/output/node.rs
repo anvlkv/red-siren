@@ -1,6 +1,9 @@
-use std::{cell::RefCell, mem};
+use std::{cell::RefCell, collections::HashMap};
 
-use common::instrument::{GroupConfig, NodeConfig};
+use common::{
+    instrument::{GroupConfig, NodeConfig},
+    NodeKey,
+};
 use fundsp::{
     hacker32::prelude::*,
     typenum::{UInt, UTerm, B1},
@@ -17,9 +20,11 @@ pub type NodeType = Pipe<
         Pipe<
             Pipe<
                 Pipe<
-                    // Binop<FrameMul<UInt<UTerm, B1>>,
-                    Pipe<Constant<UInt<UTerm, B1>>, Sine<S>>,
-                    // , Siren>,
+                    Binop<
+                        FrameMul<UInt<UTerm, B1>>,
+                        Pipe<Constant<UInt<UTerm, B1>>, Sine<S>>,
+                        Siren,
+                    >,
                     Split<UInt<UInt<UTerm, B1>, B1>>,
                 >,
                 Stack<
@@ -30,7 +35,7 @@ pub type NodeType = Pipe<
                     Unop<Formant<3>, FrameMulScalar<UInt<UTerm, B1>>>,
                 >,
             >,
-            Join<UInt<UInt<UTerm, B1>, B1>>,
+            Unop<Join<UInt<UInt<UTerm, B1>, B1>>, FrameMulScalar<UInt<UTerm, B1>>>,
         >,
         FixedSvf<S, HighpassMode<S>>,
     >,
@@ -50,13 +55,13 @@ fn create_node(config: &NodeConfig, handles: InnerHandles) -> An<NodeType> {
     } = handles;
 
     // Source
-    (sine_hz::<S>(config.base_frequency as S))// * siren(siren_control))
+    (sine_hz::<S>(config.base_frequency as S) * siren(siren_control))
         // Create resonator formants
         >> split::<U3>()
         >> ((formant::<1>(band_control.clone(), config.base_frequency as f32) * 1.0)
         | (formant::<2>(band_control.clone(), config.base_frequency as f32) * 0.8)
         | (formant::<3>(band_control.clone(), config.base_frequency as f32) * 0.6))
-        >> join::<U3>()
+        >> (join::<U3>() * 0.104167)
         // High-pass filter to remove low-frequency rumble
         >> highpass_hz(80.0, 1.0)
         // Visualize
@@ -65,7 +70,7 @@ fn create_node(config: &NodeConfig, handles: InnerHandles) -> An<NodeType> {
 
 pub fn create_group_node<K>(
     config: &GroupConfig,
-    group_handles: Vec<InnerHandles>,
+    group_handles: HashMap<NodeKey, InnerHandles>,
 ) -> An<MultiBus<K, NodeType>>
 where
     K: Size<f32> + Size<NodeType>,
@@ -73,7 +78,9 @@ where
     let nodes = config.nodes.clone();
     let handles_cell = RefCell::new(group_handles);
     busi::<K, _, _>(move |i| {
-        let handle = mem::take(&mut handles_cell.borrow_mut()[i as usize]);
+        let key = nodes[i as usize].key;
+        let mut handles = handles_cell.borrow_mut();
+        let handle = handles.remove(&key).expect("missing handle for node key");
         create_node(&nodes[i as usize], handle)
     })
 }

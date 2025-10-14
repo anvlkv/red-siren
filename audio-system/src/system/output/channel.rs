@@ -1,7 +1,9 @@
-use std::{cell::RefCell, mem};
+use std::{cell::RefCell, collections::HashMap, mem};
 
-use common::instrument::{GroupChannel, GroupConfig};
-use common::NodeKey;
+use common::{
+    instrument::{GroupChannel, GroupConfig},
+    NodeKey,
+};
 use fundsp::hacker32::prelude::*;
 use u_num_it::u_num_it;
 
@@ -20,12 +22,12 @@ where
     K: Size<f32> + Size<NodeType>,
 {
     let mut node_handles = Vec::<NodeHandles>::new();
-    let mut inner_handles = Vec::<Vec<InnerHandles>>::new();
+    let mut inner_handles = Vec::<HashMap<NodeKey, InnerHandles>>::new();
 
-    for (gi, group) in groups.iter().enumerate() {
-        let mut group_handles = Vec::<InnerHandles>::new();
-        for (ki, _node) in group.nodes.iter().enumerate() {
-            let key = NodeKey(gi as u8, ki as u8);
+    for group in groups.iter() {
+        let mut group_handles = HashMap::<NodeKey, InnerHandles>::new();
+        for node in group.nodes.iter() {
+            let key = node.key;
 
             let (activation_snoop_front, activation_snoop_backend) =
                 snoop(super::node::ACTIVATION_SNOOP_CAPACITY);
@@ -34,13 +36,16 @@ where
             let siren_control = shared(group.a_coef);
             let band_control = shared(0.0);
 
-            group_handles.push(InnerHandles {
+            group_handles.insert(
                 key,
-                activation_snoop: activation_snoop_backend,
-                output_snoop: output_snoop_backend,
-                siren_control: Var::new(&siren_control),
-                band_control: Var::new(&band_control),
-            });
+                InnerHandles {
+                    key,
+                    activation_snoop: activation_snoop_backend,
+                    output_snoop: output_snoop_backend,
+                    siren_control: Var::new(&siren_control),
+                    band_control: Var::new(&band_control),
+                },
+            );
 
             node_handles.push(NodeHandles {
                 key,

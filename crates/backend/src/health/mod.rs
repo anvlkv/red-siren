@@ -1,6 +1,4 @@
-#[cfg(feature="cpal_audio")]
-mod mic_premission;
-
+use audio_system::rt::{check_mic_permission, supports_mic};
 use serde_json::Value;
 use tauri::{App, AppHandle, Emitter, Manager, State};
 use tauri_plugin_store::StoreExt;
@@ -53,11 +51,12 @@ pub async fn health_grant_mic_premission(
     let check_result = if prompt {
         // Explicitly wrap HealthError into AppError (even though the From impl exists),
         // making the intent clear at this integration boundary.
-        #[cfg(feature="cpal_audio")]
-        {
-            mic_premission::check().await.map_err(|e| AppError::from(HealthError::MicPermissionCheckFailed { detail: Some(format!("{e}")) }))?;
+        if supports_mic() {
+            check_mic_permission().await.map_err(|e| AppError::from(HealthError::MicPermissionCheckFailed { detail: Some(format!("{e}")) }))?;
+            true
+        } else {
+            false
         }
-        true
     } else {
         false
     };

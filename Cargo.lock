@@ -344,9 +344,13 @@ name = "audio-system"
 version = "0.1.0"
 dependencies = [
  "common",
+ "cpal",
+ "dasp_sample",
  "fastrand",
  "fundsp",
  "log",
+ "parking_lot",
+ "ringbuf",
  "spectrum-analyzer",
  "u-num-it",
 ]

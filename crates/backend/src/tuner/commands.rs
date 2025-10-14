@@ -119,27 +119,12 @@ pub fn tuner_reset_config(state: State<'_, TunerState>, app: AppHandle) -> Resul
 
 #[tauri::command]
 pub fn tuner_start_stream(state: State<'_, TunerState>, app: AppHandle) -> Result<()> {
-    #[cfg(feature = "cpal_audio")]
-    {
-        state.start_tuner_stream()?;
-        state.start_spectrum_streaming(app)?;
-    }
-    #[cfg(not(feature = "cpal_audio"))]
-    {
-        let _ = (&state, &app); // explicitly unused when feature disabled
-    }
+    state.start_tuner_stream(app)?;
     Ok(())
 }
 
 #[tauri::command]
 pub fn tuner_stop_stream(state: State<'_, TunerState>) -> Result<()> {
-    #[cfg(feature = "cpal_audio")]
-    {
-        state.stop_tuner_stream();
-    }
-    #[cfg(not(feature = "cpal_audio"))]
-    {
-        let _ = &state;
-    }
+    state.stop_tuner_stream();
     Ok(())
 }

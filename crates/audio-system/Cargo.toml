@@ -5,11 +5,20 @@ edition = "2024"
 
 [dependencies]
 common = { workspace = true }
+# Runtime optional deps
+cpal = { version = "0.16", optional = true }
+dasp_sample = { version = "0.11.0", optional = true }
 fastrand = { workspace = true }
 fundsp = { workspace = true }
 log = { workspace = true }
+parking_lot = "0.12"
+ringbuf = { workspace = true, optional = true }
 spectrum-analyzer = "1.7.0"
 u-num-it = "0.3.1"
 
 [features]
-js = ["fastrand/js"]
+default = []
+# Native CPAL runtime
+rt_cpal = ["dep:cpal", "dep:dasp_sample", "dep:ringbuf"]
+# Future web runtime stub (no extra deps yet)
+rt_web = ["fastrand/js"]

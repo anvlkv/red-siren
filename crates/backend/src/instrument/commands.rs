@@ -1,3 +1,4 @@
+use audio_system::rt::ActivationSource;
 use common::error::{InstrumentError, Result};
 use common::instrument::{
     events::{ActivationSourcePayload, PlaybackStatePayload},
@@ -5,10 +6,7 @@ use common::instrument::{
 };
 use tauri::{AppHandle, Emitter, State};
 
-use crate::{
-    health::HealthSetupState,
-    instrument::engine::{ActivationSource, InstrumentEngine},
-};
+use crate::{health::HealthSetupState, instrument::engine::InstrumentEngine};
 
 #[tauri::command]
 /// Creates instrument engine and starts streaming
@@ -185,7 +183,6 @@ pub fn instrument_playback_resume(
 ) -> Result<()> {
     log::debug!("instrument_playback_resume called");
 
-    #[cfg(feature = "cpal_audio")]
     match state.inner.resume_playback()? {
         true => {
             log::info!("Resuming playback");

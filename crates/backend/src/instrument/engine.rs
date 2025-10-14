@@ -1,85 +1,57 @@
+//! Instrument engine (runtime–agnostic).
+//!
+//! PURPOSE
+//! -------
+//! Maintains UI/state (layout, config, playback state, activation source)
+//! and delegates actual audio I/O + DSP execution to the runtime abstraction
+//! provided by `audio_system::rt`.
+//!
+//! RUNTIME SEPARATION
+//! ------------------
+//! The concrete audio backend (CPAL today, Web / Null later) lives in the
+//! `audio-system` crate. This file never touches CPAL-specific types; it only
+//! talks to the `StreamController` trait provided by `audio_system::rt`.
+//!
+//! FEATURE FLAGS
+//! -------------
+//! Runtime selection (CPAL, web, or null) is handled internally by `audio_system::rt`.
+//!
+//! DESIGN (MAYA DRY KISS)
+//! ----------------------
+//! - Minimal surface: only what the backend UI/commands require.
+//! - No legacy aliases (old `cpal_audio` removed).
+//! - Narrow lock scopes; derive config outside of second lock acquisitions.
+//! - Avoid over‑engineering future runtimes; a Null controller already exists
+//!   upstream, we just gate the usage here.
+//!
+//! THREADING
+//! ---------
+//! All state here uses `parking_lot::RwLock` for cheap synchronous access.
+//! The heavy audio threads are owned by the runtime implementation.
+
 use parking_lot::RwLock;
+
+use audio_system::rt::{make_stream_controller, ActivationSource, StreamController};
 
 use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout};
 use mint::Vector2;
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ActivationSource {
-    #[default]
-    Entropy,
-    Mic,
-}
-
-impl From<u8> for ActivationSource {
-    fn from(value: u8) -> Self {
-        match value {
-            0 => Self::Entropy,
-            _ => Self::Mic,
-        }
-    }
-}
-
-impl From<ActivationSource> for u8 {
-    fn from(value: ActivationSource) -> u8 {
-        match value {
-            ActivationSource::Entropy => 0,
-            ActivationSource::Mic => 1,
-        }
-    }
-}
-
+/// Public wrapper so higher layers (commands) only hold one handle.
 #[derive(Default)]
 pub struct InstrumentEngine {
     pub(super) inner: Inner,
 }
 
-/// Common engine state and logic. This struct exists in all builds.
-/// - In non-CPAL builds it maintains UI-facing state and derives configs.
-/// - In CPAL builds it also hosts a stream controller that performs audio I/O.
+/// Internal engine state.
 pub(super) struct Inner {
-    // UI/state shared across builds
+    // Playback & instrument state
     playing: RwLock<bool>,
     activation_source: RwLock<ActivationSource>,
     layout: RwLock<InstrumentLayout>,
     config: RwLock<InstrumentConfig>,
 
-    // CPAL-specific stream controller (created on-demand)
-    #[cfg(feature = "cpal_audio")]
+    // Runtime stream controller (lazy; concrete backend chosen by audio_system::rt)
     stream_controller: RwLock<Option<Box<dyn StreamController + Send + Sync>>>,
-}
-
-// Stream controller interface (only compiled with CPAL feature)
-#[cfg(feature = "cpal_audio")]
-pub trait StreamController {
-    // Lifecycle
-    fn start(
-        &self,
-        layout: &InstrumentLayout,
-        config: &InstrumentConfig,
-        source: ActivationSource,
-    ) -> common::error::Result<()>;
-    fn stop(&self) -> common::error::Result<()>;
-    fn pause(&self) -> common::error::Result<()>;
-    fn resume(&self) -> common::error::Result<()>;
-
-    // Reactivity
-    fn on_activation_source_changed(&self, source: ActivationSource) -> common::error::Result<()>;
-    fn on_layout_changed(
-        &self,
-        layout: &InstrumentLayout,
-        config: &InstrumentConfig,
-    ) -> common::error::Result<()>;
-
-    // Data taps
-    fn snapshot_output_snoop(&self, group: usize, key: usize) -> Vec<f32>;
-    fn snapshot_all_output_snoops(&self) -> Vec<(u8, u8, Vec<f32>)>;
-}
-
-// Factory for CPAL controller (provided by engine_cpal.rs)
-#[cfg(feature = "cpal_audio")]
-fn make_stream_controller() -> common::error::Result<Box<dyn StreamController + Send + Sync>> {
-    // Delegated to the CPAL backend module
-    crate::instrument::make_stream_controller()
 }
 
 impl Default for Inner {
@@ -89,25 +61,37 @@ impl Default for Inner {
             activation_source: RwLock::new(ActivationSource::default()),
             layout: RwLock::new(InstrumentLayout::default()),
             config: RwLock::new(InstrumentConfig::default()),
-            #[cfg(feature = "cpal_audio")]
             stream_controller: RwLock::new(None),
         }
     }
 }
 
 impl Inner {
-    // Snapshot current layout
+    // ---------------------------------------------------------------------
+    // Accessors
+    // ---------------------------------------------------------------------
+
     pub fn layout(&self) -> InstrumentLayout {
         *self.layout.read()
     }
 
-    // Playback control
+    pub fn playing(&self) -> bool {
+        *self.playing.read()
+    }
+
+    pub fn activation_source(&self) -> ActivationSource {
+        *self.activation_source.read()
+    }
+
+    // ---------------------------------------------------------------------
+    // Playback lifecycle
+    // ---------------------------------------------------------------------
+
     pub fn start_playback(&self) -> common::error::Result<bool> {
         if *self.playing.read() {
             return Ok(false);
         }
 
-        // Set playing first to avoid races in callers
         {
             let mut p = self.playing.write();
             if *p {
@@ -116,8 +100,6 @@ impl Inner {
             *p = true;
         }
 
-        // CPAL: start controller with current state
-        #[cfg(feature = "cpal_audio")]
         {
             let mut controller = self.stream_controller.write();
             if controller.is_none() {
@@ -139,16 +121,11 @@ impl Inner {
             return Ok(false);
         }
 
-        // CPAL: stop controller first
-        #[cfg(feature = "cpal_audio")]
-        {
-            if let Some(ctrl) = self.stream_controller.read().as_ref() {
-                // If stop fails, still mark as stopped for consistency
-                let _ = ctrl.stop();
-            }
+        if let Some(ctrl) = self.stream_controller.read().as_ref() {
+            // Even if stop errors, proceed to mark stopped for consistency
+            let _ = ctrl.stop();
         }
 
-        // Mark stopped
         {
             let mut p = self.playing.write();
             if !*p {
@@ -165,15 +142,10 @@ impl Inner {
             return Ok(false);
         }
 
-        // CPAL: pause controller
-        #[cfg(feature = "cpal_audio")]
-        {
-            if let Some(ctrl) = self.stream_controller.read().as_ref() {
-                ctrl.pause()?;
-            }
+        if let Some(ctrl) = self.stream_controller.read().as_ref() {
+            ctrl.pause()?;
         }
 
-        // Mark not playing
         {
             let mut p = self.playing.write();
             if !*p {
@@ -190,15 +162,10 @@ impl Inner {
             return Ok(false);
         }
 
-        // CPAL: resume controller
-        #[cfg(feature = "cpal_audio")]
-        {
-            if let Some(ctrl) = self.stream_controller.read().as_ref() {
-                ctrl.resume()?;
-            }
+        if let Some(ctrl) = self.stream_controller.read().as_ref() {
+            ctrl.resume()?;
         }
 
-        // Mark playing
         {
             let mut p = self.playing.write();
             if *p {
@@ -210,14 +177,9 @@ impl Inner {
         Ok(true)
     }
 
-    pub fn playing(&self) -> bool {
-        *self.playing.read()
-    }
-
+    // ---------------------------------------------------------------------
     // Activation source
-    pub fn activation_source(&self) -> ActivationSource {
-        *self.activation_source.read()
-    }
+    // ---------------------------------------------------------------------
 
     pub fn set_activation_source(&self, src: ActivationSource) -> common::error::Result<bool> {
         let changed = {
@@ -230,7 +192,6 @@ impl Inner {
             }
         };
 
-        #[cfg(feature = "cpal_audio")]
         if changed {
             if let Some(ctrl) = self.stream_controller.read().as_ref() {
                 ctrl.on_activation_source_changed(src)?;
@@ -240,10 +201,12 @@ impl Inner {
         Ok(changed)
     }
 
-    // Layout/config maintenance
+    // ---------------------------------------------------------------------
+    // Layout / Config maintenance
+    // ---------------------------------------------------------------------
 
     pub fn set_is_dark(&self, is_dark: bool) -> common::error::Result<()> {
-        // Narrow lock scope; derive outside second lock
+        // Derive new config with minimal lock hold time
         let new_cfg = {
             let mut layout = self.layout.write();
             layout.scale = if is_dark {
@@ -251,14 +214,13 @@ impl Inner {
             } else {
                 common::instrument::Scale::Yo
             };
-            common::instrument::Config::try_from(*layout)?
+            InstrumentConfig::try_from(*layout)?
         };
         {
             let mut cfg = self.config.write();
             *cfg = new_cfg;
         }
 
-        #[cfg(feature = "cpal_audio")]
         if let Some(ctrl) = self.stream_controller.read().as_ref() {
             let layout = self.layout.read();
             let config = self.config.read();
@@ -269,25 +231,23 @@ impl Inner {
     }
 
     pub fn set_size(&self, width: f64, height: f64) -> common::error::Result<()> {
-        // Update layout and derive config
         let new_cfg = {
             let mut layout = self.layout.write();
             let scale = layout.scale;
-            *layout = common::instrument::Layout {
+            *layout = InstrumentLayout {
                 scale,
-                ..common::instrument::Layout::from_screen_estate(Vector2 {
+                ..InstrumentLayout::from_screen_estate(Vector2 {
                     x: width as f32,
                     y: height as f32,
                 })
             };
-            common::instrument::Config::try_from(*layout)?
+            InstrumentConfig::try_from(*layout)?
         };
         {
             let mut cfg = self.config.write();
             *cfg = new_cfg;
         }
 
-        #[cfg(feature = "cpal_audio")]
         if let Some(ctrl) = self.stream_controller.read().as_ref() {
             let layout = self.layout.read();
             let config = self.config.read();
@@ -308,18 +268,17 @@ impl Inner {
             let mut layout = self.layout.write();
             let space = layout.space;
             let scale = layout.scale;
-            *layout = common::instrument::Layout::from_screen_estate_with_safe_area(
+            *layout = InstrumentLayout::from_screen_estate_with_safe_area(
                 space, top, right, bottom, left,
             );
             layout.scale = scale;
-            common::instrument::Config::try_from(*layout)?
+            InstrumentConfig::try_from(*layout)?
         };
         {
             let mut cfg = self.config.write();
             *cfg = new_cfg;
         }
 
-        #[cfg(feature = "cpal_audio")]
         if let Some(ctrl) = self.stream_controller.read().as_ref() {
             let layout = self.layout.read();
             let config = self.config.read();
@@ -329,24 +288,20 @@ impl Inner {
         Ok(())
     }
 
+    // ---------------------------------------------------------------------
     // Data taps
+    // ---------------------------------------------------------------------
 
     pub fn snapshot_output_snoop(&self, group: usize, key: usize) -> Vec<f32> {
-        #[cfg(feature = "cpal_audio")]
-        {
-            if let Some(ctrl) = self.stream_controller.read().as_ref() {
-                return ctrl.snapshot_output_snoop(group, key);
-            }
+        if let Some(ctrl) = self.stream_controller.read().as_ref() {
+            return ctrl.snapshot_output_snoop(group, key);
         }
         Vec::new()
     }
 
     pub fn snapshot_all_output_snoops(&self) -> Vec<(u8, u8, Vec<f32>)> {
-        #[cfg(feature = "cpal_audio")]
-        {
-            if let Some(ctrl) = self.stream_controller.read().as_ref() {
-                return ctrl.snapshot_all_output_snoops();
-            }
+        if let Some(ctrl) = self.stream_controller.read().as_ref() {
+            return ctrl.snapshot_all_output_snoops();
         }
         Vec::new()
     }

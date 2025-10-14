@@ -1,15 +1,7 @@
 mod commands;
 mod engine;
-#[cfg(feature="cpal_audio")]
-mod engine_cpal;
-
-#[cfg(feature="cpal_audio")]
-pub(crate) use engine_cpal::make_stream_controller;
-
-// non-cpal implementation lives in engine.rs; CPAL extensions in engine_cpal.rs
-
-#[cfg(feature="cpal_audio")]
-pub mod stream;
+// Runtime implementation now lives in audio_system::rt (cpal/web/null).
+// This crate only keeps the generic engine logic in engine.rs.
 
 use common::error::{AppError, Result, SetupError};
 

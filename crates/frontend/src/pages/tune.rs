@@ -1,6 +1,7 @@
 use crate::{
     components::{
-        Button, CompactMenu, Icon, MenuItem, TunerWithContext, UiPlacement, UiSize, UiVariant,
+        expect_tuner_service, Button, CompactMenu, Icon, MenuItem, Tuner, UiPlacement, UiSize,
+        UiVariant,
     },
     util::{
         layout_context::{expect_layout_contex, LayoutContextReturn},
@@ -9,20 +10,15 @@ use crate::{
 };
 use common::RouteId;
 use leptos::prelude::*;
-use tauri_use::{use_invoke, UseTauriReturn};
 
 #[component]
 pub fn Tune() -> impl IntoView {
-    // Tuner config resource
+    // Access long-lived tuner service (commands + shared state)
+    let tuner_service = expect_tuner_service();
+
+    // Tuner config resource (refetch after reset)
     let UseTauriResourceReturn { refetch, .. } =
         use_tauri_resource::<common::tuner::Config>(common::commands::tuner::CONFIG);
-
-    // Reset command
-    let UseTauriReturn {
-        error: reset_error,
-        trigger: reset_invoke,
-        ..
-    } = use_invoke::<(), (), ()>(common::commands::tuner::RESET_CONFIG);
 
     let (menu_items, _set_menu_items) = signal(vec![
         MenuItem::Navigate {
@@ -44,23 +40,32 @@ pub fn Tune() -> impl IntoView {
         common::orientation::LayoutOrientation::Horizontal => UiPlacement::Bottom,
     });
 
-    Effect::new(move |_| {
-        if let Some(err) = reset_error() {
-            log::error!(
-                "Error invoking {}: {err}",
-                common::commands::tuner::RESET_CONFIG
-            );
+    // Start tuner stream on mount
+    Effect::new({
+        let tuner_service = tuner_service.clone();
+        move |_| {
+            tuner_service.start_stream.run(());
         }
     });
 
-    let on_reset = move |_| {
-        reset_invoke(Some(((), ())));
-        refetch(); // Refresh config after reset
+    // Stop tuner stream on unmount
+    on_cleanup({
+        let tuner_service = tuner_service.clone();
+        move || tuner_service.stop_stream.run(())
+    });
+
+    // Reset handler
+    let on_reset = {
+        let tuner_service = tuner_service.clone();
+        move |_| {
+            tuner_service.reset.run(());
+            refetch(); // Refresh config after reset
+        }
     };
 
     view! {
         <div class="relative w-full h-full">
-            <TunerWithContext />
+            <Tuner />
             <CompactMenu items=menu_items placement=placement>
                 <Button
                     on:click=on_reset

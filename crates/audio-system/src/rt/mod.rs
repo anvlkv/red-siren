@@ -91,7 +91,9 @@ pub trait StreamController {
     // Data taps
     fn snapshot_output_snoop(&self, group: usize, key: usize) -> Vec<f32>;
     fn snapshot_all_output_snoops(&self) -> Vec<(u8, u8, Vec<f32>)>;
-}
+    fn snapshot_activation_snoop(&self, group: usize, key: usize) -> Vec<f32>;
+    fn snapshot_all_activation_snoops(&self) -> Vec<(u8, u8, Vec<f32>)>;
+    }
 
 /// Null / no-op runtime used when no concrete backend feature is enabled.
 ///
@@ -141,6 +143,14 @@ impl StreamController for NullController {
     }
 
     fn snapshot_all_output_snoops(&self) -> Vec<(u8, u8, Vec<f32>)> {
+        Vec::new()
+    }
+
+    fn snapshot_activation_snoop(&self, _group: usize, _key: usize) -> Vec<f32> {
+        Vec::new()
+    }
+
+    fn snapshot_all_activation_snoops(&self) -> Vec<(u8, u8, Vec<f32>)> {
         Vec::new()
     }
 }

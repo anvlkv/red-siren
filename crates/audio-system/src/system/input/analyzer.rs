@@ -89,6 +89,11 @@ impl FFTAnalyzer {
     }
 
     fn perform_fft_analysis(&mut self) {
+        log::trace!(
+            "fft_analyzer: perform_fft_analysis enter window_size={} sample_rate={}",
+            self.window_size,
+            self.sample_rate
+        );
         // Apply Hann window
         let windowed = hann_window(&self.window_buffer);
 
@@ -97,11 +102,12 @@ impl FFTAnalyzer {
             &windowed,
             self.sample_rate as u32,
             FrequencyLimit::All,
-            Some(&spectrum_analyzer::scaling::divide_by_N),
+            Some(&spectrum_analyzer::scaling::divide_by_N_sqrt),
         ) {
             Ok(spectrum) => spectrum,
             Err(e) => {
                 log::error!("FFT analysis failed: {}", e);
+                log::trace!("fft_analyzer: FFT analysis failed early-exit");
                 return;
             }
         };
@@ -122,7 +128,7 @@ impl FFTAnalyzer {
             let mut sensor_activation = 0.0;
 
             // Check spectrum data for frequencies within sensor range
-            for (frequency, magnitude) in spectrum_data {
+            for (frequency, magnitude) in spectrum.data() {
                 let freq = frequency.val();
                 let mag = magnitude.val();
 
@@ -160,6 +166,16 @@ impl FFTAnalyzer {
             self.sensor_activations
                 .insert(sensor.key, smoothed_activation);
 
+            if log::log_enabled!(log::Level::Trace) && smoothed_activation > 0.01 {
+                log::trace!(
+                    "fft_analyzer: sensor key={:?} range=[{:.1},{:.1}] activation={:.3}",
+                    sensor.key,
+                    sensor.min_frequency,
+                    sensor.max_frequency,
+                    smoothed_activation
+                );
+            }
+
             // Update siren control if we have a control for this sensor
             if let Some(siren_control) = self.siren_controls.get(&sensor.key) {
                 // Only activate if above threshold
@@ -193,6 +209,10 @@ impl AudioUnit for FFTAnalyzer {
 
             // Perform FFT analysis when buffer is full
             if self.sample_count.is_multiple_of(self.window_size) {
+                log::trace!(
+                    "fft_analyzer: tick window complete samples={}",
+                    self.sample_count
+                );
                 self.perform_fft_analysis();
             }
         }
@@ -213,6 +233,10 @@ impl AudioUnit for FFTAnalyzer {
 
                 // Perform FFT analysis when buffer is full
                 if self.sample_count.is_multiple_of(self.window_size) {
+                    log::trace!(
+                        "fft_analyzer: process window complete samples={}",
+                        self.sample_count
+                    );
                     self.perform_fft_analysis();
                 }
             }
@@ -242,6 +266,12 @@ impl AudioUnit for FFTAnalyzer {
         // Clear spectrum data
         self.spectrum_magnitudes.clear();
         self.spectrum_frequencies.clear();
+
+        log::trace!(
+            "fft_analyzer: reset complete window_size={} sample_rate={}",
+            self.window_size,
+            self.sample_rate
+        );
     }
 
     fn allocate(&mut self) {

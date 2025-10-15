@@ -9,6 +9,7 @@ use crate::{
 use super::{expect_instrument_context, instrument_animations};
 use leptos::html::Div;
 use leptos_use::use_element_bounding;
+use tauri_use::{use_command, UseTauriWithReturn};
 
 const BAND_STROKE_WIDTH: f32 = 4.0;
 
@@ -27,6 +28,34 @@ pub fn Keyboard() -> impl IntoView {
         key_pad_main,
         ..
     } = expect_layout_contex();
+
+    // Activation snoop batch stream (pull model).
+    let UseTauriWithReturn {
+        trigger: fetch_batch,
+        data: batch_data,
+        error: batch_error,
+        ..
+    } = use_command::<common::instrument::data::ActivationSnoopBatchPayload>(
+        common::instrument::data::GET_ALL_ACTIVATION_SNOOPS,
+    );
+
+    // Log errors for the batch command
+    Effect::new(move |_| {
+        if let Some(err) = batch_error() {
+            log::error!(
+                "Error invoking {}: {err}",
+                common::instrument::data::GET_ALL_ACTIVATION_SNOOPS
+            );
+        }
+    });
+
+    // Drive periodic fetch (20 FPS)
+    let _raf = crate::util::raf_fn_fps::use_raf_fn_with_fps(
+        move |_| {
+            fetch_batch(Some(()));
+        },
+        20.0,
+    );
 
     let main_container_axis_style = Memo::new(move |_| {
         let orientation = orientation();
@@ -139,7 +168,7 @@ pub fn Keyboard() -> impl IntoView {
                     (0..num_groups as usize)
                         .rev()
                         .map(|g| {
-                            view! { <Group g /> }
+                            view! { <Group g batch_data=batch_data /> }
                         })
                         .collect_view()
                 }}
@@ -149,7 +178,10 @@ pub fn Keyboard() -> impl IntoView {
 }
 
 #[component]
-fn Group(g: usize) -> impl IntoView {
+fn Group(
+    g: usize,
+    #[prop(into)] batch_data: Signal<Option<common::instrument::data::ActivationSnoopBatchPayload>>,
+) -> impl IntoView {
     let LayoutContextReturn {
         orientation,
         num_keys_per_group,
@@ -192,7 +224,24 @@ fn Group(g: usize) -> impl IntoView {
                     .rev()
                     .map(move |k| {
                         {
-                            view! { <KeyboardElement g k first_group_channel orientation /> }
+                            let samples = Signal::derive(move || {
+                                batch_data()
+                                    .and_then(|b| {
+                                        b.snoops
+                                            .iter()
+                                            .find(|e| e.group as usize == g && e.key as usize == k)
+                                            .map(|e| e.samples.clone())
+                                    })
+                            });
+                            view! {
+                                <KeyboardElement
+                                    g
+                                    k
+                                    first_group_channel
+                                    orientation
+                                    activation_samples=samples
+                                />
+                            }
                         }
                     })
                     .collect_view()
@@ -207,12 +256,14 @@ fn KeyboardElement(
     k: usize,
     first_group_channel: common::instrument::GroupChannel,
     orientation: common::orientation::LayoutOrientation,
+    #[prop(into)] activation_samples: Signal<Option<Vec<f32>>>,
 ) -> impl IntoView {
     let ctx = expect_instrument_context();
     let LayoutContextReturn {
         key_radius,
         space,
         num_keys_per_group,
+        key_band_breadth,
         ..
     } = expect_layout_contex();
 
@@ -446,10 +497,18 @@ fn KeyboardElement(
                 round=true
                 square=true
                 attr:id=format!("key-{g}-{k}")
-                attr:style="width: var(--keyboard-key-diameter);\
-                height: var(--keyboard-key-diameter);\
-                margin: var(--keyboard-key-padding);\
-                "
+                attr:style=move || {
+                    let br = key_band_breadth();
+                    let base_r = key_radius();
+                    let inc = activation_samples
+                        .get()
+                        .map(|s| s.iter().map(|v| v.abs()).sum::<f32>())
+                        .unwrap_or(0.0)
+                        .min(16.0);
+                    let dia = ((base_r + inc) * 2.0).min(br.max(0.0));
+                    let pad = ((br - dia) / 2.0).max(0.0);
+                    format!("width: {}px; height: {}px; margin: {}px;", dia, dia, pad)
+                }
             >
                 {format!("{key_code:?}")}
             </Button>

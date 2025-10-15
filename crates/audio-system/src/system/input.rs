@@ -1,5 +1,5 @@
 pub mod analyzer;
-mod preamp;
+pub mod preamp;
 
 pub use analyzer::{FFTAnalyzer, FFT_WINDOW_SIZE};
 

@@ -327,3 +327,43 @@ pub fn instrument_all_string_snoops(
         snoops: entries,
     })
 }
+
+#[tauri::command]
+pub fn instrument_activation_snoop_data(
+    group: usize,
+    key: usize,
+    state: tauri::State<'_, crate::instrument::engine::InstrumentEngine>,
+) -> common::error::Result<common::instrument::data::ActivationSnoopDataResponse> {
+    let samples = state.inner.snapshot_activation_snoop(group, key);
+    Ok(common::instrument::data::ActivationSnoopDataResponse { samples })
+}
+
+#[tauri::command]
+pub fn instrument_all_activation_snoops(
+    state: tauri::State<'_, crate::instrument::engine::InstrumentEngine>,
+) -> common::error::Result<common::instrument::data::ActivationSnoopBatchPayload> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let entries = state
+        .inner
+        .snapshot_all_activation_snoops()
+        .into_iter()
+        .map(
+            |(group, key, samples)| common::instrument::data::ActivationSnoopEntry {
+                group,
+                key,
+                samples,
+            },
+        )
+        .collect::<Vec<_>>();
+
+    let t_unix_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+
+    Ok(common::instrument::data::ActivationSnoopBatchPayload {
+        t_unix_ms,
+        snoops: entries,
+    })
+}

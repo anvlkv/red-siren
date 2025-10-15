@@ -19,25 +19,22 @@ pub type NodeType = Pipe<
     Pipe<
         Pipe<
             Pipe<
-                Pipe<
-                    Binop<
-                        FrameMul<UInt<UTerm, B1>>,
-                        Pipe<Constant<UInt<UTerm, B1>>, Sine<S>>,
-                        Siren,
-                    >,
-                    Split<UInt<UInt<UTerm, B1>, B1>>,
+                Binop<
+                    FrameMul<UInt<UTerm, B1>>,
+                    Pipe<Constant<UInt<UTerm, B1>>, Sine<S>>,
+                    Pipe<Pipe<Var, Siren>, SnoopBackend>,
                 >,
-                Stack<
-                    Stack<
-                        Unop<Formant<1>, FrameMulScalar<UInt<UTerm, B1>>>,
-                        Unop<Formant<2>, FrameMulScalar<UInt<UTerm, B1>>>,
-                    >,
-                    Unop<Formant<3>, FrameMulScalar<UInt<UTerm, B1>>>,
-                >,
+                Split<UInt<UInt<UTerm, B1>, B1>>,
             >,
-            Unop<Join<UInt<UInt<UTerm, B1>, B1>>, FrameMulScalar<UInt<UTerm, B1>>>,
+            Stack<
+                Stack<
+                    Unop<Formant<1>, FrameMulScalar<UInt<UTerm, B1>>>,
+                    Unop<Formant<2>, FrameMulScalar<UInt<UTerm, B1>>>,
+                >,
+                Unop<Formant<3>, FrameMulScalar<UInt<UTerm, B1>>>,
+            >,
         >,
-        FixedSvf<S, HighpassMode<S>>,
+        Unop<Join<UInt<UInt<UTerm, B1>, B1>>, FrameMulScalar<UInt<UTerm, B1>>>,
     >,
     SnoopBackend,
 >;
@@ -47,31 +44,35 @@ pub const OUTPUT_SNOOP_CAPACITY: usize = 256;
 
 fn create_node(config: &NodeConfig, handles: InnerHandles) -> An<NodeType> {
     let InnerHandles {
-        activation_snoop: _activation_snoop,
-        output_snoop: output_snoop_backend,
+        activation_snoop,
+        output_snoop,
         siren_control,
         band_control,
         ..
     } = handles;
 
+    let source = sine_hz::<S>(config.base_frequency as S);
+    let siren_activation = An(siren_control) >> siren() >> activation_snoop;
+    let formants = (formant::<1>(band_control.clone(), config.base_frequency as f32) * 1.0)
+        | (formant::<2>(band_control.clone(), config.base_frequency as f32) * 0.8)
+        | (formant::<3>(band_control.clone(), config.base_frequency as f32) * 0.6);
+
     // Source
-    (sine_hz::<S>(config.base_frequency as S) * siren(siren_control))
+    (source * siren_activation)
         // Create resonator formants
         >> split::<U3>()
-        >> ((formant::<1>(band_control.clone(), config.base_frequency as f32) * 1.0)
-        | (formant::<2>(band_control.clone(), config.base_frequency as f32) * 0.8)
-        | (formant::<3>(band_control.clone(), config.base_frequency as f32) * 0.6))
+        >> formants
         >> (join::<U3>() * 0.104167)
-        // High-pass filter to remove low-frequency rumble
-        >> highpass_hz(80.0, 1.0)
         // Visualize
-        >> output_snoop_backend
+        >> output_snoop
 }
+
+pub type GroupType<K> = Pipe<MultiBus<K, NodeType>, FixedSvf<S, HighpassMode<S>>>;
 
 pub fn create_group_node<K>(
     config: &GroupConfig,
     group_handles: HashMap<NodeKey, InnerHandles>,
-) -> An<MultiBus<K, NodeType>>
+) -> An<GroupType<K>>
 where
     K: Size<f32> + Size<NodeType>,
 {
@@ -83,4 +84,10 @@ where
         let handle = handles.remove(&key).expect("missing handle for node key");
         create_node(&nodes[i as usize], handle)
     })
+    // High-pass filter to remove low-frequency rumble
+    >> highpass_hz(80.0, 1.0)
 }
+
+// fundsp::combinator::An<fundsp::audionode::Pipe<fundsp::audionode::Pipe<fundsp::audionode::Pipe<fundsp::audionode::Pipe<fundsp::audionode::Binop<fundsp::audionode::FrameMul<fundsp::typenum::UInt<fundsp::typenum::UTerm, fundsp::typenum::B1>>, fundsp::audionode::Pipe<fundsp::audionode::Constant<fundsp::typenum::UInt<fundsp::typenum::UTerm, fundsp::typenum::B1>>, fundsp::hacker::Sine<f32>>, fundsp::audionode::Pipe<fundsp::hacker::Var, fundsp::audionode::Pipe<system::output::siren::Siren, fundsp::hacker::SnoopBackend>>>, fundsp::audionode::Split<fundsp::typenum::UInt<fundsp::typenum::UInt<fundsp::typenum::UTerm, fundsp::typenum::B1>, fundsp::typenum::B1>>>, fundsp::audionode::Stack<fundsp::audionode::Stack<fundsp::audionode::Unop<system::output::formant::Formant<1>, fundsp::audionode::FrameMulScalar<fundsp::typenum::UInt<fundsp::typenum::UTerm, fundsp::typenum::B1>>>, fundsp::audionode::Unop<system::output::formant::Formant<2>, fundsp::audionode::FrameMulScalar<fundsp::typenum::UInt<fundsp::typenum::UTerm, fundsp::typenum::B1>>>>, fundsp::audionode::Unop<system::output::formant::Formant<3>, fundsp::audionode::FrameMulScalar<fundsp::typenum::UInt<fundsp::typenum::UTerm, fundsp::typenum::B1>>>>>, fundsp::audionode::Unop<fundsp::audionode::Join<fundsp::typenum::UInt<fundsp::typenum::UInt<fundsp::typenum::UTerm, fundsp::typenum::B1>, fundsp::typenum::B1>>, fundsp::audionode::FrameMulScalar<fundsp::typenum::UInt<fundsp::typenum::UTerm, fundsp::typenum::B1>>>>, fundsp::hacker::SnoopBackend>>
+
+// fundsp::combinator::An<fundsp::audionode::Pipe<fundsp::audionode::Pipe<fundsp::audionode::Pipe<fundsp::audionode::Pipe<fundsp::audionode::Binop<fundsp::audionode::FrameMul<fundsp::typenum::UInt<fundsp::typenum::UTerm, fundsp::typenum::B1>>, fundsp::audionode::Pipe<fundsp::audionode::Constant<fundsp::typenum::UInt<fundsp::typenum::UTerm, fundsp::typenum::B1>>, fundsp::hacker::Sine<f32>>, fundsp::audionode::Pipe<fundsp::hacker::Var, fundsp::audionode::Pipe<system::output::siren::Siren, fundsp::hacker::SnoopBackend>>>, fundsp::audionode::Split<fundsp::typenum::UInt<fundsp::typenum::UInt<fundsp::typenum::UTerm, fundsp::typenum::B1>, fundsp::typenum::B1>>>, fundsp::audionode::Stack<fundsp::audionode::Stack<fundsp::audionode::Unop<system::output::formant::Formant<1>, fundsp::audionode::FrameMulScalar<fundsp::typenum::UInt<fundsp::typenum::UTerm, fundsp::typenum::B1>>>, fundsp::audionode::Unop<system::output::formant::Formant<2>, fundsp::audionode::FrameMulScalar<fundsp::typenum::UInt<fundsp::typenum::UTerm, fundsp::typenum::B1>>>>, fundsp::audionode::Unop<system::output::formant::Formant<3>, fundsp::audionode::FrameMulScalar<fundsp::typenum::UInt<fundsp::typenum::UTerm, fundsp::typenum::B1>>>>>, fundsp::audionode::Unop<fundsp::audionode::Join<fundsp::typenum::UInt<fundsp::typenum::UInt<fundsp::typenum::UTerm, fundsp::typenum::B1>, fundsp::typenum::B1>>, fundsp::audionode::FrameMulScalar<fundsp::typenum::UInt<fundsp::typenum::UTerm, fundsp::typenum::B1>>>>, fundsp::hacker::SnoopBackend>>

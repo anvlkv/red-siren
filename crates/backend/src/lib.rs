@@ -28,7 +28,16 @@ pub fn run() {
         );
     }
     builder = builder.plugin(tauri_plugin_store::Builder::new().build());
-    builder = builder.plugin(tauri_plugin_log::Builder::new().build());
+    builder = builder.plugin(
+        tauri_plugin_log::Builder::new()
+            .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepOne)
+            .level(if cfg!(debug_assertions) {
+                log::LevelFilter::Trace
+            } else {
+                log::LevelFilter::Info
+            })
+            .build(),
+    );
     builder = builder.plugin(tauri_plugin_opener::init());
 
     /*
@@ -64,6 +73,8 @@ pub fn run() {
         instrument::ui_safe_area_insets_apply,
         instrument::instrument_string_snoop_data,
         instrument::instrument_all_string_snoops,
+        instrument::instrument_activation_snoop_data,
+        instrument::instrument_all_activation_snoops,
     ]);
 
     // Setup logic

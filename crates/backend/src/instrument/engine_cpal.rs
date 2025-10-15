@@ -479,6 +479,48 @@ impl StreamController for CpalController {
         }
         result
     }
+
+    fn snapshot_activation_snoop(&self, group: usize, key: usize) -> Vec<f32> {
+        let key = NodeKey(group as u8, key as u8);
+
+        let mut out = Vec::new();
+        let mut snoops = self.activation_snoops.write();
+        if let Some(snoop) = snoops.get_mut(&key) {
+            snoop.update();
+            let cap = snoop.capacity();
+            out.reserve(cap + 2);
+            for rev in (0..cap).rev() {
+                out.push(snoop.at(rev));
+            }
+        }
+        out
+    }
+
+    fn snapshot_all_activation_snoops(&self) -> Vec<(u8, u8, Vec<f32>)> {
+        // Use last known layout to iterate keys.
+        let layout = *self.last_layout.read();
+        let num_groups = layout.num_groups.get() as usize;
+        let keys_per_group = layout.num_keys_per_group.get() as usize;
+
+        let mut result = Vec::with_capacity(num_groups * keys_per_group);
+        let mut snoops = self.activation_snoops.write();
+
+        for g in 0..num_groups {
+            for k in 0..keys_per_group {
+                let key = NodeKey(g as u8, k as u8);
+                if let Some(snoop) = snoops.get_mut(&key) {
+                    snoop.update();
+                    let cap = snoop.capacity();
+                    let mut samples = Vec::with_capacity(cap + 2);
+                    for rev in (0..cap).rev() {
+                        samples.push(snoop.at(rev));
+                    }
+                    result.push((g as u8, k as u8, samples));
+                }
+            }
+        }
+        result
+    }
 }
 
 /// Factory called by the generic engine to obtain a CPAL stream controller.

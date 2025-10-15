@@ -204,6 +204,6 @@ fn write_data<T>(
 
     let took = produce_sample(data_buff.as_slice());
     if let Some(remaining) = frames.checked_sub(took).filter(|r| *r > 0) {
-        log::warn!("input stream: produced {took} samples, {remaining} unconsumed");
+        log::trace!("input stream: produced {took} samples, {remaining} unconsumed");
     }
 }

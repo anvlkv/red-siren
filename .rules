@@ -173,5 +173,6 @@ It is advisable to check relevant docs with puppeteer.
 ### Workspace crates
 
 - `common` - shared types, errors, utils, constants, etc.
-- `src-tauri` - Tauri backend application code
-- `src` - Leptos frontend application code
+- `backend` - Tauri backend application code
+- `frontend` - Leptos frontend application code
+- `audio-system` - Fundsp + cpal audio runtime

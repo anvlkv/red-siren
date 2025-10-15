@@ -7,7 +7,6 @@ const SIREN_BASE_HZ: f32 = 0.5;
 
 #[derive(Clone)]
 pub struct Siren {
-    a_var: Var,
     freq: f32,
     phase: f32,
     time: f32,
@@ -19,13 +18,13 @@ pub struct Siren {
 impl AudioNode for Siren {
     const ID: u64 = SIREN_ID;
 
-    type Inputs = U0;
+    type Inputs = U1;
 
     type Outputs = U1;
 
-    fn tick(&mut self, _input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
+    fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
         // Smooth modulation to avoid clicks
-        let a_raw = self.a_var.value();
+        let a_raw = input[0];
         let dt = self.sample_duration.max(1.0 / DEFAULT_SR as f32);
         let tau = 0.02; // ~20 ms smoothing
         let alpha = dt / (tau + dt);
@@ -60,9 +59,8 @@ impl AudioNode for Siren {
     }
 }
 
-pub fn siren(a_var: Var) -> An<Siren> {
+pub fn siren() -> An<Siren> {
     let mut siren = Siren {
-        a_var,
         freq: SIREN_BASE_HZ,
         phase: 0.0,
         time: 0.0,

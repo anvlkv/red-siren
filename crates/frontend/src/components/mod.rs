@@ -27,6 +27,7 @@ pub use menu::*;
 pub use switch::*;
 pub use tooltip::*;
 pub use tuner::*;
+pub use tuner::{expect_tuner_service, provide_tuner_service, TunerService};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, strum::EnumString)]
 pub enum UiVariant {

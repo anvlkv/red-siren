@@ -14,14 +14,14 @@ use crate::util::tauri_resource::{use_tauri_resource, UseTauriResourceReturn};
 use common::tuner::{Config, Layout as TunerLayout, SpectrumData, UpdateSensorPayload};
 use common::RouteId;
 
-pub use context::{provide_tuner_context, use_tuner_context, TunerContextProvider};
+pub use context::{expect_tuner_service, provide_tuner_service, TunerService};
 pub use sensor_handles::SensorHandles;
 pub use spectrum::SpectrumVisualizer;
 
 /// Main tuner component with spectrum visualization and sensor configuration
 #[component]
 pub fn Tuner() -> impl IntoView {
-    let context = use_tuner_context();
+    let context = expect_tuner_service();
 
     // Get tuner config resource
     let UseTauriResourceReturn {
@@ -66,19 +66,6 @@ pub fn Tuner() -> impl IntoView {
         trigger: update_sensor_invoke,
         ..
     } = use_invoke::<UpdateSensorPayload, (), ()>(common::commands::tuner::UPDATE_SENSOR);
-
-    // Start/stop tuner stream commands
-    let UseTauriReturn {
-        error: start_stream_error,
-        trigger: start_stream_invoke,
-        ..
-    } = use_invoke::<(), (), ()>(common::commands::tuner::START_STREAM);
-
-    let UseTauriReturn {
-        error: stop_stream_error,
-        trigger: stop_stream_invoke,
-        ..
-    } = use_invoke::<(), (), ()>(common::commands::tuner::STOP_STREAM);
 
     // Get setup state to check mic permission
     let UseTauriResourceReturn {
@@ -144,41 +131,18 @@ pub fn Tuner() -> impl IntoView {
         if let Some(err) = update_sensor_error() {
             log::error!("Error updating sensor: {err}");
         }
-        if let Some(err) = start_stream_error() {
-            log::error!("Error starting tuner stream: {err}");
-        }
-        if let Some(err) = stop_stream_error() {
-            log::error!("Error stopping tuner stream: {err}");
-        }
     });
 
-    // Start listening and tuner stream when component mounts
+    // Start listening when component mounts (stream lifetime handled at page level via TunerService)
     Effect::new(move |_| {
         config_update_open();
         spectrum_open();
-
-        // Only start tuner input stream when mic permission is granted
-        if let Some(state) = setup_state() {
-            if state.mic_permission.is_some() {
-                log::debug!("Starting tuner input stream");
-                start_stream_invoke(Some(((), ())));
-            } else {
-                log::warn!(
-                    "Mic permission not set; not starting tuner stream (redirecting to Permissions)"
-                );
-                // Navigation effect above will handle redirect
-            }
-        }
     });
 
-    // Cleanup listeners and stop stream on unmount
+    // Cleanup listeners on unmount (stream stop handled at page level)
     on_cleanup(move || {
         close_config_update();
         close_spectrum();
-
-        // Stop tuner input stream
-        log::debug!("Stopping tuner input stream");
-        stop_stream_invoke(Some(((), ())));
     });
 
     // Callback for updating sensors
@@ -224,15 +188,5 @@ pub fn Tuner() -> impl IntoView {
                 </div>
             </Show>
         </div>
-    }
-}
-
-/// Wrapper component that provides context
-#[component]
-pub fn TunerWithContext() -> impl IntoView {
-    view! {
-        <TunerContextProvider>
-            <Tuner />
-        </TunerContextProvider>
     }
 }

@@ -305,4 +305,18 @@ impl Inner {
         }
         Vec::new()
     }
+
+    pub fn snapshot_activation_snoop(&self, group: usize, key: usize) -> Vec<f32> {
+        if let Some(ctrl) = self.stream_controller.read().as_ref() {
+            return ctrl.snapshot_activation_snoop(group, key);
+        }
+        Vec::new()
+    }
+
+    pub fn snapshot_all_activation_snoops(&self) -> Vec<(u8, u8, Vec<f32>)> {
+        if let Some(ctrl) = self.stream_controller.read().as_ref() {
+            return ctrl.snapshot_all_activation_snoops();
+        }
+        Vec::new()
+    }
 }

@@ -1,6 +1,13 @@
+#![allow(clippy::manual_is_multiple_of)]
+
 use std::{
     collections::HashMap,
-    sync::{mpsc, mpsc::Sender, Arc, Mutex},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        mpsc,
+        mpsc::Sender,
+        Arc, Mutex,
+    },
 };
 
 use crate::rt::TunerRuntime;
@@ -16,8 +23,6 @@ use cpal::traits::DeviceTrait;
 
 use crate::system::input::{FFTAnalyzer, FFT_WINDOW_SIZE};
 
-/// Duration of input ring buffer in milliseconds (approx upper bound).
-const BUFFER_DURATION_MS: u64 = 100;
 /// Maximum samples kept in rolling buffer (2 seconds @ 48kHz); bounds memory.
 const MAX_BUFFER_SAMPLES: usize = 96_000;
 
@@ -73,8 +78,10 @@ impl CpalTunerRuntime {
     }
 
     fn build_analyzer(&self, config: &TunerConfig, sample_rate: f64) -> Box<FFTAnalyzer> {
+        let preamp = crate::input::preamp::create_sensors_preamp();
+
         let mut analyzer = Box::new(FFTAnalyzer::new(
-            Box::new(pass()),
+            Box::new(preamp),
             FFT_WINDOW_SIZE,
             config.clone(),
             HashMap::new(), // No siren controls for tuner runtime
@@ -84,8 +91,10 @@ impl CpalTunerRuntime {
     }
 
     fn ensure_started(&self) -> Result<()> {
+        log::trace!("tuner: ensure_started called");
         // Already started?
         if self.input_tx.lock().unwrap().is_some() {
+            log::trace!("tuner: already started");
             return Ok(());
         }
 
@@ -94,38 +103,40 @@ impl CpalTunerRuntime {
         let input_device = host
             .default_input_device()
             .ok_or(InstrumentError::DeviceUnavailable)?;
+        let device_name = input_device.name().unwrap_or_else(|_| "<unknown>".into());
 
         let default_cfg = input_device
             .default_input_config()
             .map_err(|_| InstrumentError::InputConfigUnavailable)?;
         let stream_cfg: cpal::StreamConfig = default_cfg.clone().into();
-
         let sr = stream_cfg.sample_rate.0 as f64;
+
         {
             let cfg = self.config.lock().unwrap().clone();
             let analyzer = self.build_analyzer(&cfg, sr);
             *self.analyzer.lock().unwrap() = Some(analyzer);
             *self.sample_rate.lock().unwrap() = Some(sr as f32);
         }
+        log::trace!(
+            "tuner: starting input stream device='{}' sample_rate={} channels={}",
+            device_name,
+            sr,
+            stream_cfg.channels
+        );
 
-        // Capacity: derive approximate ring buffer size (in samples) for configured buffer duration.
-        let channels = stream_cfg.channels as usize;
-        let samples_per_ms = sr / 1000.0;
-        let cap_samples = ((samples_per_ms * BUFFER_DURATION_MS as f64).ceil() as usize)
-            .saturating_mul(std::cmp::max(1, channels));
-        let capacity = cap_samples.next_power_of_two();
-
-        // We'll store samples in an owned Vec (not a fixed ringbuf) – simple & sufficient.
+        // We'll store samples in an owned Vec (not a fixed ringbuf) – simple & sufficient / simplified (removed unused capacity calc).
         let sample_buffer = Arc::clone(&self.sample_buffer);
+        let pushed_counter = Arc::new(AtomicUsize::new(0));
 
         // Spawn input stream: convert (and down-mix if necessary) -> mono f64 slice -> push into Vec<f32>.
-        let (tx, handle) =
-            spawn_owned_input_stream(input_device, default_cfg, stream_cfg, move || {
+        let (tx, handle) = spawn_owned_input_stream(input_device, default_cfg, stream_cfg, {
+            let pushed_counter = pushed_counter.clone();
+            move || {
                 let buffer = sample_buffer.clone();
+                let pushed_counter = pushed_counter.clone();
                 let prod = move |samples: &[f64]| -> usize {
                     // Convert to f32 and append
                     let mut buf = buffer.lock().unwrap();
-                    buf.reserve(samples.len());
                     for s in samples {
                         buf.push(*s as f32);
                     }
@@ -133,12 +144,27 @@ impl CpalTunerRuntime {
                     if buf.len() > MAX_BUFFER_SAMPLES {
                         let excess = buf.len() - MAX_BUFFER_SAMPLES;
                         buf.drain(0..excess);
+                        log::trace!(
+                            "tuner: trimmed {} samples (buffer_len={})",
+                            excess,
+                            buf.len()
+                        );
+                    }
+                    let total =
+                        pushed_counter.fetch_add(samples.len(), Ordering::Relaxed) + samples.len();
+                    if total % FFT_WINDOW_SIZE == 0 {
+                        log::trace!(
+                            "tuner: ingested {} samples (buffer_len={})",
+                            total,
+                            buf.len()
+                        );
                     }
                     samples.len()
                 };
                 let boxed: Box<ProdType> = Box::new(prod);
                 boxed
-            })?;
+            }
+        })?;
 
         *self.input_tx.lock().unwrap() = Some(tx);
         *self.input_thread.lock().unwrap() = Some(handle);
@@ -151,10 +177,24 @@ impl CpalTunerRuntime {
         // Drain a window of samples
         let samples: Vec<f32> = {
             let mut buf = self.sample_buffer.lock().unwrap();
-            if buf.len() < window {
+            let available = buf.len();
+            if available < window {
+                log::trace!(
+                    "tuner: process_window insufficient samples (have {}, need {})",
+                    available,
+                    window
+                );
                 return None;
             }
-            buf.drain(0..window).collect()
+            let drained: Vec<f32> = buf.drain(0..window).collect();
+            if log::log_enabled!(log::Level::Trace) {
+                log::trace!(
+                    "tuner: process_window drained {} samples (remaining {})",
+                    drained.len(),
+                    buf.len()
+                );
+            }
+            drained
         };
 
         let mut analyzer_guard = self.analyzer.lock().unwrap();
@@ -165,11 +205,15 @@ impl CpalTunerRuntime {
         for s in &samples {
             analyzer.tick(&[*s], &mut out);
         }
+        log::trace!("tuner: fed analyzer with {} samples", samples.len());
 
         // Fetch spectrum data
         let (frequencies, magnitudes) = match analyzer.get_spectrum_data() {
-            Some(d) => d,
-            None => return None,
+            Some(data) => data,
+            None => {
+                log::trace!("tuner: analyzer returned no spectrum yet");
+                return None;
+            }
         };
 
         // Sensor activations
@@ -208,20 +252,43 @@ impl CpalTunerRuntime {
             fft_size: window,
         };
 
+        if log::log_enabled!(log::Level::Trace) {
+            let preview: Vec<f32> = spectrum
+                .current_magnitudes
+                .iter()
+                .cloned()
+                .take(8)
+                .collect();
+            log::trace!(
+                "tuner: spectrum window bins={} max_hold_len={} sample_rate={} preview={:?}",
+                spectrum.current_magnitudes.len(),
+                spectrum.max_magnitudes.len(),
+                spectrum.sample_rate,
+                preview
+            );
+        }
+
         *self.last_spectrum.lock().unwrap() = Some(spectrum.clone());
         Some(spectrum)
     }
 
     fn shutdown(&self) {
+        log::trace!("tuner: shutdown initiated");
         // Stop input stream
         if let Some(tx) = self.input_tx.lock().unwrap().take() {
+            log::trace!("tuner: sending shutdown to input stream");
             let (ack_tx, ack_rx) = mpsc::channel();
             let _ = tx.send(stream::Control::Shutdown(ack_tx));
             let _ = ack_rx.recv_timeout(std::time::Duration::from_millis(500));
+        } else {
+            log::trace!("tuner: no input_tx present at shutdown");
         }
 
         if let Some(handle) = self.input_thread.lock().unwrap().take() {
+            log::trace!("tuner: joining input thread");
             let _ = handle.join();
+        } else {
+            log::trace!("tuner: no input_thread to join");
         }
 
         // Clear analyzer & buffers
@@ -229,6 +296,7 @@ impl CpalTunerRuntime {
         self.sample_buffer.lock().unwrap().clear();
         self.last_spectrum.lock().unwrap().take();
         self.max_hold.lock().unwrap().clear();
+        log::trace!("tuner: shutdown complete (state cleared)");
     }
 }
 
@@ -253,7 +321,13 @@ impl TunerRuntime for CpalTunerRuntime {
     }
 
     fn poll_spectrum(&self) -> Option<SpectrumData> {
-        self.process_window()
+        let res = self.process_window();
+        if res.is_none() {
+            log::trace!("tuner: poll_spectrum -> None");
+        } else {
+            log::trace!("tuner: poll_spectrum -> Some");
+        }
+        res
     }
 }
 

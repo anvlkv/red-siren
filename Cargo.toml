@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
   "crates/audio-system",
-  "crates/backend",
+  "src-tauri",
   "crates/common",
   "crates/frontend",
 ]

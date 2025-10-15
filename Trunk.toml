@@ -2,7 +2,7 @@
 target = "./index.html"
 
 [watch]
-ignore = ["./crates/backend", "./crates/audio-system"]
+ignore = ["./src-tauri", "./crates/audio-system"]
 
 [serve]
 port = 1420

@@ -99,13 +99,15 @@ pub fn CompactMenu(
 
     let card_variant = Signal::derive(move || {
         let place = placement();
-        match place {
-            UiPlacement::Bottom => "rounded-b-none px-4",
-            UiPlacement::Top => "rounded-t-none px-4",
-            UiPlacement::Left => "rounded-l-none py-4",
-            UiPlacement::Right => "rounded-r-none py-4",
-        }
-        .to_string()
+        format!(
+            "{} overflow-visible",
+            match place {
+                UiPlacement::Bottom => "rounded-b-none px-4",
+                UiPlacement::Top => "rounded-t-none px-4",
+                UiPlacement::Left => "rounded-l-none py-4",
+                UiPlacement::Right => "rounded-r-none py-4",
+            }
+        )
     });
 
     let inner_flex_class = Signal::derive(move || {
@@ -133,7 +135,7 @@ pub fn CompactMenu(
                 <div class=inner_flex_class>
                     <A href=RouteId::Home.as_ref() attr:class="contents">
                         <h1
-                            class="block text-3xl italic cursor-pointer hover:underline focus:underline"
+                            class="block md:text-3xl text-xl italic cursor-pointer hover:underline focus:underline"
                             style=title_style
                         >
                             "Red Siren"

@@ -10,7 +10,7 @@ pub use item::*;
 pub fn Menu() -> impl IntoView {
     view! {
         <div class="inline-grid grid-cols-1 gap-4 w-full">
-            <nav class="contents text-3xl">
+            <nav class="contents md:text-3xl text-xl">
                 {DEFAULT_MENU_ITEMS
                     .iter()
                     .copied()

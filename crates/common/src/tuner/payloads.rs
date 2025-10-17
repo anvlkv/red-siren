@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SpectrumData {
-    /// Current frame spectrum values (0-1 normalized)
+    /// Current frame spectrum values in dB (20*log10)
     pub current_magnitudes: Vec<f32>,
 
-    /// Max hold spectrum values (0-1 normalized)
+    /// Max hold spectrum values in dB (20*log10)
     pub max_magnitudes: Vec<f32>,
 
     /// Sensor activation levels from FFT analyzer (0-1)
@@ -38,9 +38,9 @@ pub struct UpdateSensorPayload {
     /// Maximum frequency in Hz
     pub max_frequency: f32,
 
-    /// Minimum magnitude threshold (0-1)
+    /// Minimum magnitude threshold in dB (20*log10)
     pub min_magnitude: f32,
 
-    /// Maximum magnitude threshold (0-1)
+    /// Maximum magnitude threshold in dB (20*log10)
     pub max_magnitude: f32,
 }

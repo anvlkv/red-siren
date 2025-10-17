@@ -90,15 +90,15 @@ pub fn Switch(
         if is_vertical() {
             // Square sizing to match Button square variants
             match size() {
-                UiSize::Sm => "h-10 w-10 text-base",
-                UiSize::Md => "h-12 w-12 text-lg",
-                UiSize::Lg => "h-16 w-16 text-2xl",
+                UiSize::Sm => "h-10 w-10 md:text-base text-sm",
+                UiSize::Md => "h-12 w-12 md:text-lg text-base",
+                UiSize::Lg => "h-16 w-16 md:text-2xl text-lg",
             }
         } else {
             match size() {
-                UiSize::Sm => "h-10 px-4 text-base",
-                UiSize::Md => "h-12 px-5 text-lg",
-                UiSize::Lg => "h-16 px-6 text-2xl",
+                UiSize::Sm => "h-10 px-4 md:text-base text-sm",
+                UiSize::Md => "h-12 px-5 md:text-lg text-base",
+                UiSize::Lg => "h-16 px-6 md:text-2xl text-lg",
             }
         }
     };

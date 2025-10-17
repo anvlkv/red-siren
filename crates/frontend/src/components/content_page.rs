@@ -75,7 +75,7 @@ pub fn ContentPage(
     view! {
         <div class="w-full h-full flex items-center justify-center">
             <Card class=merged_card_class card_animation_direction first_appear=first_appear>
-                <div class="flex items-center justify-between gap-4 mb-6">
+                <div class="flex items-center justify-between flex-wrap gap-4 mb-6">
                     <Show when=move || !no_back_button>
                         <Button
                             size=UiSize::Md
@@ -86,7 +86,7 @@ pub fn ContentPage(
                             <span class="inline-block ml-2 flex-grow text-center">Back</span>
                         </Button>
                     </Show>
-                    <h1 class="block text-5xl text-center italic">{title}</h1>
+                    <h1 class="block md:text-5xl text-2xl text-center italic">{title}</h1>
                 </div>
                 {children()}
             </Card>

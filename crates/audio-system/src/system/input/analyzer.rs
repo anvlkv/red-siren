@@ -1,22 +1,27 @@
 use std::collections::HashMap;
 
 use common::{tuner::Config, NodeKey};
+use fundsp::audiounit::BigBlockAdapter;
 use fundsp::hacker32::prelude::*;
 use spectrum_analyzer::{samples_fft_to_spectrum, windows::hann_window, FrequencyLimit};
 
 use crate::util::hash_str;
+use ringbuf::{
+    traits::{Consumer, Producer, SplitRef},
+    StaticRb,
+};
 
 const ANALYZER_ID: u64 = hash_str(concat!(module_path!(), "::FFTAnalyzer"));
-const ACTIVATION_THRESHOLD: f32 = 0.1; // Minimum magnitude to consider for activation
+const ACTIVATION_THRESHOLD: f32 = 0.1; // Activation gate on normalized 0..1 activation (computed from dB thresholds)
 const ACTIVATION_SMOOTHING: f32 = 0.15; // Smoothing factor for activation updates
 
 pub const FFT_WINDOW_SIZE: usize = 2048; // Power of 2 for FFT, good balance of frequency resolution vs latency
 
 /// Custom AudioUnit that performs FFT analysis and activates sirens
-#[derive(Clone)]
+
 pub struct FFTAnalyzer {
     inner_net: Box<dyn AudioUnit>,
-    window_buffer: Vec<f32>,
+    window_rb: StaticRb<f32, FFT_WINDOW_SIZE>,
     window_size: usize,
     sample_count: usize,
 
@@ -56,7 +61,7 @@ impl FFTAnalyzer {
 
         Self {
             inner_net,
-            window_buffer: vec![0.0; window_size],
+            window_rb: StaticRb::<f32, FFT_WINDOW_SIZE>::default(),
             window_size,
             sample_count: 0,
             // peak_frequency: peak_frequency.clone(),
@@ -69,6 +74,25 @@ impl FFTAnalyzer {
             spectrum_magnitudes: Vec::new(),
             spectrum_frequencies: Vec::new(),
         }
+    }
+
+    /// Update analyzer configuration at runtime (sensor thresholds, sample rate, keys)
+    pub fn set_config(&mut self, config: Config) {
+        // Update stored config and sample rate
+        self.sample_rate = config.sample_rate;
+        self.config = config.clone();
+
+        // Rebuild sensor activation map preserving existing values where possible
+        let mut new_activations = HashMap::new();
+        for sensor in &config.sensor_data {
+            let prev = self
+                .sensor_activations
+                .get(&sensor.key)
+                .copied()
+                .unwrap_or(0.0);
+            new_activations.insert(sensor.key, prev);
+        }
+        self.sensor_activations = new_activations;
     }
 
     /// Get the latest spectrum data (frequencies and magnitudes)
@@ -88,21 +112,50 @@ impl FFTAnalyzer {
         self.sensor_activations.clone()
     }
 
-    fn perform_fft_analysis(&mut self) {
+    /// Analyze a full window of raw input samples by running them through the preamp,
+    /// collecting the processed mono output, and performing FFT on that processed window.
+    pub fn analyze_window(&mut self, samples: &[f32]) {
+        if samples.len() != self.window_size {
+            log::trace!(
+                "fft_analyzer: analyze_window wrong size (got {}, expected {})",
+                samples.len(),
+                self.window_size
+            );
+            return;
+        }
+        // Batch process the window through preamp using BigBlockAdapter
+        let mut adapter = BigBlockAdapter::new(self.inner_net.clone());
+        adapter.set_sample_rate(self.sample_rate as f64);
+
+        // Prepare input/output slices for process_big (mono)
+        let input_slices: [&[f32]; 1] = [samples];
+        let mut processed = vec![0.0f32; self.window_size];
+        let mut output_slices: [&mut [f32]; 1] = [processed.as_mut_slice()];
+
+        adapter.process_big(self.window_size, &input_slices, &mut output_slices);
+
+        self.perform_fft_analysis(&processed);
+    }
+
+    fn perform_fft_analysis(&mut self, window: &[f32]) {
         log::trace!(
             "fft_analyzer: perform_fft_analysis enter window_size={} sample_rate={}",
             self.window_size,
             self.sample_rate
         );
         // Apply Hann window
-        let windowed = hann_window(&self.window_buffer);
+        let windowed = hann_window(window);
 
         // Perform FFT using spectrum-analyzer
+        let scaling = spectrum_analyzer::scaling::combined(&[
+            &spectrum_analyzer::scaling::divide_by_N_sqrt,
+            &spectrum_analyzer::scaling::scale_20_times_log10,
+        ]);
         let spectrum = match samples_fft_to_spectrum(
             &windowed,
             self.sample_rate as u32,
             FrequencyLimit::All,
-            Some(&spectrum_analyzer::scaling::divide_by_N_sqrt),
+            Some(&scaling),
         ) {
             Ok(spectrum) => spectrum,
             Err(e) => {
@@ -127,29 +180,38 @@ impl FFTAnalyzer {
         for sensor in &self.config.sensor_data {
             let mut sensor_activation = 0.0;
 
-            // Check spectrum data for frequencies within sensor range
-            for (frequency, magnitude) in spectrum.data() {
-                let freq = frequency.val();
-                let mag = magnitude.val();
+            // Use FrequencySpectrum methods: sample the sensor range at resolution and take the peak dB
+            let fr_min = spectrum.min_fr().val();
+            let fr_max = spectrum.max_fr().val();
+            let res = spectrum.frequency_resolution();
 
-                // Check if frequency falls within sensor range
-                if freq >= sensor.min_frequency && freq <= sensor.max_frequency {
-                    // Check if magnitude exceeds minimum threshold
-                    if mag >= sensor.min_magnitude {
-                        // Calculate normalized activation (0-1)
-                        let activation = if sensor.max_magnitude > sensor.min_magnitude {
-                            ((mag - sensor.min_magnitude)
-                                / (sensor.max_magnitude - sensor.min_magnitude))
-                                .clamp(0.0, 1.0)
-                        } else if mag >= sensor.min_magnitude {
-                            1.0
-                        } else {
-                            0.0
-                        };
+            let start = sensor.min_frequency.max(fr_min);
+            let end = sensor.max_frequency.min(fr_max);
 
-                        // Use maximum activation across the frequency range
-                        sensor_activation = sensor_activation.max(activation);
+            if end > start {
+                let mut peak_db = f32::NEG_INFINITY;
+                let mut f = start;
+                while f <= end {
+                    let v_db = spectrum.freq_val_exact(f).val();
+                    if v_db > peak_db {
+                        peak_db = v_db;
                     }
+                    f += res;
+                }
+
+                if peak_db.is_finite() {
+                    // Normalize activation (0-1) using dB thresholds
+                    let activation = if sensor.max_magnitude > sensor.min_magnitude {
+                        ((peak_db - sensor.min_magnitude)
+                            / (sensor.max_magnitude - sensor.min_magnitude))
+                            .clamp(0.0, 1.0)
+                    } else if peak_db >= sensor.min_magnitude {
+                        1.0
+                    } else {
+                        0.0
+                    };
+
+                    sensor_activation = sensor_activation.max(activation);
                 }
             }
 
@@ -189,6 +251,23 @@ impl FFTAnalyzer {
     }
 }
 
+impl Clone for FFTAnalyzer {
+    fn clone(&self) -> Self {
+        Self {
+            inner_net: self.inner_net.clone(),
+            window_rb: StaticRb::<f32, FFT_WINDOW_SIZE>::default(),
+            window_size: self.window_size,
+            sample_count: 0,
+            sample_rate: self.sample_rate,
+            config: self.config.clone(),
+            siren_controls: self.siren_controls.clone(),
+            sensor_activations: self.sensor_activations.clone(),
+            spectrum_magnitudes: self.spectrum_magnitudes.clone(),
+            spectrum_frequencies: self.spectrum_frequencies.clone(),
+        }
+    }
+}
+
 impl AudioUnit for FFTAnalyzer {
     fn inputs(&self) -> usize {
         self.inner_net.inputs()
@@ -204,16 +283,57 @@ impl AudioUnit for FFTAnalyzer {
 
         // Collect samples for FFT analysis (from first output channel if available)
         if !output.is_empty() {
-            self.window_buffer[self.sample_count % self.window_size] = output[0];
-            self.sample_count += 1;
+            let sample = output[0];
+            {
+                let mut analyze_window_opt: Option<Vec<f32>> = None;
+                {
+                    let rb = &mut self.window_rb;
+                    let (mut prod, mut cons) = rb.split_ref();
+                    // Try to push; if ring is full, drain one and retry once.
+                    let mut pushed_ok = prod.try_push(sample).is_ok();
+                    if !pushed_ok {
+                        let _: Option<f32> = cons.try_pop();
+                        if self.sample_count > 0 {
+                            self.sample_count -= 1;
+                        }
+                        pushed_ok = prod.try_push(sample).is_ok();
+                    }
+                    if pushed_ok {
+                        self.sample_count += 1;
 
-            // Perform FFT analysis when buffer is full
-            if self.sample_count.is_multiple_of(self.window_size) {
-                log::trace!(
-                    "fft_analyzer: tick window complete samples={}",
-                    self.sample_count
-                );
-                self.perform_fft_analysis();
+                        // Analyze exactly when we have a full window accumulated.
+                        if self.sample_count >= self.window_size {
+                            log::trace!(
+                                "fft_analyzer: tick window complete samples={}",
+                                self.sample_count
+                            );
+                            // Drain window samples in order
+                            let mut window = Vec::with_capacity(self.window_size);
+                            while window.len() < self.window_size {
+                                let v: Option<f32> = cons.try_pop();
+                                if let Some(s) = v {
+                                    window.push(s);
+                                } else {
+                                    break;
+                                }
+                            }
+                            if window.len() == self.window_size {
+                                // Reset fill count after analysis
+                                self.sample_count = 0;
+                                analyze_window_opt = Some(window);
+                            } else {
+                                log::trace!(
+                                    "fft_analyzer: insufficient samples to analyze (have {}, need {})",
+                                    window.len(),
+                                    self.window_size
+                                );
+                            }
+                        }
+                    }
+                }
+                if let Some(window) = analyze_window_opt {
+                    self.perform_fft_analysis(&window);
+                }
             }
         }
     }
@@ -228,16 +348,55 @@ impl AudioUnit for FFTAnalyzer {
                 let simd_val = output.at(0, i);
                 let array = simd_val.to_array();
                 let sample = array[0];
-                self.window_buffer[self.sample_count % self.window_size] = sample;
-                self.sample_count += 1;
+                {
+                    let mut analyze_window_opt: Option<Vec<f32>> = None;
+                    {
+                        let rb = &mut self.window_rb;
+                        let (mut prod, mut cons) = rb.split_ref();
+                        // Try to push; on full buffer drain one and retry once.
+                        let mut pushed_ok = prod.try_push(sample).is_ok();
+                        if !pushed_ok {
+                            let _: Option<f32> = cons.try_pop();
+                            if self.sample_count > 0 {
+                                self.sample_count -= 1;
+                            }
+                            pushed_ok = prod.try_push(sample).is_ok();
+                        }
+                        if pushed_ok {
+                            self.sample_count += 1;
 
-                // Perform FFT analysis when buffer is full
-                if self.sample_count.is_multiple_of(self.window_size) {
-                    log::trace!(
-                        "fft_analyzer: process window complete samples={}",
-                        self.sample_count
-                    );
-                    self.perform_fft_analysis();
+                            // Analyze exactly when we have a full window accumulated.
+                            if self.sample_count >= self.window_size {
+                                log::trace!(
+                                    "fft_analyzer: process window complete samples={}",
+                                    self.sample_count
+                                );
+                                let mut window = Vec::with_capacity(self.window_size);
+                                while window.len() < self.window_size {
+                                    let v: Option<f32> = cons.try_pop();
+                                    if let Some(s) = v {
+                                        window.push(s);
+                                    } else {
+                                        break;
+                                    }
+                                }
+                                if window.len() == self.window_size {
+                                    // Reset fill count after analysis
+                                    self.sample_count = 0;
+                                    analyze_window_opt = Some(window);
+                                } else {
+                                    log::trace!(
+                                        "fft_analyzer: insufficient samples to analyze (have {}, need {})",
+                                        window.len(),
+                                        self.window_size
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    if let Some(window) = analyze_window_opt {
+                        self.perform_fft_analysis(&window);
+                    }
                 }
             }
         }
@@ -251,7 +410,16 @@ impl AudioUnit for FFTAnalyzer {
     fn reset(&mut self) {
         self.inner_net.reset();
         self.sample_count = 0;
-        self.window_buffer.fill(0.0);
+        {
+            let rb = &mut self.window_rb;
+            let (_, mut cons) = rb.split_ref();
+            loop {
+                let v: Option<f32> = cons.try_pop();
+                if v.is_none() {
+                    break;
+                }
+            }
+        }
 
         // Reset all sensor activations
         for activation in self.sensor_activations.values_mut() {

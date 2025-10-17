@@ -22,7 +22,7 @@ pub type NodeType = Pipe<
                 Binop<
                     FrameMul<UInt<UTerm, B1>>,
                     Pipe<Constant<UInt<UTerm, B1>>, Sine<S>>,
-                    Pipe<Pipe<Var, Siren>, SnoopBackend>,
+                    Pipe<Pipe<Var, SnoopBackend>, Siren>,
                 >,
                 Split<UInt<UInt<UTerm, B1>, B1>>,
             >,
@@ -52,7 +52,7 @@ fn create_node(config: &NodeConfig, handles: InnerHandles) -> An<NodeType> {
     } = handles;
 
     let source = sine_hz::<S>(config.base_frequency as S);
-    let siren_activation = An(siren_control) >> siren() >> activation_snoop;
+    let siren_activation = An(siren_control) >> activation_snoop >> siren();
     let formants = (formant::<1>(band_control.clone(), config.base_frequency as f32) * 1.0)
         | (formant::<2>(band_control.clone(), config.base_frequency as f32) * 0.8)
         | (formant::<3>(band_control.clone(), config.base_frequency as f32) * 0.6);

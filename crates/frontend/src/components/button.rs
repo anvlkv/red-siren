@@ -55,15 +55,15 @@ pub fn Button(
 
         let size_cls = if square() {
             match size() {
-                UiSize::Sm => "h-10 w-10 text-xl",
-                UiSize::Md => "h-12 w-12 text-2xl",
-                UiSize::Lg => "h-16 w-16 text-4xl",
+                UiSize::Sm => "h-10 w-10 md:text-xl text-lg",
+                UiSize::Md => "h-12 w-12 md:text-2xl text-xl",
+                UiSize::Lg => "h-16 w-16 md:text-4xl text-2xl",
             }
         } else {
             match size() {
-                UiSize::Sm => "h-10 px-4 text-base",
-                UiSize::Md => "h-12 px-5 text-lg",
-                UiSize::Lg => "h-16 px-6 text-2xl",
+                UiSize::Sm => "h-10 px-4 md:text-base text-sm",
+                UiSize::Md => "h-12 px-5 md:text-lg text-base",
+                UiSize::Lg => "h-16 px-6 md:text-2xl text-lg",
             }
         };
 

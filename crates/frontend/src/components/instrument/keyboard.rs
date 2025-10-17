@@ -492,7 +492,7 @@ fn KeyboardElement(
                 style=band_style
             ></div>
             <Button
-                class="border-none text-thin text-base"
+                class="border-none text-thin md:text-base text-sm"
                 size=UiSize::Sm
                 round=true
                 square=true

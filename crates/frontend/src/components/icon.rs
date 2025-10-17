@@ -24,9 +24,9 @@ pub fn Icon(
 ) -> impl IntoView {
     // Tailwind size class derived from UiSize
     let size_class = move || match size() {
-        UiSize::Sm => "text-3xl",
-        UiSize::Md => "text-4xl",
-        UiSize::Lg => "text-5xl",
+        UiSize::Sm => "md:text-3xl text-xl",
+        UiSize::Md => "md:text-4xl text-2xl",
+        UiSize::Lg => "md:text-5xl text-3xl",
     };
 
     view! {

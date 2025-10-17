@@ -1,6 +1,5 @@
 //! Draggable sensor handles for tuner configuration
 
-use common::orientation::LayoutOrientation;
 use common::tuner::{Config, Layout as TunerLayout, SensorData, UpdateSensorPayload};
 use leptos::callback::Callback;
 use leptos::{html, prelude::*};
@@ -46,68 +45,18 @@ pub fn SensorHandle(
             .and_then(|cfg| {
                 layout.with(|l| {
                     l.as_ref().map(|lay| {
-                        // Get current sensor data from config
                         let current_sensor = cfg.sensor_data.get(index).copied().unwrap_or(sensor);
-
-                        // Position sensors based on their frequency and magnitude ranges
-                        let line = lay.line_position;
-                        let space = lay.space;
-
-                        // Map frequencies to positions along baseline
-                        let min_freq = 20.0_f32;
-                        let max_freq = 20000.0_f32;
-                        let log_min = min_freq.ln();
-                        let log_max = max_freq.ln();
-
-                        // Calculate position based on frequency (along baseline)
-                        let min_freq_pos = ((current_sensor.min_frequency.ln() - log_min)
-                            / (log_max - log_min))
-                            .clamp(0.0, 1.0);
-                        let max_freq_pos = ((current_sensor.max_frequency.ln() - log_min)
-                            / (log_max - log_min))
-                            .clamp(0.0, 1.0);
-
-                        // Calculate position based on magnitude (perpendicular to baseline)
-                        // Magnitude range is 0-1, map to distance from baseline
-                        let max_distance = match lay.orientation {
-                            LayoutOrientation::Horizontal => space.y * 0.4, // Use 40% of vertical space
-                            LayoutOrientation::Vertical => space.x * 0.4, // Use 40% of horizontal space
-                        };
-
-                        let min_mag_distance = current_sensor.min_magnitude * max_distance;
-                        let max_mag_distance = current_sensor.max_magnitude * max_distance;
-
-                        // Scale to actual positions
-                        let line_length = match lay.orientation {
-                            LayoutOrientation::Horizontal => line.1.x - line.0.x,
-                            LayoutOrientation::Vertical => line.1.y - line.0.y,
-                        };
-
-                        let min_offset = min_freq_pos * line_length;
-                        let max_offset = max_freq_pos * line_length;
-
-                        match lay.orientation {
-                            LayoutOrientation::Horizontal => (
-                                Point2 {
-                                    x: line.0.x + min_offset,
-                                    y: line.0.y - min_mag_distance, // Above baseline
-                                },
-                                Point2 {
-                                    x: line.0.x + max_offset,
-                                    y: line.0.y - max_mag_distance, // Above baseline
-                                },
-                            ),
-                            LayoutOrientation::Vertical => (
-                                Point2 {
-                                    x: line.0.x + min_mag_distance, // Right of baseline
-                                    y: line.0.y + min_offset,
-                                },
-                                Point2 {
-                                    x: line.0.x + max_mag_distance, // Right of baseline
-                                    y: line.0.y + max_offset,
-                                },
-                            ),
-                        }
+                        let p_min = cfg.frequency_magnitude_to_space(
+                            lay,
+                            current_sensor.min_frequency,
+                            current_sensor.min_magnitude,
+                        );
+                        let p_max = cfg.frequency_magnitude_to_space(
+                            lay,
+                            current_sensor.max_frequency,
+                            current_sensor.max_magnitude,
+                        );
+                        (p_min, p_max)
                     })
                 })
             })
@@ -125,41 +74,14 @@ pub fn SensorHandle(
                     layout.with(|l| {
                         l.as_ref().and_then(|lay| {
                             cfg.sensor_data.get(index).map(|current_sensor| {
-                                // Calculate position based on current frequency and magnitude
-                                let line = lay.line_position;
-                                let space = lay.space;
-                                let min_freq = 20.0_f32;
-                                let max_freq = 20000.0_f32;
-                                let log_min = min_freq.ln();
-                                let log_max = max_freq.ln();
-
-                                let freq_pos = ((current_sensor.min_frequency.ln() - log_min)
-                                    / (log_max - log_min))
-                                    .clamp(0.0, 1.0);
-
-                                let line_length = match lay.orientation {
-                                    LayoutOrientation::Horizontal => line.1.x - line.0.x,
-                                    LayoutOrientation::Vertical => line.1.y - line.0.y,
-                                };
-
-                                let offset = freq_pos * line_length;
-
-                                // Calculate magnitude distance from baseline
-                                let max_distance = match lay.orientation {
-                                    LayoutOrientation::Horizontal => space.y * 0.4,
-                                    LayoutOrientation::Vertical => space.x * 0.4,
-                                };
-                                let mag_distance = current_sensor.min_magnitude * max_distance;
-
-                                match lay.orientation {
-                                    LayoutOrientation::Horizontal => Position {
-                                        x: (line.0.x + offset) as f64,
-                                        y: (line.0.y - mag_distance) as f64,
-                                    },
-                                    LayoutOrientation::Vertical => Position {
-                                        x: (line.0.x + mag_distance) as f64,
-                                        y: (line.0.y + offset) as f64,
-                                    },
+                                let p = cfg.frequency_magnitude_to_space(
+                                    lay,
+                                    current_sensor.min_frequency,
+                                    current_sensor.min_magnitude,
+                                );
+                                Position {
+                                    x: p.x as f64,
+                                    y: p.y as f64,
                                 }
                             })
                         })
@@ -179,41 +101,14 @@ pub fn SensorHandle(
                     layout.with(|l| {
                         l.as_ref().and_then(|lay| {
                             cfg.sensor_data.get(index).map(|current_sensor| {
-                                // Calculate position based on current frequency and magnitude
-                                let line = lay.line_position;
-                                let space = lay.space;
-                                let min_freq = 20.0_f32;
-                                let max_freq = 20000.0_f32;
-                                let log_min = min_freq.ln();
-                                let log_max = max_freq.ln();
-
-                                let freq_pos = ((current_sensor.max_frequency.ln() - log_min)
-                                    / (log_max - log_min))
-                                    .clamp(0.0, 1.0);
-
-                                let line_length = match lay.orientation {
-                                    LayoutOrientation::Horizontal => line.1.x - line.0.x,
-                                    LayoutOrientation::Vertical => line.1.y - line.0.y,
-                                };
-
-                                let offset = freq_pos * line_length;
-
-                                // Calculate magnitude distance from baseline
-                                let max_distance = match lay.orientation {
-                                    LayoutOrientation::Horizontal => space.y * 0.4,
-                                    LayoutOrientation::Vertical => space.x * 0.4,
-                                };
-                                let mag_distance = current_sensor.max_magnitude * max_distance;
-
-                                match lay.orientation {
-                                    LayoutOrientation::Horizontal => Position {
-                                        x: (line.0.x + offset) as f64,
-                                        y: (line.0.y - mag_distance) as f64,
-                                    },
-                                    LayoutOrientation::Vertical => Position {
-                                        x: (line.0.x + mag_distance) as f64,
-                                        y: (line.0.y + offset) as f64,
-                                    },
+                                let p = cfg.frequency_magnitude_to_space(
+                                    lay,
+                                    current_sensor.max_frequency,
+                                    current_sensor.max_magnitude,
+                                );
+                                Position {
+                                    x: p.x as f64,
+                                    y: p.y as f64,
                                 }
                             })
                         })
@@ -228,7 +123,6 @@ pub fn SensorHandle(
 
     // Click handler for selecting sensor
     let handle_click = {
-        let on_select = on_select.clone();
         move |_| {
             on_select.run(Some(index));
         }
@@ -238,7 +132,7 @@ pub fn SensorHandle(
     let UseDraggableReturn {
         x: min_x,
         y: min_y,
-        position: min_pos_signal,
+        position: _,
         set_position: set_min_position,
         is_dragging: min_dragging,
         style: min_style,
@@ -248,7 +142,6 @@ pub fn SensorHandle(
         UseDraggableOptions::default()
             .initial_value(min_position.get_untracked())
             .on_start({
-                let on_select = on_select.clone();
                 move |_| {
                     // Select this sensor when starting to drag
                     on_select.run(Some(index));
@@ -256,53 +149,18 @@ pub fn SensorHandle(
                 }
             })
             .on_end({
-                let on_update = on_update.clone();
                 move |UseDraggableCallbackArgs { position, .. }| {
-                    // Map position to frequency and magnitude
+                    // Map position to frequency and magnitude using config
                     config.with(|c| {
                         layout.with(|l| {
                             if let (Some(cfg), Some(lay)) = (c.as_ref(), l.as_ref()) {
-                                let line = lay.line_position;
-                                let space = lay.space;
-
-                                // Calculate frequency from position along baseline
-                                let line_position = match lay.orientation {
-                                    LayoutOrientation::Horizontal => {
-                                        ((position.x as f32) - line.0.x) / (line.1.x - line.0.x)
-                                    }
-                                    LayoutOrientation::Vertical => {
-                                        ((position.y as f32) - line.0.y) / (line.1.y - line.0.y)
-                                    }
-                                }
-                                .clamp(0.0, 1.0);
-
-                                // Map to frequency (logarithmic scale)
-                                let min_freq = 20.0_f32;
-                                let max_freq = 20000.0_f32;
-                                let log_min = min_freq.ln();
-                                let log_max = max_freq.ln();
-                                let log_freq = log_min + (log_max - log_min) * line_position;
-                                let freq = log_freq.exp();
-
-                                // Calculate magnitude from distance to baseline
-                                let max_distance = match lay.orientation {
-                                    LayoutOrientation::Horizontal => space.y * 0.4,
-                                    LayoutOrientation::Vertical => space.x * 0.4,
-                                };
-
-                                let distance_from_baseline = match lay.orientation {
-                                    LayoutOrientation::Horizontal => {
-                                        (line.0.y - (position.y as f32)).abs()
-                                    }
-                                    LayoutOrientation::Vertical => {
-                                        ((position.x as f32) - line.0.x).abs()
-                                    }
-                                };
-
-                                let magnitude =
-                                    (distance_from_baseline / max_distance).clamp(0.0, 1.0);
-
-                                // Get current sensor data from config
+                                let (freq, magnitude) = cfg.space_to_frequency_magnitude(
+                                    lay,
+                                    mint::Point2 {
+                                        x: position.x as f32,
+                                        y: position.y as f32,
+                                    },
+                                );
                                 let current_sensor =
                                     cfg.sensor_data.get(index).copied().unwrap_or(sensor);
 
@@ -334,7 +192,7 @@ pub fn SensorHandle(
     let UseDraggableReturn {
         x: max_x,
         y: max_y,
-        position: max_pos_signal,
+        position: _,
         set_position: set_max_position,
         is_dragging: max_dragging,
         style: max_style,
@@ -344,7 +202,6 @@ pub fn SensorHandle(
         UseDraggableOptions::default()
             .initial_value(max_position.get_untracked())
             .on_start({
-                let on_select = on_select.clone();
                 move |_| {
                     // Select this sensor when starting to drag
                     on_select.run(Some(index));
@@ -352,53 +209,18 @@ pub fn SensorHandle(
                 }
             })
             .on_end({
-                let on_update = on_update.clone();
                 move |UseDraggableCallbackArgs { position, .. }| {
-                    // Map position to frequency and magnitude
+                    // Map position to frequency and magnitude using config
                     config.with(|c| {
                         layout.with(|l| {
                             if let (Some(cfg), Some(lay)) = (c.as_ref(), l.as_ref()) {
-                                let line = lay.line_position;
-                                let space = lay.space;
-
-                                // Calculate frequency from position along baseline
-                                let line_position = match lay.orientation {
-                                    LayoutOrientation::Horizontal => {
-                                        ((position.x as f32) - line.0.x) / (line.1.x - line.0.x)
-                                    }
-                                    LayoutOrientation::Vertical => {
-                                        ((position.y as f32) - line.0.y) / (line.1.y - line.0.y)
-                                    }
-                                }
-                                .clamp(0.0, 1.0);
-
-                                // Map to frequency (logarithmic scale)
-                                let min_freq = 20.0_f32;
-                                let max_freq = 20000.0_f32;
-                                let log_min = min_freq.ln();
-                                let log_max = max_freq.ln();
-                                let log_freq = log_min + (log_max - log_min) * line_position;
-                                let freq = log_freq.exp();
-
-                                // Calculate magnitude from distance to baseline
-                                let max_distance = match lay.orientation {
-                                    LayoutOrientation::Horizontal => space.y * 0.4,
-                                    LayoutOrientation::Vertical => space.x * 0.4,
-                                };
-
-                                let distance_from_baseline = match lay.orientation {
-                                    LayoutOrientation::Horizontal => {
-                                        (line.0.y - (position.y as f32)).abs()
-                                    }
-                                    LayoutOrientation::Vertical => {
-                                        ((position.x as f32) - line.0.x).abs()
-                                    }
-                                };
-
-                                let magnitude =
-                                    (distance_from_baseline / max_distance).clamp(0.0, 1.0);
-
-                                // Get current sensor data from config
+                                let (freq, magnitude) = cfg.space_to_frequency_magnitude(
+                                    lay,
+                                    mint::Point2 {
+                                        x: position.x as f32,
+                                        y: position.y as f32,
+                                    },
+                                );
                                 let current_sensor =
                                     cfg.sensor_data.get(index).copied().unwrap_or(sensor);
 
@@ -439,16 +261,18 @@ pub fn SensorHandle(
             <div
                 node_ref=min_handle_ref
                 class=move || format!("{} {}", handle_class, opacity_class())
-                on:click=handle_click.clone()
+                on:click=handle_click
                 style=move || {
-                    let size = sensor_radius.get() * 2.0;
+                    let stroke_pad = 2.0;
+                    let size = sensor_radius.get() * 2.0 + stroke_pad;
+                    let offset = sensor_radius.get() + stroke_pad / 2.0;
                     format!(
                         "position: absolute; {}; width: {}px; height: {}px; transform: translate(-{}px, -{}px);",
                         min_style.get(),
                         size,
                         size,
-                        sensor_radius.get(),
-                        sensor_radius.get(),
+                        offset,
+                        offset,
                     )
                 }
             >
@@ -471,14 +295,7 @@ pub fn SensorHandle(
                         }
                         class="fill-gray/40 dark:fill-cinnabar/40 stroke-gray dark:stroke-cinnabar stroke-1"
                     />
-                    // Outward line pointing left
-                    <line
-                        x1=move || sensor_radius.get()
-                        y1=move || sensor_radius.get()
-                        x2="0"
-                        y2=move || sensor_radius.get()
-                        class="stroke-gray dark:stroke-cinnabar stroke-2"
-                    />
+
                 </svg>
             </div>
 
@@ -486,16 +303,18 @@ pub fn SensorHandle(
             <div
                 node_ref=max_handle_ref
                 class=move || format!("{} {}", handle_class, opacity_class())
-                on:click=handle_click.clone()
+                on:click=handle_click
                 style=move || {
-                    let size = sensor_radius.get() * 2.0;
+                    let stroke_pad = 2.0;
+                    let size = sensor_radius.get() * 2.0 + stroke_pad;
+                    let offset = sensor_radius.get() + stroke_pad / 2.0;
                     format!(
                         "position: absolute; {}; width: {}px; height: {}px; transform: translate(-{}px, -{}px);",
                         max_style.get(),
                         size,
                         size,
-                        sensor_radius.get(),
-                        sensor_radius.get(),
+                        offset,
+                        offset,
                     )
                 }
             >
@@ -518,14 +337,7 @@ pub fn SensorHandle(
                         }
                         class="fill-gray/40 dark:fill-cinnabar/40 stroke-gray dark:stroke-cinnabar stroke-1"
                     />
-                    // Outward line pointing right
-                    <line
-                        x1=move || sensor_radius.get()
-                        y1=move || sensor_radius.get()
-                        x2=move || sensor_radius.get() * 2.0
-                        y2=move || sensor_radius.get()
-                        class="stroke-gray dark:stroke-cinnabar stroke-2"
-                    />
+
                 </svg>
             </div>
 
@@ -578,9 +390,9 @@ pub fn SensorHandles(
                                     index=index
                                     config=config
                                     layout=layout
-                                    on_update=on_update.clone()
+                                    on_update=on_update
                                     is_active=is_active
-                                    on_select=on_select.clone()
+                                    on_select=on_select
                                 />
                             }
                         })

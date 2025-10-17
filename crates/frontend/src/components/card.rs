@@ -38,7 +38,7 @@ pub fn Card(
 ) -> impl IntoView {
     // Base layout and typography colors tuned to the existing theme
     let base = format!(
-        "text-black dark:text-red \
+        "max-h-svh max-w-svw overflow-auto text-black dark:text-red \
                 transition-all duration-200 \
                 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 \
                 relative preserve-3d will-change-transform {}",

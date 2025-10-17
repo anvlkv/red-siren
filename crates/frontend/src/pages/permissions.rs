@@ -30,16 +30,16 @@ pub fn Permissions() -> impl IntoView {
     view! {
         <ContentPage title="Permissions" card_animation_direction=UiPlacement::Left>
             <div class="flex flex-col items-center justify-center gap-6">
-                <h2 class="text-2xl text-bold max-w-md lg:max-w-[42ch] italic">
+                <h2 class="md:text-2xl text-lg text-bold max-w-md lg:max-w-[42ch] italic">
                     "Why grant microphone access"
                 </h2>
-                <p class="text-xl max-w-md lg:max-w-[42ch] ">
+                <p class="md:text-xl text-base max-w-md lg:max-w-[42ch] ">
                     "Granting mic access lets Red Siren respond to your noise in real time. Audio is processed locally — nothing is recorded or sent off‑device. It can run without mic access, but tuning and responsiveness will be reduced"
                 </p>
-                <h3 class="text-2xl text-bold max-w-md lg:max-w-[42ch] italic">
+                <h3 class="md:text-2xl text-lg text-bold max-w-md lg:max-w-[42ch] italic">
                     "How to enable it"
                 </h3>
-                <p class="text-xl max-w-md lg:max-w-[42ch] ">
+                <p class="md:text-xl text-base max-w-md lg:max-w-[42ch] ">
                     "When the system prompt appears, choose Allow. If you previously denied access, re-enable it in System Settings → Privacy & Security → Microphone for the app, then restart the app and try again."
                 </p>
                 <div class="grid grid-cols-2 justify-items-stretch gap-4 w-full">
@@ -59,7 +59,7 @@ pub fn Permissions() -> impl IntoView {
                         attr:aria-label="Allow mic access"
                         disabled=prompted
                     >
-                        <span class="absolute left-4 text-4xl">
+                        <span class="absolute left-4 md:text-4xl text-2xl">
                             <Icon name="mic" />
                         </span>
                         "Allow"

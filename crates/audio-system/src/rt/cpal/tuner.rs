@@ -200,12 +200,9 @@ impl CpalTunerRuntime {
         let mut analyzer_guard = self.analyzer.lock().unwrap();
         let analyzer = analyzer_guard.as_mut()?;
 
-        // Feed samples sample-by-sample (analyzer expects tick-level input)
-        let mut out = [0.0f32];
-        for s in &samples {
-            analyzer.tick(&[*s], &mut out);
-        }
-        log::trace!("tuner: fed analyzer with {} samples", samples.len());
+        // Analyze full window (preamp + FFT) using BigBlockAdapter
+        analyzer.analyze_window(&samples);
+        log::trace!("tuner: analyzed window of {} samples", samples.len());
 
         // Fetch spectrum data
         let (frequencies, magnitudes) = match analyzer.get_spectrum_data() {
@@ -233,10 +230,12 @@ impl CpalTunerRuntime {
         } else {
             for (i, &cur) in magnitudes.iter().enumerate() {
                 if i < max_hold.len() {
-                    max_hold[i] *= self.max_hold_decay;
-                    if cur > max_hold[i] {
-                        max_hold[i] = cur;
-                    }
+                    // Decay and compare in linear domain (dB -> linear -> decay/compare -> dB)
+                    let cur_lin = (10.0f32).powf(cur / 20.0);
+                    let mut prev_lin = (10.0f32).powf(max_hold[i] / 20.0);
+                    prev_lin *= self.max_hold_decay;
+                    let new_lin = prev_lin.max(cur_lin);
+                    max_hold[i] = 20.0 * new_lin.log10();
                 }
             }
         }
@@ -315,9 +314,17 @@ impl TunerRuntime for CpalTunerRuntime {
     }
 
     fn update_config(&self, config: &TunerConfig) {
-        let mut cfg = self.config.lock().unwrap();
-        *cfg = config.clone();
-        // NOTE: Analyzer rebuild deferred (could be added if config materially affects internals).
+        {
+            let mut cfg = self.config.lock().unwrap();
+            *cfg = config.clone();
+        }
+        // Propagate to running analyzer without restart
+        if let Some(analyzer) = self.analyzer.lock().unwrap().as_mut() {
+            analyzer.set_config(config.clone());
+            if let Some(sr) = *self.sample_rate.lock().unwrap() {
+                analyzer.set_sample_rate(sr as f64);
+            }
+        }
     }
 
     fn poll_spectrum(&self) -> Option<SpectrumData> {

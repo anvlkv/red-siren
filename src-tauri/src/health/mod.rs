@@ -161,6 +161,9 @@ fn maybe_toggle_windows(
                 .show()
                 .map_err(|e| HealthError::WindowOp { op: "show_main".into(), message: e.to_string() })?;
 
+            #[cfg(debug_assertions)]
+            main_window.open_devtools();
+
             #[cfg(not(debug_assertions))]
             main_window
                 .set_focus()

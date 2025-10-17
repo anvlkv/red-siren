@@ -1,4 +1,4 @@
-use mint::{Point2, Vector2};
+use mint::Point2;
 use serde::{Deserialize, Serialize};
 
 use crate::tuner::layout::Layout;
@@ -17,8 +17,8 @@ pub struct SensorData {
     pub key: NodeKey,
     pub min_frequency: f32, // Hz
     pub max_frequency: f32, // Hz
-    pub min_magnitude: f32, // Linear magnitude threshold
-    pub max_magnitude: f32, // Linear magnitude threshold
+    pub min_magnitude: f32, // dB (20*log10) threshold
+    pub max_magnitude: f32, // dB (20*log10) threshold
 }
 
 impl Config {
@@ -28,31 +28,45 @@ impl Config {
         frequency: f32,
         magnitude: f32,
     ) -> mint::Point2<f32> {
-        let Vector2 {
-            x: space_width,
-            y: space_height,
-        } = layout.space;
-
-        // Map frequency to 0-1 range based on sample rate
+        // Normalize inputs (log-frequency mapping: 20Hz..Nyquist)
         let nyquist = self.sample_rate / 2.0;
-        let freq_ratio = (frequency / nyquist).clamp(0.0, 1.0);
+        let f_min = 20.0_f32;
+        let log_min = f_min.ln();
+        let log_max = nyquist.ln();
+        let freq_ratio =
+            ((frequency.max(f_min).ln() - log_min) / (log_max - log_min)).clamp(0.0, 1.0);
+        let min_db = -120.0_f32;
+        let max_db = 0.0_f32;
+        let mag_norm = ((magnitude - min_db) / (max_db - min_db)).clamp(0.0, 1.0);
 
-        // Magnitude is already normalized 0-1
+        // Anchor to baseline with sensor-radius margins and full perpendicular range
+        let (start, end) = layout.line_position;
+        let r = layout.sensor_radius;
 
-        let (x, y) = match layout.orientation {
-            crate::orientation::LayoutOrientation::Vertical => {
-                let x = magnitude * space_width;
-                let y = freq_ratio * space_height;
-                (x, y)
-            }
+        match layout.orientation {
             crate::orientation::LayoutOrientation::Horizontal => {
-                let x = freq_ratio * space_width;
-                let y = magnitude * space_height;
-                (x, y)
-            }
-        };
+                // Along baseline: left -> right, inset by radius on both ends
+                let line_len = end.x - start.x;
+                let x = (start.x + r) + freq_ratio * (line_len - 2.0 * r);
 
-        Point2 { x, y }
+                // Perpendicular: from baseline upward to top
+                let avail_up = start.y;
+                let y = start.y - mag_norm * avail_up;
+
+                Point2 { x, y }
+            }
+            crate::orientation::LayoutOrientation::Vertical => {
+                // Along baseline: top -> bottom, inset by radius on both ends
+                let line_len = end.y - start.y;
+                let y = (start.y + r) + freq_ratio * (line_len - 2.0 * r);
+
+                // Perpendicular: from baseline rightward to screen edge
+                let avail_right = layout.space.x - start.x;
+                let x = start.x + mag_norm * avail_right;
+
+                Point2 { x, y }
+            }
+        }
     }
 
     pub fn space_to_frequency_magnitude(
@@ -60,34 +74,42 @@ impl Config {
         layout: &Layout,
         point: mint::Point2<f32>,
     ) -> (f32, f32) {
-        let Vector2 {
-            x: space_width,
-            y: space_height,
-        } = layout.space;
-
-        if space_width == 0.0 || space_height == 0.0 {
-            return (0.0, 0.0);
-        }
-
-        let x = point.x;
-        let y = point.y;
-
         let nyquist = self.sample_rate / 2.0;
+        let (start, end) = layout.line_position;
+        let r = layout.sensor_radius;
 
-        let (magnitude, freq_ratio) = match layout.orientation {
-            crate::orientation::LayoutOrientation::Vertical => {
-                let magnitude = (x / space_width).clamp(0.0, 1.0);
-                let freq_ratio = (y / space_height).clamp(0.0, 1.0);
-                (magnitude, freq_ratio)
-            }
+        let (freq_ratio, mag_norm) = match layout.orientation {
             crate::orientation::LayoutOrientation::Horizontal => {
-                let freq_ratio = (x / space_width).clamp(0.0, 1.0);
-                let magnitude = (y / space_height).clamp(0.0, 1.0);
-                (magnitude, freq_ratio)
+                // Along baseline with radius margins
+                let line_len = end.x - start.x;
+                let freq_ratio = ((point.x - (start.x + r)) / (line_len - 2.0 * r)).clamp(0.0, 1.0);
+
+                // Perpendicular: baseline upward to top
+                let avail_up = start.y;
+                let mag_norm = ((start.y - point.y) / avail_up).clamp(0.0, 1.0);
+
+                (freq_ratio, mag_norm)
+            }
+            crate::orientation::LayoutOrientation::Vertical => {
+                // Along baseline with radius margins
+                let line_len = end.y - start.y;
+                let freq_ratio = ((point.y - (start.y + r)) / (line_len - 2.0 * r)).clamp(0.0, 1.0);
+
+                // Perpendicular: baseline rightward to screen edge
+                let avail_right = layout.space.x - start.x;
+                let mag_norm = ((point.x - start.x) / avail_right).clamp(0.0, 1.0);
+
+                (freq_ratio, mag_norm)
             }
         };
 
-        let frequency = freq_ratio * nyquist;
+        let f_min = 20.0_f32;
+        let log_min = f_min.ln();
+        let log_max = nyquist.ln();
+        let frequency = (log_min + freq_ratio * (log_max - log_min)).exp();
+        let min_db = -120.0_f32;
+        let max_db = 0.0_f32;
+        let magnitude = min_db + mag_norm * (max_db - min_db);
 
         (frequency, magnitude)
     }
@@ -128,9 +150,9 @@ fn generate_default_sensors(
     let log_max = max_freq.ln();
     let log_step = (log_max - log_min) / (total_keys as f32);
 
-    // Default magnitude thresholds
-    let default_min_magnitude = 0.01;
-    let default_max_magnitude = 0.8;
+    // Default magnitude thresholds (dB)
+    let default_min_magnitude = -80.0;
+    let default_max_magnitude = -20.0;
 
     // Generate sensors for each key
     for group_idx in 0..layout.num_groups.get() {

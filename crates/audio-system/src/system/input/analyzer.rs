@@ -178,42 +178,25 @@ impl FFTAnalyzer {
 
         // Process sensor activations
         for sensor in &self.config.sensor_data {
-            let mut sensor_activation = 0.0;
+            // activation computed below
 
-            // Use FrequencySpectrum methods: sample the sensor range at resolution and take the peak dB
-            let fr_min = spectrum.min_fr().val();
-            let fr_max = spectrum.max_fr().val();
-            let res = spectrum.frequency_resolution();
+            // Use FrequencySpectrum: closest bin at sensor center frequency
+            let center = 0.5 * (sensor.min_frequency + sensor.max_frequency);
+            let (f, v) = spectrum.freq_val_closest(center);
+            let freq = f.val();
+            let peak_db = v.val();
 
-            let start = sensor.min_frequency.max(fr_min);
-            let end = sensor.max_frequency.min(fr_max);
+            // Activate only if the closest bin actually lies inside the sensor band
+            let in_band = freq >= sensor.min_frequency && freq <= sensor.max_frequency;
 
-            if end > start {
-                let mut peak_db = f32::NEG_INFINITY;
-                let mut f = start;
-                while f <= end {
-                    let v_db = spectrum.freq_val_exact(f).val();
-                    if v_db > peak_db {
-                        peak_db = v_db;
-                    }
-                    f += res;
-                }
+            // Binary activation: 1.0 if in-band and dB >= min threshold, else 0.0
+            let activation = if in_band && peak_db >= sensor.min_magnitude {
+                1.0
+            } else {
+                0.0
+            };
 
-                if peak_db.is_finite() {
-                    // Normalize activation (0-1) using dB thresholds
-                    let activation = if sensor.max_magnitude > sensor.min_magnitude {
-                        ((peak_db - sensor.min_magnitude)
-                            / (sensor.max_magnitude - sensor.min_magnitude))
-                            .clamp(0.0, 1.0)
-                    } else if peak_db >= sensor.min_magnitude {
-                        1.0
-                    } else {
-                        0.0
-                    };
-
-                    sensor_activation = sensor_activation.max(activation);
-                }
-            }
+            // use activation directly (no intermediate variable)
 
             // Apply smoothing to prevent jitter
             let current_activation = self
@@ -221,8 +204,8 @@ impl FFTAnalyzer {
                 .get(&sensor.key)
                 .copied()
                 .unwrap_or(0.0);
-            let smoothed_activation = current_activation
-                + (sensor_activation - current_activation) * ACTIVATION_SMOOTHING;
+            let smoothed_activation =
+                current_activation + (activation - current_activation) * ACTIVATION_SMOOTHING;
 
             // Update stored activation
             self.sensor_activations

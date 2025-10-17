@@ -42,12 +42,13 @@ impl Config {
         // Anchor to baseline with sensor-radius margins and full perpendicular range
         let (start, end) = layout.line_position;
         let r = layout.sensor_radius;
+        let inset = r + 0.5;
 
         match layout.orientation {
             crate::orientation::LayoutOrientation::Horizontal => {
                 // Along baseline: left -> right, inset by radius on both ends
                 let line_len = end.x - start.x;
-                let x = (start.x + r) + freq_ratio * (line_len - 2.0 * r);
+                let x = (start.x + inset) + freq_ratio * (line_len - 2.0 * inset);
 
                 // Perpendicular: from baseline upward to top
                 let avail_up = start.y;
@@ -58,7 +59,7 @@ impl Config {
             crate::orientation::LayoutOrientation::Vertical => {
                 // Along baseline: top -> bottom, inset by radius on both ends
                 let line_len = end.y - start.y;
-                let y = (start.y + r) + freq_ratio * (line_len - 2.0 * r);
+                let y = (start.y + inset) + freq_ratio * (line_len - 2.0 * inset);
 
                 // Perpendicular: from baseline rightward to screen edge
                 let avail_right = layout.space.x - start.x;
@@ -77,12 +78,14 @@ impl Config {
         let nyquist = self.sample_rate / 2.0;
         let (start, end) = layout.line_position;
         let r = layout.sensor_radius;
+        let inset = r + 0.5;
 
         let (freq_ratio, mag_norm) = match layout.orientation {
             crate::orientation::LayoutOrientation::Horizontal => {
                 // Along baseline with radius margins
                 let line_len = end.x - start.x;
-                let freq_ratio = ((point.x - (start.x + r)) / (line_len - 2.0 * r)).clamp(0.0, 1.0);
+                let freq_ratio =
+                    ((point.x - (start.x + inset)) / (line_len - 2.0 * inset)).clamp(0.0, 1.0);
 
                 // Perpendicular: baseline upward to top
                 let avail_up = start.y;
@@ -93,7 +96,8 @@ impl Config {
             crate::orientation::LayoutOrientation::Vertical => {
                 // Along baseline with radius margins
                 let line_len = end.y - start.y;
-                let freq_ratio = ((point.y - (start.y + r)) / (line_len - 2.0 * r)).clamp(0.0, 1.0);
+                let freq_ratio =
+                    ((point.y - (start.y + inset)) / (line_len - 2.0 * inset)).clamp(0.0, 1.0);
 
                 // Perpendicular: baseline rightward to screen edge
                 let avail_right = layout.space.x - start.x;

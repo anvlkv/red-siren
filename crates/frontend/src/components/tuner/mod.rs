@@ -158,35 +158,24 @@ pub fn Tuner() -> impl IntoView {
 
     // Derived signals for visualization
     let config_signal = Signal::derive(move || context.config.get());
-    let layout_signal: Signal<Option<TunerLayout>> = Signal::derive(move || tuner_layout());
     let spectrum_signal = Signal::derive(move || context.spectrum.get());
     let active_sensor_signal = Signal::derive(move || context.active_sensor.get());
+
+    let tuner_layout = Signal::derive(tuner_layout);
 
     view! {
         <div class="relative w-full h-full overflow-hidden">
             // Spectrum visualization layer
-            <SpectrumVisualizer spectrum=spectrum_signal layout=layout_signal />
+            <SpectrumVisualizer spectrum=spectrum_signal layout=tuner_layout />
 
             // Sensor handles layer
             <SensorHandles
                 config=config_signal
-                layout=Signal::derive(move || tuner_layout())
+                layout=tuner_layout
                 on_update=on_update_sensor
                 active_sensor=active_sensor_signal
                 on_select=on_select_sensor
             />
-
-            // Info overlay (optional - shows current active sensor)
-            <Show when=move || active_sensor_signal.get().is_some()>
-                <div class="absolute top-4 left-4 p-2 bg-white/80 dark:bg-black/80 rounded-md">
-                    <span class="text-xs text-gray dark:text-cinnabar">
-                        "Sensor "
-                        {move || {
-                            active_sensor_signal.get().map(|i| i.to_string()).unwrap_or_default()
-                        }}
-                    </span>
-                </div>
-            </Show>
         </div>
     }
 }

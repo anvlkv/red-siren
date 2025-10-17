@@ -267,7 +267,7 @@ pub fn SensorHandle(
                     let size = sensor_radius.get() * 2.0 + stroke_pad;
                     let offset = sensor_radius.get() + stroke_pad / 2.0;
                     format!(
-                        "position: absolute; {}; width: {}px; height: {}px; transform: translate(-{}px, -{}px);",
+                        "position: absolute; {}; width: {}px; height: {}px; transform: translate(-{}px, -{}px); overflow: visible;",
                         min_style.get(),
                         size,
                         size,
@@ -276,7 +276,7 @@ pub fn SensorHandle(
                     )
                 }
             >
-                <svg class="w-full h-full pointer-events-none">
+                <svg class="w-full h-full pointer-events-none" style="overflow: visible;">
                     // Semi-circle facing left
                     <path
                         d=move || {
@@ -309,7 +309,7 @@ pub fn SensorHandle(
                     let size = sensor_radius.get() * 2.0 + stroke_pad;
                     let offset = sensor_radius.get() + stroke_pad / 2.0;
                     format!(
-                        "position: absolute; {}; width: {}px; height: {}px; transform: translate(-{}px, -{}px);",
+                        "position: absolute; {}; width: {}px; height: {}px; transform: translate(-{}px, -{}px); overflow: visible;",
                         max_style.get(),
                         size,
                         size,
@@ -318,7 +318,7 @@ pub fn SensorHandle(
                     )
                 }
             >
-                <svg class="w-full h-full pointer-events-none">
+                <svg class="w-full h-full pointer-events-none" style="overflow: visible;">
                     // Semi-circle facing right
                     <path
                         d=move || {

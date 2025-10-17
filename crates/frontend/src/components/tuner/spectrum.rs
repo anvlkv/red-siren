@@ -68,11 +68,18 @@ pub fn SpectrumVisualizer(
                 />
             </Show>
 
+            // Sensor activation bars (highest opacity - 60%)
+            <Show when=move || spectrum().is_some() && layout().is_some()>
+                <g class="fill-gray/30 dark:fill-cinnabar/60">
+                    <ActivationBars activations=activations layout=layout baseline=baseline />
+                </g>
+            </Show>
+
             // Max hold layer (lowest opacity - 10%)
             <Show when=move || max_path.get().is_some()>
                 <path
                     d=move || max_path.get().unwrap_or_default()
-                    class="fill-gray/10 dark:fill-cinnabar/10 stroke-gray/20 dark:stroke-cinnabar/20 stroke-1"
+                    class="fill-gray/40 dark:fill-cinnabar/10 stroke-gray/20 dark:stroke-cinnabar/20 stroke-1"
                 />
             </Show>
 
@@ -80,15 +87,8 @@ pub fn SpectrumVisualizer(
             <Show when=move || current_path.get().is_some()>
                 <path
                     d=move || current_path.get().unwrap_or_default()
-                    class="fill-gray/20 dark:fill-cinnabar/20 stroke-gray/40 dark:stroke-cinnabar/40 stroke-1"
+                    class="fill-gray/70 dark:fill-cinnabar/20 stroke-gray/40 dark:stroke-cinnabar/40 stroke-1"
                 />
-            </Show>
-
-            // Sensor activation bars (highest opacity - 60%)
-            <Show when=move || spectrum().is_some() && layout().is_some()>
-                <g class="fill-gray/60 dark:fill-cinnabar/60">
-                    <ActivationBars activations=activations layout=layout baseline=baseline />
-                </g>
             </Show>
         </svg>
     }
@@ -162,7 +162,6 @@ fn ActivationBars(
                     .as_ref()
                     .unwrap()
                     .iter()
-                    .rev()
                     .enumerate()
                     .map(|(i, &activation)| {
                         let layout = *layout().as_ref().unwrap();

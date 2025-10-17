@@ -85,6 +85,9 @@ pub fn tuner_update_sensor(
                 event: common::events::tuner::CONFIG.to_string(),
                 message: e.to_string(),
             })?;
+
+        // Update runtime with new config if it's running
+        state.update_runtime_config(&config);
     }
 
     Ok(())
@@ -108,11 +111,14 @@ pub fn tuner_reset_config(state: State<'_, TunerState>, app: AppHandle) -> Resul
     state.max_hold_buffer.write().clear();
 
     // Emit config update event
-    app.emit(common::events::tuner::CONFIG, new_config)
+    app.emit(common::events::tuner::CONFIG, new_config.clone())
         .map_err(|e| TunerError::Emit {
             event: common::events::tuner::CONFIG.to_string(),
             message: e.to_string(),
         })?;
+
+    // Update runtime with new config if it's running
+    state.update_runtime_config(&new_config);
 
     Ok(())
 }

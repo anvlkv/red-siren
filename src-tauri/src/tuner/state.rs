@@ -156,4 +156,11 @@ impl TunerState {
     pub fn start_spectrum_streaming(&self, _app: AppHandle) -> Result<()> {
         Ok(())
     }
+
+    /// Update runtime configuration if runtime is active
+    pub fn update_runtime_config(&self, config: &Config) {
+        if let Some(runtime) = self.runtime.read().as_ref() {
+            runtime.update_config(config);
+        }
+    }
 }

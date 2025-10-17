@@ -19,28 +19,34 @@ pub type NodeType = Pipe<
     Pipe<
         Pipe<
             Pipe<
-                Binop<
-                    FrameMul<UInt<UTerm, B1>>,
-                    Pipe<Constant<UInt<UTerm, B1>>, Sine<S>>,
-                    Pipe<Pipe<Var, SnoopBackend>, Siren>,
+                Pipe<
+                    Binop<
+                        FrameMul<UInt<UTerm, B1>>,
+                        Pipe<Constant<UInt<UTerm, B1>>, Sine<S>>,
+                        Pipe<Pipe<Pipe<Var, Follow<S>>, SnoopBackend>, Siren>,
+                    >,
+                    Split<UInt<UInt<UTerm, B1>, B1>>,
                 >,
-                Split<UInt<UInt<UTerm, B1>, B1>>,
-            >,
-            Stack<
                 Stack<
-                    Unop<Formant<1>, FrameMulScalar<UInt<UTerm, B1>>>,
-                    Unop<Formant<2>, FrameMulScalar<UInt<UTerm, B1>>>,
+                    Stack<
+                        Unop<Formant<1>, FrameMulScalar<UInt<UTerm, B1>>>,
+                        Unop<Formant<2>, FrameMulScalar<UInt<UTerm, B1>>>,
+                    >,
+                    Unop<Formant<3>, FrameMulScalar<UInt<UTerm, B1>>>,
                 >,
-                Unop<Formant<3>, FrameMulScalar<UInt<UTerm, B1>>>,
             >,
+            Unop<Join<UInt<UInt<UTerm, B1>, B1>>, FrameMulScalar<UInt<UTerm, B1>>>,
         >,
-        Unop<Join<UInt<UInt<UTerm, B1>, B1>>, FrameMulScalar<UInt<UTerm, B1>>>,
+        FixedSvf<S, BellMode<S>>,
     >,
     SnoopBackend,
 >;
 
 pub const ACTIVATION_SNOOP_CAPACITY: usize = 16;
 pub const OUTPUT_SNOOP_CAPACITY: usize = 256;
+const FOLLOW_RESPONSE_TIME_S: f32 = 1.0 / 75.0;
+const NODE_BELL_Q: f32 = 1.0;
+const NODE_BELL_GAIN_DB: f32 = 1.7;
 
 fn create_node(config: &NodeConfig, handles: InnerHandles) -> An<NodeType> {
     let InnerHandles {
@@ -52,7 +58,8 @@ fn create_node(config: &NodeConfig, handles: InnerHandles) -> An<NodeType> {
     } = handles;
 
     let source = sine_hz::<S>(config.base_frequency as S);
-    let siren_activation = An(siren_control) >> activation_snoop >> siren();
+    let siren_activation =
+        An(siren_control) >> follow(FOLLOW_RESPONSE_TIME_S) >> activation_snoop >> siren();
     let formants = (formant::<1>(band_control.clone(), config.base_frequency as f32) * 1.0)
         | (formant::<2>(band_control.clone(), config.base_frequency as f32) * 0.8)
         | (formant::<3>(band_control.clone(), config.base_frequency as f32) * 0.6);
@@ -63,6 +70,8 @@ fn create_node(config: &NodeConfig, handles: InnerHandles) -> An<NodeType> {
         >> split::<U3>()
         >> formants
         >> (join::<U3>() * 0.104167)
+        // Node bell filter
+        >> bell_hz(config.base_frequency as S, NODE_BELL_Q, NODE_BELL_GAIN_DB)
         // Visualize
         >> output_snoop
 }

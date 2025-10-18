@@ -20,19 +20,22 @@ Frequencies outside table range are clamped to nearest endpoint.
 
 pub type PreampType = Pipe<
     Pipe<
-        Split<U5>,
-        Stack<
+        Pipe<
+            Split<U5>,
             Stack<
                 Stack<
-                    Stack<FixedSvf<f32, BellMode<f32>>, FixedSvf<f32, BellMode<f32>>>,
+                    Stack<
+                        Stack<FixedSvf<f32, BellMode<f32>>, FixedSvf<f32, BellMode<f32>>>,
+                        FixedSvf<f32, BellMode<f32>>,
+                    >,
                     FixedSvf<f32, BellMode<f32>>,
                 >,
-                FixedSvf<f32, BellMode<f32>>,
+                Pass,
             >,
-            Pass,
         >,
+        Join<U5>,
     >,
-    Join<U5>,
+    Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>,
 >;
 
 pub fn create_sensors_preamp() -> An<PreampType> {
@@ -83,6 +86,7 @@ pub fn create_sensors_preamp() -> An<PreampType> {
             | bell_hz(freq_10khz, q_10khz, gain_10khz_linear)
             | pass())
         >> join::<U5>()
+        >> mul(1.0 / 5.0)
 }
 
 #[cfg(test)]

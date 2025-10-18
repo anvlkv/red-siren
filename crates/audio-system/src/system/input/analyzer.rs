@@ -18,17 +18,11 @@ const ACTIVATION_SMOOTHING: f32 = 0.15; // Smoothing factor for activation updat
 pub const FFT_WINDOW_SIZE: usize = 2048; // Power of 2 for FFT, good balance of frequency resolution vs latency
 
 /// Custom AudioUnit that performs FFT analysis and activates sirens
-
 pub struct FFTAnalyzer {
-    inner_net: Box<dyn AudioUnit>,
+    inner_net: BigBlockAdapter,
     window_rb: StaticRb<f32, FFT_WINDOW_SIZE>,
     window_size: usize,
     sample_count: usize,
-
-    // Analysis results
-    // peak_frequency: Arc<Shared>,
-    // spectral_centroid: Arc<Shared>,
-    // rms_level: Arc<Shared>,
 
     // Configuration and controls
     sample_rate: f32,
@@ -60,7 +54,7 @@ impl FFTAnalyzer {
         }
 
         Self {
-            inner_net,
+            inner_net: BigBlockAdapter::new(inner_net),
             window_rb: StaticRb::<f32, FFT_WINDOW_SIZE>::default(),
             window_size,
             sample_count: 0,
@@ -123,16 +117,16 @@ impl FFTAnalyzer {
             );
             return;
         }
-        // Batch process the window through preamp using BigBlockAdapter
-        let mut adapter = BigBlockAdapter::new(self.inner_net.clone());
-        adapter.set_sample_rate(self.sample_rate as f64);
+
+        self.inner_net.set_sample_rate(self.sample_rate as f64);
 
         // Prepare input/output slices for process_big (mono)
         let input_slices: [&[f32]; 1] = [samples];
         let mut processed = vec![0.0f32; self.window_size];
         let mut output_slices: [&mut [f32]; 1] = [processed.as_mut_slice()];
 
-        adapter.process_big(self.window_size, &input_slices, &mut output_slices);
+        self.inner_net
+            .process_big(self.window_size, &input_slices, &mut output_slices);
 
         self.perform_fft_analysis(&processed);
     }

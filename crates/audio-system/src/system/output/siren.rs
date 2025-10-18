@@ -47,36 +47,37 @@ impl AudioNode for Siren {
         match self.state {
             SirenState::Idle => {
                 // Silent and frozen. Start only when a > 0 at boundary.
-                out = 0.0;
                 if a > 0.0 {
                     self.state = SirenState::Active;
                 }
             }
             SirenState::Active => {
                 // Emit sine. If a <= 0, finish to next boundary (Tail).
-                out = s;
-
-                if a <= 0.0 {
-                    self.state = SirenState::Tail;
-                    // Preserve direction of travel for the tail.
-                    self.tail_dir_sign = if self.last_a >= 0.0 { 1.0 } else { -1.0 };
-                }
-
-                // If we hit a boundary while non-positive gate, stop immediately.
                 if crossed && a <= 0.0 {
+                    // Hit boundary while non-positive gate, stop immediately.
                     self.state = SirenState::Idle;
                     self.phase = 0.0;
                     out = 0.0;
+                } else {
+                    out = s;
+
+                    if a <= 0.0 {
+                        self.state = SirenState::Tail;
+                        // Preserve direction of travel for the tail.
+                        self.tail_dir_sign = if self.last_a >= 0.0 { 1.0 } else { -1.0 };
+                    }
                 }
             }
             SirenState::Tail => {
                 // Keep emitting until next zero crossing, then stop.
-                out = s;
-
                 if crossed {
+                    // Tail complete, transition to idle without emitting
                     self.state = SirenState::Idle;
                     self.phase = 0.0;
                     out = 0.0;
+                } else {
+                    // Continue tail emission
+                    out = s;
                 }
             }
         }

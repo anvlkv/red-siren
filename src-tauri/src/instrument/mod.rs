@@ -11,12 +11,9 @@ use crate::setup::WindowState;
 
 pub use commands::*;
 
-pub type InstrumentState = engine::InstrumentEngine;
-
-// pub(super)use stream::StreamWrapper;
 
 pub fn setup(app: &mut App) -> Result<()> {
-    let is_new = app.manage(engine::InstrumentEngine::default());
+    let is_new = app.manage(engine::InstrumentEngine::new(app.handle()));
 
     if is_new {
         log::debug!("Instrument engine initialized and managed state created");
@@ -27,10 +24,10 @@ pub fn setup(app: &mut App) -> Result<()> {
         let base_handle_new = app.handle().clone();
         spawn(async move {
             let state = base_handle_new.state::<engine::InstrumentEngine>();
-            match state.inner.set_size(size.width as f64, size.height as f64) {
+            match state.set_size(size.width as f64, size.height as f64) {
                 Ok(_) => {
                     log::debug!("Set initial instrument layout for window size: {}x{}", size.width, size.height);
-                    let layout = state.inner.layout();
+                    let layout = state.layout();
 
 
 
@@ -60,7 +57,7 @@ pub fn setup(app: &mut App) -> Result<()> {
             let state = handle.state::<engine::InstrumentEngine>();
             let win_state = handle.state::<WindowState>();
             let is_dark = win_state.lock().dark;
-            if let Err(e) = state.inner.set_is_dark(is_dark) {
+            if let Err(e) = state.set_is_dark(is_dark) {
                 log::error!("error updating `{}`: {e}", common::events::setup::UPDATE_WINDOW_APPEARANCE)
             }
         });
@@ -79,10 +76,10 @@ pub fn setup(app: &mut App) -> Result<()> {
             let window_state = win_state.lock();
             log::trace!("locked window state: {:#?}", *window_state);
             log::trace!("Setting instrument layout for new window size: {}x{}", window_state.width, window_state.height);
-            match state.inner.set_size(window_state.width, window_state.height) {
+            match state.set_size(window_state.width, window_state.height) {
                 Ok(_) => {
                     log::debug!("Updated instrument layout for new window size: {}x{}", window_state.width, window_state.height);
-                    let layout = state.inner.layout();
+                    let layout = state.layout();
 
 
 

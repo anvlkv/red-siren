@@ -1,5 +1,7 @@
 use fundsp::hacker32::prelude::*;
 
+use crate::util::S;
+
 /*
 Tuner input gain calibration
 
@@ -21,14 +23,14 @@ Frequencies outside table range are clamped to nearest endpoint.
 pub type PreampType = Pipe<
     Pipe<
         Pipe<
-            Split<U5>,
+            Pipe<DCBlock<S>, Split<U5>>,
             Stack<
                 Stack<
                     Stack<
-                        Stack<FixedSvf<f32, BellMode<f32>>, FixedSvf<f32, BellMode<f32>>>,
-                        FixedSvf<f32, BellMode<f32>>,
+                        Stack<FixedSvf<S, BellMode<S>>, FixedSvf<S, BellMode<S>>>,
+                        FixedSvf<S, BellMode<S>>,
                     >,
-                    FixedSvf<f32, BellMode<f32>>,
+                    FixedSvf<S, BellMode<S>>,
                 >,
                 Pass,
             >,
@@ -79,7 +81,8 @@ pub fn create_sensors_preamp() -> An<PreampType> {
 
     // Create cascaded bell filters for frequency-selective amplification
     // Each bell filter applies gain at its center frequency with specified Q
-    split::<U5>()
+    dcblock()
+        >> split::<U5>()
         >> (bell_hz(freq_20hz, q_20hz, gain_20hz_linear)
             | bell_hz(freq_100hz, q_100hz, gain_100hz_linear)
             | bell_hz(freq_1khz, q_1khz, gain_1khz_linear)

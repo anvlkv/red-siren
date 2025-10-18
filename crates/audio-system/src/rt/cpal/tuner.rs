@@ -80,11 +80,10 @@ impl CpalTunerRuntime {
     fn build_analyzer(&self, config: &TunerConfig, sample_rate: f64) -> Box<FFTAnalyzer> {
         let preamp = crate::input::preamp::create_sensors_preamp();
 
-        let mut analyzer = Box::new(FFTAnalyzer::new(
+        let mut analyzer = Box::new(FFTAnalyzer::new_tuner_stub(
             Box::new(preamp),
             FFT_WINDOW_SIZE,
             config.clone(),
-            HashMap::new(), // No siren controls for tuner runtime
         ));
         analyzer.set_sample_rate(sample_rate);
         analyzer
@@ -320,7 +319,7 @@ impl TunerRuntime for CpalTunerRuntime {
         }
         // Propagate to running analyzer without restart
         if let Some(analyzer) = self.analyzer.lock().unwrap().as_mut() {
-            analyzer.set_config(config.clone());
+            analyzer.set_config_for_tuner_stub(config.clone());
             if let Some(sr) = *self.sample_rate.lock().unwrap() {
                 analyzer.set_sample_rate(sr as f64);
             }

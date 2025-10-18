@@ -10,3 +10,5 @@ pub const fn hash_str(s: &str) -> u64 {
     }
     hash
 }
+
+pub type S = f32;

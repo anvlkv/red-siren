@@ -83,13 +83,14 @@ pub fn run() {
         let config = app.config();
         log::debug!("App starting with config: {config:#?}");
 
-        // Existing setup logic
+        // Setup supporting modules
         setup::app_setup(app)?;
-
         health::setup(app)?;
         intro::setup(app)?;
-        instrument::setup(app)?;
         tuner::setup(app)?;
+
+        // Setup instrument last
+        instrument::setup(app)?;
 
         Ok(())
     });

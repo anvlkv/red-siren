@@ -1,26 +1,3 @@
-//! CPAL-backed stream controller.
-//!
-//! Migrated from the previous backend implementation and adapted to live
-//! inside `audio-system` under the generic runtime facade (`crate::rt`).
-//!
-//! Responsibilities:
-//! - Device & stream discovery (input/output) via CPAL.
-//! - DSP graph creation (delegates to `crate::create_output_system`).
-//! - Activation source management (microphone vs entropy noise).
-//! - Crossfade / rebuild of primary DSP subnet on layout/config changes.
-//! - Gain ramp (fade in/out) on pause/resume for pop reduction.
-//! - Data snoop snapshotting for UI visualization.
-//!
-//! Design (MAYA DRY KISS):
-//! - Keep only logic tied to CPAL runtime concerns here.
-//! - Higher-level engine state & UI interaction remain in the backend crate,
-//!   depending only on the `StreamController` trait.
-//! - No legacy aliases; feature flag `rt_cpal` controls inclusion.
-//!
-//! Future extensions:
-//! - Multi-channel (>2) output routing.
-//! - Runtime configuration for buffer sizing / latency tuning.
-//! - Additional activation sources (e.g. external MIDI).
 use std::{
     collections::HashMap,
     sync::mpsc::{self, Sender},
@@ -29,6 +6,7 @@ use std::{
 };
 
 use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout};
+use common::tuner::Config as TunerConfig;
 use common::{
     error::{ControlError, InstrumentError, Result},
     NodeKey,
@@ -57,7 +35,6 @@ const BUFFER_DURATION_MS: u64 = 100;
 /// CPAL-backed stream controller implementing audio I/O and DSP graph
 /// lifecycle. The higher-level runtime facade instantiates this when the
 /// `rt_cpal` feature is enabled.
-#[derive(Default)]
 struct CpalController {
     // DSP frontend and node references
     dsp_net_frontend: RwLock<Option<Net>>,
@@ -76,17 +53,44 @@ struct CpalController {
     // Per-string data taps and controls
     activation_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
     output_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
-    siren_controls: RwLock<HashMap<NodeKey, Shared>>,
     band_controls: RwLock<HashMap<NodeKey, Shared>>,
 
     // Last known state for restarts
     last_layout: RwLock<InstrumentLayout>,
     last_config: RwLock<InstrumentConfig>,
     last_source: RwLock<ActivationSource>,
+    last_tuner_config: RwLock<TunerConfig>,
+}
+
+impl Default for CpalController {
+    fn default() -> Self {
+        Self {
+            dsp_net_frontend: RwLock::new(None),
+            dsp_primary_node_id: RwLock::new(None),
+            sample_rate: RwLock::new(None),
+            gain_param: RwLock::new(None),
+            control_tx: RwLock::new(None),
+            output_thread: RwLock::new(None),
+            activation_sender: RwLock::new(None),
+            activation_thread: RwLock::new(None),
+            activation_snoops: RwLock::new(HashMap::new()),
+            output_snoops: RwLock::new(HashMap::new()),
+            band_controls: RwLock::new(HashMap::new()),
+            last_layout: RwLock::new(InstrumentLayout::default()),
+            last_config: RwLock::new(InstrumentConfig::default()),
+            last_source: RwLock::new(ActivationSource::default()),
+            last_tuner_config: RwLock::new(TunerConfig::default()),
+        }
+    }
 }
 
 impl CpalController {
-    fn create_network(&self, config: &InstrumentConfig, sample_rate: f64) -> Net {
+    fn create_network(
+        &self,
+        config: &InstrumentConfig,
+        tuner_config: &TunerConfig,
+        sample_rate: f64,
+    ) -> Net {
         // For now hard-code (1 input, 2 outputs). Multi-channel path to come.
         let mut net = Net::new(1, 2);
         net.set_sample_rate(sample_rate);
@@ -94,32 +98,36 @@ impl CpalController {
         // Build output system graph & retrieve handles.
         let node_handles = crate::create_output_system(config, &mut net, 2);
 
+        let mut siren_controls = HashMap::<NodeKey, Shared>::new();
+        let mut band_controls = HashMap::<NodeKey, Shared>::new();
+
         // Store node handle artifacts (activation/output snoops, control vars).
         {
             let mut activation_snoops = self.activation_snoops.write();
             let mut output_snoops = self.output_snoops.write();
-            let mut siren_controls = self.siren_controls.write();
-            let mut band_controls = self.band_controls.write();
+            let mut stored_band_controls = self.band_controls.write();
 
             activation_snoops.clear();
             output_snoops.clear();
-            siren_controls.clear();
-            band_controls.clear();
+            stored_band_controls.clear();
 
             for handle in node_handles {
                 activation_snoops.insert(handle.key, handle.activation_snoop);
                 output_snoops.insert(handle.key, handle.output_snoop);
                 siren_controls.insert(handle.key, handle.siren_control);
-                band_controls.insert(handle.key, handle.band_control);
+                band_controls.insert(handle.key, handle.band_control.clone());
+                stored_band_controls.insert(handle.key, handle.band_control);
             }
         }
+
+        crate::create_input_system(tuner_config, &mut net, siren_controls);
 
         net.allocate();
         log::debug!("created network: {}", net.display());
         net
     }
 
-    fn update_primary_node(&self, config: &InstrumentConfig) {
+    fn update_primary_node(&self, config: &InstrumentConfig, tuner_config: &TunerConfig) {
         let primary_id = match *self.dsp_primary_node_id.read() {
             Some(id) => id,
             None => {
@@ -129,7 +137,7 @@ impl CpalController {
         };
 
         let sample_rate = self.sample_rate.read().unwrap_or(44100.0);
-        let new_node = self.create_network(config, sample_rate);
+        let new_node = self.create_network(config, tuner_config, sample_rate);
 
         let mut guard = self.dsp_net_frontend.write();
         let Some(net) = guard.as_mut() else {
@@ -196,10 +204,19 @@ impl CpalController {
         self.gain_param.write().take();
         self.activation_snoops.write().clear();
         self.output_snoops.write().clear();
-        self.siren_controls.write().clear();
-        self.band_controls.write().clear();
 
         Ok(())
+    }
+
+    /// Set band control value for a specific node
+    pub fn set_band_control(&self, key: NodeKey, value: f32) -> Result<()> {
+        let band_controls = self.band_controls.read();
+        if let Some(control) = band_controls.get(&key) {
+            control.set_value(value);
+            Ok(())
+        } else {
+            Err(ControlError::NodeNotFound { key }.into())
+        }
     }
 }
 
@@ -209,12 +226,14 @@ impl StreamController for CpalController {
         layout: &InstrumentLayout,
         config: &InstrumentConfig,
         source: ActivationSource,
+        tuner_config: &TunerConfig,
     ) -> Result<()> {
         // Snapshot for potential restarts.
         {
             *self.last_layout.write() = *layout;
             *self.last_config.write() = config.clone();
             *self.last_source.write() = source;
+            *self.last_tuner_config.write() = tuner_config.clone();
         }
 
         let host = cpal::default_host();
@@ -289,7 +308,7 @@ impl StreamController for CpalController {
         // Create primary subnet & top-level net.
         let output_sample_rate = output_default_cfg.sample_rate().0 as f64;
         *self.sample_rate.write() = Some(output_sample_rate);
-        let subnet = self.create_network(config, output_sample_rate);
+        let subnet = self.create_network(config, tuner_config, output_sample_rate);
         let mut net = Net::new(1, output_channels);
         net.set_sample_rate(output_sample_rate);
 
@@ -414,19 +433,22 @@ impl StreamController for CpalController {
         // Restart streaming pipeline with new source
         let layout = *self.last_layout.read();
         let config = self.last_config.read().clone();
+        let tuner_config = self.last_tuner_config.read();
         self.stop()?;
-        self.start(&layout, &config, source)
+        self.start(&layout, &config, source, &tuner_config)
     }
 
     fn on_layout_changed(
         &self,
         layout: &InstrumentLayout,
         config: &InstrumentConfig,
+        tuner_config: &TunerConfig,
     ) -> Result<()> {
         *self.last_layout.write() = *layout;
         *self.last_config.write() = config.clone();
+        *self.last_tuner_config.write() = tuner_config.clone();
         if self.control_tx.read().is_some() {
-            self.update_primary_node(config);
+            self.update_primary_node(config, tuner_config);
         }
         Ok(())
     }
@@ -512,6 +534,10 @@ impl StreamController for CpalController {
             }
         }
         result
+    }
+
+    fn set_band_control(&self, key: NodeKey, value: f32) -> Result<()> {
+        self.set_band_control(key, value)
     }
 }
 /// Factory exposed to the runtime facade.

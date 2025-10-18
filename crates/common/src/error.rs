@@ -229,6 +229,8 @@ pub enum ControlError {
     BackendMissing { op: String },
     #[error("stream build failed: {detail}")]
     BuildStream { detail: String },
+    #[error("node not found: {key:?}")]
+    NodeNotFound { key: crate::NodeKey },
 }
 
 impl From<ControlError> for AppError {

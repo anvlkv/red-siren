@@ -13,7 +13,7 @@ use super::formant::*;
 use super::siren::*;
 use super::InnerHandles;
 
-pub type S = f32;
+use crate::util::S;
 
 pub type NodeType = Pipe<
     Pipe<

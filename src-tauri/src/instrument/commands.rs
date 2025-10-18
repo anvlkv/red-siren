@@ -13,7 +13,7 @@ use crate::{health::HealthSetupState, instrument::engine::InstrumentEngine};
 pub fn instrument_playback_start(state: State<'_, InstrumentEngine>, app: AppHandle) -> Result<()> {
     log::debug!("instrument_playback_start called");
 
-    match state.inner.start_playback()? {
+    match state.start_playback()? {
         true => {
             log::info!("Starting playback");
             app.emit(
@@ -38,7 +38,7 @@ pub fn instrument_playback_start(state: State<'_, InstrumentEngine>, app: AppHan
 pub fn instrument_playback_stop(state: State<'_, InstrumentEngine>, app: AppHandle) -> Result<()> {
     log::debug!("instrument_playback_stop called");
 
-    match state.inner.stop_playback()? {
+    match state.stop_playback()? {
         true => {
             log::info!("Stopping playback");
             app.emit(
@@ -65,7 +65,7 @@ pub fn instrument_playback_state(
 ) -> Result<PlaybackStatePayload> {
     log::debug!("instrument_playback_state called");
 
-    let playing = state.inner.playing();
+    let playing = state.playing();
 
     log::debug!("Returning playback state: {}", playing);
     Ok(PlaybackStatePayload { playing })
@@ -77,7 +77,7 @@ pub fn instrument_activation_source(
     state: State<'_, InstrumentEngine>,
 ) -> Result<ActivationSourcePayload> {
     log::debug!("instrument_activation_source called");
-    let source = state.inner.activation_source();
+    let source = state.activation_source();
     log::debug!("Current activation source (enum): {:?}", source);
     Ok(ActivationSourcePayload {
         source: source.into(),
@@ -100,7 +100,7 @@ pub fn instrument_set_activation_source(
     let hs_state = health.lock();
     let src_u8 = source;
     let requested: ActivationSource = source.into();
-    let current: ActivationSource = state.inner.activation_source().into();
+    let current: ActivationSource = state.activation_source().into();
 
     // If no change, just log and return
     if current == requested {
@@ -119,7 +119,7 @@ pub fn instrument_set_activation_source(
     }
 
     // Apply change via inner method
-    match state.inner.set_activation_source(requested)? {
+    match state.set_activation_source(requested)? {
         true => {
             log::info!(
                 "Setting activation source to {:?} (code={})",
@@ -155,7 +155,7 @@ pub fn instrument_set_activation_source(
 pub fn instrument_playback_pause(state: State<'_, InstrumentEngine>, app: AppHandle) -> Result<()> {
     log::debug!("instrument_playback_pause called");
 
-    match state.inner.pause_playback()? {
+    match state.pause_playback()? {
         true => {
             log::info!("Pausing playback");
             app.emit(
@@ -183,7 +183,7 @@ pub fn instrument_playback_resume(
 ) -> Result<()> {
     log::debug!("instrument_playback_resume called");
 
-    match state.inner.resume_playback()? {
+    match state.resume_playback()? {
         true => {
             log::info!("Resuming playback");
             app.emit(
@@ -207,7 +207,7 @@ pub fn instrument_playback_resume(
 /// Returns current instrument layout (invoke/event: instrument_layout)
 pub fn instrument_layout(state: State<'_, InstrumentEngine>) -> Result<Layout> {
     log::debug!("instrument_layout called");
-    Ok(state.inner.layout())
+    Ok(state.layout())
 }
 
 #[tauri::command]
@@ -248,17 +248,16 @@ pub fn ui_safe_area_insets_apply(
     };
 
     // Get current layout before changes
-    let old_layout = state.inner.layout();
+    let old_layout = state.layout();
 
     state
-        .inner
         .set_safe_area(top, right, bottom, left)
         .map_err(|e| InstrumentError::Emit {
             event: "set_safe_area".to_string(),
             message: e.to_string(),
         })?;
 
-    let new_layout = state.inner.layout();
+    let new_layout = state.layout();
 
     // Only emit LAYOUT event if layout actually changed
     if old_layout != new_layout {
@@ -294,7 +293,7 @@ pub fn instrument_string_snoop_data(
     key: usize,
     state: tauri::State<'_, crate::instrument::engine::InstrumentEngine>,
 ) -> common::error::Result<common::instrument::data::StringSnoopDataResponse> {
-    let samples = state.inner.snapshot_output_snoop(group, key);
+    let samples = state.snapshot_output_snoop(group, key);
     Ok(common::instrument::data::StringSnoopDataResponse { samples })
 }
 
@@ -305,7 +304,6 @@ pub fn instrument_all_string_snoops(
     use std::time::{SystemTime, UNIX_EPOCH};
 
     let entries = state
-        .inner
         .snapshot_all_output_snoops()
         .into_iter()
         .map(
@@ -334,7 +332,7 @@ pub fn instrument_activation_snoop_data(
     key: usize,
     state: tauri::State<'_, crate::instrument::engine::InstrumentEngine>,
 ) -> common::error::Result<common::instrument::data::ActivationSnoopDataResponse> {
-    let samples = state.inner.snapshot_activation_snoop(group, key);
+    let samples = state.snapshot_activation_snoop(group, key);
     Ok(common::instrument::data::ActivationSnoopDataResponse { samples })
 }
 
@@ -345,7 +343,6 @@ pub fn instrument_all_activation_snoops(
     use std::time::{SystemTime, UNIX_EPOCH};
 
     let entries = state
-        .inner
         .snapshot_all_activation_snoops()
         .into_iter()
         .map(

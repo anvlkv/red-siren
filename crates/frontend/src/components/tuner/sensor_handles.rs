@@ -295,7 +295,6 @@ pub fn SensorHandle(
                         }
                         class="fill-gray/40 dark:fill-cinnabar/40 stroke-gray dark:stroke-cinnabar stroke-1"
                     />
-
                 </svg>
             </div>
 
@@ -337,7 +336,6 @@ pub fn SensorHandle(
                         }
                         class="fill-gray/40 dark:fill-cinnabar/40 stroke-gray dark:stroke-cinnabar stroke-1"
                     />
-
                 </svg>
             </div>
 
@@ -347,10 +345,34 @@ pub fn SensorHandle(
                 style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
             >
                 <line
-                    x1=move || min_x.get()
-                    y1=move || min_y.get()
-                    x2=move || max_x.get()
-                    y2=move || max_y.get()
+                    x1=move || {
+                        let r = (sensor_radius.get() - 1.0) as f64;
+                        let dx = max_x.get() - min_x.get();
+                        let dy = max_y.get() - min_y.get();
+                        let len = (dx * dx + dy * dy).sqrt();
+                        min_x.get() + if len > 0.0 { r * dx / len } else { 0.0 }
+                    }
+                    y1=move || {
+                        let r = (sensor_radius.get() - 1.0) as f64;
+                        let dx = max_x.get() - min_x.get();
+                        let dy = max_y.get() - min_y.get();
+                        let len = (dx * dx + dy * dy).sqrt();
+                        min_y.get() + if len > 0.0 { r * dy / len } else { 0.0 }
+                    }
+                    x2=move || {
+                        let r = (sensor_radius.get() - 1.0) as f64;
+                        let dx = max_x.get() - min_x.get();
+                        let dy = max_y.get() - min_y.get();
+                        let len = (dx * dx + dy * dy).sqrt();
+                        max_x.get() - if len > 0.0 { r * dx / len } else { 0.0 }
+                    }
+                    y2=move || {
+                        let r = (sensor_radius.get() - 1.0) as f64;
+                        let dx = max_x.get() - min_x.get();
+                        let dy = max_y.get() - min_y.get();
+                        let len = (dx * dx + dy * dy).sqrt();
+                        max_y.get() - if len > 0.0 { r * dy / len } else { 0.0 }
+                    }
                     class="stroke-gray/40 dark:stroke-cinnabar/40 stroke-1"
                 />
             </svg>

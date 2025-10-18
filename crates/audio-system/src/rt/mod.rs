@@ -1,30 +1,3 @@
-//! Runtime abstraction layer for audio backends.
-//!
-//! WHY:
-//! - Centralizes selection of a concrete audio runtime (CPAL now, Web later).
-//! - Provides a stable trait `StreamController` consumed by higher-level
-//!   instrument & tuner engines (in the backend crate).
-//! - Enables building the application without any native audio backend
-//!   (feature flags control inclusion).
-//!
-//! EXTENDING:
-//! - Add a new submodule under `rt/` (e.g. `web`) implementing
-//!   `make_stream_controller()` that returns a boxed implementor of
-//!   `StreamController`.
-//! - Gate it behind a Cargo feature (e.g. `rt_web`) and update the factory
-//!   precedence logic below if multiple runtimes may be enabled together.
-//!
-//! PRINCIPLES (MAYA DRY KISS):
-//! - Minimal surface: only what the backend needs today.
-//! - No legacy compatibility aliases retained (old `cpal_audio` removed).
-//! - Keep implementation details (threads, buffers, device specifics) inside
-//!   concrete runtime modules (`cpal`, future `web`).
-//!
-//! FEATURE FLAGS:
-//! - `rt_cpal`: enables native CPAL runtime (desktop).
-//! - `rt_web`: placeholder for future WebAudio / WASM implementation.
-//! - If none enabled, a `NullController` is used (no-op, silent).
-
 #[cfg(feature = "rt_cpal")]
 pub mod cpal;
 
@@ -32,6 +5,7 @@ pub mod cpal;
 pub mod web;
 
 use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout};
+use common::tuner::Config as TunerConfig;
 
 /// Source of activation energy driving instrument strings / nodes.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -75,6 +49,7 @@ pub trait StreamController {
         layout: &InstrumentLayout,
         config: &InstrumentConfig,
         source: ActivationSource,
+        tuner_config: &TunerConfig,
     ) -> common::error::Result<()>;
     fn stop(&self) -> common::error::Result<()>;
     fn pause(&self) -> common::error::Result<()>;
@@ -86,6 +61,7 @@ pub trait StreamController {
         &self,
         layout: &InstrumentLayout,
         config: &InstrumentConfig,
+        tuner_config: &TunerConfig
     ) -> common::error::Result<()>;
 
     // Data taps
@@ -93,6 +69,9 @@ pub trait StreamController {
     fn snapshot_all_output_snoops(&self) -> Vec<(u8, u8, Vec<f32>)>;
     fn snapshot_activation_snoop(&self, group: usize, key: usize) -> Vec<f32>;
     fn snapshot_all_activation_snoops(&self) -> Vec<(u8, u8, Vec<f32>)>;
+
+    // Band control
+    fn set_band_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()>;
     }
 
 /// Null / no-op runtime used when no concrete backend feature is enabled.
@@ -110,6 +89,7 @@ impl StreamController for NullController {
         _layout: &InstrumentLayout,
         _config: &InstrumentConfig,
         _source: ActivationSource,
+        _tuner_config: &TunerConfig,
     ) -> common::error::Result<()> {
         Ok(())
     }
@@ -134,6 +114,7 @@ impl StreamController for NullController {
         &self,
         _layout: &InstrumentLayout,
         _config: &InstrumentConfig,
+        _tuner_config: &TunerConfig
     ) -> common::error::Result<()> {
         Ok(())
     }
@@ -152,6 +133,10 @@ impl StreamController for NullController {
 
     fn snapshot_all_activation_snoops(&self) -> Vec<(u8, u8, Vec<f32>)> {
         Vec::new()
+    }
+
+    fn set_band_control(&self, _key: common::NodeKey, _value: f32) -> common::error::Result<()> {
+        Ok(())
     }
 }
 

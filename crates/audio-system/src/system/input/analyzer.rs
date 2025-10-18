@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use common::{tuner::Config, NodeKey};
 use fundsp::audiounit::BigBlockAdapter;
 use fundsp::hacker32::prelude::*;
-use spectrum_analyzer::{samples_fft_to_spectrum, windows::hann_window, FrequencyLimit};
+use spectrum_analyzer::{
+    samples_fft_to_spectrum, windows::hann_window, FrequencyLimit, FrequencySpectrum,
+};
 
 use crate::util::hash_str;
 use ringbuf::{
@@ -12,8 +14,6 @@ use ringbuf::{
 };
 
 const ANALYZER_ID: u64 = hash_str(concat!(module_path!(), "::FFTAnalyzer"));
-const ACTIVATION_THRESHOLD: f32 = 0.1; // Activation gate on normalized 0..1 activation (computed from dB thresholds)
-const ACTIVATION_SMOOTHING: f32 = 0.15; // Smoothing factor for activation updates
 
 pub const FFT_WINDOW_SIZE: usize = 2048; // Power of 2 for FFT, good balance of frequency resolution vs latency
 
@@ -27,14 +27,10 @@ pub struct FFTAnalyzer {
     // Configuration and controls
     sample_rate: f32,
     config: Config,
-    siren_controls: HashMap<NodeKey, Shared>,
-
-    // Smoothed activation values for each sensor
-    sensor_activations: HashMap<NodeKey, f32>,
+    activation_controls: HashMap<NodeKey, Shared>,
 
     // Spectrum data storage
-    spectrum_magnitudes: Vec<f32>,
-    spectrum_frequencies: Vec<f32>,
+    spectrum: Option<FrequencySpectrum>,
 }
 
 impl FFTAnalyzer {
@@ -42,17 +38,8 @@ impl FFTAnalyzer {
         inner_net: Box<dyn AudioUnit>,
         window_size: usize,
         config: Config,
-        siren_controls: HashMap<NodeKey, Shared>,
+        activation_controls: HashMap<NodeKey, Shared>,
     ) -> Self {
-        // let peak_frequency = Arc::new(shared(0.0));
-        // let spectral_centroid = Arc::new(shared(0.0));
-        // let rms_level = Arc::new(shared(0.0));
-
-        let mut sensor_activations = HashMap::new();
-        for sensor in &config.sensor_data {
-            sensor_activations.insert(sensor.key, 0.0);
-        }
-
         Self {
             inner_net: BigBlockAdapter::new(inner_net),
             window_rb: StaticRb::<f32, FFT_WINDOW_SIZE>::default(),
@@ -63,47 +50,58 @@ impl FFTAnalyzer {
             // rms_level: rms_level.clone(),
             sample_rate: config.sample_rate,
             config,
-            siren_controls,
-            sensor_activations,
-            spectrum_magnitudes: Vec::new(),
-            spectrum_frequencies: Vec::new(),
+            activation_controls,
+            spectrum: None,
         }
     }
 
-    /// Update analyzer configuration at runtime (sensor thresholds, sample rate, keys)
-    pub fn set_config(&mut self, config: Config) {
-        // Update stored config and sample rate
-        self.sample_rate = config.sample_rate;
-        self.config = config.clone();
+    pub fn new_tuner_stub(
+        inner_net: Box<dyn AudioUnit>,
+        window_size: usize,
+        config: Config,
+    ) -> Self {
+        let activation_controls = Self::activation_controls_from_config(&config);
+        Self::new(inner_net, window_size, config, activation_controls)
+    }
 
-        // Rebuild sensor activation map preserving existing values where possible
-        let mut new_activations = HashMap::new();
-        for sensor in &config.sensor_data {
-            let prev = self
-                .sensor_activations
-                .get(&sensor.key)
-                .copied()
-                .unwrap_or(0.0);
-            new_activations.insert(sensor.key, prev);
-        }
-        self.sensor_activations = new_activations;
+    fn activation_controls_from_config(config: &Config) -> HashMap<NodeKey, Shared> {
+        HashMap::from_iter(config.sensor_data.iter().map(|d| (d.key, shared(0.0))))
+    }
+
+    /// Update analyzer configuration at runtime (sensor thresholds, sample rate, keys)
+    pub fn set_config_for_tuner_stub(&mut self, config: Config) {
+        let activation_controls = Self::activation_controls_from_config(&config);
+        self.sample_rate = config.sample_rate;
+        self.config = config;
+        self.activation_controls = activation_controls;
     }
 
     /// Get the latest spectrum data (frequencies and magnitudes)
     pub fn get_spectrum_data(&self) -> Option<(Vec<f32>, Vec<f32>)> {
-        if self.spectrum_magnitudes.is_empty() {
-            None
-        } else {
-            Some((
-                self.spectrum_frequencies.clone(),
-                self.spectrum_magnitudes.clone(),
-            ))
-        }
+        self.spectrum.as_ref().map(|spectrum| {
+            let data = spectrum.data();
+            let mut frequencies = Vec::with_capacity(data.len());
+            let mut magnitudes = Vec::with_capacity(data.len());
+            for (freq, mag) in data {
+                frequencies.push(freq.val());
+                magnitudes.push(mag.val());
+            }
+            (frequencies, magnitudes)
+        })
+    }
+
+    /// Get the current frequency spectrum
+    pub fn get_spectrum(&self) -> Option<&FrequencySpectrum> {
+        self.spectrum.as_ref()
     }
 
     /// Get current sensor activation levels
     pub fn get_sensor_activations(&self) -> HashMap<NodeKey, f32> {
-        self.sensor_activations.clone()
+        HashMap::from_iter(
+            self.activation_controls
+                .iter()
+                .map(|(k, v)| (*k, v.value())),
+        )
     }
 
     /// Analyze a full window of raw input samples by running them through the preamp,
@@ -159,21 +157,12 @@ impl FFTAnalyzer {
             }
         };
 
-        // Get spectrum data
-        let spectrum_data = spectrum.data();
-
-        // Store spectrum data for external access
-        self.spectrum_magnitudes.clear();
-        self.spectrum_frequencies.clear();
-        for (frequency, magnitude) in spectrum_data {
-            self.spectrum_frequencies.push(frequency.val());
-            self.spectrum_magnitudes.push(magnitude.val());
-        }
+        // Store spectrum for external access
+        self.spectrum = Some(spectrum);
+        let spectrum = self.spectrum.as_ref().unwrap();
 
         // Process sensor activations
         for sensor in &self.config.sensor_data {
-            // activation computed below
-
             // Use FrequencySpectrum: closest bin at sensor center frequency
             let center = 0.5 * (sensor.min_frequency + sensor.max_frequency);
             let (f, v) = spectrum.freq_val_closest(center);
@@ -183,46 +172,34 @@ impl FFTAnalyzer {
             // Activate only if the closest bin actually lies inside the sensor band
             let in_band = freq >= sensor.min_frequency && freq <= sensor.max_frequency;
 
-            // Binary activation: 1.0 if in-band and dB >= min threshold, else 0.0
-            let activation = if in_band && peak_db >= sensor.min_magnitude {
-                1.0
-            } else {
+            // Distance-based activation: interpolate between min/max magnitude
+            let activation = if !in_band {
                 0.0
+            } else if peak_db <= sensor.min_magnitude {
+                f32::EPSILON
+            } else {
+                // Linear interpolation/extrapolation based on min/max range
+                (peak_db - sensor.min_magnitude) / (sensor.max_magnitude - sensor.min_magnitude)
             };
 
-            // use activation directly (no intermediate variable)
-
-            // Apply smoothing to prevent jitter
-            let current_activation = self
-                .sensor_activations
-                .get(&sensor.key)
-                .copied()
-                .unwrap_or(0.0);
-            let smoothed_activation =
-                current_activation + (activation - current_activation) * ACTIVATION_SMOOTHING;
-
-            // Update stored activation
-            self.sensor_activations
-                .insert(sensor.key, smoothed_activation);
-
-            if log::log_enabled!(log::Level::Trace) && smoothed_activation > 0.01 {
+            if log::log_enabled!(log::Level::Trace) && activation > 0.01 {
                 log::trace!(
                     "fft_analyzer: sensor key={:?} range=[{:.1},{:.1}] activation={:.3}",
                     sensor.key,
                     sensor.min_frequency,
                     sensor.max_frequency,
-                    smoothed_activation
+                    activation
                 );
             }
 
             // Update siren control if we have a control for this sensor
-            if let Some(siren_control) = self.siren_controls.get(&sensor.key) {
-                // Only activate if above threshold
-                if smoothed_activation > ACTIVATION_THRESHOLD {
-                    siren_control.set_value(smoothed_activation);
-                } else {
-                    siren_control.set_value(0.0);
-                }
+            if let Some(siren_control) = self.activation_controls.get(&sensor.key) {
+                siren_control.set_value(activation);
+            } else {
+                log::warn!(
+                    "fft_analyzer: no siren control found for sensor key={:?}",
+                    sensor.key
+                );
             }
         }
     }
@@ -237,10 +214,8 @@ impl Clone for FFTAnalyzer {
             sample_count: 0,
             sample_rate: self.sample_rate,
             config: self.config.clone(),
-            siren_controls: self.siren_controls.clone(),
-            sensor_activations: self.sensor_activations.clone(),
-            spectrum_magnitudes: self.spectrum_magnitudes.clone(),
-            spectrum_frequencies: self.spectrum_frequencies.clone(),
+            activation_controls: self.activation_controls.clone(),
+            spectrum: None,
         }
     }
 }
@@ -398,19 +373,13 @@ impl AudioUnit for FFTAnalyzer {
             }
         }
 
-        // Reset all sensor activations
-        for activation in self.sensor_activations.values_mut() {
-            *activation = 0.0;
-        }
-
         // Reset all siren controls
-        for siren_control in self.siren_controls.values() {
+        for siren_control in self.activation_controls.values() {
             siren_control.set_value(0.0);
         }
 
         // Clear spectrum data
-        self.spectrum_magnitudes.clear();
-        self.spectrum_frequencies.clear();
+        self.spectrum = None;
 
         log::trace!(
             "fft_analyzer: reset complete window_size={} sample_rate={}",

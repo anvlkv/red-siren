@@ -70,7 +70,7 @@ pub fn SpectrumVisualizer(
 
             // Sensor activation bars (highest opacity - 60%)
             <Show when=move || spectrum().is_some() && layout().is_some()>
-                <g class="fill-gray/30 dark:fill-cinnabar/60">
+                <g class="fill-gray/20 dark:fill-cinnabar/20" style="mix-blend-mode: multiply">
                     <ActivationBars activations=activations layout=layout baseline=baseline />
                 </g>
             </Show>
@@ -79,7 +79,8 @@ pub fn SpectrumVisualizer(
             <Show when=move || max_path.get().is_some()>
                 <path
                     d=move || max_path.get().unwrap_or_default()
-                    class="fill-gray/40 dark:fill-cinnabar/10 stroke-gray/20 dark:stroke-cinnabar/20 stroke-1"
+                    class="fill-gray/30 dark:fill-cinnabar/30 stroke-gray/50 dark:stroke-cinnabar/50 stroke-1"
+                    style="mix-blend-mode: multiply"
                 />
             </Show>
 
@@ -87,7 +88,8 @@ pub fn SpectrumVisualizer(
             <Show when=move || current_path.get().is_some()>
                 <path
                     d=move || current_path.get().unwrap_or_default()
-                    class="fill-gray/70 dark:fill-cinnabar/20 stroke-gray/40 dark:stroke-cinnabar/40 stroke-1"
+                    class="fill-gray/40 dark:fill-cinnabar/40 stroke-gray/60 dark:stroke-cinnabar/60 stroke-1"
+                    style="mix-blend-mode: multiply"
                 />
             </Show>
         </svg>
@@ -108,15 +110,15 @@ fn generate_spectrum_path(
     let mut path = String::new();
     let baseline = layout.line_position;
 
-    // Start from baseline origin
-    path.push_str(&format!("M {} {} ", baseline.0.x, baseline.0.y));
-
     // Use Config mapping for coordinates
     let cfg = Config {
         sensor_data: vec![],
         fft_size: 0,
         sample_rate,
     };
+
+    // Start from the left edge at baseline level
+    path.push_str(&format!("M {} {} ", 0.0, baseline.0.y));
 
     for (i, &mag) in magnitudes.iter().enumerate() {
         if i < frequencies.len() {
@@ -125,9 +127,11 @@ fn generate_spectrum_path(
         }
     }
 
-    // Close path back to baseline
-    path.push_str(&format!("L {} {} ", baseline.1.x, baseline.1.y));
-    path.push_str(&format!("L {} {} Z", baseline.0.x, baseline.0.y));
+    // Close path back to baseline at the right edge
+    path.push_str(&format!("L {} {} ", layout.space.x, baseline.0.y));
+    path.push_str(&format!("L {} {} ", 0.0, baseline.0.y));
+
+    path.push_str(" Z");
 
     path
 }
@@ -153,7 +157,21 @@ fn ActivationBars(
     };
     let bar_width = move || line_length() / (num_sensors() as f32);
     let bar_spacing = move || bar_width() * 0.1; // 10% spacing between bars
-    let level = move |v: f32| v.clamp(0.0, 1.0);
+                                                 // Calculate scaling factor to fit all activations within 0..1 range
+    let scale_factor = move || {
+        activations()
+            .as_ref()
+            .map(|acts| {
+                let max_activation = acts.iter().fold(0.0f32, |acc, &x| acc.max(x.abs()));
+                if max_activation > 1.0 {
+                    1.0 / max_activation
+                } else {
+                    1.0
+                }
+            })
+            .unwrap_or(1.0)
+    };
+    let level = move |v: f32| (v * scale_factor()).clamp(0.0, 1.0);
 
     view! {
         <>

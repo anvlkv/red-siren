@@ -7,10 +7,9 @@ use common::{
 use fundsp::hacker32::prelude::*;
 use u_num_it::u_num_it;
 
-use super::{
-    node::{NodeType, S},
-    InnerHandles, NodeHandles,
-};
+use super::{node::NodeType, InnerHandles, NodeHandles};
+
+use crate::util::S;
 
 pub fn create_channel_system<G, K>(
     groups: &[GroupConfig],

@@ -32,7 +32,7 @@ pub fn create_output_system(
 pub fn create_input_system(
     config: &common::tuner::Config,
     net: &mut Net,
-    sirens: &HashMap<NodeKey, Shared>,
-) -> Option<Box<input::analyzer::FFTAnalyzer>> {
-    input::sensors_system(config, net, sirens)
+    activations: HashMap<NodeKey, Shared>,
+) {
+    input::sensors_system(config, net, activations)
 }

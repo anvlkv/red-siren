@@ -1,9 +1,10 @@
-use audio_system::rt::{check_mic_permission, supports_mic};
+// NOTE: mic permission functions moved to audio_worklet layer
+// use audio_system::rt::{check_mic_permission, supports_mic};
 use serde_json::Value;
 use tauri::{App, AppHandle, Emitter, Manager, State};
 use tauri_plugin_store::StoreExt;
 use parking_lot::{Mutex, MutexGuard}; // switched from tokio::sync::Mutex to parking_lot for non-async, faster locking
-use common::error::{HealthError, AppError};
+use common::error::HealthError;
 
 #[derive(Default, Debug, Clone, Copy)]
 /// State to track setup completion
@@ -49,14 +50,9 @@ pub async fn health_grant_mic_premission(
 ) -> common::error::Result<bool> {
     // If prompting, run full check and propagate any HealthError (mapped automatically into AppError).
     let check_result = if prompt {
-        // Explicitly wrap HealthError into AppError (even though the From impl exists),
-        // making the intent clear at this integration boundary.
-        if supports_mic() {
-            check_mic_permission().await.map_err(|e| AppError::from(HealthError::MicPermissionCheckFailed { detail: Some(format!("{e}")) }))?;
-            true
-        } else {
-            false
-        }
+        // TODO: Implement mic permission check via audio_worklet commands
+        // For now, return false as placeholder
+        false
     } else {
         false
     };

@@ -5,20 +5,19 @@ use std::sync::{
 use std::thread;
 use std::time::Duration;
 
-use audio_system::rt::{make_tuner_runtime, TunerRuntime};
+use common::audio::TunerRuntime;
 use common::error::Result;
 use common::tuner::{Config, Layout as TunerLayout, SpectrumData};
 use parking_lot::RwLock;
 use tauri::{AppHandle, Emitter};
 
 /// Generic, runtime‑agnostic tuner state.
-/// All concrete audio / FFT work is delegated to `audio_system::rt::TunerRuntime`.
+/// All concrete audio / FFT work is delegated to Web Audio implementation.
 ///
 /// MAYA DRY KISS:
 /// - Minimal state here (UI + configuration + latest spectrum).
-/// - No direct dependency on CPAL or any runtime feature flags.
-/// - Polling thread obtains data via trait object; when no runtime feature
-///   is enabled, a Null runtime returns `None` and emits nothing.
+/// - No direct dependency on specific audio backends.
+/// - Web implementation will provide spectrum data via web audio analysis.
 pub struct TunerState {
     // Persistent config (updated via commands)
     pub tuner_config: RwLock<Config>,
@@ -79,12 +78,10 @@ impl TunerState {
         {
             let mut rt_guard = self.runtime.write();
             if rt_guard.is_none() {
-                *rt_guard = Some(make_tuner_runtime());
+                *rt_guard = Some(super::web_impl::make_web_tuner_runtime());
             }
-            if let Some(rt) = rt_guard.as_ref() {
-                let cfg = self.tuner_config.read().clone();
-                rt.start(&cfg)?;
-            }
+            // Note: Web implementation doesn't need explicit start call
+            // Tuner will be integrated with Web Audio worklet in future phases
         }
 
         // CAS to avoid race spawning multiple threads

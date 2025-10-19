@@ -1,3 +1,4 @@
+pub mod audio_worklet;
 pub mod health;
 pub mod instrument;
 pub mod intro;

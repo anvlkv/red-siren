@@ -1,78 +1,11 @@
-#[cfg(feature = "rt_cpal")]
-pub mod cpal;
-
-#[cfg(feature = "rt_web")]
+#[cfg(any(feature = "rt_web", feature = "rt_web_audio_unit"))]
 pub mod web;
+
+// Re-export audio types from common
+pub use common::audio::{ActivationSource, StreamController, TunerRuntime};
 
 use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout};
 use common::tuner::Config as TunerConfig;
-
-/// Source of activation energy driving instrument strings / nodes.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub enum ActivationSource {
-    /// Pseudo-random / noise entropy (internal generator).
-    #[default]
-    Entropy,
-    /// Live microphone input (if permission & capture available).
-    Mic,
-}
-
-impl From<u8> for ActivationSource {
-    fn from(value: u8) -> Self {
-        match value {
-            0 => Self::Entropy,
-            _ => Self::Mic,
-        }
-    }
-}
-
-impl From<ActivationSource> for u8 {
-    fn from(v: ActivationSource) -> Self {
-        match v {
-            ActivationSource::Entropy => 0,
-            ActivationSource::Mic => 1,
-        }
-    }
-}
-
-/// Unified interface the higher-level engine uses.
-///
-/// Implementations manage:
-/// - Graph construction / re-construction on layout or config changes.
-/// - Audio I/O lifecycle (start/stop/pause/resume).
-/// - Activation source switching (mic vs entropy).
-/// - Data snoops (per-string sample snapshots).
-pub trait StreamController {
-    // Lifecycle
-    fn start(
-        &self,
-        layout: &InstrumentLayout,
-        config: &InstrumentConfig,
-        source: ActivationSource,
-        tuner_config: &TunerConfig,
-    ) -> common::error::Result<()>;
-    fn stop(&self) -> common::error::Result<()>;
-    fn pause(&self) -> common::error::Result<()>;
-    fn resume(&self) -> common::error::Result<()>;
-
-    // Reactivity
-    fn on_activation_source_changed(&self, source: ActivationSource) -> common::error::Result<()>;
-    fn on_layout_changed(
-        &self,
-        layout: &InstrumentLayout,
-        config: &InstrumentConfig,
-        tuner_config: &TunerConfig
-    ) -> common::error::Result<()>;
-
-    // Data taps
-    fn snapshot_output_snoop(&self, group: usize, key: usize) -> Vec<f32>;
-    fn snapshot_all_output_snoops(&self) -> Vec<(u8, u8, Vec<f32>)>;
-    fn snapshot_activation_snoop(&self, group: usize, key: usize) -> Vec<f32>;
-    fn snapshot_all_activation_snoops(&self) -> Vec<(u8, u8, Vec<f32>)>;
-
-    // Band control
-    fn set_band_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()>;
-    }
 
 /// Null / no-op runtime used when no concrete backend feature is enabled.
 ///
@@ -114,7 +47,7 @@ impl StreamController for NullController {
         &self,
         _layout: &InstrumentLayout,
         _config: &InstrumentConfig,
-        _tuner_config: &TunerConfig
+        _tuner_config: &TunerConfig,
     ) -> common::error::Result<()> {
         Ok(())
     }
@@ -135,65 +68,33 @@ impl StreamController for NullController {
         Vec::new()
     }
 
-    fn set_band_control(&self, _key: common::NodeKey, _value: f32) -> common::error::Result<()> {
+    fn set_band_control(&self, _group: u8, _key: u8, _value: f32) -> common::error::Result<()> {
         Ok(())
     }
 }
 
-/// Factory returning the highest-precedence available runtime.
-///
-/// Precedence (current):
-/// 1. rt_cpal
-/// 2. rt_web
-/// 3. NullController (fallback)
-pub fn make_stream_controller() -> common::error::Result<Box<dyn StreamController + Send + Sync>> {
-    #[cfg(feature = "rt_cpal")]
-    {
-        return cpal::make_stream_controller();
-    }
-    #[cfg(all(not(feature = "rt_cpal"), feature = "rt_web"))]
-    {
-        return web::make_stream_controller();
-    }
-    Ok(Box::new(NullController::default()))
-}
-/// Indicates whether the active build includes a microphone-capable backend.
-pub fn supports_mic() -> bool {
-    #[cfg(feature = "rt_cpal")]
-    {
-        return true;
-    }
-    #[cfg(not(feature = "rt_cpal"))]
-    {
-        return false;
-    }
-}
-/// Mic permission / availability check.
-/// Returns Ok(()) on success; in non-mic builds returns an error so callers
-/// can mark permission as false.
-pub async fn check_mic_permission() -> Result<(), common::error::HealthError> {
-    #[cfg(feature = "rt_cpal")]
-    {
-        return cpal::check_mic_permission().await;
-    }
-    #[cfg(not(feature = "rt_cpal"))]
-    {
-        return Err(common::error::HealthError::MicPermissionCheckFailed {
-            detail: Some("no_mic_runtime".into()),
-        });
-    }
-}
-/// Spectrum / tuner runtime abstraction.
-///
-/// Backend polls `poll_spectrum` periodically (e.g. every 20ms). Implementations
-/// may accumulate samples internally until a full frame (FFT) is ready.
-pub trait TunerRuntime: Send + Sync {
-    fn start(&self, config: &common::tuner::Config) -> common::error::Result<()>;
-    fn stop(&self);
-    fn update_config(&self, config: &common::tuner::Config);
-    /// Poll for latest spectrum data (non-blocking). Returns None if not ready.
-    fn poll_spectrum(&self) -> Option<common::tuner::SpectrumData>;
-}
+// NOTE: make_stream_controller() has been removed from this crate.
+//
+// StreamController implementation now lives in the integration layer:
+// - Web Audio: Implemented in src-tauri/src/audio_worklet/controller.rs
+//
+// This separation follows MAYA DRY KISS principles:
+// - audio-system focuses purely on DSP processing
+// - Integration concerns handled in appropriate layers
+// NOTE: supports_mic() has been removed from this crate.
+//
+// Microphone capability checks now happen in the integration layer:
+// - src-tauri handles browser permission APIs for web runtime
+// - CPAL runtime retains its own mic support logic
+//
+// This keeps audio-system focused on pure DSP concerns.
+// NOTE: check_mic_permission() has been removed from this crate.
+//
+// Permission checks are now handled in the integration layer:
+// - src-tauri/src/audio_worklet/commands.rs for web runtime
+// - CPAL runtime retains its own permission checking
+//
+// This separation allows proper async handling in the Tauri context.
 /// Null (no-op) tuner runtime.
 #[derive(Default)]
 struct NullTunerRuntime;
@@ -209,13 +110,7 @@ impl TunerRuntime for NullTunerRuntime {
 }
 /// Factory producing a tuner runtime (CPAL, web, or null).
 pub fn make_tuner_runtime() -> Box<dyn TunerRuntime + Send + Sync> {
-    #[cfg(feature = "rt_cpal")]
-    {
-        if let Some(r) = cpal::make_tuner_runtime() {
-            return r;
-        }
-    }
-    #[cfg(all(not(feature = "rt_cpal"), feature = "rt_web"))]
+    #[cfg(feature = "rt_web")]
     {
         if let Some(r) = web::make_tuner_runtime() {
             return r;

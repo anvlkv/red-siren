@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Audio Worklet (Hidden)</title>
+        <style>
+            body {
+                margin: 0;
+                padding: 20px;
+                font-family:
+                    system-ui,
+                    -apple-system,
+                    sans-serif;
+                background: #1a1a1a;
+                color: #ffffff;
+                font-size: 12px;
+            }
+            .status {
+                padding: 10px;
+                border-radius: 4px;
+                margin-bottom: 10px;
+            }
+            .status.info {
+                background: #1e3a8a;
+            }
+            .status.success {
+                background: #166534;
+            }
+            .status.error {
+                background: #dc2626;
+            }
+            .log {
+                font-family: "Monaco", "Menlo", monospace;
+                font-size: 10px;
+                max-height: 200px;
+                overflow-y: auto;
+                background: #000;
+                padding: 10px;
+                border-radius: 4px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="status info" id="status">Initializing Audio Worklet...</div>
+        <div class="log" id="log"></div>
+
+        <script type="module">
+            // Global state
+            let audioContext = null;
+            let audioWorkletNode = null;
+            let microphoneStream = null;
+            let microphoneSource = null;
+
+            // Pending request tracking to pair acks/snoop responses with request IDs
+            const pendingAcks = new Map(); // operation -> requestId
+            const pendingSnoop = new Map(); // snoopKey -> requestId
+
+            const ackOp = {
+                layoutConfig: "rebuild_networks",
+                activationSource: "set_activation_source",
+                start: "start",
+                stop: "stop",
+                pause: "pause",
+                resume: "resume",
+                setBandControl: "set_band_control",
+            };
+
+            function makeSnoopKey(snoopType, group, key) {
+                const g =
+                    group === null || group === undefined ? "all" : `${group}`;
+                const k = key === null || key === undefined ? "all" : `${key}`;
+                return `snoop:${snoopType}:${g}:${k}`;
+            }
+
+            // Logging
+            function log(message) {
+                console.log(`[AudioWorklet] ${message}`);
+                const logDiv = document.getElementById("log");
+                const timestamp = new Date().toTimeString().split(" ")[0];
+                logDiv.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+                logDiv.scrollTop = logDiv.scrollHeight;
+            }
+
+            function updateStatus(message, type = "info") {
+                const statusDiv = document.getElementById("status");
+                statusDiv.textContent = message;
+                statusDiv.className = `status ${type}`;
+                log(`Status: ${message}`);
+            }
+
+            // Initialize Tauri API
+            const { invoke } = window.__TAURI__.core;
+            const { listen } = window.__TAURI__.event;
+
+            // AudioContext setup
+            async function initializeAudioContext() {
+                try {
+                    audioContext = new (window.AudioContext ||
+                        window.webkitAudioContext)({
+                        sampleRate: 44100,
+                        latencyHint: "playback",
+                    });
+
+                    if (audioContext.state === "suspended") {
+                        await audioContext.resume();
+                    }
+
+                    log(
+                        `AudioContext initialized: ${audioContext.sampleRate}Hz, ${audioContext.destination.channelCount} channels`,
+                    );
+                    return true;
+                } catch (error) {
+                    log(`Failed to initialize AudioContext: ${error.message}`);
+                    return false;
+                }
+            }
+
+            // Load WASM module (validated existence of bindgen outputs)
+            async function loadWasmModule() {
+                try {
+                    const wasmModuleImport = await import(
+                        "./audio-worklet/audio_system.js"
+                    );
+                    await wasmModuleImport.default(
+                        "./audio-worklet/audio_system_bg.wasm",
+                    );
+                    log("WASM module loaded successfully");
+                    return true;
+                } catch (error) {
+                    log(`Failed to load WASM module: ${error.message}`);
+                    return false;
+                }
+            }
+
+            // Register AudioWorklet processor
+            async function registerAudioWorklet() {
+                try {
+                    await audioContext.audioWorklet.addModule(
+                        "./audio-worklet.js",
+                    );
+                    log("AudioWorklet processor registered");
+                    return true;
+                } catch (error) {
+                    log(`Failed to register AudioWorklet: ${error.message}`);
+                    return false;
+                }
+            }
+
+            // Create AudioWorklet node
+            function createAudioWorkletNode() {
+                try {
+                    audioWorkletNode = new AudioWorkletNode(
+                        audioContext,
+                        "red-siren-processor",
+                        {
+                            numberOfInputs: 1,
+                            numberOfOutputs: 1,
+                            channelCount: 2,
+                            channelCountMode: "explicit",
+                            channelInterpretation: "speakers",
+                        },
+                    );
+
+                    // Connect to destination for audio output
+                    audioWorkletNode.connect(audioContext.destination);
+
+                    // Handle messages from the processor
+                    audioWorkletNode.port.onmessage = (event) => {
+                        handleProcessorMessage(event.data);
+                    };
+
+                    log("AudioWorklet node created and connected");
+                    return true;
+                } catch (error) {
+                    log(`Failed to create AudioWorklet node: ${error.message}`);
+                    return false;
+                }
+            }
+
+            // Handle messages from AudioWorklet processor
+            async function handleProcessorMessage(data) {
+                const { type, payload, id } = data;
+
+                try {
+                    switch (type) {
+                        case "ack": {
+                            const op = payload.operation;
+                            const requestId = pendingAcks.get(op);
+                            if (!requestId) {
+                                log(
+                                    `Ack received for '${op}' but no pending request id found`,
+                                );
+                                break;
+                            }
+                            pendingAcks.delete(op);
+
+                            await invoke("audio_worklet_ack", {
+                                request_id: requestId,
+                                payload: {
+                                    operation: payload.operation,
+                                    success: payload.success,
+                                    errorMessage: payload.errorMessage || null,
+                                },
+                            });
+                            break;
+                        }
+
+                        case "snoop_response": {
+                            // Resolve key to find the original request id
+                            const key = payload.isSingleNode
+                                ? makeSnoopKey(
+                                      payload.snoopType,
+                                      payload.singleNodeData?.group ?? null,
+                                      payload.singleNodeData?.key ?? null,
+                                  )
+                                : makeSnoopKey(payload.snoopType, null, null);
+
+                            const requestId = pendingSnoop.get(key);
+                            if (!requestId) {
+                                log(
+                                    `Snoop response received for '${key}' but no pending request id found`,
+                                );
+                                break;
+                            }
+                            pendingSnoop.delete(key);
+
+                            await invoke("audio_worklet_snoop_response", {
+                                request_id: requestId,
+                                payload,
+                            });
+                            break;
+                        }
+
+                        case "log":
+                            log(`Processor: ${payload.message}`);
+                            break;
+
+                        default:
+                            log(`Unknown processor message type: ${type}`);
+                    }
+                } catch (error) {
+                    log(`Error handling processor message: ${error.message}`);
+                }
+            }
+
+            // Send message to AudioWorklet processor
+            function sendToProcessor(type, payload = {}, id = null) {
+                if (!audioWorkletNode) {
+                    log("AudioWorklet node not available");
+                    return;
+                }
+                audioWorkletNode.port.postMessage({ type, payload, id });
+            }
+
+            // Microphone permission and setup
+            async function requestMicrophonePermission() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            echoCancellation: false,
+                            noiseSuppression: false,
+                            autoGainControl: false,
+                            sampleRate: audioContext.sampleRate,
+                        },
+                    });
+
+                    if (microphoneStream) {
+                        microphoneStream
+                            .getTracks()
+                            .forEach((track) => track.stop());
+                    }
+
+                    microphoneStream = stream;
+                    microphoneSource =
+                        audioContext.createMediaStreamSource(stream);
+                    microphoneSource.connect(audioWorkletNode);
+
+                    log("Microphone permission granted and connected");
+                    return true;
+                } catch (error) {
+                    log(`Microphone permission denied: ${error.message}`);
+                    return false;
+                }
+            }
+
+            // Event listeners for Tauri events
+            async function setupTauriEventListeners() {
+                // Start DSP processing (payload is [requestId, payload])
+                await listen("audio_worklet_start", async (event) => {
+                    try {
+                        const [requestId, payload] = event.payload;
+                        pendingAcks.set(ackOp.start, requestId);
+                        sendToProcessor("start_dsp", payload, requestId);
+                        log(`Forwarded start_dsp with requestId=${requestId}`);
+                    } catch (e) {
+                        log(`Invalid start payload: ${e?.message || e}`);
+                    }
+                });
+
+                // Stop DSP processing (payload is requestId)
+                await listen("audio_worklet_stop", async (event) => {
+                    const requestId = event.payload;
+                    pendingAcks.set(ackOp.stop, requestId);
+                    sendToProcessor("stop_dsp", {}, requestId);
+                    log(`Forwarded stop_dsp with requestId=${requestId}`);
+                });
+
+                // Pause DSP processing (payload is requestId)
+                await listen("audio_worklet_pause", async (event) => {
+                    const requestId = event.payload;
+                    pendingAcks.set(ackOp.pause, requestId);
+                    sendToProcessor("pause_dsp", {}, requestId);
+                    log(`Forwarded pause_dsp with requestId=${requestId}`);
+                });
+
+                // Resume DSP processing (payload is requestId)
+                await listen("audio_worklet_resume", async (event) => {
+                    const requestId = event.payload;
+                    pendingAcks.set(ackOp.resume, requestId);
+                    sendToProcessor("resume_dsp", {}, requestId);
+                    log(`Forwarded resume_dsp with requestId=${requestId}`);
+                });
+
+                // Update layout/config (payload is [requestId, payload])
+                await listen("audio_worklet_layout_config", async (event) => {
+                    try {
+                        const [requestId, payload] = event.payload;
+                        pendingAcks.set(ackOp.layoutConfig, requestId);
+                        sendToProcessor("rebuild_networks", payload, requestId);
+                        log(
+                            `Forwarded rebuild_networks with requestId=${requestId}`,
+                        );
+                    } catch (e) {
+                        log(
+                            `Invalid layout_config payload: ${e?.message || e}`,
+                        );
+                    }
+                });
+
+                // Change activation source (payload is [requestId, payload])
+                await listen(
+                    "audio_worklet_activation_source",
+                    async (event) => {
+                        try {
+                            const [requestId, payload] = event.payload;
+
+                            // Handle microphone connection if needed before forwarding
+                            if (payload.source === 1 && !microphoneSource) {
+                                const micGranted =
+                                    await requestMicrophonePermission();
+                                if (!micGranted) {
+                                    // Immediately ack failure with the provided request id
+                                    await invoke("audio_worklet_ack", {
+                                        request_id: requestId,
+                                        payload: {
+                                            operation: ackOp.activationSource,
+                                            success: false,
+                                            errorMessage:
+                                                "Microphone permission required",
+                                        },
+                                    });
+                                    log(
+                                        `Denied mic permission; acked failure for requestId=${requestId}`,
+                                    );
+                                    return;
+                                }
+                            }
+
+                            pendingAcks.set(ackOp.activationSource, requestId);
+                            sendToProcessor(
+                                "set_activation_source",
+                                payload,
+                                requestId,
+                            );
+                            log(
+                                `Forwarded set_activation_source with requestId=${requestId}`,
+                            );
+                        } catch (e) {
+                            log(
+                                `Invalid activation_source payload: ${e?.message || e}`,
+                            );
+                        }
+                    },
+                );
+
+                // Set band control (payload is [requestId, payload])
+                await listen(
+                    "audio_worklet_set_band_control",
+                    async (event) => {
+                        try {
+                            const [requestId, payload] = event.payload;
+                            pendingAcks.set(ackOp.setBandControl, requestId);
+                            sendToProcessor(
+                                "set_band_control",
+                                payload,
+                                requestId,
+                            );
+                            log(
+                                `Forwarded set_band_control with requestId=${requestId}`,
+                            );
+                        } catch (e) {
+                            log(
+                                `Invalid set_band_control payload: ${e?.message || e}`,
+                            );
+                        }
+                    },
+                );
+
+                // Snoop data request (payload is [requestId, payload])
+                await listen("audio_worklet_snoop_request", async (event) => {
+                    try {
+                        const [requestId, payload] = event.payload;
+                        const key = makeSnoopKey(
+                            payload.snoopType,
+                            payload.group,
+                            payload.key,
+                        );
+                        pendingSnoop.set(key, requestId);
+                        sendToProcessor("get_snoop_data", payload, requestId);
+                        log(
+                            `Forwarded get_snoop_data with requestId=${requestId} key=${key}`,
+                        );
+                    } catch (e) {
+                        log(
+                            `Invalid snoop_request payload: ${e?.message || e}`,
+                        );
+                    }
+                });
+
+                log("Tauri event listeners set up");
+            }
+
+            // Initialize everything
+            async function initialize() {
+                try {
+                    updateStatus("Initializing AudioContext...", "info");
+                    if (!(await initializeAudioContext())) {
+                        throw new Error("AudioContext initialization failed");
+                    }
+
+                    updateStatus("Loading WASM module...", "info");
+                    if (!(await loadWasmModule())) {
+                        throw new Error("WASM module loading failed");
+                    }
+
+                    updateStatus("Registering AudioWorklet...", "info");
+                    if (!(await registerAudioWorklet())) {
+                        throw new Error("AudioWorklet registration failed");
+                    }
+
+                    updateStatus("Creating AudioWorklet node...", "info");
+                    if (!createAudioWorkletNode()) {
+                        throw new Error("AudioWorklet node creation failed");
+                    }
+
+                    updateStatus("Setting up event listeners...", "info");
+                    await setupTauriEventListeners();
+
+                    updateStatus("Audio Worklet ready", "success");
+
+                    // Notify Tauri that we're ready (best-effort; request_id is synthetic)
+                    await invoke("audio_worklet_ack", {
+                        request_id: `initialize_${Date.now()}`,
+                        payload: {
+                            operation: "initialize",
+                            success: true,
+                            errorMessage: null,
+                        },
+                    });
+                } catch (error) {
+                    updateStatus(
+                        `Initialization failed: ${error.message}`,
+                        "error",
+                    );
+                    log(
+                        `Initialization error: ${error.stack || error.message}`,
+                    );
+
+                    // Notify Tauri of the failure (best-effort; request_id is synthetic)
+                    try {
+                        await invoke("audio_worklet_ack", {
+                            request_id: `initialize_${Date.now()}`,
+                            payload: {
+                                operation: "initialize",
+                                success: false,
+                                errorMessage: error.message,
+                            },
+                        });
+                    } catch (invokeError) {
+                        log(
+                            `Failed to notify Tauri of initialization error: ${invokeError.message}`,
+                        );
+                    }
+                }
+            }
+
+            // Start initialization when DOM is ready
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", initialize);
+            } else {
+                initialize();
+            }
+
+            // Clean up on page unload
+            window.addEventListener("beforeunload", () => {
+                if (microphoneStream) {
+                    microphoneStream
+                        .getTracks()
+                        .forEach((track) => track.stop());
+                }
+                if (audioContext && audioContext.state !== "closed") {
+                    audioContext.close();
+                }
+            });
+        </script>
+    </body>
+</html>

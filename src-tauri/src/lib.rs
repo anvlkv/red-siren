@@ -1,3 +1,4 @@
+mod audio_worklet;
 mod health;
 mod instrument;
 mod intro;
@@ -75,6 +76,12 @@ pub fn run() {
         instrument::instrument_all_string_snoops,
         instrument::instrument_activation_snoop_data,
         instrument::instrument_all_activation_snoops,
+        audio_worklet::commands::audio_worklet_ack,
+        audio_worklet::commands::audio_worklet_snoop_response,
+        audio_worklet::commands::audio_worklet_mic_permission_check,
+        audio_worklet::commands::audio_worklet_supports_mic,
+        audio_worklet::commands::audio_worklet_get_mic_permission,
+        audio_worklet::commands::audio_worklet_cleanup_expired,
     ]);
 
     // Setup logic
@@ -88,6 +95,9 @@ pub fn run() {
         health::setup(app)?;
         intro::setup(app)?;
         tuner::setup(app)?;
+
+        // Setup audio worklet integration
+        audio_worklet::setup_audio_worklet(app)?;
 
         // Setup instrument last
         instrument::setup(app)?;

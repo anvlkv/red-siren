@@ -113,8 +113,6 @@ pub struct GroupConfig {
     pub channel: GroupChannel,
     /// Group nodes
     pub nodes: Vec<NodeConfig>,
-    /// Controls pause at zero crossings
-    pub a_coef: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -228,9 +226,6 @@ impl NodeConfig {
 impl GroupConfig {
     /// Unified group validation (safe constraints only).
     fn validate(&self, _group_idx: usize) -> Result<(), InstrumentConfigError> {
-        if !(0.0..1.0).contains(&self.a_coef) {
-            return Err(InstrumentConfigError::InvalidACoef(self.a_coef));
-        }
         if self.nodes.is_empty() {
             return Err(InstrumentConfigError::EmptyGroup);
         }
@@ -419,24 +414,6 @@ fn assign_node_phases(nodes: &mut [NodeConfig], group_index: usize, channel: Gro
     }
 }
 
-/// Map a group's base frequency to an a_coef ∈ [0,1], higher pitch => higher coef.
-///
-/// Uses logarithmic normalization over the "soft" recommended band. Values
-/// below soft min clamp to 0, above soft max clamp to 1. A floor of 0.2 keeps
-/// low groups expressive.
-fn a_coef_from_frequency(f: f64) -> f32 {
-    let min = SOFT_MIN_FREQ_HZ.max(1.0);
-    let max = SOFT_MAX_FREQ_HZ;
-    let ln_min = min.ln();
-    let ln_max = max.ln();
-    let norm = if ln_max > ln_min {
-        ((f.ln() - ln_min) / (ln_max - ln_min)).clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
-    (0.2 + 0.8 * norm) as f32
-}
-
 impl TryFrom<Layout> for Config {
     type Error = InstrumentConfigError;
 
@@ -463,13 +440,9 @@ impl TryFrom<Layout> for Config {
             // 1) Phase spreading
             assign_node_phases(&mut nodes, g_x, g_channel);
 
-            // 2) a_coef increases with pitch
-            let a_coef = a_coef_from_frequency(f_base);
-
             groups.push(GroupConfig {
                 channel: g_channel,
                 nodes,
-                a_coef,
             });
         }
 
@@ -567,7 +540,6 @@ mod tests {
         let group = GroupConfig {
             channel: GroupChannel::Left,
             nodes: vec![node],
-            a_coef: 0.5,
         };
         assert!(group.validate(0).is_ok());
     }
@@ -629,44 +601,6 @@ mod tests {
     }
 
     #[test]
-    fn test_a_coef_non_decreasing_with_frequency() {
-        let layout = layout_test_cases().next().expect("at least one layout");
-        let config = Config::try_from(layout).expect("layout should yield a valid config");
-
-        // Build a vector of (min_group_frequency, a_coef)
-        // Use min base frequency of each group's nodes as representative
-        let mut pairs: Vec<(f64, f32)> = config
-            .0
-            .iter()
-            .map(|g| {
-                let min_f = g
-                    .nodes
-                    .iter()
-                    .map(|n| n.base_frequency)
-                    .fold(f64::INFINITY, f64::min);
-                (min_f, g.a_coef)
-            })
-            .collect();
-
-        // Sort by frequency
-        pairs.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-
-        // Verify non-decreasing a_coef
-        for window in pairs.windows(2) {
-            let prev = window[0];
-            let next = window[1];
-            assert!(
-                next.1 + 1e-6 >= prev.1,
-                "a_coef decreased: {} -> {} (freq {} -> {})",
-                prev.1,
-                next.1,
-                prev.0,
-                next.0
-            );
-        }
-    }
-
-    #[test]
     fn test_config_max_volume_check() {
         // Construct a config that should violate the max node budget:
         // MAX_DBS is treated as the hard cap on total simultaneous nodes.
@@ -680,7 +614,6 @@ mod tests {
         let group = GroupConfig {
             channel: GroupChannel::Left,
             nodes: vec![dummy_node.clone(); excessive_nodes],
-            a_coef: 0.5,
         };
         let cfg_excess = Config(vec![group]);
         assert!(
@@ -697,7 +630,6 @@ mod tests {
         let group_ok = GroupConfig {
             channel: GroupChannel::Left,
             nodes: vec![dummy_node; ok_nodes],
-            a_coef: 0.5,
         };
         let cfg_ok = Config(vec![group_ok]);
         assert!(

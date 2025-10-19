@@ -176,7 +176,7 @@ impl FFTAnalyzer {
             let activation = if !in_band {
                 0.0
             } else if peak_db <= sensor.min_magnitude {
-                f32::EPSILON
+                0.0
             } else {
                 // Linear interpolation/extrapolation based on min/max range
                 (peak_db - sensor.min_magnitude) / (sensor.max_magnitude - sensor.min_magnitude)

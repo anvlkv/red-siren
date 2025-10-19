@@ -53,6 +53,7 @@ pub fn SpectrumVisualizer(
     });
 
     let activations = Signal::derive(move || spectrum().map(|data| data.sensor_activations));
+    let max_activations = Signal::derive(move || spectrum().map(|data| data.max_activations));
     // fft_size not needed for dB scaling
 
     view! {
@@ -66,6 +67,16 @@ pub fn SpectrumVisualizer(
                     y2=move || baseline.get().unwrap().1.y
                     class="stroke-gray/20 dark:stroke-cinnabar/20 stroke-1"
                 />
+            </Show>
+
+            // Max-hold sensor activation outline bars
+            <Show when=move || spectrum().is_some() && layout().is_some()>
+                <g
+                    class="fill-none stroke-gray/40 dark:stroke-cinnabar/40 stroke-[0.5]"
+                    style="mix-blend-mode: multiply"
+                >
+                    <ActivationBars activations=max_activations layout=layout baseline=baseline />
+                </g>
             </Show>
 
             // Sensor activation bars (highest opacity - 60%)

@@ -4,127 +4,105 @@ use crate::util::hash_str;
 
 const SIREN_ID: u64 = hash_str(concat!(module_path!(), "::Siren"));
 const SIREN_BASE_HZ: f32 = 0.5;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum SirenState {
-    Idle,
-    Active,
-    Tail,
-}
+const PAUSE_THRESHOLD: f32 = 0.5; // Above this, pause becomes negative
+const BASE_PAUSE_DURATION: f32 = 0.1; // Base pause duration in seconds
 
 #[derive(Clone)]
 pub struct Siren {
     freq: f32,
     phase: f32,
     sample_duration: f32,
-    last_sine: f32,
-    last_a: f32,
-    state: SirenState,
-    epsilon: f32,
-    tail_dir_sign: f32,
+    pause_timer: f32,   // Tracks remaining pause time
+    previous_sine: f32, // For zero-crossing detection
+}
+
+impl Siren {
+    /// Detects if we've crossed zero between previous and current sine values
+    fn has_zero_crossed(&self, current_sine: f32) -> bool {
+        // Zero crossing occurs when signs differ and we're going from positive to negative
+        self.previous_sine > 0.0 && current_sine <= 0.0
+    }
+
+    /// Calculates pause duration based on input amplitude
+    /// Returns negative duration when a > PAUSE_THRESHOLD
+    fn calculate_pause_duration(&self, a: f32) -> f32 {
+        if a > 0.0 {
+            // Higher amplitude = shorter pause
+            // When a > PAUSE_THRESHOLD, this becomes negative
+            BASE_PAUSE_DURATION * (1.0 - a / PAUSE_THRESHOLD)
+        } else {
+            0.0
+        }
+    }
 }
 
 impl AudioNode for Siren {
     const ID: u64 = SIREN_ID;
 
     type Inputs = U1;
-
     type Outputs = U1;
 
     fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
-        // Raw gate/time coefficient (may be negative => backwards)
         let a = input[0];
 
-        // Current sine sample
-        let s = self.phase.sin();
+        log::trace!("Siren tick: input a = {}", a);
 
-        // Zero-cross boundary detection
-        let crossed = (s * self.last_sine) < 0.0 || s.abs() < self.epsilon;
+        // Silent when input is zero
+        if a <= 0.0 {
+            self.pause_timer = 0.0;
+            self.previous_sine = 0.0;
+            log::trace!("Siren: input <= 0, returning silence");
+            return [0.0].into();
+        }
 
-        // Output and state transitions
-        let mut out = 0.0f32;
+        // Handle pause state
+        if self.pause_timer > 0.0 {
+            // Still pausing
+            self.pause_timer -= self.sample_duration;
+            return [0.0].into();
+        }
 
-        match self.state {
-            SirenState::Idle => {
-                // Silent and frozen. Start only when a > 0 at boundary.
-                if a > 0.0 {
-                    self.state = SirenState::Active;
-                }
-            }
-            SirenState::Active => {
-                // Emit sine. If a <= 0, finish to next boundary (Tail).
-                if crossed && a <= 0.0 {
-                    // Hit boundary while non-positive gate, stop immediately.
-                    self.state = SirenState::Idle;
-                    self.phase = 0.0;
-                    out = 0.0;
-                } else {
-                    out = s;
+        // Negative pause means we skip the pause entirely and continue oscillating
+        if self.pause_timer < 0.0 {
+            self.pause_timer = 0.0;
+        }
 
-                    if a <= 0.0 {
-                        self.state = SirenState::Tail;
-                        // Preserve direction of travel for the tail.
-                        self.tail_dir_sign = if self.last_a >= 0.0 { 1.0 } else { -1.0 };
-                    }
-                }
-            }
-            SirenState::Tail => {
-                // Keep emitting until next zero crossing, then stop.
-                if crossed {
-                    // Tail complete, transition to idle without emitting
-                    self.state = SirenState::Idle;
-                    self.phase = 0.0;
-                    out = 0.0;
-                } else {
-                    // Continue tail emission
-                    out = s;
-                }
+        // Generate sine wave
+        let current_sine = self.phase.sin();
+
+        // Check for zero crossing (positive to negative)
+        if self.has_zero_crossed(current_sine) {
+            // Calculate and set pause duration
+            self.pause_timer = self.calculate_pause_duration(a);
+
+            // If pause is negative (a > PAUSE_THRESHOLD), we don't actually pause
+            if self.pause_timer > 0.0 {
+                self.previous_sine = current_sine;
+                return [0.0].into();
             }
         }
 
-        // Phase/time advancement
+        // Advance phase
         let two_pi = std::f32::consts::TAU;
         let omega = two_pi * self.freq;
+        self.phase += omega * self.sample_duration;
 
-        match self.state {
-            SirenState::Idle => {
-                // Do not advance when muted.
-            }
-            SirenState::Active => {
-                // Advance with 'a' coefficient (sign preserved for backwards motion).
-                self.phase += omega * self.sample_duration * a;
-                if self.phase >= two_pi || self.phase < 0.0 {
-                    self.phase %= two_pi;
-                    if self.phase < 0.0 {
-                        self.phase += two_pi;
-                    }
-                }
-            }
-            SirenState::Tail => {
-                // Finish to boundary in preserved direction.
-                self.phase += omega * self.sample_duration * self.tail_dir_sign;
-                if self.phase >= two_pi || self.phase < 0.0 {
-                    self.phase %= two_pi;
-                    if self.phase < 0.0 {
-                        self.phase += two_pi;
-                    }
-                }
-            }
+        // Wrap phase to [0, 2π)
+        if self.phase >= two_pi {
+            self.phase -= two_pi;
         }
 
-        // Bookkeeping
-        self.last_sine = s;
-        self.last_a = a;
+        // Store current sine for next zero-crossing check
+        self.previous_sine = current_sine;
 
-        [out].into()
+        log::trace!("Siren: oscillating, output = {}", current_sine);
+        [current_sine].into()
     }
 
     fn reset(&mut self) {
         self.phase = 0.0;
-        self.last_sine = 0.0;
-        self.last_a = 0.0;
-        self.state = SirenState::Idle;
-        self.tail_dir_sign = 1.0;
+        self.pause_timer = 0.0;
+        self.previous_sine = 0.0;
     }
 
     fn set_sample_rate(&mut self, sample_rate: f64) {
@@ -137,13 +115,54 @@ pub fn siren() -> An<Siren> {
         freq: SIREN_BASE_HZ,
         phase: 0.0,
         sample_duration: 1.0 / DEFAULT_SR as f32,
-        last_sine: 0.0,
-        last_a: 0.0,
-        state: SirenState::Idle,
-        epsilon: 1.0e-6,
-        tail_dir_sign: 1.0,
+        pause_timer: 0.0,
+        previous_sine: 0.0,
     };
     siren.reset();
     siren.set_sample_rate(DEFAULT_SR);
     An(siren)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_siren_behavior() {
+        // Test with zero input
+        let mut siren_node = siren();
+        siren_node.reset();
+
+        let mut outputs = Vec::new();
+
+        // Process 2 seconds worth of samples with zero input
+        for _ in 0..96000 {
+            let input: Frame<f32, U1> = [0.0].into();
+            let output = siren_node.tick(&input);
+            outputs.push(output[0]);
+        }
+
+        // All outputs should be zero
+        assert!(
+            outputs.iter().all(|&x| x == 0.0),
+            "Should be silent when input is 0"
+        );
+
+        // Test with positive input (should oscillate)
+        outputs.clear();
+
+        for _ in 0..96000 {
+            let input: Frame<f32, U1> = [0.3].into();
+            let output = siren_node.tick(&input);
+            outputs.push(output[0]);
+        }
+
+        let has_positive = outputs.iter().any(|&x| x > 0.01);
+        let has_negative = outputs.iter().any(|&x| x < -0.01);
+
+        assert!(
+            has_positive && has_negative,
+            "Should oscillate when input > 0"
+        );
+    }
 }

@@ -292,9 +292,6 @@ pub enum InstrumentConfigError {
     #[error("empty group")]
     EmptyGroup,
 
-    #[error("invalid a_coef: {0}")]
-    InvalidACoef(f32),
-
     #[error("node {node} band range invalid: start {start} end {end}")]
     NodeBandRangeInvalid { node: usize, start: f32, end: f32 },
 }

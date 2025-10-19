@@ -15,6 +15,9 @@ pub struct SpectrumData {
     /// Sensor activation levels from FFT analyzer (0-1)
     pub sensor_activations: Vec<f32>,
 
+    /// Max-hold sensor activation levels (0-1)
+    pub max_activations: Vec<f32>,
+
     /// Corresponding frequencies for each magnitude
     pub frequencies: Vec<f32>,
 

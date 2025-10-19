@@ -56,6 +56,7 @@ struct CpalTunerRuntime {
     // Config & sensor handling
     config: Mutex<TunerConfig>,
     max_hold: Mutex<Vec<f32>>,
+    activation_max_hold: Mutex<Vec<f32>>,
     max_hold_decay: f32,
 
     // Runtime info
@@ -72,6 +73,7 @@ impl CpalTunerRuntime {
             last_spectrum: Mutex::new(None),
             config: Mutex::new(config),
             max_hold: Mutex::new(Vec::new()),
+            activation_max_hold: Mutex::new(Vec::new()),
             max_hold_decay: 0.95,
             sample_rate: Mutex::new(None),
         }
@@ -222,7 +224,7 @@ impl CpalTunerRuntime {
             }
         }
 
-        // Max-hold update
+        // Max-hold update for magnitudes (dB)
         let mut max_hold = self.max_hold.lock().unwrap();
         if max_hold.is_empty() {
             *max_hold = magnitudes.clone();
@@ -239,12 +241,25 @@ impl CpalTunerRuntime {
             }
         }
 
+        // Max-hold update for sensor activations (0..1)
+        let mut activation_max = self.activation_max_hold.lock().unwrap();
+        if activation_max.len() != sensor_activations.len() {
+            *activation_max = sensor_activations.clone();
+        } else {
+            for (i, &cur) in sensor_activations.iter().enumerate() {
+                let prev = activation_max[i] * self.max_hold_decay;
+                activation_max[i] = prev.max(cur);
+            }
+        }
+        let max_activations = activation_max.clone();
+
         let sample_rate = self.sample_rate.lock().unwrap().unwrap_or(48_000.0);
 
         let spectrum = SpectrumData {
             current_magnitudes: magnitudes.clone(),
             max_magnitudes: max_hold.clone(),
             sensor_activations,
+            max_activations,
             frequencies,
             sample_rate,
             fft_size: window,
@@ -294,6 +309,7 @@ impl CpalTunerRuntime {
         self.sample_buffer.lock().unwrap().clear();
         self.last_spectrum.lock().unwrap().take();
         self.max_hold.lock().unwrap().clear();
+        self.activation_max_hold.lock().unwrap().clear();
         log::trace!("tuner: shutdown complete (state cleared)");
     }
 }

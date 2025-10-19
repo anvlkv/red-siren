@@ -32,7 +32,7 @@ where
                 snoop(super::node::ACTIVATION_SNOOP_CAPACITY);
             let (output_snoop_front, output_snoop_backend) =
                 snoop(super::node::OUTPUT_SNOOP_CAPACITY);
-            let siren_control = shared(group.a_coef);
+            let siren_control = shared(0.0);
             let band_control = shared(0.0);
 
             group_handles.insert(

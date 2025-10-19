@@ -23,6 +23,7 @@ pub type NodeType = Pipe<
                     Binop<
                         FrameMul<UInt<UTerm, B1>>,
                         Pipe<Constant<UInt<UTerm, B1>>, Sine<S>>,
+                        // Pipe<Pipe<Var, SnoopBackend>, Siren>,
                         Pipe<Pipe<Pipe<Var, Follow<S>>, SnoopBackend>, Siren>,
                     >,
                     Split<UInt<UInt<UTerm, B1>, B1>>,

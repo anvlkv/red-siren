@@ -422,23 +422,12 @@ impl StreamController for CpalController {
                 let mut activator_cons = activator_cons;
                 let mut in_sample = [0_f32];
                 let mut out_sample = [0_f32, 0_f32];
-                let mut tick_count: usize = 0;
                 let next_value = move || {
-                    tick_count += 1;
                     let mut tmp = [0.0f64; 1];
                     if activator_cons.pop_slice(&mut tmp) > 0 {
                         in_sample[0] = tmp[0] as f32;
                     }
                     backend.tick(&in_sample, &mut out_sample);
-                    if tick_count % 2048 == 0 {
-                        log::trace!(
-                            "Output tick: n={}, in={:.3}, outL={:.3}, outR={:.3}",
-                            tick_count,
-                            in_sample[0],
-                            out_sample[0],
-                            out_sample[1]
-                        );
-                    }
                     (out_sample[0], out_sample[1])
                 };
                 let boxed: Box<GenType> = Box::new(next_value);

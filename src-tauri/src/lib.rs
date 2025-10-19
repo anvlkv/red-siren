@@ -31,6 +31,7 @@ pub fn run() {
     builder = builder.plugin(
         tauri_plugin_log::Builder::new()
             .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepOne)
+            // .level(log::LevelFilter::Trace)
             .level(if cfg!(debug_assertions) {
                 log::LevelFilter::Trace
             } else {

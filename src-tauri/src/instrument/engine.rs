@@ -42,25 +42,88 @@ impl InstrumentEngine {
     pub fn start_playback(&self) -> common::error::Result<bool> {
         let tuner_state = self.app.state::<crate::tuner::TunerState>();
         let tuner_config = tuner_state.tuner_config.read();
-        self.inner.start_playback(&tuner_config)
+        {
+            log::trace!("InstrumentEngine.start_playback()");
+            let res = self.inner.start_playback(&tuner_config);
+            if let Ok(changed) = &res {
+                log::trace!("InstrumentEngine.start_playback -> {}", changed);
+            } else {
+                log::error!(
+                    "InstrumentEngine.start_playback error: {:?}",
+                    res.as_ref().err()
+                );
+            }
+            res
+        }
     }
 
     pub fn stop_playback(&self) -> common::error::Result<bool> {
-        self.inner.stop_playback()
+        {
+            log::trace!("InstrumentEngine.stop_playback()");
+            let res = self.inner.stop_playback();
+            if let Ok(changed) = &res {
+                log::trace!("InstrumentEngine.stop_playback -> {}", changed);
+            } else {
+                log::error!(
+                    "InstrumentEngine.stop_playback error: {:?}",
+                    res.as_ref().err()
+                );
+            }
+            res
+        }
     }
 
     pub fn pause_playback(&self) -> common::error::Result<bool> {
-        self.inner.pause_playback()
+        {
+            log::trace!("InstrumentEngine.pause_playback()");
+            let res = self.inner.pause_playback();
+            if let Ok(changed) = &res {
+                log::trace!("InstrumentEngine.pause_playback -> {}", changed);
+            } else {
+                log::error!(
+                    "InstrumentEngine.pause_playback error: {:?}",
+                    res.as_ref().err()
+                );
+            }
+            res
+        }
     }
 
     pub fn resume_playback(&self) -> common::error::Result<bool> {
-        self.inner.resume_playback()
+        {
+            log::trace!("InstrumentEngine.resume_playback()");
+            let res = self.inner.resume_playback();
+            if let Ok(changed) = &res {
+                log::trace!("InstrumentEngine.resume_playback -> {}", changed);
+            } else {
+                log::error!(
+                    "InstrumentEngine.resume_playback error: {:?}",
+                    res.as_ref().err()
+                );
+            }
+            res
+        }
     }
 
     pub fn set_activation_source(&self, src: ActivationSource) -> common::error::Result<bool> {
         let tuner_state = self.app.state::<crate::tuner::TunerState>();
         let tuner_config = tuner_state.tuner_config.read();
-        self.inner.set_activation_source(src, &tuner_config)
+        {
+            log::trace!("InstrumentEngine.set_activation_source({:?})", src);
+            let res = self.inner.set_activation_source(src, &tuner_config);
+            if let Ok(changed) = &res {
+                log::trace!(
+                    "InstrumentEngine.set_activation_source -> changed={}",
+                    changed
+                );
+            } else {
+                log::error!(
+                    "InstrumentEngine.set_activation_source error: {:?}",
+                    res.as_ref().err()
+                );
+            }
+            res
+        }
     }
 
     pub fn set_is_dark(&self, is_dark: bool) -> common::error::Result<()> {
@@ -163,7 +226,12 @@ impl Inner {
                 let layout = self.layout.read();
                 let config = self.config.read();
                 let source = *self.activation_source.read();
+                log::trace!(
+                    "Inner.start_playback: starting stream with source={:?}",
+                    source
+                );
                 ctrl.start(&layout, &config, source, tuner_config)?;
+                log::trace!("Inner.start_playback: ctrl.start() returned Ok");
             }
         }
 
@@ -177,7 +245,9 @@ impl Inner {
 
         if let Some(ctrl) = self.stream_controller.read().as_ref() {
             // Even if stop errors, proceed to mark stopped for consistency
+            log::trace!("Inner.stop_playback: calling ctrl.stop()");
             let _ = ctrl.stop();
+            log::trace!("Inner.stop_playback: ctrl.stop() returned");
         }
 
         {
@@ -197,7 +267,9 @@ impl Inner {
         }
 
         if let Some(ctrl) = self.stream_controller.read().as_ref() {
+            log::trace!("Inner.pause_playback: calling ctrl.pause()");
             ctrl.pause()?;
+            log::trace!("Inner.pause_playback: ctrl.pause() returned");
         }
 
         {
@@ -217,7 +289,9 @@ impl Inner {
         }
 
         if let Some(ctrl) = self.stream_controller.read().as_ref() {
+            log::trace!("Inner.resume_playback: calling ctrl.resume()");
             ctrl.resume()?;
+            log::trace!("Inner.resume_playback: ctrl.resume() returned");
         }
 
         {
@@ -251,9 +325,13 @@ impl Inner {
         };
 
         if changed {
+            log::trace!("Inner.set_activation_source: changed to {:?}", src);
             if let Some(ctrl) = self.stream_controller.read().as_ref() {
+                log::trace!("Inner.set_activation_source: notifying stream controller");
                 ctrl.on_activation_source_changed(src)?;
             }
+        } else {
+            log::trace!("Inner.set_activation_source: no-op (already {:?})", src);
         }
 
         Ok(changed)

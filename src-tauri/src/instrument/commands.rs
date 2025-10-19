@@ -92,19 +92,24 @@ pub fn instrument_set_activation_source(
     health: State<'_, HealthSetupState>,
     app: AppHandle,
 ) -> Result<()> {
-    log::debug!(
+    log::trace!(
         "instrument_set_activation_source called with source={}",
         source
     );
 
-    let hs_state = health.lock();
     let src_u8 = source;
     let requested: ActivationSource = source.into();
     let current: ActivationSource = state.activation_source().into();
+    log::trace!(
+        "Activation source change requested: current={:?}, requested={:?} (code={})",
+        current,
+        requested,
+        src_u8
+    );
 
     // If no change, just log and return
     if current == requested {
-        log::debug!(
+        log::trace!(
             "Activation source unchanged (still {:?}, code={}) - no action taken",
             current,
             src_u8
@@ -112,13 +117,23 @@ pub fn instrument_set_activation_source(
         return Ok(());
     }
 
+    // Read mic permission with a narrow lock scope
+    let mic_permission_opt = {
+        log::trace!("Locking HealthSetupState to read mic_permission");
+        let hs = health.lock();
+        let perm = hs.mic_permission;
+        log::trace!("HealthSetupState.mic_permission={:?}", perm);
+        perm
+    };
+
     // Permission check if Mic requested
-    if matches!(requested, ActivationSource::Mic) && hs_state.mic_permission != Some(true) {
+    if matches!(requested, ActivationSource::Mic) && mic_permission_opt != Some(true) {
         log::warn!("Won't enable mic activation source without mic permission");
         return Err(InstrumentError::MicPermissionMissing.into());
     }
 
     // Apply change via inner method
+    log::trace!("Invoking engine.set_activation_source({:?})", requested);
     match state.set_activation_source(requested)? {
         true => {
             log::info!(

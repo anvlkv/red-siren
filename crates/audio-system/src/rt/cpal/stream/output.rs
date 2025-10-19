@@ -190,7 +190,6 @@ where
     }
     for frame in output.chunks_mut(channels) {
         let (l, r) = next_sample();
-        log::trace!("next sample: L={l:.5}, R={r:.5}");
         let left: T = T::from_sample(l as f64);
         let right: T = T::from_sample(r as f64);
 

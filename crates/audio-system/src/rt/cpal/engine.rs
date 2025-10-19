@@ -228,6 +228,7 @@ impl StreamController for CpalController {
         source: ActivationSource,
         tuner_config: &TunerConfig,
     ) -> Result<()> {
+        log::trace!("CpalController.start: begin with source={:?}", source);
         // Snapshot for potential restarts.
         {
             *self.last_layout.write() = *layout;
@@ -237,26 +238,72 @@ impl StreamController for CpalController {
         }
 
         let host = cpal::default_host();
+        log::trace!(
+            "CpalController.start: using CPAL host: {}",
+            host.id().name()
+        );
         let output_device = host
             .default_output_device()
             .ok_or(InstrumentError::DeviceUnavailable)?;
+        let output_device_name = output_device
+            .name()
+            .unwrap_or_else(|e| format!("(error getting name: {e})"));
+        log::trace!(
+            "CpalController.start: default output device: {}",
+            output_device_name
+        );
         let output_default_cfg = output_device
             .default_output_config()
             .map_err(|_| InstrumentError::OutputConfigUnavailable)?;
+        log::trace!(
+            "CpalController.start: output default cfg: format={:?}, channels={}, sample_rate={} Hz, buffer={:?}",
+            output_default_cfg.sample_format(),
+            output_default_cfg.channels(),
+            output_default_cfg.sample_rate().0,
+            output_default_cfg.buffer_size(),
+        );
 
         // Currently support up to stereo.
         let output_channels = std::cmp::Ord::min(output_default_cfg.channels(), 2) as usize;
+        log::trace!(
+            "CpalController.start: using {} output channels",
+            output_channels
+        );
 
         // Prepare activation ring buffer & activation source thread.
+        log::trace!(
+            "CpalController.start: selecting activation source branch: {:?}",
+            source
+        );
         let (act_sx, act_handle, activator_cons) = if matches!(source, ActivationSource::Mic) {
             let input_device = host
                 .default_input_device()
                 .ok_or(InstrumentError::DeviceUnavailable)?;
+            let input_device_name = input_device
+                .name()
+                .unwrap_or_else(|e| format!("(error getting name: {e})"));
+            log::trace!(
+                "CpalController.start: default input device: {}",
+                input_device_name
+            );
             let input_default_cfg = input_device
                 .default_input_config()
                 .map_err(|_| InstrumentError::InputConfigUnavailable)?;
+            log::trace!(
+                "CpalController.start: input default cfg: format={:?}, channels={}, sample_rate={} Hz, buffer={:?}",
+                input_default_cfg.sample_format(),
+                input_default_cfg.channels(),
+                input_default_cfg.sample_rate().0,
+                input_default_cfg.buffer_size(),
+            );
 
+            log::trace!("CpalController.start: using Mic activation");
             let stream_cfg: cpal::StreamConfig = input_default_cfg.clone().into();
+            log::trace!(
+                "CpalController.start: input stream_cfg: channels={}, sample_rate={} Hz",
+                stream_cfg.channels,
+                stream_cfg.sample_rate.0
+            );
             let channels_in = stream_cfg.channels as usize;
 
             let samples_per_ms = stream_cfg.sample_rate.0 as f64 / 1000.0;
@@ -271,8 +318,10 @@ impl StreamController for CpalController {
                     // Downmix to mono when pushing into ring buffer.
                     let ch = channels_in;
                     let mut mono = Vec::<f64>::new();
+                    let mut call_count: usize = 0;
                     let prod = move |sample: &[f64]| -> usize {
-                        if ch <= 1 {
+                        call_count += 1;
+                        let pushed = if ch <= 1 {
                             buffer_prod.push_slice(sample)
                         } else {
                             mono.clear();
@@ -282,7 +331,15 @@ impl StreamController for CpalController {
                                 mono.push(sum / ch as f64);
                             }
                             buffer_prod.push_slice(&mono)
+                        };
+                        if call_count % 1000 == 0 {
+                            log::trace!(
+                                "Mic producer tick: call={}, pushed={}",
+                                call_count,
+                                pushed
+                            );
                         }
+                        pushed
                     };
                     let boxed: Box<ProdType> = Box::new(prod);
                     boxed
@@ -291,6 +348,7 @@ impl StreamController for CpalController {
             (sx, join, buffer_cons)
         } else {
             // Entropy / noise activation
+            log::trace!("CpalController.start: using Noise activation");
             let channels_in = 1usize;
             let samples_per_ms = output_default_cfg.sample_rate().0 as f64 / 1000.0;
             let cap_samples = ((samples_per_ms * BUFFER_DURATION_MS as f64).ceil() as usize)
@@ -298,7 +356,19 @@ impl StreamController for CpalController {
             let capacity = cap_samples.next_power_of_two();
             let (mut buffer_prod, buffer_cons) = SharedRb::<Heap<f64>>::new(capacity).split();
             let (sx, join) = spawn_owned_noise_stream(move || {
-                let prod = move |sample: &[f64]| buffer_prod.push_slice(sample);
+                let mut call_count: usize = 0;
+                let prod = move |sample: &[f64]| {
+                    call_count += 1;
+                    let pushed = buffer_prod.push_slice(sample);
+                    if call_count % 1000 == 0 {
+                        log::trace!(
+                            "Noise producer tick: call={}, pushed={}",
+                            call_count,
+                            pushed
+                        );
+                    }
+                    pushed
+                };
                 let boxed: Box<ProdType> = Box::new(prod);
                 boxed
             })?;
@@ -352,12 +422,23 @@ impl StreamController for CpalController {
                 let mut activator_cons = activator_cons;
                 let mut in_sample = [0_f32];
                 let mut out_sample = [0_f32, 0_f32];
+                let mut tick_count: usize = 0;
                 let next_value = move || {
+                    tick_count += 1;
                     let mut tmp = [0.0f64; 1];
                     if activator_cons.pop_slice(&mut tmp) > 0 {
                         in_sample[0] = tmp[0] as f32;
                     }
                     backend.tick(&in_sample, &mut out_sample);
+                    if tick_count % 2048 == 0 {
+                        log::trace!(
+                            "Output tick: n={}, in={:.3}, outL={:.3}, outR={:.3}",
+                            tick_count,
+                            in_sample[0],
+                            out_sample[0],
+                            out_sample[1]
+                        );
+                    }
                     (out_sample[0], out_sample[1])
                 };
                 let boxed: Box<GenType> = Box::new(next_value);
@@ -377,11 +458,19 @@ impl StreamController for CpalController {
     }
 
     fn stop(&self) -> Result<()> {
+        log::trace!("CpalController.stop: begin");
         self.fade_out();
-        self.shutdown_streams()
+        let res = self.shutdown_streams();
+        if res.is_ok() {
+            log::trace!("CpalController.stop: shutdown_streams Ok");
+        } else {
+            log::error!("CpalController.stop: shutdown_streams Err");
+        }
+        res
     }
 
     fn pause(&self) -> Result<()> {
+        log::trace!("CpalController.pause: begin");
         self.fade_out();
         let Some(tx) = self.control_tx.read().as_ref().cloned() else {
             return Err(ControlError::BackendMissing { op: "pause".into() }.into());
@@ -399,6 +488,7 @@ impl StreamController for CpalController {
     }
 
     fn resume(&self) -> Result<()> {
+        log::trace!("CpalController.resume: begin");
         let Some(tx) = self.control_tx.read().as_ref().cloned() else {
             return Err(ControlError::BackendMissing {
                 op: "resume".into(),
@@ -426,15 +516,30 @@ impl StreamController for CpalController {
     }
 
     fn on_activation_source_changed(&self, source: ActivationSource) -> Result<()> {
+        log::trace!(
+            "CpalController.on_activation_source_changed: requested={:?}",
+            source
+        );
         *self.last_source.write() = source;
-        if self.control_tx.read().is_none() {
-            return Ok(()); // Not started yet
+        let started = self.control_tx.read().is_some();
+        log::trace!(
+            "CpalController.on_activation_source_changed: controller started? {}",
+            started
+        );
+        if !started {
+            log::trace!("CpalController.on_activation_source_changed: backend not started; caching source and returning Ok");
+            return Ok(());
         }
         // Restart streaming pipeline with new source
+        log::trace!("CpalController.on_activation_source_changed: preparing to restart streams");
         let layout = *self.last_layout.read();
         let config = self.last_config.read().clone();
-        let tuner_config = self.last_tuner_config.read();
+        let tuner_config = self.last_tuner_config.read().clone();
+        log::trace!("CpalController.on_activation_source_changed: state cloned; calling stop()");
         self.stop()?;
+        log::trace!(
+            "CpalController.on_activation_source_changed: stop() returned Ok; calling start()"
+        );
         self.start(&layout, &config, source, &tuner_config)
     }
 

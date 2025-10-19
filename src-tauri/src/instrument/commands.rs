@@ -1,4 +1,4 @@
-use common::audio::ActivationSource;
+use audio_system::rt::ActivationSource;
 use common::error::{InstrumentError, Result};
 use common::instrument::{
     events::{ActivationSourcePayload, PlaybackStatePayload},

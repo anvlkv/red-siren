@@ -1,6 +1,6 @@
 use parking_lot::RwLock;
 
-use common::audio::{ActivationSource, StreamController};
+use audio_system::rt::{make_stream_controller, ActivationSource, StreamController};
 
 use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout};
 use common::tuner::Config as TunerConfig;
@@ -42,7 +42,7 @@ impl InstrumentEngine {
     pub fn start_playback(&self) -> common::error::Result<bool> {
         let tuner_state = self.app.state::<crate::tuner::TunerState>();
         let tuner_config = tuner_state.tuner_config.read();
-        self.inner.start_playback(&self.app, &tuner_config)
+        self.inner.start_playback(&tuner_config)
     }
 
     pub fn stop_playback(&self) -> common::error::Result<bool> {
@@ -104,8 +104,8 @@ impl InstrumentEngine {
         self.inner.snapshot_all_activation_snoops()
     }
 
-    pub fn set_band_control(&self, group: u8, key: u8, value: f32) -> common::error::Result<()> {
-        self.inner.set_band_control(group, key, value)
+    pub fn set_band_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()> {
+        self.inner.set_band_control(key, value)
     }
 }
 
@@ -117,7 +117,7 @@ pub(super) struct Inner {
     layout: RwLock<InstrumentLayout>,
     config: RwLock<InstrumentConfig>,
 
-    // Runtime stream controller (Web Audio worklet implementation)
+    // Runtime stream controller (lazy; concrete backend chosen by audio_system::rt)
     stream_controller: RwLock<Option<Box<dyn StreamController + Send + Sync>>>,
 }
 
@@ -141,11 +141,7 @@ impl Inner {
     // Playback lifecycle
     // ---------------------------------------------------------------------
 
-    fn start_playback(
-        &self,
-        app: &AppHandle,
-        tuner_config: &TunerConfig,
-    ) -> common::error::Result<bool> {
+    fn start_playback(&self, tuner_config: &TunerConfig) -> common::error::Result<bool> {
         if *self.playing.read() {
             return Ok(false);
         }
@@ -161,9 +157,7 @@ impl Inner {
         {
             let mut controller = self.stream_controller.write();
             if controller.is_none() {
-                // Create WebAudioController using the audio_worklet integration
-                let web_controller = crate::audio_worklet::create_web_audio_controller(app);
-                *controller = Some(Box::new(web_controller));
+                *controller = Some(make_stream_controller()?);
             }
             if let Some(ctrl) = controller.as_ref() {
                 let layout = self.layout.read();
@@ -244,7 +238,7 @@ impl Inner {
     fn set_activation_source(
         &self,
         src: ActivationSource,
-        _tuner_config: &TunerConfig,
+        tuner_config: &TunerConfig,
     ) -> common::error::Result<bool> {
         let changed = {
             let mut current = self.activation_source.write();
@@ -390,9 +384,9 @@ impl Inner {
         Vec::new()
     }
 
-    fn set_band_control(&self, group: u8, key: u8, value: f32) -> common::error::Result<()> {
+    fn set_band_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()> {
         if let Some(ctrl) = self.stream_controller.read().as_ref() {
-            return ctrl.set_band_control(group, key, value);
+            return ctrl.set_band_control(key, value);
         }
         Ok(())
     }

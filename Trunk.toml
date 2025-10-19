@@ -9,31 +9,6 @@ port = 1420
 open = false
 
 [[hooks]]
-stage = "pre_build"
-command = "cargo"
-command_arguments = [
-  "build",
-  "--target",
-  "wasm32-unknown-unknown",
-  "--release",
-  "-p",
-  "audio-system",
-  "--features",
-  "rt_web_audio_unit"
-]
-
-[[hooks]]
-stage = "post_build"
-command = "wasm-bindgen"
-command_arguments = [
-  "target/wasm32-unknown-unknown/release/audio_system.wasm",
-  "--out-dir",
-  "dist/audio-worklet",
-  "--target",
-  "web"
-]
-
-[[hooks]]
 stage = "post_build"
 command = "sh"
 command_arguments = [

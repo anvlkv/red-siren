@@ -150,13 +150,6 @@ impl TunerState {
         self.spectrum_buffer.write().take();
     }
 
-    /// No-op placeholder to preserve existing command call sequence
-    /// until the commands module is simplified (start_tuner_stream already
-    /// initiates polling & emission).
-    pub fn start_spectrum_streaming(&self, _app: AppHandle) -> Result<()> {
-        Ok(())
-    }
-
     /// Update runtime configuration if runtime is active
     pub fn update_runtime_config(&self, config: &Config) {
         if let Some(runtime) = self.runtime.read().as_ref() {

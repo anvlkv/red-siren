@@ -4,6 +4,8 @@ pub const PLAYBACK_STATE: &str = "instrument_playback_state";
 pub const ACTIVATION_SRC: &str = "instrument_activation_source";
 /// Emitted when instrument layout changes (invoke & event share this string)
 pub const LAYOUT: &str = "instrument_layout";
+/// Emitted when band control position changes
+pub const BAND_CONTROL_G_K: &str = "instrument_band_control";
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

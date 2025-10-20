@@ -27,7 +27,7 @@ pub use menu::*;
 pub use switch::*;
 pub use tooltip::*;
 pub use tuner::*;
-pub use tuner::{expect_tuner_service, provide_tuner_service, TunerService};
+pub use tuner::{expect_tuner_service, provide_tuner_service};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, strum::EnumString)]
 pub enum UiVariant {
@@ -78,8 +78,8 @@ impl UiPadding {
         match self {
             Self::None => "p-0",
             Self::Sm => "p-1",
-            Self::Md => "p-4",
-            Self::Lg => "p-8",
+            Self::Md => "md:p-4 p-2",
+            Self::Lg => "md:p-8 p-3",
         }
     }
 }

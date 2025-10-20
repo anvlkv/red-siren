@@ -124,7 +124,7 @@ pub fn App() -> impl IntoView {
         <>
             <leptos_styling::StyleSheets />
             <div class=window_appearance_class>
-                <main class="bg-red dark:bg-black font-serif text-black dark:text-red relative h-screen w-screen">
+                <main class="bg-red dark:bg-black font-serif text-black dark:text-red relative h-screen w-screen select-none">
                     <Router>
                         <AppRoutes />
                     </Router>

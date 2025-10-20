@@ -1,6 +1,8 @@
 use audio_system::rt::ActivationSource;
 
 use common::error::{InstrumentError, Result};
+use common::instrument::commands::UpdateBandControlPayload;
+use common::instrument::events::BAND_CONTROL_G_K;
 use common::instrument::{
     events::{ActivationSourcePayload, PlaybackStatePayload},
     Layout,
@@ -100,7 +102,7 @@ pub fn instrument_set_activation_source(
 
     let src_u8 = source;
     let requested: ActivationSource = source.into();
-    let current: ActivationSource = state.activation_source().into();
+    let current: ActivationSource = state.activation_source();
     log::trace!(
         "Activation source change requested: current={:?}, requested={:?} (code={})",
         current,
@@ -388,6 +390,7 @@ pub fn instrument_update_band_control(
     key: u8,
     value: f32,
     state: State<'_, InstrumentEngine>,
+    app: AppHandle,
 ) -> Result<()> {
     log::trace!(
         "instrument_update_band_control called: group={}, key={}, value={}",
@@ -405,6 +408,11 @@ pub fn instrument_update_band_control(
         key,
         value
     );
+
+    app.emit(
+        BAND_CONTROL_G_K,
+        UpdateBandControlPayload { group, key, value },
+    )?;
 
     Ok(())
 }

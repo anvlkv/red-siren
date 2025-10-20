@@ -1,5 +1,10 @@
-use leptos::{html::Div, prelude::*};
-use leptos_use::use_element_bounding;
+use common::instrument::commands::UpdateBandControlPayload;
+use leptos::{html, prelude::*};
+use leptos_use::{
+    core::Position, use_draggable_with_options, use_element_bounding, UseDraggableOptions,
+    UseDraggableReturn,
+};
+use tauri_use::{use_invoke, use_listen, UseListenReturn, UseTauriReturn};
 
 use crate::{
     components::{expect_instrument_context, Button, UiSize},
@@ -24,8 +29,9 @@ pub fn KeyboardElement(
     } = expect_layout_contex();
 
     // NodeRefs for band and key wrapper
-    let band_ref = NodeRef::<Div>::new();
-    let key_ref = NodeRef::<Div>::new();
+    let band_ref = NodeRef::<html::Div>::new();
+    let key_ref = NodeRef::<html::Div>::new();
+    let draggable_ref = NodeRef::<html::Button>::new();
 
     // Measure band
     let leptos_use::UseElementBoundingReturn {
@@ -102,6 +108,199 @@ pub fn KeyboardElement(
                     key_should_animate.set(true);
                 }
             }
+        }
+    });
+
+    // Backend update command
+    let UseTauriReturn {
+        error: band_control_error,
+        trigger: update_band_control,
+        ..
+    } = use_invoke::<UpdateBandControlPayload, (), ()>(
+        common::commands::instrument::UPDATE_BAND_CONTROL,
+    );
+
+    let UseListenReturn {
+        data: band_control_data,
+        error: listen_band_control_error,
+        open: listen_band_control_open,
+        close: listen_band_control_close,
+        ..
+    } = use_listen::<UpdateBandControlPayload>(tauri_use::EventType::Custom(
+        common::events::instrument::BAND_CONTROL_G_K,
+    ));
+
+    let band_control_data = Memo::new(move |prev| {
+        band_control_data()
+            .iter()
+            .filter_map(|d| {
+                if d.group == g as u8 && d.key == k as u8 {
+                    Some(d.value)
+                } else {
+                    None
+                }
+            })
+            .next()
+            .or(prev.copied())
+            .unwrap_or_default()
+    });
+
+    // Get initial band control
+    Effect::new(move |_| {
+        listen_band_control_open();
+    });
+
+    // Log errors from band control updates
+    Effect::new(move |_| {
+        if let Some(err) = band_control_error.get() {
+            log::error!("Error updating band control: {err}");
+        }
+
+        if let Some(err) = listen_band_control_error.get() {
+            log::error!("Error listening band control: {err}");
+        }
+    });
+
+    on_cleanup(move || {
+        listen_band_control_close();
+    });
+
+    // Calculate drag constraints based on band dimensions and alignment
+    let calculated_drag_constraints = Memo::new(move |_| {
+        let band_w = band_width.get();
+        let band_h = band_height.get();
+        let key_dia = key_radius.get() as f64 * 2.0;
+        let key_margin = ((key_band_breadth.get() as f64 - key_dia) / 2.0).max(0.0);
+        let key_full_size = key_dia + key_margin * 2.0;
+
+        if band_w <= 0.0 || band_h <= 0.0 || key_full_size <= 0.0 {
+            return (0.0, 0.0, 0.0, 0.0);
+        }
+
+        let channel = first_group_channel.nth_channel_from_first(g);
+
+        match orientation {
+            common::orientation::LayoutOrientation::Vertical => {
+                // Vertical: keys stack vertically, drag horizontally along band's length (width)
+                let available_x = (band_w - key_full_size).max(0.0);
+                match channel {
+                    common::instrument::GroupChannel::Left => {
+                        // Left aligned: can drag from 0 to available_x
+                        (0.0, available_x, 0.0, 0.0)
+                    }
+                    common::instrument::GroupChannel::Right => {
+                        // Right aligned: can drag from -available_x to 0
+                        (-available_x, 0.0, 0.0, 0.0)
+                    }
+                }
+            }
+            common::orientation::LayoutOrientation::Horizontal => {
+                // Horizontal: keys stack horizontally, drag vertically along band's length (height)
+                let available_y = (band_h - key_full_size).max(0.0);
+                match channel {
+                    common::instrument::GroupChannel::Left => {
+                        // Top aligned: can drag from 0 to available_y
+                        (0.0, 0.0, 0.0, available_y)
+                    }
+                    common::instrument::GroupChannel::Right => {
+                        // Bottom aligned: can drag from -available_y to 0
+                        (0.0, 0.0, -available_y, 0.0)
+                    }
+                }
+            }
+        }
+    });
+
+    // Setup draggable for the wrapper div
+    let UseDraggableReturn {
+        position: drag_position,
+        is_dragging,
+        ..
+    } = use_draggable_with_options(
+        draggable_ref,
+        UseDraggableOptions::default().prevent_default(true),
+    );
+
+    // Constrain position and update backend
+    let constrained_position = Signal::derive(move || {
+        let pos = band_control_data.get() as f64;
+        let (min_x, max_x, min_y, max_y) = calculated_drag_constraints();
+
+        match (orientation, first_group_channel.nth_channel_from_first(g)) {
+            (
+                common::orientation::LayoutOrientation::Vertical,
+                common::instrument::GroupChannel::Left,
+            ) => {
+                let x_range = max_x - min_x;
+                let x = pos * x_range;
+                Position { x, y: 0.0 }
+            }
+            (
+                common::orientation::LayoutOrientation::Vertical,
+                common::instrument::GroupChannel::Right,
+            ) => {
+                let x_range = max_x - min_x;
+                let x = pos * -x_range;
+                Position { x, y: 0.0 }
+            }
+            (
+                common::orientation::LayoutOrientation::Horizontal,
+                common::instrument::GroupChannel::Left,
+            ) => {
+                let y_range = max_y - min_y;
+                let y = pos * y_range;
+                Position { x: 0.0, y }
+            }
+            (
+                common::orientation::LayoutOrientation::Horizontal,
+                common::instrument::GroupChannel::Right,
+            ) => {
+                let y_range = max_y - min_y;
+                let y = pos * -y_range;
+                Position { x: 0.0, y }
+            }
+        }
+    });
+
+    // Calculate normalized value for band control
+    Effect::new(move |_| {
+        let Position { x, y } = drag_position.get();
+        let (min_x, max_x, min_y, max_y) = calculated_drag_constraints();
+        let base_x = key_x();
+        let base_y = key_y();
+
+        if is_dragging.get() {
+            let normalized_value = match orientation {
+                common::orientation::LayoutOrientation::Vertical => {
+                    let d_x = match first_group_channel.nth_channel_from_first(g) {
+                        common::instrument::GroupChannel::Left => x - base_x,
+                        common::instrument::GroupChannel::Right => base_x - x,
+                    };
+
+                    let x_range = max_x - min_x;
+                    d_x / x_range
+                }
+                common::orientation::LayoutOrientation::Horizontal => {
+                    let d_y = match first_group_channel.nth_channel_from_first(g) {
+                        common::instrument::GroupChannel::Left => y - base_y,
+                        common::instrument::GroupChannel::Right => base_y - y,
+                    };
+
+                    let y_range = max_y - min_y;
+                    d_y / y_range
+                }
+            }
+            .clamp(0.0, 1.0);
+
+            // Update backend
+            update_band_control(Some((
+                UpdateBandControlPayload {
+                    group: g as u8,
+                    key: k as u8,
+                    value: normalized_value as f32,
+                },
+                (),
+            )));
         }
     });
 
@@ -260,7 +459,12 @@ pub fn KeyboardElement(
                 style=band_style
             ></div>
             <Button
-                class="border-none text-thin md:text-base text-sm"
+                class=Signal::derive(move || {
+                    format!(
+                        "border-none text-thin md:text-base text-sm absolute {}",
+                        if is_dragging() { "cursor-grabbing" } else { "cursor-grab" },
+                    )
+                })
                 size=UiSize::Sm
                 round=true
                 square=true
@@ -287,6 +491,9 @@ pub fn KeyboardElement(
                         .min(16.0);
                     format!("scale({s}, {s})", s = 0.75 + inc / 64.0)
                 }
+                style:top=move || { format!("{}px", constrained_position().y) }
+                style:left=move || { format!("{}px", constrained_position().x) }
+                node_ref=draggable_ref
             >
                 {format!("{key_code:?}")}
             </Button>

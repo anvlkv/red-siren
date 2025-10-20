@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 use serde::{Deserialize, Serialize};
 
 use crate::error::InstrumentConfigError;

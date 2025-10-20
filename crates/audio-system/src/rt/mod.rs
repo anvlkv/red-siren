@@ -72,6 +72,8 @@ pub trait StreamController {
 
     // Band control
     fn set_band_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()>;
+
+    fn get_band_control(&self, key: common::NodeKey) -> common::error::Result<f32>;
     }
 
 /// Null / no-op runtime used when no concrete backend feature is enabled.
@@ -137,6 +139,10 @@ impl StreamController for NullController {
 
     fn set_band_control(&self, _key: common::NodeKey, _value: f32) -> common::error::Result<()> {
         Ok(())
+    }
+
+    fn get_band_control(&self, _key: common::NodeKey) -> common::error::Result<f32> {
+        Ok(0.0)
     }
 }
 

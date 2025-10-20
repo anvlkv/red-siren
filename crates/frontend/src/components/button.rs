@@ -1,4 +1,4 @@
-use leptos::prelude::*;
+use leptos::{html, prelude::*};
 use leptos_router::components::A;
 
 use crate::components::{UiPlacement, UiSize, UiVariant};
@@ -41,8 +41,10 @@ pub fn Button(
 
     // Optional placement for directional / edge-aware layout (Left/Right => vertical stacking)
     #[prop(optional, into)] placement: Signal<Option<UiPlacement>>,
+
+    #[prop(optional)] node_ref: NodeRef<html::Button>,
 ) -> impl IntoView {
-    let base = "relative inline-flex items-center justify-center cursor-pointer \
+    let base = "relative inline-flex items-center justify-center \
             transition-colors transition-shadow transition-opacity duration-200 focus:outline-none \
             focus-visible:ring-2 focus-visible:ring-offset-2 \
             hover:shadow-md active:shadow-sm italic backface-hidden antialiased";
@@ -55,15 +57,15 @@ pub fn Button(
 
         let size_cls = if square() {
             match size() {
-                UiSize::Sm => "h-10 w-10 md:text-xl text-lg",
-                UiSize::Md => "h-12 w-12 md:text-2xl text-xl",
-                UiSize::Lg => "h-16 w-16 md:text-4xl text-2xl",
+                UiSize::Sm => "md:h-10 md:w-10 h-8 w-8 md:text-xl text-lg",
+                UiSize::Md => "md:h-12 md:w-12 h-9 w-9 md:text-2xl text-xl",
+                UiSize::Lg => "md:h-16 md:w-16 h-10 w-10 md:text-4xl text-2xl",
             }
         } else {
             match size() {
-                UiSize::Sm => "h-10 px-4 md:text-base text-sm",
-                UiSize::Md => "h-12 px-5 md:text-lg text-base",
-                UiSize::Lg => "h-16 px-6 md:text-2xl text-lg",
+                UiSize::Sm => "md:h-10 h-8 md:px-4 px-2 md:text-base text-sm",
+                UiSize::Md => "md:h-12 h-9 md:px-5 px-3 md:text-lg text-base",
+                UiSize::Lg => "md:h-16 h-10 md:px-6 px-4 md:text-2xl text-lg",
             }
         };
 
@@ -97,10 +99,15 @@ pub fn Button(
             ""
         };
 
-        format!(
-            "{base} {rounding} {size_cls} {variant_cls} {disabled_cls} {}",
-            class()
-        )
+        let class = class();
+
+        let cursor = if class.contains(" cursor-") {
+            ""
+        } else {
+            "cursor-pointer"
+        };
+
+        format!("{base} {rounding} {size_cls} {variant_cls} {disabled_cls} {class} {cursor}",)
     };
 
     let button_style = Signal::derive(move || {
@@ -123,7 +130,7 @@ pub fn Button(
                     .into_any()
             } else {
                 view! {
-                    <button class=class disabled=disabled style=button_style>
+                    <button class=class disabled=disabled style=button_style node_ref=node_ref>
                         {children()}
                     </button>
                 }

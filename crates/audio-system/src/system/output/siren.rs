@@ -45,13 +45,10 @@ impl AudioNode for Siren {
     fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
         let a = input[0];
 
-        log::trace!("Siren tick: input a = {}", a);
-
         // Silent when input is zero
         if a <= 0.0 {
             self.pause_timer = 0.0;
             self.previous_sine = 0.0;
-            log::trace!("Siren: input <= 0, returning silence");
             return [0.0].into();
         }
 
@@ -95,7 +92,6 @@ impl AudioNode for Siren {
         // Store current sine for next zero-crossing check
         self.previous_sine = current_sine;
 
-        log::trace!("Siren: oscillating, output = {}", current_sine);
         [current_sine].into()
     }
 

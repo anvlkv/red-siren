@@ -139,7 +139,6 @@ fn run_output(
         SampleFormat::F32 => device.build_output_stream(
             config,
             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                log::trace!("output stream tick: {} samples", data.len());
                 write_data(data, channels, &mut next_sample)
             },
             err_cb,
@@ -148,7 +147,6 @@ fn run_output(
         SampleFormat::I16 => device.build_output_stream(
             config,
             move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
-                log::trace!("output stream tick: {} samples", data.len());
                 write_data(data, channels, &mut next_sample)
             },
             err_cb,
@@ -157,7 +155,6 @@ fn run_output(
         SampleFormat::U16 => device.build_output_stream(
             config,
             move |data: &mut [u16], _: &cpal::OutputCallbackInfo| {
-                log::trace!("output stream tick: {} samples", data.len());
                 write_data(data, channels, &mut next_sample)
             },
             err_cb,

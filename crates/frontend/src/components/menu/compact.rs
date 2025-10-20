@@ -102,10 +102,10 @@ pub fn CompactMenu(
         format!(
             "{} overflow-visible",
             match place {
-                UiPlacement::Bottom => "rounded-b-none px-4",
-                UiPlacement::Top => "rounded-t-none px-4",
-                UiPlacement::Left => "rounded-l-none py-4",
-                UiPlacement::Right => "rounded-r-none py-4",
+                UiPlacement::Bottom => "rounded-b-none md:px-4 px-2",
+                UiPlacement::Top => "rounded-t-none md:px-4 px-2",
+                UiPlacement::Left => "rounded-l-none md:py-4 py-2",
+                UiPlacement::Right => "rounded-r-none md:py-4 py-2",
             }
         )
     });

@@ -173,9 +173,7 @@ impl FFTAnalyzer {
             let in_band = freq >= sensor.min_frequency && freq <= sensor.max_frequency;
 
             // Distance-based activation: interpolate between min/max magnitude
-            let activation = if !in_band {
-                0.0
-            } else if peak_db <= sensor.min_magnitude {
+            let activation = if !in_band || peak_db <= sensor.min_magnitude {
                 0.0
             } else {
                 // Linear interpolation/extrapolation based on min/max range

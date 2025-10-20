@@ -23,7 +23,7 @@ pub struct ActivationSourcePayload {
     pub source: u8,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateBandControlPayload {
     pub group: u8,

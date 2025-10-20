@@ -218,6 +218,16 @@ impl CpalController {
             Err(ControlError::NodeNotFound { key }.into())
         }
     }
+
+    /// Set band control value for a specific node
+    pub fn get_band_control(&self, key: NodeKey) -> Result<f32> {
+        let band_controls = self.band_controls.read();
+        if let Some(control) = band_controls.get(&key) {
+            Ok(control.value())
+        } else {
+            Err(ControlError::NodeNotFound { key }.into())
+        }
+    }
 }
 
 impl StreamController for CpalController {
@@ -318,10 +328,8 @@ impl StreamController for CpalController {
                     // Downmix to mono when pushing into ring buffer.
                     let ch = channels_in;
                     let mut mono = Vec::<f64>::new();
-                    let mut call_count: usize = 0;
                     let prod = move |sample: &[f64]| -> usize {
-                        call_count += 1;
-                        let pushed = if ch <= 1 {
+                        if ch <= 1 {
                             buffer_prod.push_slice(sample)
                         } else {
                             mono.clear();
@@ -331,15 +339,7 @@ impl StreamController for CpalController {
                                 mono.push(sum / ch as f64);
                             }
                             buffer_prod.push_slice(&mono)
-                        };
-                        if call_count % 1000 == 0 {
-                            log::trace!(
-                                "Mic producer tick: call={}, pushed={}",
-                                call_count,
-                                pushed
-                            );
                         }
-                        pushed
                     };
                     let boxed: Box<ProdType> = Box::new(prod);
                     boxed
@@ -356,19 +356,7 @@ impl StreamController for CpalController {
             let capacity = cap_samples.next_power_of_two();
             let (mut buffer_prod, buffer_cons) = SharedRb::<Heap<f64>>::new(capacity).split();
             let (sx, join) = spawn_owned_noise_stream(move || {
-                let mut call_count: usize = 0;
-                let prod = move |sample: &[f64]| {
-                    call_count += 1;
-                    let pushed = buffer_prod.push_slice(sample);
-                    if call_count % 1000 == 0 {
-                        log::trace!(
-                            "Noise producer tick: call={}, pushed={}",
-                            call_count,
-                            pushed
-                        );
-                    }
-                    pushed
-                };
+                let prod = move |sample: &[f64]| buffer_prod.push_slice(sample);
                 let boxed: Box<ProdType> = Box::new(prod);
                 boxed
             })?;
@@ -632,6 +620,10 @@ impl StreamController for CpalController {
 
     fn set_band_control(&self, key: NodeKey, value: f32) -> Result<()> {
         self.set_band_control(key, value)
+    }
+
+    fn get_band_control(&self, key: NodeKey) -> Result<f32> {
+        self.get_band_control(key)
     }
 }
 /// Factory exposed to the runtime facade.

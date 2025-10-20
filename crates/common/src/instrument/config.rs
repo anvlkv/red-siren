@@ -121,8 +121,6 @@ pub struct NodeConfig {
     pub base_frequency: f64,
     /// Starting phase of the oscillator
     pub phase: f64,
-    /// Range in which node frequency may change
-    pub band_range: Range<f64>,
     /// Unique node identifier within the instrument
     pub key: NodeKey,
 }
@@ -135,14 +133,6 @@ impl NodeConfig {
     /// 3. Safe (hard) bounds (emit *safe* errors)
     fn validate(&self, idx: usize) -> Result<(), InstrumentConfigError> {
         // 1. Structural
-        if self.band_range.start >= self.band_range.end {
-            return Err(InstrumentConfigError::NodeBandRangeInvalid {
-                node: idx,
-                start: self.band_range.start as f32,
-                end: self.band_range.end as f32,
-            });
-        }
-
         // 2. Recommended bounds (soft limits)
         if self.base_frequency < SOFT_MIN_FREQ_HZ {
             return Err(InstrumentConfigError::NodeFreqencyBelowRecomended {
@@ -154,30 +144,6 @@ impl NodeConfig {
             return Err(InstrumentConfigError::NodeFreqencyAboveRecomended {
                 node: idx,
                 freq: self.base_frequency as f32,
-            });
-        }
-        if self.band_range.start < SOFT_MIN_FREQ_HZ {
-            return Err(InstrumentConfigError::NodeBandStartBelowRecomended {
-                node: idx,
-                freq: self.band_range.start as f32,
-            });
-        }
-        if self.band_range.start > SOFT_MAX_FREQ_HZ {
-            return Err(InstrumentConfigError::NodeBandStartAboveRecomended {
-                node: idx,
-                freq: self.band_range.start as f32,
-            });
-        }
-        if self.band_range.end < SOFT_MIN_FREQ_HZ {
-            return Err(InstrumentConfigError::NodeBandEndBelowRecomended {
-                node: idx,
-                freq: self.band_range.end as f32,
-            });
-        }
-        if self.band_range.end > SOFT_MAX_FREQ_HZ {
-            return Err(InstrumentConfigError::NodeBandEndAboveRecomended {
-                node: idx,
-                freq: self.band_range.end as f32,
             });
         }
 
@@ -192,30 +158,6 @@ impl NodeConfig {
             return Err(InstrumentConfigError::NodeFreqencyAboveSafe {
                 node: idx,
                 freq: self.base_frequency as f32,
-            });
-        }
-        if self.band_range.start < MIN_FREQ_HZ {
-            return Err(InstrumentConfigError::NodeBandStartBelowSafe {
-                node: idx,
-                freq: self.band_range.start as f32,
-            });
-        }
-        if self.band_range.start > MAX_FREQ_HZ {
-            return Err(InstrumentConfigError::NodeBandStartAboveSafe {
-                node: idx,
-                freq: self.band_range.start as f32,
-            });
-        }
-        if self.band_range.end < MIN_FREQ_HZ {
-            return Err(InstrumentConfigError::NodeBandEndBelowSafe {
-                node: idx,
-                freq: self.band_range.end as f32,
-            });
-        }
-        if self.band_range.end > MAX_FREQ_HZ {
-            return Err(InstrumentConfigError::NodeBandEndAboveSafe {
-                node: idx,
-                freq: self.band_range.end as f32,
             });
         }
 
@@ -328,7 +270,7 @@ impl Config {
 
 fn build_group_nodes(
     group_f_base: f64,
-    group_n_base: usize,
+    group: usize,
     scale: Scale,
     equal_divisions: u32,
 ) -> Vec<NodeConfig> {
@@ -346,10 +288,6 @@ fn build_group_nodes(
     }
     boundaries.push(equal_divisions as f64);
 
-    // Harmonic spacing cap
-    let harmonic_step = group_f_base / group_n_base as f64;
-    let harmonic_half_span = harmonic_step * 0.5;
-
     let mut nodes = Vec::with_capacity(divs.len());
     for (i, &d) in divs.iter().enumerate() {
         let center_ratio = 2f64.powf(d as f64 / equal_divisions as f64);
@@ -358,33 +296,10 @@ fn build_group_nodes(
             continue;
         }
 
-        let lower_ratio = 2f64.powf(boundaries[i] / equal_divisions as f64);
-        let upper_ratio = 2f64.powf(boundaries[i + 1] / equal_divisions as f64);
-
-        let mut start_f = group_f_base * lower_ratio;
-        let mut end_f = group_f_base * upper_ratio;
-
-        // Harmonic cap intersection
-        start_f = start_f.max((base_f - harmonic_half_span).max(MIN_FREQ_HZ));
-        end_f = end_f.min((base_f + harmonic_half_span).min(MAX_FREQ_HZ));
-
-        if end_f <= start_f {
-            // fallback micro-span
-            let eps = base_f * 0.001;
-            let s = (base_f - eps).max(MIN_FREQ_HZ);
-            let e = (base_f + eps).min(MAX_FREQ_HZ);
-            if e <= s {
-                continue;
-            }
-            start_f = s;
-            end_f = e;
-        }
-
         nodes.push(NodeConfig {
             base_frequency: base_f,
             phase: 0.0,
-            band_range: start_f..end_f,
-            key: NodeKey(0, 0),
+            key: NodeKey(group as u8, i as u8),
         });
     }
 
@@ -431,13 +346,13 @@ impl TryFrom<Layout> for Config {
         for (g_x, n) in (0..value.num_groups.get() as usize).map(|g_x| (g_x, 2 * g_x + 1)) {
             let g_channel = value.first_group_channel.nth_channel_from_first(g_x);
 
-            let (group_f_base, group_n_base) = g_channel.compute_fundamentals(l, n);
+            let (group_f_base, _group_n_base) = g_channel.compute_fundamentals(l, n);
 
             let f_base = group_f_base * 2usize.pow(g_x as u32) as f64;
 
-            let mut nodes = build_group_nodes(f_base, group_n_base, scale, equal_divisions);
+            let mut nodes = build_group_nodes(f_base, g_x, scale, equal_divisions);
 
-            // 1) Phase spreading
+            // Phase spreading
             assign_node_phases(&mut nodes, g_x, g_channel);
 
             groups.push(GroupConfig {
@@ -515,14 +430,12 @@ mod tests {
         let valid_node = NodeConfig {
             base_frequency: (super::SOFT_MIN_FREQ_HZ + super::SOFT_MAX_FREQ_HZ) / 2.0,
             phase: 0.0,
-            band_range: super::SOFT_MIN_FREQ_HZ..super::SOFT_MAX_FREQ_HZ,
             key: NodeKey(0, 0),
         };
         assert!(valid_node.validate(0).is_ok());
         assert!(NodeConfig {
             base_frequency: super::MIN_FREQ_HZ - 1.0,
             phase: 0.0,
-            band_range: super::MIN_FREQ_HZ..super::MAX_FREQ_HZ,
             key: NodeKey(0, 0),
         }
         .validate(0)
@@ -534,7 +447,6 @@ mod tests {
         let node = NodeConfig {
             base_frequency: (super::SOFT_MIN_FREQ_HZ + super::SOFT_MAX_FREQ_HZ) / 2.0,
             phase: 0.0,
-            band_range: super::SOFT_MIN_FREQ_HZ..super::SOFT_MAX_FREQ_HZ,
             key: NodeKey(0, 0),
         };
         let group = GroupConfig {
@@ -608,7 +520,6 @@ mod tests {
         let dummy_node = NodeConfig {
             base_frequency: (SOFT_MIN_FREQ_HZ + SOFT_MAX_FREQ_HZ) / 2.0,
             phase: 0.0,
-            band_range: SOFT_MIN_FREQ_HZ..SOFT_MAX_FREQ_HZ,
             key: NodeKey(0, 0),
         };
         let group = GroupConfig {

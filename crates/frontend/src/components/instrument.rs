@@ -1,5 +1,5 @@
 mod context;
-mod debug;
+mod element;
 mod keyboard;
 mod strings;
 
@@ -15,7 +15,6 @@ style_sheet!(
 
 pub use context::{expect_instrument_context, provide_instrument_context};
 
-use debug::*;
 use keyboard::*;
 use strings::*;
 
@@ -33,7 +32,6 @@ pub fn Instrument() -> impl IntoView {
         >
             <InstrumentStrings attr:class="absolute h-full w-auto right-0 bottom-0 stroke-black dark:stroke-red bg-none" />
             <Keyboard attr:class="absolute inset-0" />
-            <DebugOverlay />
         </div>
     }
 }

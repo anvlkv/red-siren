@@ -58,12 +58,12 @@ fn create_node(config: &NodeConfig, handles: InnerHandles) -> An<NodeType> {
         ..
     } = handles;
 
-    let source = sine_hz::<S>(config.base_frequency as S);
+    let source = constant(config.base_frequency as S) >> sine_phase::<S>(config.phase as S);
     let siren_activation =
         An(siren_control) >> follow(FOLLOW_RESPONSE_TIME_S) >> activation_snoop >> siren();
-    let formants = (formant::<1>(band_control.clone(), config.base_frequency as f32) * 1.0)
-        | (formant::<2>(band_control.clone(), config.base_frequency as f32) * 0.8)
-        | (formant::<3>(band_control.clone(), config.base_frequency as f32) * 0.6);
+    let formants = (formant::<1>(band_control.clone(), config.base_frequency as S) * 1.0)
+        | (formant::<2>(band_control.clone(), config.base_frequency as S) * 0.8)
+        | (formant::<3>(band_control.clone(), config.base_frequency as S) * 0.6);
 
     // Source
     (source * siren_activation)

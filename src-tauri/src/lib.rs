@@ -76,6 +76,7 @@ pub fn run() {
         instrument::instrument_all_string_snoops,
         instrument::instrument_activation_snoop_data,
         instrument::instrument_all_activation_snoops,
+        instrument::instrument_update_band_control,
     ]);
 
     // Setup logic

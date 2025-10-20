@@ -1,4 +1,5 @@
 use audio_system::rt::ActivationSource;
+
 use common::error::{InstrumentError, Result};
 use common::instrument::{
     events::{ActivationSourcePayload, PlaybackStatePayload},
@@ -378,4 +379,32 @@ pub fn instrument_all_activation_snoops(
         t_unix_ms,
         snoops: entries,
     })
+}
+
+#[tauri::command]
+/// Updates the band control value for a specific key
+pub fn instrument_update_band_control(
+    group: u8,
+    key: u8,
+    value: f32,
+    state: State<'_, InstrumentEngine>,
+) -> Result<()> {
+    log::trace!(
+        "instrument_update_band_control called: group={}, key={}, value={}",
+        group,
+        key,
+        value
+    );
+
+    let node_key = common::NodeKey(group, key);
+    state.set_band_control(node_key, value)?;
+
+    log::trace!(
+        "Band control updated for node ({}, {}): value={}",
+        group,
+        key,
+        value
+    );
+
+    Ok(())
 }

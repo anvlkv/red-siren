@@ -45,7 +45,7 @@ pub fn Button(
     let base = "relative inline-flex items-center justify-center cursor-pointer \
             transition-colors transition-shadow transition-opacity duration-200 focus:outline-none \
             focus-visible:ring-2 focus-visible:ring-offset-2 \
-            hover:shadow-md active:shadow-sm italic";
+            hover:shadow-md active:shadow-sm italic backface-hidden antialiased";
     let class = move || {
         let rounding = if round() {
             "rounded-full"

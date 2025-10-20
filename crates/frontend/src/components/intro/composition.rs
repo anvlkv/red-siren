@@ -50,7 +50,7 @@ pub fn IntroComp(#[prop(into)] exit: Signal<bool>) -> impl IntoView {
             <svg
                 viewBox="0 0 1048 932"
                 fill="none"
-                class="absolute h-full w-auto top-0 left-0 stroke-gray dark:stroke-cinnabar blur-[.5px]"
+                class="absolute h-full w-auto top-0 left-0 stroke-gray dark:stroke-cinnabar"
                 r#xmlns="http://www.w3.org/2000/svg"
                 id="waves"
             >

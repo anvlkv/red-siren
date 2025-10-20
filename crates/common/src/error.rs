@@ -291,9 +291,6 @@ pub enum InstrumentConfigError {
 
     #[error("empty group")]
     EmptyGroup,
-
-    #[error("node {node} band range invalid: start {start} end {end}")]
-    NodeBandRangeInvalid { node: usize, start: f32, end: f32 },
 }
 
 impl From<InstrumentConfigError> for AppError {

@@ -297,7 +297,7 @@ fn build_group_nodes(
         nodes.push(NodeConfig {
             base_frequency: base_f,
             phase: 0.0,
-            key: NodeKey(group as u8, i as u8),
+            key: NodeKey::new(group as u8, i as u8),
         });
     }
 
@@ -323,7 +323,7 @@ fn assign_node_phases(nodes: &mut [NodeConfig], group_index: usize, channel: Gro
     for (k, node) in nodes.iter_mut().enumerate() {
         let spread = 2.0 * std::f64::consts::PI * (k as f64) / n;
         node.phase = group_offset + spread + channel_offset;
-        node.key = NodeKey(group_index as u8, k as u8);
+        node.key = NodeKey::new(group_index as u8, k as u8);
     }
 }
 
@@ -428,13 +428,13 @@ mod tests {
         let valid_node = NodeConfig {
             base_frequency: (super::SOFT_MIN_FREQ_HZ + super::SOFT_MAX_FREQ_HZ) / 2.0,
             phase: 0.0,
-            key: NodeKey(0, 0),
+            key: NodeKey::new(0, 0),
         };
         assert!(valid_node.validate(0).is_ok());
         assert!(NodeConfig {
             base_frequency: super::MIN_FREQ_HZ - 1.0,
             phase: 0.0,
-            key: NodeKey(0, 0),
+            key: NodeKey::new(0, 0),
         }
         .validate(0)
         .is_err());
@@ -445,7 +445,7 @@ mod tests {
         let node = NodeConfig {
             base_frequency: (super::SOFT_MIN_FREQ_HZ + super::SOFT_MAX_FREQ_HZ) / 2.0,
             phase: 0.0,
-            key: NodeKey(0, 0),
+            key: NodeKey::new(0, 0),
         };
         let group = GroupConfig {
             channel: GroupChannel::Left,
@@ -518,7 +518,7 @@ mod tests {
         let dummy_node = NodeConfig {
             base_frequency: (SOFT_MIN_FREQ_HZ + SOFT_MAX_FREQ_HZ) / 2.0,
             phase: 0.0,
-            key: NodeKey(0, 0),
+            key: NodeKey::new(0, 0),
         };
         let group = GroupConfig {
             channel: GroupChannel::Left,

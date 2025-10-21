@@ -45,7 +45,7 @@ pub type NodeType = Pipe<
 
 pub const ACTIVATION_SNOOP_CAPACITY: usize = 16;
 pub const OUTPUT_SNOOP_CAPACITY: usize = 256;
-const FOLLOW_RESPONSE_TIME_S: f32 = 1.0 / 75.0;
+const FOLLOW_RESPONSE_TIME_S: f32 = (1.0 / 75.0) * 5.0;
 const NODE_BELL_Q: f32 = 0.3142;
 const NODE_BELL_GAIN_DB: f32 = 1.7;
 
@@ -70,7 +70,7 @@ fn create_node(config: &NodeConfig, handles: InnerHandles) -> An<NodeType> {
         // Create resonator formants
         >> split::<U3>()
         >> formants
-        >> (join::<U3>() * 0.104167)
+        >> (join::<U3>() * (1.0 / (1.0 + 0.8 + 0.6)))
         // Node bell filter
         >> bell_hz(config.base_frequency as S, NODE_BELL_Q, NODE_BELL_GAIN_DB)
         // Visualize

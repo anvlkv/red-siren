@@ -272,21 +272,27 @@ pub fn KeyboardElement(
         if is_dragging.get() {
             let normalized_value = match orientation {
                 common::orientation::LayoutOrientation::Vertical => {
+                    let x_range = max_x - min_x;
+
                     let d_x = match first_group_channel.nth_channel_from_first(g) {
                         common::instrument::GroupChannel::Left => x - base_x,
                         common::instrument::GroupChannel::Right => base_x - x,
                     };
 
-                    let x_range = max_x - min_x;
+                    log::debug!("d_x: {d_x}");
+
                     d_x / x_range
                 }
                 common::orientation::LayoutOrientation::Horizontal => {
+                    let y_range = max_y - min_y;
+
                     let d_y = match first_group_channel.nth_channel_from_first(g) {
                         common::instrument::GroupChannel::Left => y - base_y,
                         common::instrument::GroupChannel::Right => base_y - y,
                     };
 
-                    let y_range = max_y - min_y;
+                    log::debug!("d_y: {d_y}");
+
                     d_y / y_range
                 }
             }
@@ -351,7 +357,7 @@ pub fn KeyboardElement(
                 " --inst-key-breadth-tx: {breadth_tx}px;",
                 " --inst-key-breadth-ty: {breadth_ty}px;",
                 " --inst-key-length-tx: {length_tx}px;",
-                " --inst-key-length-ty: {length_ty}px;"
+                " --inst-key-length-ty: {length_ty}px;",
             ),
             k1_tx = k1_tx,
             k1_ty = k1_ty,

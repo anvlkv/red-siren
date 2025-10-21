@@ -20,4 +20,4 @@ pub use events::navigation_payloads::{
     NavRequestedPayload, NavStartedPayload,
 };
 pub use navigation::routes::RouteId;
-pub use node_key::NodeKey;
+pub use node_key::{NodeKey, NodeKeyError, NodeKeyRegistry};

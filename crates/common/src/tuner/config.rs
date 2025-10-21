@@ -2,7 +2,7 @@ use mint::Point2;
 use serde::{Deserialize, Serialize};
 
 use crate::tuner::layout::Layout;
-use crate::NodeKey;
+use crate::{NodeKey, NodeKeyRegistry};
 
 /// Represents the full tuner data set (layout + sensors + FFT mapping).
 #[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
@@ -124,13 +124,24 @@ impl From<crate::instrument::Layout> for Config {
         // Use existing Layout conversion
         let tuner_layout: Layout = layout.into();
 
-        // Calculate total keys from layout
-        let total_keys = tuner_layout.num_sensors.get() as usize;
+        // Calculate total keys from layout - ensure consistency
+        let registry =
+            NodeKeyRegistry::new(layout.num_groups.get(), layout.num_keys_per_group.get());
+        let total_keys = registry.total_keys();
+
+        // Validate total_keys matches tuner layout
+        if total_keys != tuner_layout.num_sensors.get() as usize {
+            log::warn!(
+                "Tuner layout total keys mismatch: registry={}, layout={}",
+                total_keys,
+                tuner_layout.num_sensors.get()
+            );
+        }
 
         // Generate logarithmically spaced frequency ranges
         let sensor_data = generate_default_sensors(total_keys, &layout);
 
-        Config {
+        Self {
             sensor_data,
             fft_size: 2048,
             sample_rate: 48000.0,
@@ -158,11 +169,13 @@ fn generate_default_sensors(
     let default_min_magnitude = -80.0;
     let default_max_magnitude = -20.0;
 
-    // Generate sensors for each key
-    for group_idx in 0..layout.num_groups.get() {
-        for key_idx in 0..layout.num_keys_per_group.get() {
-            let sensor_idx = group_idx * layout.num_keys_per_group.get() + key_idx;
+    // Create NodeKey registry for validation
+    let registry = NodeKeyRegistry::new(layout.num_groups.get(), layout.num_keys_per_group.get());
 
+    // Generate sensors for each key using registry
+    let mut sensor_idx = 0;
+    registry.iter_keys(|node_key| {
+        if sensor_idx < total_keys {
             // Calculate frequency range for this sensor
             let log_freq_start = log_min + (sensor_idx as f32) * log_step;
             let log_freq_end = log_min + ((sensor_idx + 1) as f32) * log_step;
@@ -171,14 +184,16 @@ fn generate_default_sensors(
             let sensor_max_freq = log_freq_end.exp();
 
             sensors.push(SensorData {
-                key: NodeKey(group_idx, key_idx),
+                key: node_key,
                 min_frequency: sensor_min_freq,
                 max_frequency: sensor_max_freq,
                 min_magnitude: default_min_magnitude,
                 max_magnitude: default_max_magnitude,
             });
+
+            sensor_idx += 1;
         }
-    }
+    });
 
     sensors
 }

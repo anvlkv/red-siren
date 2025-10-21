@@ -22,15 +22,14 @@ impl<const D: u8> AudioNode for Formant<D> {
         // Map control to [0, 1]
         let v = self.control.value().clamp(0.0, 1.0);
 
-        // Reasonable Q mapping: broader at low control, narrower at high control
-        // Q in [1.0, 10.0]
-        let q = 1.0 + v * 9.0;
+        // Reasonable Q mapping: broader at hight control value
+        let q = 10.0 - v * (10.0 - f32::EPSILON);
 
         // Keep a consistent spacing between adjacent formants using semitone steps.
         // D indexes the formant band; apply a fixed step and a small detune from control.
         let step_semitones = 5.0; // distance between adjacent formants
         let detune_semitones = (v - 0.5) * 2.0; // +/- 1 semitone sweep by control
-        let semitones = (D as f32 - 1.0) * step_semitones + detune_semitones;
+        let semitones = (D as f32 - 1.0) * step_semitones + (detune_semitones * 120.0);
 
         // Center frequency derived from base by semitone offset
         let center = self.base * 2f32.powf(semitones / 12.0);

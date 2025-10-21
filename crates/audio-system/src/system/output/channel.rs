@@ -20,13 +20,26 @@ where
     G: Size<f32> + Size<NodeType>,
     K: Size<f32> + Size<NodeType>,
 {
+    let total_nodes: usize = groups.iter().map(|g| g.nodes.len()).sum();
+    log::info!(
+        "Creating channel system with {} groups, {} total nodes",
+        groups.len(),
+        total_nodes
+    );
+
     let mut node_handles = Vec::<NodeHandles>::new();
     let mut inner_handles = Vec::<HashMap<NodeKey, InnerHandles>>::new();
 
-    for group in groups.iter() {
+    for (group_idx, group) in groups.iter().enumerate() {
+        log::debug!(
+            "Creating group {} with {} nodes",
+            group_idx,
+            group.nodes.len()
+        );
         let mut group_handles = HashMap::<NodeKey, InnerHandles>::new();
         for node in group.nodes.iter() {
             let key = node.key;
+            log::trace!("Creating node with key: {:?}", key);
 
             let (activation_snoop_front, activation_snoop_backend) =
                 snoop(super::node::ACTIVATION_SNOOP_CAPACITY);
@@ -53,7 +66,13 @@ where
                 siren_control,
                 band_control,
             });
+            log::trace!("Created node handle for key: {:?}", key);
         }
+        log::debug!(
+            "Completed group {} with {} nodes",
+            group_idx,
+            group.nodes.len()
+        );
         inner_handles.push(group_handles);
     }
 

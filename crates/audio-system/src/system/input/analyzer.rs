@@ -40,7 +40,7 @@ impl FFTAnalyzer {
         config: Config,
         activation_controls: HashMap<NodeKey, Shared>,
     ) -> Self {
-        Self {
+        let analyzer = Self {
             inner_net: BigBlockAdapter::new(inner_net),
             window_rb: StaticRb::<f32, FFT_WINDOW_SIZE>::default(),
             window_size,
@@ -52,7 +52,11 @@ impl FFTAnalyzer {
             config,
             activation_controls,
             spectrum: None,
-        }
+        };
+
+        // Validate initial setup
+        analyzer.validate_sensor_controls();
+        analyzer
     }
 
     pub fn new_tuner_stub(
@@ -65,7 +69,19 @@ impl FFTAnalyzer {
     }
 
     fn activation_controls_from_config(config: &Config) -> HashMap<NodeKey, Shared> {
-        HashMap::from_iter(config.sensor_data.iter().map(|d| (d.key, shared(0.0))))
+        let controls = HashMap::from_iter(config.sensor_data.iter().map(|d| (d.key, shared(0.0))));
+
+        // Validate NodeKeys are reasonable (basic sanity check)
+        for sensor in &config.sensor_data {
+            if sensor.key.group() > 16 || sensor.key.key() > 32 {
+                log::warn!(
+                    "Suspicious NodeKey in sensor data: {:?} - very high indices",
+                    sensor.key
+                );
+            }
+        }
+
+        controls
     }
 
     /// Update analyzer configuration at runtime (sensor thresholds, sample rate, keys)
@@ -127,6 +143,51 @@ impl FFTAnalyzer {
             .process_big(self.window_size, &input_slices, &mut output_slices);
 
         self.perform_fft_analysis(&processed);
+
+        // Periodic validation (every 1000 samples to avoid performance impact)
+        if self.sample_count % 1000 == 0 {
+            self.validate_sensor_controls();
+        }
+    }
+
+    /// Validate that sensor data NodeKeys match available activation controls
+    fn validate_sensor_controls(&self) {
+        let missing_controls: Vec<NodeKey> = self
+            .config
+            .sensor_data
+            .iter()
+            .filter_map(|sensor| {
+                if !self.activation_controls.contains_key(&sensor.key) {
+                    Some(sensor.key)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if !missing_controls.is_empty() {
+            log::warn!(
+                "FFT analyzer missing activation controls for sensor keys: {:?}",
+                missing_controls
+            );
+        }
+
+        // Check for orphaned controls (controls without corresponding sensors)
+        let sensor_keys: std::collections::HashSet<NodeKey> =
+            self.config.sensor_data.iter().map(|s| s.key).collect();
+        let orphaned_controls: Vec<NodeKey> = self
+            .activation_controls
+            .keys()
+            .filter(|k| !sensor_keys.contains(k))
+            .copied()
+            .collect();
+
+        if !orphaned_controls.is_empty() {
+            log::warn!(
+                "FFT analyzer has orphaned activation controls for keys: {:?}",
+                orphaned_controls
+            );
+        }
     }
 
     fn perform_fft_analysis(&mut self, window: &[f32]) {
@@ -419,7 +480,7 @@ mod tests {
             sample_rate: 44100.0,
             fft_size: 2048,
             sensor_data: vec![SensorData {
-                key: NodeKey(0, 0),
+                key: NodeKey::new(0, 0),
                 min_frequency: 100.0,
                 max_frequency: 500.0,
                 min_magnitude: 0.01,
@@ -430,7 +491,7 @@ mod tests {
         // Create siren controls
         let mut siren_controls = HashMap::new();
         let control = shared(0.0);
-        siren_controls.insert(NodeKey(0, 0), control.clone());
+        siren_controls.insert(NodeKey::new(0, 0), control.clone());
 
         // Create analyzer
         let analyzer = FFTAnalyzer::new(inner_net, FFT_WINDOW_SIZE, config, siren_controls);
@@ -453,7 +514,7 @@ mod tests {
             sample_rate: 44100.0,
             fft_size: 2048,
             sensor_data: vec![SensorData {
-                key: NodeKey(0, 0),
+                key: NodeKey::new(0, 0),
                 min_frequency: 440.0,
                 max_frequency: 460.0,
                 min_magnitude: 0.05,
@@ -463,7 +524,7 @@ mod tests {
 
         let mut siren_controls = HashMap::new();
         let control = shared(0.0);
-        siren_controls.insert(NodeKey(0, 0), control.clone());
+        siren_controls.insert(NodeKey::new(0, 0), control.clone());
 
         let mut analyzer = FFTAnalyzer::new(inner_net, FFT_WINDOW_SIZE, config, siren_controls);
 

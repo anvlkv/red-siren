@@ -9,7 +9,7 @@ use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout}
 use common::tuner::Config as TunerConfig;
 use common::{
     error::{ControlError, InstrumentError, Result},
-    NodeKey,
+    NodeKey, NodeKeyRegistry,
 };
 use cpal::traits::{DeviceTrait, HostTrait};
 use fundsp::hacker32::prelude::*;
@@ -91,9 +91,24 @@ impl CpalController {
         tuner_config: &TunerConfig,
         sample_rate: f64,
     ) -> Net {
+        log::info!(
+            "Creating network with {} groups, {} keys per group",
+            config.num_groups(),
+            config.0.first().map(|g| g.nodes.len()).unwrap_or(0)
+        );
+
         // For now hard-code (1 input, 2 outputs). Multi-channel path to come.
         let mut net = Net::new(1, 2);
         net.set_sample_rate(sample_rate);
+
+        // Preserve old control values before clearing
+        let old_band_values = {
+            let stored_band_controls = self.band_controls.read();
+            stored_band_controls
+                .iter()
+                .map(|(k, v)| (*k, v.value()))
+                .collect::<HashMap<NodeKey, f32>>()
+        };
 
         // Build output system graph & retrieve handles.
         let node_handles = crate::create_output_system(config, &mut net, 2);
@@ -112,6 +127,16 @@ impl CpalController {
             stored_band_controls.clear();
 
             for handle in node_handles {
+                // Restore old band control value if it existed
+                if let Some(old_value) = old_band_values.get(&handle.key) {
+                    handle.band_control.set_value(*old_value);
+                    log::debug!(
+                        "Restored band control value for {:?}: {}",
+                        handle.key,
+                        old_value
+                    );
+                }
+
                 activation_snoops.insert(handle.key, handle.activation_snoop);
                 output_snoops.insert(handle.key, handle.output_snoop);
                 siren_controls.insert(handle.key, handle.siren_control);
@@ -120,6 +145,10 @@ impl CpalController {
             }
         }
 
+        log::info!(
+            "Created {} siren controls for input system",
+            siren_controls.len()
+        );
         crate::create_input_system(tuner_config, &mut net, siren_controls);
 
         net.allocate();
@@ -136,6 +165,7 @@ impl CpalController {
             }
         };
 
+        log::info!("Updating primary DSP node due to state change");
         let sample_rate = self.sample_rate.read().unwrap_or(44100.0);
         let new_node = self.create_network(config, tuner_config, sample_rate);
 
@@ -148,6 +178,7 @@ impl CpalController {
         net.crossfade(primary_id, Fade::Smooth, 0.3, Box::new(new_node));
         net.check();
         net.commit();
+        log::info!("Primary DSP node updated successfully");
     }
 
     fn fade_out(&self) {
@@ -526,20 +557,53 @@ impl StreamController for CpalController {
         config: &InstrumentConfig,
         tuner_config: &TunerConfig,
     ) -> Result<()> {
+        log::info!(
+            "Layout changed: groups={}, keys_per_group={}",
+            layout.num_groups.get(),
+            layout.num_keys_per_group.get()
+        );
+
+        // Validate NodeKey consistency between configs
+        let registry =
+            NodeKeyRegistry::new(layout.num_groups.get(), layout.num_keys_per_group.get());
+
+        // Check for invalid NodeKeys in tuner config
+        let sensor_keys: std::collections::HashMap<NodeKey, ()> = tuner_config
+            .sensor_data
+            .iter()
+            .map(|s| (s.key, ()))
+            .collect();
+        let invalid_sensor_keys = registry.has_invalid_keys(&sensor_keys);
+        if !invalid_sensor_keys.is_empty() {
+            log::warn!("Invalid sensor NodeKeys found: {:?}", invalid_sensor_keys);
+        }
+
         *self.last_layout.write() = *layout;
         *self.last_config.write() = config.clone();
         *self.last_tuner_config.write() = tuner_config.clone();
         if self.control_tx.read().is_some() {
             self.update_primary_node(config, tuner_config);
+        } else {
+            log::warn!("Audio stream not running, layout change will apply on next start");
         }
         Ok(())
     }
 
     fn snapshot_output_snoop(&self, group: usize, key: usize) -> Vec<f32> {
-        let key = NodeKey(group as u8, key as u8);
+        let layout = *self.last_layout.read();
+        let registry =
+            NodeKeyRegistry::new(layout.num_groups.get(), layout.num_keys_per_group.get());
+
+        let node_key = match registry.create_key(group as u8, key as u8) {
+            Ok(key) => key,
+            Err(err) => {
+                log::warn!("Invalid NodeKey in snapshot_output_snoop: {}", err);
+                return Vec::new();
+            }
+        };
         let mut out = Vec::new();
         let mut snoops = self.output_snoops.write();
-        if let Some(snoop) = snoops.get_mut(&key) {
+        if let Some(snoop) = snoops.get_mut(&node_key) {
             snoop.update();
             let cap = snoop.capacity();
             out.reserve(cap + 2);
@@ -551,37 +615,43 @@ impl StreamController for CpalController {
     }
 
     fn snapshot_all_output_snoops(&self) -> Vec<(u8, u8, Vec<f32>)> {
-        // Use last known layout to iterate keys.
         let layout = *self.last_layout.read();
-        let num_groups = layout.num_groups.get() as usize;
-        let keys_per_group = layout.num_keys_per_group.get() as usize;
+        let registry =
+            NodeKeyRegistry::new(layout.num_groups.get(), layout.num_keys_per_group.get());
 
-        let mut result = Vec::with_capacity(num_groups * keys_per_group);
+        let mut result = Vec::with_capacity(registry.total_keys());
         let mut snoops = self.output_snoops.write();
 
-        for g in 0..num_groups {
-            for k in 0..keys_per_group {
-                let key = NodeKey(g as u8, k as u8);
-                if let Some(snoop) = snoops.get_mut(&key) {
-                    snoop.update();
-                    let cap = snoop.capacity();
-                    let mut samples = Vec::with_capacity(cap + 2);
-                    for rev in (0..cap).rev() {
-                        samples.push(snoop.at(rev));
-                    }
-                    result.push((g as u8, k as u8, samples));
+        registry.iter_keys(|node_key| {
+            if let Some(snoop) = snoops.get_mut(&node_key) {
+                snoop.update();
+                let cap = snoop.capacity();
+                let mut samples = Vec::with_capacity(cap + 2);
+                for rev in (0..cap).rev() {
+                    samples.push(snoop.at(rev));
                 }
+                result.push((node_key.group(), node_key.key(), samples));
             }
-        }
+        });
         result
     }
 
     fn snapshot_activation_snoop(&self, group: usize, key: usize) -> Vec<f32> {
-        let key = NodeKey(group as u8, key as u8);
+        let layout = *self.last_layout.read();
+        let registry =
+            NodeKeyRegistry::new(layout.num_groups.get(), layout.num_keys_per_group.get());
+
+        let node_key = match registry.create_key(group as u8, key as u8) {
+            Ok(key) => key,
+            Err(err) => {
+                log::warn!("Invalid NodeKey in snapshot_activation_snoop: {}", err);
+                return Vec::new();
+            }
+        };
 
         let mut out = Vec::new();
         let mut snoops = self.activation_snoops.write();
-        if let Some(snoop) = snoops.get_mut(&key) {
+        if let Some(snoop) = snoops.get_mut(&node_key) {
             snoop.update();
             let cap = snoop.capacity();
             out.reserve(cap + 2);
@@ -593,28 +663,24 @@ impl StreamController for CpalController {
     }
 
     fn snapshot_all_activation_snoops(&self) -> Vec<(u8, u8, Vec<f32>)> {
-        // Use last known layout to iterate keys.
         let layout = *self.last_layout.read();
-        let num_groups = layout.num_groups.get() as usize;
-        let keys_per_group = layout.num_keys_per_group.get() as usize;
+        let registry =
+            NodeKeyRegistry::new(layout.num_groups.get(), layout.num_keys_per_group.get());
 
-        let mut result = Vec::with_capacity(num_groups * keys_per_group);
+        let mut result = Vec::with_capacity(registry.total_keys());
         let mut snoops = self.activation_snoops.write();
 
-        for g in 0..num_groups {
-            for k in 0..keys_per_group {
-                let key = NodeKey(g as u8, k as u8);
-                if let Some(snoop) = snoops.get_mut(&key) {
-                    snoop.update();
-                    let cap = snoop.capacity();
-                    let mut samples = Vec::with_capacity(cap + 2);
-                    for rev in (0..cap).rev() {
-                        samples.push(snoop.at(rev));
-                    }
-                    result.push((g as u8, k as u8, samples));
+        registry.iter_keys(|node_key| {
+            if let Some(snoop) = snoops.get_mut(&node_key) {
+                snoop.update();
+                let cap = snoop.capacity();
+                let mut samples = Vec::with_capacity(cap + 2);
+                for rev in (0..cap).rev() {
+                    samples.push(snoop.at(rev));
                 }
+                result.push((node_key.group(), node_key.key(), samples));
             }
-        }
+        });
         result
     }
 

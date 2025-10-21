@@ -7,6 +7,7 @@ use common::instrument::{
     events::{ActivationSourcePayload, PlaybackStatePayload},
     Layout,
 };
+use common::{NodeKey, NodeKeyRegistry};
 use tauri::{AppHandle, Emitter, State};
 
 use crate::{health::HealthSetupState, instrument::engine::InstrumentEngine};
@@ -399,7 +400,20 @@ pub fn instrument_update_band_control(
         value
     );
 
-    let node_key = common::NodeKey(group, key);
+    // Validate NodeKey against current layout
+    let layout = state.layout();
+    let registry = NodeKeyRegistry::new(layout.num_groups.get(), layout.num_keys_per_group.get());
+    let node_key = match registry.create_key(group, key) {
+        Ok(key) => key,
+        Err(err) => {
+            log::warn!("Invalid NodeKey in band control update: {}", err);
+            return Err(common::error::ControlError::NodeNotFound {
+                key: NodeKey::new(group, key),
+            }
+            .into());
+        }
+    };
+
     state.set_band_control(node_key, value)?;
 
     log::trace!(

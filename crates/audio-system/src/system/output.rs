@@ -26,7 +26,7 @@ impl Default for InnerHandles {
         let band_control = shared(0.0);
 
         Self {
-            key: NodeKey(0, 0),
+            key: NodeKey::new(0, 0),
             activation_snoop,
             output_snoop,
             siren_control: Var::new(&siren_control),
@@ -43,6 +43,10 @@ pub fn mono_system(config: &Config, net: &mut Net) -> Vec<NodeHandles> {
 }
 
 pub fn stereo_system(config: &Config, net: &mut Net) -> Vec<NodeHandles> {
+    log::info!(
+        "Creating stereo output system with {} total groups",
+        config.num_groups()
+    );
     let nodes_count_per_group = config.num_nodes_per_group();
     let groups_count_left = config.num_groups_left();
     let groups_count_right = config.num_groups_right();

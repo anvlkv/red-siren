@@ -96,9 +96,7 @@ pub fn MenuItemView(
         <div class=move || if compact { "rounded-full" } else { "rounded-lg" } role="menuitem">
             {match item {
                 MenuItem::Navigate { route, .. } => {
-                    let href: &'static str = route.into();
                     if compact {
-
                         view! {
                             <Tooltip text=label placement=tooltip_placement>
                                 <Button href=route.as_ref() square=true size>

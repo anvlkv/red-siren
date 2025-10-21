@@ -333,6 +333,12 @@ impl Inner {
             if let Some(ctrl) = self.stream_controller.read().as_ref() {
                 log::trace!("Inner.set_activation_source: notifying stream controller");
                 ctrl.on_activation_source_changed(src)?;
+
+                // Also trigger layout change to ensure proper system recreation with new tuner config
+                let layout = self.layout.read();
+                let config = self.config.read();
+                ctrl.on_layout_changed(&layout, &config, tuner_config)?;
+                log::info!("Recreated audio systems after activation source change");
             }
         } else {
             log::trace!("Inner.set_activation_source: no-op (already {:?})", src);
@@ -365,6 +371,7 @@ impl Inner {
             let layout = self.layout.read();
             let config = self.config.read();
             ctrl.on_layout_changed(&layout, &config, tuner_config)?;
+            log::info!("Recreated audio systems after dark mode change");
         }
 
         Ok(())
@@ -397,6 +404,7 @@ impl Inner {
             let layout = self.layout.read();
             let config = self.config.read();
             ctrl.on_layout_changed(&layout, &config, tuner_config)?;
+            log::info!("Recreated audio systems after size change");
         }
 
         Ok(())
@@ -429,6 +437,7 @@ impl Inner {
             let layout = self.layout.read();
             let config = self.config.read();
             ctrl.on_layout_changed(&layout, &config, tuner_config)?;
+            log::info!("Recreated audio systems after safe area change");
         }
 
         Ok(())

@@ -24,7 +24,7 @@ pub type NodeType = Pipe<
                         FrameMul<UInt<UTerm, B1>>,
                         Pipe<Constant<UInt<UTerm, B1>>, Sine<S>>,
                         // Pipe<Pipe<Var, SnoopBackend>, Siren>,
-                        Pipe<Pipe<Pipe<Var, Follow<S>>, SnoopBackend>, Siren>,
+                        Pipe<Pipe<Pipe<Var, Follow<S>>, SnoopBackend>, Siren<S>>,
                     >,
                     Split<UInt<UInt<UTerm, B1>, B1>>,
                 >,
@@ -43,11 +43,11 @@ pub type NodeType = Pipe<
     SnoopBackend,
 >;
 
-pub const ACTIVATION_SNOOP_CAPACITY: usize = 16;
-pub const OUTPUT_SNOOP_CAPACITY: usize = 256;
-const FOLLOW_RESPONSE_TIME_S: f32 = (1.0 / 75.0) * 5.0;
-const NODE_BELL_Q: f32 = 0.3142;
-const NODE_BELL_GAIN_DB: f32 = 1.7;
+pub const ACTIVATION_SNOOP_CAPACITY: usize = 8;
+pub const OUTPUT_SNOOP_CAPACITY: usize = 745;
+const FOLLOW_RESPONSE_TIME_S: f32 = (1.0 / 75.0) * 25.0;
+const NODE_BELL_Q: f32 = std::f32::consts::PI / 10.0;
+const NODE_BELL_GAIN_DB: f32 = 0.7;
 
 fn create_node(config: &NodeConfig, handles: InnerHandles) -> An<NodeType> {
     let InnerHandles {
@@ -70,7 +70,7 @@ fn create_node(config: &NodeConfig, handles: InnerHandles) -> An<NodeType> {
         // Create resonator formants
         >> split::<U3>()
         >> formants
-        >> (join::<U3>() * (1.0 / (1.0 + 0.8 + 0.6)))
+        >> (join::<U3>() * (1.0 / 3.0))
         // Node bell filter
         >> bell_hz(config.base_frequency as S, NODE_BELL_Q, NODE_BELL_GAIN_DB)
         // Visualize

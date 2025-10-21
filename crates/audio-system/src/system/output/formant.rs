@@ -18,12 +18,13 @@ impl<const D: u8> AudioNode for Formant<D> {
 
     type Outputs = U1;
 
+    #[inline]
     fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
         // Map control to [0, 1]
         let v = self.control.value().clamp(0.0, 1.0);
 
         // Reasonable Q mapping: broader at hight control value
-        let q = 10.0 - v * (10.0 - f32::EPSILON);
+        let q = 1.0 - v * (1.0 - f32::EPSILON);
 
         // Keep a consistent spacing between adjacent formants using semitone steps.
         // D indexes the formant band; apply a fixed step and a small detune from control.
@@ -43,6 +44,34 @@ impl<const D: u8> AudioNode for Formant<D> {
 
     fn set_sample_rate(&mut self, sample_rate: f64) {
         self.resonator.set_sample_rate(sample_rate);
+    }
+
+    fn process(&mut self, size: usize, input: &BufferRef, output: &mut BufferMut) {
+        // Extract control value once per batch since it's shared
+        let v = self.control.value().clamp(0.0, 1.0);
+
+        // Reasonable Q mapping: broader at high control value
+        let q = 1.0 - v * (1.0 - f32::EPSILON);
+
+        // Calculate frequency parameters once per batch
+        let step_semitones = 5.0; // distance between adjacent formants
+        let detune_semitones = (v - 0.5) * 2.0; // +/- 1 semitone sweep by control
+        let semitones = (D as f32 - 1.0) * step_semitones + (detune_semitones * 120.0);
+
+        // Center frequency derived from base by semitone offset
+        let center = self.base * 2f32.powf(semitones / 12.0);
+
+        for i in 0..full_simd_items(size) {
+            let element: [f32; SIMD_N] = core::array::from_fn(|j| {
+                let input_sample = input.at_f32(0, (i << SIMD_S) + j);
+                let resonator_input: Frame<f32, U3> = [input_sample, center, q].into();
+                let result = self.resonator.tick(&resonator_input);
+                result[0]
+            });
+            output.set(0, i, F32x::new(element));
+        }
+
+        self.process_remainder(size, input, output);
     }
 }
 

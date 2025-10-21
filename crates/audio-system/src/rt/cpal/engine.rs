@@ -127,21 +127,19 @@ impl CpalController {
             stored_band_controls.clear();
 
             for handle in node_handles {
-                // Restore old band control value if it existed
-                if let Some(old_value) = old_band_values.get(&handle.key) {
-                    handle.band_control.set_value(*old_value);
-                    log::debug!(
-                        "Restored band control value for {:?}: {}",
-                        handle.key,
-                        old_value
-                    );
-                }
-
                 activation_snoops.insert(handle.key, handle.activation_snoop);
                 output_snoops.insert(handle.key, handle.output_snoop);
                 siren_controls.insert(handle.key, handle.siren_control);
                 band_controls.insert(handle.key, handle.band_control.clone());
                 stored_band_controls.insert(handle.key, handle.band_control);
+            }
+
+            // Restore old band control values after insertion
+            for (key, old_value) in old_band_values {
+                if let Some(control) = stored_band_controls.get(&key) {
+                    control.set_value(old_value);
+                    log::debug!("Restored band control value for {:?}: {}", key, old_value);
+                }
             }
         }
 

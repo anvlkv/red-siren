@@ -271,4 +271,40 @@ mod tests {
         assert!(!new_controls.contains_key(&NodeKey::new(2, 0)));
         assert!(!new_controls.contains_key(&NodeKey::new(0, 2)));
     }
+
+    #[test]
+    fn test_band_control_value_preservation() {
+        // Simulate the CPAL controller's value preservation logic
+        let registry = NodeKeyRegistry::new(2, 2);
+
+        // Create old controls with some values set
+        let mut old_controls = HashMap::new();
+        old_controls.insert(NodeKey::new(0, 0), 0.25);
+        old_controls.insert(NodeKey::new(0, 1), 0.75);
+        old_controls.insert(NodeKey::new(1, 0), 0.50);
+        old_controls.insert(NodeKey::new(1, 1), 0.90);
+
+        // Extract old values (simulating the preservation step)
+        let old_values: HashMap<NodeKey, f32> = old_controls.clone();
+
+        // Create new controls (simulating network recreation)
+        let mut new_controls = HashMap::new();
+        registry.iter_keys(|key| {
+            new_controls.insert(key, 0.0); // Start with default values
+        });
+
+        // Apply preserved values (simulating the restoration step)
+        for (key, old_value) in old_values {
+            if new_controls.contains_key(&key) {
+                new_controls.insert(key, old_value);
+            }
+        }
+
+        // Verify all values were preserved correctly
+        assert_eq!(new_controls.get(&NodeKey::new(0, 0)), Some(&0.25));
+        assert_eq!(new_controls.get(&NodeKey::new(0, 1)), Some(&0.75));
+        assert_eq!(new_controls.get(&NodeKey::new(1, 0)), Some(&0.50));
+        assert_eq!(new_controls.get(&NodeKey::new(1, 1)), Some(&0.90));
+        assert_eq!(new_controls.len(), 4);
+    }
 }

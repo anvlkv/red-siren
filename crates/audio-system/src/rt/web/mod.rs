@@ -48,7 +48,7 @@ use crate::rt::{NullController, StreamController};
 ///
 /// Currently returns a `NullController` as a placeholder.
 pub fn make_stream_controller() -> common::error::Result<Box<dyn StreamController + Send + Sync>> {
-    Ok(Box::new(NullController::default()))
+    Ok(Box::new(NullController))
 }
 
 // (Optional) Future scaffold example:

@@ -370,6 +370,7 @@ impl TryFrom<Layout> for Config {
         Ok(config)
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::super::layout_test_cases;

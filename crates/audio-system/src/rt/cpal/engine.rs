@@ -201,6 +201,7 @@ impl CpalController {
         config: &InstrumentConfig,
         tuner_config: &TunerConfig,
         sample_rate: f64,
+        source: ActivationSource,
     ) -> Net {
         log::info!(
             "Creating network with {} groups, {} keys per group",
@@ -275,7 +276,7 @@ impl CpalController {
             "Created {} siren controls for input system",
             siren_controls.len()
         );
-        crate::create_input_system(tuner_config, &mut net, siren_controls);
+        crate::create_input_system(tuner_config, &mut net, siren_controls, source);
 
         net.allocate();
         log::debug!("created network: {}", net.display());
@@ -293,7 +294,8 @@ impl CpalController {
 
         log::info!("Updating primary DSP node due to state change");
         let sample_rate = self.sample_rate.read().unwrap_or(44100.0);
-        let new_node = self.create_network(config, tuner_config, sample_rate);
+        let source = *self.last_source.read();
+        let new_node = self.create_network(config, tuner_config, sample_rate, source);
 
         let mut guard = self.dsp_net_frontend.write();
         let Some(net) = guard.as_mut() else {
@@ -561,7 +563,7 @@ impl StreamController for CpalController {
         // Create primary subnet & top-level net.
         let output_sample_rate = output_default_cfg.sample_rate().0 as f64;
         *self.sample_rate.write() = Some(output_sample_rate);
-        let subnet = self.create_network(config, tuner_config, output_sample_rate);
+        let subnet = self.create_network(config, tuner_config, output_sample_rate, source);
         let mut net = Net::new(1, output_channels);
         net.set_sample_rate(output_sample_rate);
 

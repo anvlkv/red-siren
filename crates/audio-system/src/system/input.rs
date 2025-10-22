@@ -1,7 +1,9 @@
 pub mod analyzer;
 pub mod preamp;
+pub mod random_activator;
 
 pub use analyzer::{FFTAnalyzer, FFT_WINDOW_SIZE};
+pub use random_activator::RandomActivator;
 
 use common::tuner::Config;
 use common::NodeKey;
@@ -67,6 +69,27 @@ pub fn sensors_system(config: &Config, net: &mut Net, activations: HashMap<NodeK
 
     log::info!(
         "Sensors system created successfully with analyzer node id: {:?}",
+        id
+    );
+}
+
+/// Create a random activation system that bypasses FFT analysis
+/// Used when activation source is Entropy/Random
+pub fn random_sensors_system(net: &mut Net, activations: HashMap<NodeKey, Shared>) {
+    log::info!(
+        "Creating random sensors system with {} activation controls",
+        activations.len()
+    );
+
+    // Create RandomActivator node
+    let random_activator = RandomActivator::new(activations);
+
+    // Add to network
+    let id = net.push(Box::new(random_activator));
+    net.connect_input(0, id, 0);
+
+    log::info!(
+        "Random sensors system created successfully with activator node id: {:?}",
         id
     );
 }

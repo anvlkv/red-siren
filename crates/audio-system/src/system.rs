@@ -3,6 +3,7 @@ mod output;
 
 use std::collections::HashMap;
 
+use crate::rt::ActivationSource;
 use common::NodeKey;
 use fundsp::{net::Net, shared::Shared, snoop::Snoop};
 
@@ -34,6 +35,19 @@ pub fn create_input_system(
     config: &common::tuner::Config,
     net: &mut Net,
     activations: HashMap<NodeKey, Shared>,
+    source: ActivationSource,
 ) {
-    input::sensors_system(config, net, activations)
+    match source {
+        ActivationSource::Mic => {
+            // Use FFT analyzer for microphone input
+            input::sensors_system(config, net, activations)
+        }
+        ActivationSource::Entropy => {
+            // Use random activator for entropy source
+            input::random_sensors_system(net, activations)
+        }
+    }
 }
+
+#[cfg(test)]
+mod tests;

@@ -4,13 +4,13 @@ use crate::util::hash_str;
 
 const SIREN_ID: u64 = hash_str(concat!(module_path!(), "::Siren"));
 const SIREN_BASE_HZ: f32 = 0.5;
-const MAX_FREQUENCY_HZ: f32 = 15000.0; // Maximum frequency for interpolation
+const MAX_FREQUENCY_HZ: f32 = 5000.0; // Maximum frequency for interpolation
 
 const BASE_PAUSE_DURATION: f32 = 0.1; // Base pause duration in seconds
 
-/// Siren oscillator with excitement-controlled pauses and frequency doubling.
+/// Siren oscillator with excitement-controlled pauses and frequency.
 /// - Input 0: excitement level (a). Zero = silent, positive = oscillate with pauses.
-/// - Output 0: siren wave with pauses and frequency doubling.
+/// - Output 0: siren wave with pauses and frequency.
 #[derive(Default, Clone)]
 pub struct Siren<F: Real> {
     freq: F,
@@ -249,8 +249,8 @@ mod tests {
         let mut zero_crossings = 0;
         let mut previous_output = 0.0;
 
-        // Run for 1 second at 48kHz
-        for _ in 0..48000 {
+        // Run for 2 seconds at 48kHz to account for initial low frequency
+        for _ in 0..96000 {
             let input: Frame<f32, typenum::U1> = [0.5].into(); // Mid excitement level
             let output = siren_node.tick(&input);
 
@@ -261,12 +261,16 @@ mod tests {
             previous_output = output[0];
         }
 
-        // With a=0.5, frequency should be: 0.5 + (15000 - 0.5) * 0.5 = 7500.25 Hz
-        // But since frequency only updates on zero crossings, we expect around 7500 crossings in 1 second
-        // Allow some tolerance for pauses
+        // With a=0.5:
+        // - Initial frequency: 0.5 Hz (takes ~1 second to first zero crossing)
+        // - After first crossing: frequency = 0.5 + (15000 - 0.5) * 0.5 = 7500.25 Hz
+        // - Pause duration after each crossing: 0.1 * (1 - 0.5) = 0.05 seconds
+        // - With pauses, each cycle effectively takes: 1/7500 + 0.05 ≈ 0.05 seconds
+        // - Effective frequency with pauses: ~20 Hz
+        // - In 2 seconds, expect ~20-40 zero crossings (after initial slow period)
         assert!(
-            zero_crossings > 6000 && zero_crossings < 8000,
-            "With a=0.5, should have frequency around 7500Hz, got {} zero crossings",
+            (15..=45).contains(&zero_crossings),
+            "With a=0.5 and pauses, expected 15-45 zero crossings in 2 seconds, got {}",
             zero_crossings
         );
 
@@ -275,8 +279,8 @@ mod tests {
         zero_crossings = 0;
         previous_output = 0.0;
 
-        // Test with very low excitement (a=0.1)
-        for _ in 0..48000 {
+        // Test with very low excitement (a=0.1) for 2 seconds
+        for _ in 0..96000 {
             let input: Frame<f32, typenum::U1> = [0.1].into();
             let output = siren_node.tick(&input);
 
@@ -286,10 +290,13 @@ mod tests {
             previous_output = output[0];
         }
 
-        // With a=0.1, frequency should be: 0.5 + (15000 - 0.5) * 0.1 ≈ 1500 Hz
+        // With a=0.1:
+        // - Frequency after first crossing: 0.5 + (15000 - 0.5) * 0.1 = 1500.05 Hz
+        // - Pause duration: 0.1 * (1 - 0.1) = 0.09 seconds
+        // - Each cycle = 1/1500 + 0.09 ≈ 0.09 seconds (effective ~11 Hz)
         assert!(
-            zero_crossings > 1000 && zero_crossings < 2000,
-            "With a=0.1, should have frequency around 1500Hz, got {} zero crossings",
+            (8..=25).contains(&zero_crossings),
+            "With a=0.1 and longer pauses, expected 8-25 zero crossings in 2 seconds, got {}",
             zero_crossings
         );
     }

@@ -49,3 +49,9 @@ This work is licensed under a
 
 [cc-by-sa]: http://creativecommons.org/licenses/by-sa/4.0/
 [cc-by-sa-image]: https://licensebuttons.net/l/by-sa/4.0/88x31.png
+
+---
+
+This software was developed with assistance from AI coding tools: GitHub Copilot, Claude.
+
+While AI suggestions were used during development, all code has been reviewed, tested, and modified by human developers. Users are responsible for verifying the code meets their requirements.

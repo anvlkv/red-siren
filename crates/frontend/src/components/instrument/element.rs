@@ -448,7 +448,6 @@ pub fn KeyboardElement(
         }
     };
 
-    let key_code = (g, k);
     let channel_alignment = match first_group_channel.nth_channel_from_first(g) {
         common::instrument::GroupChannel::Left => {
             r#"
@@ -577,7 +576,7 @@ pub fn KeyboardElement(
                 style:left=move || { format!("{}px", constrained_position().x) }
                 node_ref=draggable_ref
             >
-                {format!("{key_code:?}")}
+                {""}
             </Button>
         </div>
     }

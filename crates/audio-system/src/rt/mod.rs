@@ -165,6 +165,7 @@ impl StreamController for NullController {
 /// 1. rt_cpal
 /// 2. rt_web
 /// 3. NullController (fallback)
+#[allow(unreachable_code)]
 pub fn make_stream_controller() -> common::error::Result<Box<dyn StreamController + Send + Sync>> {
     #[cfg(feature = "rt_cpal")]
     {
@@ -174,9 +175,11 @@ pub fn make_stream_controller() -> common::error::Result<Box<dyn StreamControlle
     {
         return web::make_stream_controller();
     }
-    Ok(Box::new(NullController::default()))
+    Ok(Box::new(NullController))
 }
 /// Indicates whether the active build includes a microphone-capable backend.
+#[allow(unreachable_code)]
+#[allow(clippy::needless_return)]
 pub fn supports_mic() -> bool {
     #[cfg(feature = "rt_cpal")]
     {
@@ -190,6 +193,7 @@ pub fn supports_mic() -> bool {
 /// Mic permission / availability check.
 /// Returns Ok(()) on success; in non-mic builds returns an error so callers
 /// can mark permission as false.
+#[allow(clippy::needless_return)]
 pub async fn check_mic_permission() -> Result<(), common::error::HealthError> {
     #[cfg(feature = "rt_cpal")]
     {
@@ -227,6 +231,7 @@ impl TunerRuntime for NullTunerRuntime {
     }
 }
 /// Factory producing a tuner runtime (CPAL, web, or null).
+#[allow(unreachable_code)]
 pub fn make_tuner_runtime() -> Box<dyn TunerRuntime + Send + Sync> {
     #[cfg(feature = "rt_cpal")]
     {
@@ -240,5 +245,5 @@ pub fn make_tuner_runtime() -> Box<dyn TunerRuntime + Send + Sync> {
             return r;
         }
     }
-    Box::new(NullTunerRuntime::default())
+    Box::new(NullTunerRuntime)
 }

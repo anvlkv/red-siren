@@ -22,7 +22,7 @@ pub type FilterType = Pipe<
     Binop<FrameAdd<U1>, FbBiquad<S, ResonatorBiquad<S>, SoftCrush>, Pass>,
 >;
 
-const RESONATOR_Q: f32 = std::f32::consts::PI / 10.0;
+const RESONATOR_Q: f32 = std::f32::consts::PI;
 const SWITCH_FOLLOW_RESPONSE_S: f32 = (1.0 / 75.0) * 3.0;
 const SHAPE_VALUE: f32 = 0.75;
 

@@ -45,9 +45,6 @@ impl FFTAnalyzer {
             window_rb: StaticRb::<f32, FFT_WINDOW_SIZE>::default(),
             window_size,
             sample_count: 0,
-            // peak_frequency: peak_frequency.clone(),
-            // spectral_centroid: spectral_centroid.clone(),
-            // rms_level: rms_level.clone(),
             sample_rate: config.sample_rate,
             config,
             activation_controls,
@@ -185,6 +182,27 @@ impl FFTAnalyzer {
         }
     }
 
+    /// Apply slow-growth activation function using x^3 curve
+    /// This function grows very slowly from 0 to 1, making it less likely to hit 1.0
+    fn slow_growth_activation(x: f32) -> f32 {
+        if x <= 0.0 {
+            return 0.0;
+        }
+        if x >= 1.0 {
+            return 1.0;
+        }
+
+        // Use x^3 for slow growth
+        // This gives:
+        // x=0.1 -> 0.001
+        // x=0.2 -> 0.008
+        // x=0.3 -> 0.027
+        // x=0.5 -> 0.125
+        // x=0.7 -> 0.343
+        // x=0.9 -> 0.729
+        x * x * x
+    }
+
     fn perform_fft_analysis(&mut self, window: &[f32]) {
         log::trace!(
             "fft_analyzer: perform_fft_analysis enter window_size={} sample_rate={}",
@@ -219,36 +237,61 @@ impl FFTAnalyzer {
 
         // Process sensor activations
         for sensor in &self.config.sensor_data {
-            // Use FrequencySpectrum: closest bin at sensor center frequency
             let center = 0.5 * (sensor.min_frequency + sensor.max_frequency);
-            let (f, v) = spectrum.freq_val_closest(center);
-            let freq = f.val();
-            let peak_db = v.val();
 
-            // Activate only if the closest bin actually lies inside the sensor band
-            let in_band = freq >= sensor.min_frequency && freq <= sensor.max_frequency;
+            // Test min, center, and max frequencies
+            let test_freqs = [sensor.min_frequency, center, sensor.max_frequency];
 
-            // Distance-based activation: interpolate between min/max magnitude
-            let activation = if !in_band || peak_db <= sensor.min_magnitude {
-                0.0
-            } else {
-                // Linear interpolation/extrapolation based on min/max range
-                (peak_db - sensor.min_magnitude) / (sensor.max_magnitude - sensor.min_magnitude)
-            };
+            let mut max_activation = 0.0f32;
 
-            if log::log_enabled!(log::Level::Trace) && activation > 0.01 {
+            for &test_freq in &test_freqs {
+                let (f, v) = spectrum.freq_val_closest(test_freq);
+                let freq = f.val();
+                let peak_db = v.val();
+
+                // Check if the closest bin is within sensor band
+                let in_band = freq >= sensor.min_frequency && freq <= sensor.max_frequency;
+
+                // Calculate raw activation value
+                let raw_activation = if !in_band || peak_db <= sensor.min_magnitude {
+                    0.0
+                } else {
+                    // Linear interpolation based on min/max magnitude range
+                    ((peak_db - sensor.min_magnitude)
+                        / (sensor.max_magnitude - sensor.min_magnitude))
+                        .clamp(0.0, 1.0)
+                };
+
+                // Apply slow-growth function
+                let activation = Self::slow_growth_activation(raw_activation);
+                max_activation = max_activation.max(activation);
+
+                if log::log_enabled!(log::Level::Trace) && activation > 0.01 {
+                    log::trace!(
+                        "fft_analyzer: sensor key={:?} test_freq={:.1} Hz, closest={:.1} Hz, peak={:.1} dB, raw={:.3}, activation={:.3}",
+                        sensor.key,
+                        test_freq,
+                        freq,
+                        peak_db,
+                        raw_activation,
+                        activation
+                    );
+                }
+            }
+
+            if log::log_enabled!(log::Level::Trace) && max_activation > 0.01 {
                 log::trace!(
-                    "fft_analyzer: sensor key={:?} range=[{:.1},{:.1}] activation={:.3}",
+                    "fft_analyzer: sensor key={:?} range=[{:.1},{:.1}] final_activation={:.3}",
                     sensor.key,
                     sensor.min_frequency,
                     sensor.max_frequency,
-                    activation
+                    max_activation
                 );
             }
 
-            // Update siren control if we have a control for this sensor
+            // Update siren control with the maximum activation from all test points
             if let Some(siren_control) = self.activation_controls.get(&sensor.key) {
-                siren_control.set_value(activation);
+                siren_control.set_value(max_activation);
             } else {
                 log::warn!(
                     "fft_analyzer: no siren control found for sensor key={:?}",
@@ -527,5 +570,62 @@ mod tests {
         analyzer.reset();
         assert_eq!(control.value(), 0.0);
         assert_eq!(analyzer.sample_count, 0);
+    }
+
+    #[test]
+    fn test_slow_growth_activation() {
+        // Test boundary conditions
+        assert_eq!(FFTAnalyzer::slow_growth_activation(0.0), 0.0);
+        assert_eq!(FFTAnalyzer::slow_growth_activation(1.0), 1.0);
+        assert_eq!(FFTAnalyzer::slow_growth_activation(-0.1), 0.0);
+        assert_eq!(FFTAnalyzer::slow_growth_activation(1.5), 1.0);
+
+        // Test very small values (linear approximation region)
+        let small_val = FFTAnalyzer::slow_growth_activation(0.005);
+        assert!(small_val > 0.0 && small_val < 0.01);
+
+        // Test slow growth property: function should grow slowly
+        let test_points = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
+        let mut prev = 0.0;
+
+        for &x in &test_points {
+            let activation = FFTAnalyzer::slow_growth_activation(x);
+
+            // Should be monotonically increasing
+            assert!(
+                activation > prev,
+                "Activation should increase: {} > {}",
+                activation,
+                prev
+            );
+
+            // Should be bounded [0, 1]
+            assert!((0.0..=1.0).contains(&activation));
+
+            // Should be significantly less than linear (slower growth)
+            assert!(
+                activation < x * 0.9,
+                "Activation {} should be much less than linear {}",
+                activation,
+                x * 0.9
+            );
+
+            prev = activation;
+        }
+
+        // Near x=1, should approach 1 but slowly
+        let near_one = FFTAnalyzer::slow_growth_activation(0.95);
+        assert!(near_one > 0.8 && near_one < 1.0);
+
+        println!("Slow-growth activation test values:");
+        for x in [
+            0.0, 0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 1.0,
+        ] {
+            println!(
+                "  f({:.2}) = {:.4}",
+                x,
+                FFTAnalyzer::slow_growth_activation(x)
+            );
+        }
     }
 }

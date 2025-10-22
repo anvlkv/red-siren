@@ -198,12 +198,7 @@ pub fn InstrumentStrings() -> impl IntoView {
     };
 
     view! {
-        <svg
-            viewBox=view_box
-            class="absolute h-full w-auto top-auto left-auto bottom-0 right-0 stroke-gray/40 dark:stroke-cinnabar/40 stroke-[0.5px]"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-        >
+        <svg viewBox=view_box fill="none" xmlns="http://www.w3.org/2000/svg">
             <g
                 id="strings-root"
                 class=super::instrument_animations::INSTRUMENT_STRINGS_ROOT_APPEAR

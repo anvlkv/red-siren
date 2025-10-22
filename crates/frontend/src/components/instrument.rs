@@ -30,7 +30,7 @@ pub fn Instrument() -> impl IntoView {
             )
             style=format!("--inst-crossfade-duration: {}ms;", INTRO_FADE_DURATION_MS / 2.0)
         >
-            <InstrumentStrings attr:class="absolute h-full w-auto right-0 bottom-0 stroke-black dark:stroke-red bg-none" />
+            <InstrumentStrings attr:class="absolute h-full w-auto right-0 bottom-0 fill-none stroke-gray/40 dark:stroke-cinnabar/40 stroke-[0.5px]" />
             <Keyboard attr:class="absolute inset-0" />
         </div>
     }

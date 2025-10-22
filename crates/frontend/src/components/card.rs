@@ -48,7 +48,7 @@ pub fn Card(
     let bg_and_border = match variant {
         UiVariant::Solid => {
             "\
-            bg-red/40 dark:bg-black/40 bg-blend-screen dark:bg-blend-darken \
+             bg-linear-to-b from-cinnabar/60 to-red/60 dark:from-gray/60 dark:to-black/60 bg-red/40 dark:bg-black/40 bg-blend-screen dark:bg-blend-darken \
             shadow-xl shadow-gray dark:shadow-cinnabar backdrop-blur-sm"
         }
         UiVariant::Outline => {

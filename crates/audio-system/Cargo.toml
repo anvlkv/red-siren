@@ -20,6 +20,9 @@ u-num-it = "0.3.1"
 wasm-bindgen = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true }
 
+[target.'cfg(target_os = "ios")'.dependencies]
+objc = "0.2"
+
 [features]
 default = []
 # Native CPAL runtime

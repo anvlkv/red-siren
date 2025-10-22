@@ -166,7 +166,7 @@ impl Candidate {
             );
         let safe_breadth = orientation.safe_breadth(space, safe_area_padding).max(1.0);
         let instrument_breadth = self.band_breadth * (1.0 + 2.0 * STRING_TO_BAND_MIN_GAP_RATIO);
-        let band_length = (safe_breadth / 2.0) - instrument_breadth;
+        let band_length = (safe_breadth - instrument_breadth) / 2.0;
 
         Some(Layout {
             space,

@@ -494,8 +494,8 @@ pub fn KeyboardElement(
                         .get()
                         .map(|s| s.iter().map(|v| v.abs()).sum::<f32>())
                         .unwrap_or(0.0)
-                        .min(16.0);
-                    format!("scale({s}, {s})", s = 0.75 + inc / 64.0)
+                        .min(8.0);
+                    format!("scale({s}, {s})", s = 0.75 + inc / 16.0)
                 }
                 style:top=move || { format!("{}px", constrained_position().y) }
                 style:left=move || { format!("{}px", constrained_position().x) }

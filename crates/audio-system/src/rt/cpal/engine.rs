@@ -27,6 +27,11 @@ use super::stream::{
     ControlInvocationResult, GenType, ProdType,
 };
 
+#[cfg(target_os = "ios")]
+use objc::runtime::{Object, BOOL, NO, YES};
+#[cfg(target_os = "ios")]
+use objc::{class, msg_send, sel, sel_impl};
+
 const CONTROL_INVOKE_TIMEOUT_MS: u64 = 500;
 const FADE_DURATION_MS: u64 = 120;
 const FOLLOW_RESPONSE_SECS: f32 = 0.01;
@@ -82,6 +87,110 @@ impl Default for CpalController {
             last_tuner_config: RwLock::new(TunerConfig::default()),
         }
     }
+}
+
+#[cfg(target_os = "ios")]
+#[allow(unexpected_cfgs)]
+unsafe fn configure_ios_audio_session() -> Result<()> {
+    // Get the shared AVAudioSession singleton instance
+    let audio_session: *mut Object = msg_send![class!(AVAudioSession), sharedInstance];
+
+    // Create category string for playAndRecord (duplex audio)
+    let category_str: *mut Object = msg_send![
+        class!(NSString),
+        stringWithUTF8String: "AVAudioSessionCategoryPlayAndRecord\0".as_ptr()
+    ];
+
+    // Create mode string for default mode
+    let mode_str: *mut Object = msg_send![
+        class!(NSString),
+        stringWithUTF8String: "AVAudioSessionModeDefault\0".as_ptr()
+    ];
+
+    // Set category and mode with options
+    // Options: 0x8 = DefaultToSpeaker, 0x4 = AllowBluetooth
+    let options: u64 = 0x8 | 0x4; // DefaultToSpeaker | AllowBluetooth
+    let mut error: *mut Object = std::ptr::null_mut();
+
+    let success: BOOL = msg_send![
+        audio_session,
+        setCategory: category_str
+        mode: mode_str
+        options: options
+        error: &mut error
+    ];
+
+    if success != YES {
+        log::error!("Failed to set iOS audio session category");
+        if !error.is_null() {
+            let description: *mut Object = msg_send![error, localizedDescription];
+            let c_str: *const std::os::raw::c_char = msg_send![description, UTF8String];
+            if !c_str.is_null() {
+                let err_msg = std::ffi::CStr::from_ptr(c_str).to_string_lossy();
+                log::error!("Error details: {}", err_msg);
+            }
+        }
+        return Err(InstrumentError::DeviceUnavailable.into());
+    }
+
+    // Activate the audio session
+    let mut error: *mut Object = std::ptr::null_mut();
+    let success: BOOL = msg_send![
+        audio_session,
+        setActive: YES
+        error: &mut error
+    ];
+
+    if success != YES {
+        log::error!("Failed to activate iOS audio session");
+        if !error.is_null() {
+            let description: *mut Object = msg_send![error, localizedDescription];
+            let c_str: *const std::os::raw::c_char = msg_send![description, UTF8String];
+            if !c_str.is_null() {
+                let err_msg = std::ffi::CStr::from_ptr(c_str).to_string_lossy();
+                log::error!("Error details: {}", err_msg);
+            }
+        }
+        return Err(InstrumentError::DeviceUnavailable.into());
+    }
+
+    log::trace!("iOS audio session configured successfully for duplex audio");
+    Ok(())
+}
+
+#[cfg(target_os = "ios")]
+#[allow(unexpected_cfgs)]
+unsafe fn deactivate_ios_audio_session() {
+    // Deactivate on background thread as it can block for ~0.5 seconds
+    std::thread::spawn(|| {
+        unsafe {
+            let audio_session: *mut Object = msg_send![class!(AVAudioSession), sharedInstance];
+            let mut error: *mut Object = std::ptr::null_mut();
+
+            // Use NotifyOthersOnDeactivation option (0x1)
+            let options: u64 = 0x1;
+            let success: BOOL = msg_send![
+                audio_session,
+                setActive: NO
+                withOptions: options
+                error: &mut error
+            ];
+
+            if success != YES {
+                log::warn!("Failed to deactivate iOS audio session");
+                if !error.is_null() {
+                    let description: *mut Object = msg_send![error, localizedDescription];
+                    let c_str: *const std::os::raw::c_char = msg_send![description, UTF8String];
+                    if !c_str.is_null() {
+                        let err_msg = std::ffi::CStr::from_ptr(c_str).to_string_lossy();
+                        log::warn!("Error details: {}", err_msg);
+                    }
+                }
+            } else {
+                log::trace!("iOS audio session deactivated");
+            }
+        }
+    });
 }
 
 impl CpalController {
@@ -234,6 +343,12 @@ impl CpalController {
         self.activation_snoops.write().clear();
         self.output_snoops.write().clear();
 
+        // Deactivate iOS audio session
+        #[cfg(target_os = "ios")]
+        unsafe {
+            deactivate_ios_audio_session();
+        }
+
         Ok(())
     }
 
@@ -268,6 +383,13 @@ impl StreamController for CpalController {
         tuner_config: &TunerConfig,
     ) -> Result<()> {
         log::trace!("CpalController.start: begin with source={:?}", source);
+
+        // Configure iOS audio session before creating any streams
+        #[cfg(target_os = "ios")]
+        unsafe {
+            configure_ios_audio_session()?;
+        }
+
         // Snapshot for potential restarts.
         {
             *self.last_layout.write() = *layout;
@@ -315,9 +437,13 @@ impl StreamController for CpalController {
             source
         );
         let (act_sx, act_handle, activator_cons) = if matches!(source, ActivationSource::Mic) {
-            let input_device = host
-                .default_input_device()
-                .ok_or(InstrumentError::DeviceUnavailable)?;
+            // Use the same device for input (already selected above)
+            let input_device = if output_device.supports_input() {
+                output_device.clone()
+            } else {
+                host.default_input_device()
+                    .ok_or(InstrumentError::DeviceUnavailable)?
+            };
             let input_device_name = input_device
                 .name()
                 .unwrap_or_else(|e| format!("(error getting name: {e})"));

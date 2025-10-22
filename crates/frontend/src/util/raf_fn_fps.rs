@@ -26,17 +26,6 @@ where
     throttled_runner(callback, Signal::derive(move || fps), options)
 }
 
-/// Signal-driven FPS version - reactive to FPS changes
-pub fn use_raf_fn_with_fps_signal<F>(
-    callback: F,
-    fps: Signal<f64>,
-) -> Pausable<impl Fn() + Clone + Send + Sync, impl Fn() + Clone + Send + Sync>
-where
-    F: Fn(UseRafFnCallbackArgs) + 'static,
-{
-    throttled_runner(callback, fps, UseRafFnWithFpsOptions::default())
-}
-
 /// Core throttled runner with simplified timing
 fn throttled_runner<F>(
     callback: F,

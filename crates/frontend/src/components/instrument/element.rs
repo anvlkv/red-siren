@@ -1,4 +1,4 @@
-use common::instrument::commands::UpdateBandControlPayload;
+use common::instrument::commands::{UpdateBandControlPayload, UpdateKeyControlPayload};
 use leptos::{html, prelude::*};
 use leptos_use::{
     core::Position, use_draggable_with_options, use_element_bounding, UseDraggableOptions,
@@ -120,6 +120,14 @@ pub fn KeyboardElement(
         common::commands::instrument::UPDATE_BAND_CONTROL,
     );
 
+    let UseTauriReturn {
+        error: key_control_error,
+        trigger: update_key_control,
+        ..
+    } = use_invoke::<UpdateKeyControlPayload, (), ()>(
+        common::commands::instrument::UPDATE_KEY_CONTROL,
+    );
+
     let UseListenReturn {
         data: band_control_data,
         error: listen_band_control_error,
@@ -129,6 +137,19 @@ pub fn KeyboardElement(
     } = use_listen::<UpdateBandControlPayload>(tauri_use::EventType::Custom(
         common::events::instrument::BAND_CONTROL_G_K,
     ));
+
+    let UseListenReturn {
+        data: key_control_data,
+        error: listen_key_control_error,
+        open: listen_key_control_open,
+        close: listen_key_control_close,
+        ..
+    } = use_listen::<UpdateKeyControlPayload>(tauri_use::EventType::Custom(
+        common::events::instrument::KEY_CONTROL_G_K,
+    ));
+
+    // Local state for pressed/released
+    let is_pressed = RwSignal::new(false);
 
     let band_control_data = Memo::new(move |prev| {
         band_control_data()
@@ -145,24 +166,56 @@ pub fn KeyboardElement(
             .unwrap_or_default()
     });
 
+    let key_control_data = Memo::new(move |prev| {
+        key_control_data()
+            .iter()
+            .filter_map(|d| {
+                if d.group == g as u8 && d.key == k as u8 {
+                    Some(d.value)
+                } else {
+                    None
+                }
+            })
+            .next()
+            .or(prev.copied())
+            .unwrap_or(0.0)
+    });
+
+    // Sync key control state
+    Effect::new(move |_| {
+        let value = key_control_data();
+        is_pressed.set(value > 0.5);
+    });
+
     // Get initial band control
     Effect::new(move |_| {
         listen_band_control_open();
     });
 
+    // Get initial key control
+    Effect::new(move |_| {
+        listen_key_control_open();
+    });
+
     // Log errors from band control updates
     Effect::new(move |_| {
-        if let Some(err) = band_control_error.get() {
-            log::error!("Error updating band control: {err}");
+        if let Some(err) = band_control_error() {
+            log::error!("Error calling update band control: {err}");
         }
-
-        if let Some(err) = listen_band_control_error.get() {
-            log::error!("Error listening band control: {err}");
+        if let Some(err) = listen_band_control_error() {
+            log::error!("Error listening to band control: {err}");
+        }
+        if let Some(err) = key_control_error() {
+            log::error!("Error calling update key control: {err}");
+        }
+        if let Some(err) = listen_key_control_error() {
+            log::error!("Error listening to key control: {err}");
         }
     });
 
     on_cleanup(move || {
         listen_band_control_close();
+        listen_key_control_close();
     });
 
     // Calculate drag constraints based on band dimensions and alignment
@@ -466,15 +519,38 @@ pub fn KeyboardElement(
             ></div>
             <Button
                 class=Signal::derive(move || {
+                    let ring = if is_pressed() {
+                        "inset-ring-3 inset-ring-cinnabar dark:inset-ring-gray ring-2 ring-gray dark:ring-cinnabar"
+                    } else {
+                        ""
+                    };
                     format!(
-                        "border-none text-thin md:text-base text-sm absolute {}",
+                        "border-none text-thin md:text-base text-sm absolute {} {}",
                         if is_dragging() { "cursor-grabbing" } else { "cursor-grab" },
+                        ring,
                     )
                 })
                 size=UiSize::Sm
                 round=true
                 square=true
                 attr:id=format!("key-{g}-{k}")
+                on:click=move |ev| {
+                    ev.prevent_default();
+                    ev.stop_propagation();
+                    let new_value = if is_pressed() { 0.0 } else { 1.0 };
+                    is_pressed.set(!is_pressed());
+                    update_key_control(
+                        Some((
+                            UpdateKeyControlPayload {
+                                group: g as u8,
+                                key: k as u8,
+                                value: new_value,
+                            },
+                            (),
+                        )),
+                    );
+                }
+                attr:aria-pressed=move || is_pressed().to_string()
                 style:width=move || {
                     let dia = key_radius() * 2.0;
                     format!("{dia}px")

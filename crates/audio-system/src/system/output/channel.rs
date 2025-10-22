@@ -4,14 +4,18 @@ use common::{
     instrument::{GroupChannel, GroupConfig},
     NodeKey,
 };
-use fundsp::hacker32::prelude::*;
+use fundsp::{hacker32::prelude::*, typenum::op};
 use u_num_it::u_num_it;
 
-use super::{node::NodeType, InnerHandles, NodeHandles};
+use super::{
+    filter::{FilterHandles, FilterType},
+    node::NodeType,
+    InnerHandles, NodeHandles,
+};
 
 use crate::util::S;
 
-pub fn create_channel_system<G, K>(
+pub fn create_channel_system<G, K, F>(
     groups: &[GroupConfig],
     channel: usize,
     net: &mut Net,
@@ -19,6 +23,7 @@ pub fn create_channel_system<G, K>(
 where
     G: Size<f32> + Size<NodeType>,
     K: Size<f32> + Size<NodeType>,
+    F: Size<f32> + Size<FilterType>,
 {
     let total_nodes: usize = groups.iter().map(|g| g.nodes.len()).sum();
     log::info!(
@@ -29,6 +34,7 @@ where
 
     let mut node_handles = Vec::<NodeHandles>::new();
     let mut inner_handles = Vec::<HashMap<NodeKey, InnerHandles>>::new();
+    let mut filter_handles = Vec::<FilterHandles>::new();
 
     for (group_idx, group) in groups.iter().enumerate() {
         log::debug!(
@@ -37,6 +43,7 @@ where
             group.nodes.len()
         );
         let mut group_handles = HashMap::<NodeKey, InnerHandles>::new();
+
         for node in group.nodes.iter() {
             let key = node.key;
             log::trace!("Creating node with key: {:?}", key);
@@ -47,11 +54,11 @@ where
                 snoop(super::node::OUTPUT_SNOOP_CAPACITY);
             let siren_control = shared(0.0);
             let band_control = shared(0.0);
+            let key_control = shared(0.0);
 
             group_handles.insert(
                 key,
                 InnerHandles {
-                    key,
                     activation_snoop: activation_snoop_backend,
                     output_snoop: output_snoop_backend,
                     siren_control: Var::new(&siren_control),
@@ -59,12 +66,18 @@ where
                 },
             );
 
+            filter_handles.push(FilterHandles {
+                control: Var::new(&key_control),
+                freq: node.base_frequency,
+            });
+
             node_handles.push(NodeHandles {
                 key,
                 activation_snoop: activation_snoop_front,
                 output_snoop: output_snoop_front,
                 siren_control,
                 band_control,
+                key_control,
             });
             log::trace!("Created node handle for key: {:?}", key);
         }
@@ -81,6 +94,8 @@ where
     let node = busi::<G, _, _>(move |i| {
         let group_handles = mem::take(&mut handles_cell.borrow_mut()[i as usize]);
         super::node::create_group_node::<K>(&groups[i as usize], group_handles)
+    }) >> busi::<F, _, _>(move |i| {
+        super::filter::create_filter(filter_handles[i as usize].clone())
     });
     let node_id = net.push(Box::new(node >> dcblock::<S>() >> declick::<S>()));
     net.connect_output(node_id, 0, channel);
@@ -108,7 +123,9 @@ pub fn one_channel_subsystem(
                         U => {
                             type KNum = NumType;
 
-                            node_handles.extend(create_channel_system::<GNum, KNum>(
+                            type FNum = op!(GNum * KNum);
+
+                            node_handles.extend(create_channel_system::<GNum, KNum, FNum>(
                                 channel_groups,
                                 channel as usize,
                                 net,

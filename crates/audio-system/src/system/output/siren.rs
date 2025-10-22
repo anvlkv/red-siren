@@ -4,8 +4,7 @@ use crate::util::hash_str;
 
 const SIREN_ID: u64 = hash_str(concat!(module_path!(), "::Siren"));
 const SIREN_BASE_HZ: f32 = 0.5;
-const MAX_FREQUENCY_HZ: f32 = 15000.0; // Maximum frequency before reversing direction
-const FREQUENCY_GROWTH_FACTOR: f32 = 1.3; // Exponential growth factor
+const MAX_FREQUENCY_HZ: f32 = 15000.0; // Maximum frequency for interpolation
 
 const BASE_PAUSE_DURATION: f32 = 0.1; // Base pause duration in seconds
 
@@ -17,9 +16,8 @@ pub struct Siren<F: Real> {
     freq: F,
     phase: F,
     sample_duration: F,
-    pause_timer: F,          // Tracks remaining pause time
-    previous_sine: F,        // For zero-crossing detection
-    freq_direction_up: bool, // True = increasing freq, False = decreasing freq
+    pause_timer: F,   // Tracks remaining pause time
+    previous_sine: F, // For zero-crossing detection
     hash: u64,
 }
 
@@ -61,7 +59,6 @@ impl<F: Real> AudioNode for Siren<F> {
         self.pause_timer = F::zero();
         self.previous_sine = F::zero();
         self.freq = F::from_f32(SIREN_BASE_HZ);
-        self.freq_direction_up = true;
     }
 
     fn set_sample_rate(&mut self, sample_rate: f64) {
@@ -78,7 +75,6 @@ impl<F: Real> AudioNode for Siren<F> {
             self.pause_timer = F::zero();
             self.previous_sine = F::zero();
             self.freq = F::from_f32(SIREN_BASE_HZ);
-            self.freq_direction_up = true;
             return [0.0].into();
         }
 
@@ -95,22 +91,10 @@ impl<F: Real> AudioNode for Siren<F> {
 
         // Check for zero crossing (positive to negative)
         if self.has_zero_crossed(current_sine_f) {
-            // Update frequency exponentially with direction
-            if self.freq_direction_up {
-                self.freq *= F::from_f32(FREQUENCY_GROWTH_FACTOR);
-                // Check if we've hit the maximum frequency
-                if self.freq.to_f32() >= MAX_FREQUENCY_HZ {
-                    self.freq = F::from_f32(MAX_FREQUENCY_HZ);
-                    self.freq_direction_up = false; // Start going down
-                }
-            } else {
-                self.freq /= F::from_f32(FREQUENCY_GROWTH_FACTOR);
-                // Check if we've hit the minimum frequency
-                if self.freq.to_f32() <= SIREN_BASE_HZ {
-                    self.freq = F::from_f32(SIREN_BASE_HZ);
-                    self.freq_direction_up = true; // Start going up again
-                }
-            }
+            // Update frequency by interpolating based on input amplitude
+            // a = 0 -> SIREN_BASE_HZ, a = 1 -> MAX_FREQUENCY_HZ
+            self.freq =
+                F::from_f32(SIREN_BASE_HZ) + (F::from_f32(MAX_FREQUENCY_HZ - SIREN_BASE_HZ) * a);
 
             // Calculate and set pause duration
             self.pause_timer = self.calculate_pause_duration(a);
@@ -137,7 +121,6 @@ impl<F: Real> AudioNode for Siren<F> {
         let mut freq = self.freq;
         let mut pause_timer = self.pause_timer;
         let mut previous_sine = self.previous_sine;
-        let mut freq_direction_up = self.freq_direction_up;
 
         for i in 0..full_simd_items(size) {
             let element: [f32; SIMD_N] = core::array::from_fn(|j| {
@@ -148,7 +131,6 @@ impl<F: Real> AudioNode for Siren<F> {
                     pause_timer = F::zero();
                     previous_sine = F::zero();
                     freq = F::from_f32(SIREN_BASE_HZ);
-                    freq_direction_up = true;
                     return 0.0;
                 }
 
@@ -164,22 +146,10 @@ impl<F: Real> AudioNode for Siren<F> {
 
                 // Check for zero crossing (positive to negative)
                 if previous_sine > F::zero() && current_sine_f <= F::zero() {
-                    // Update frequency exponentially with direction
-                    if freq_direction_up {
-                        freq *= F::from_f32(FREQUENCY_GROWTH_FACTOR);
-                        // Check if we've hit the maximum frequency
-                        if freq.to_f32() >= MAX_FREQUENCY_HZ {
-                            freq = F::from_f32(MAX_FREQUENCY_HZ);
-                            freq_direction_up = false; // Start going down
-                        }
-                    } else {
-                        freq /= F::from_f32(FREQUENCY_GROWTH_FACTOR);
-                        // Check if we've hit the minimum frequency
-                        if freq.to_f32() <= SIREN_BASE_HZ {
-                            freq = F::from_f32(SIREN_BASE_HZ);
-                            freq_direction_up = true; // Start going up again
-                        }
-                    }
+                    // Update frequency by interpolating based on input amplitude
+                    // a = 0 -> SIREN_BASE_HZ, a = 1 -> MAX_FREQUENCY_HZ
+                    freq = F::from_f32(SIREN_BASE_HZ)
+                        + (F::from_f32(MAX_FREQUENCY_HZ - SIREN_BASE_HZ) * a);
 
                     // Calculate pause duration
                     pause_timer = if a > F::zero() {
@@ -212,7 +182,6 @@ impl<F: Real> AudioNode for Siren<F> {
         self.freq = freq;
         self.pause_timer = pause_timer;
         self.previous_sine = previous_sine;
-        self.freq_direction_up = freq_direction_up;
         self.process_remainder(size, input, output);
     }
 
@@ -271,23 +240,19 @@ mod tests {
     }
 
     #[test]
-    fn test_frequency_growth_and_oscillation() {
+    fn test_frequency_interpolation() {
         let mut siren_node = siren();
         siren_node.reset();
 
-        // Test that frequency grows exponentially and then oscillates up/down
+        // Test that frequency is interpolated based on input amplitude
+        // Test with a=0.5, frequency should be in the middle
         let mut zero_crossings = 0;
         let mut previous_output = 0.0;
-        let mut non_zero_outputs = 0;
 
-        for _i in 0..480000 {
-            // 10 seconds at 48kHz to see full oscillation pattern (up to 15kHz then down)
-            let input: Frame<f32, typenum::U1> = [1.0].into(); // Maximum excitement to eliminate pauses
+        // Run for 1 second at 48kHz
+        for _ in 0..48000 {
+            let input: Frame<f32, typenum::U1> = [0.5].into(); // Mid excitement level
             let output = siren_node.tick(&input);
-
-            if output[0] != 0.0 {
-                non_zero_outputs += 1;
-            }
 
             // Detect zero crossings (positive to negative)
             if previous_output > 0.0 && output[0] <= 0.0 {
@@ -296,19 +261,36 @@ mod tests {
             previous_output = output[0];
         }
 
-        // With exponential growth factor 1.3 and no pauses:
-        // Frequency grows: 0.5 -> 0.65 -> 0.845 -> 1.1 -> 1.43 -> 1.86 -> 2.42 -> 3.15 -> 4.09 -> 5.32 -> 6.92 -> 9.0 -> 11.7 -> 15.2
-        // Then reverses direction and goes back down, creating oscillation pattern
-        // Over 10 seconds we should see many crossings as frequency oscillates up and down
+        // With a=0.5, frequency should be: 0.5 + (15000 - 0.5) * 0.5 = 7500.25 Hz
+        // But since frequency only updates on zero crossings, we expect around 7500 crossings in 1 second
+        // Allow some tolerance for pauses
         assert!(
-            zero_crossings >= 10,
-            "Should have many zero crossings for full frequency oscillation, got {}",
+            zero_crossings > 6000 && zero_crossings < 8000,
+            "With a=0.5, should have frequency around 7500Hz, got {} zero crossings",
             zero_crossings
         );
+
+        // Test with different input levels
+        siren_node.reset();
+        zero_crossings = 0;
+        previous_output = 0.0;
+
+        // Test with very low excitement (a=0.1)
+        for _ in 0..48000 {
+            let input: Frame<f32, typenum::U1> = [0.1].into();
+            let output = siren_node.tick(&input);
+
+            if previous_output > 0.0 && output[0] <= 0.0 {
+                zero_crossings += 1;
+            }
+            previous_output = output[0];
+        }
+
+        // With a=0.1, frequency should be: 0.5 + (15000 - 0.5) * 0.1 ≈ 1500 Hz
         assert!(
-            non_zero_outputs > 400000,
-            "Should have substantial non-zero output over 10 seconds, got {}",
-            non_zero_outputs
+            zero_crossings > 1000 && zero_crossings < 2000,
+            "With a=0.1, should have frequency around 1500Hz, got {} zero crossings",
+            zero_crossings
         );
     }
 }

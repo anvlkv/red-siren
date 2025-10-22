@@ -10,7 +10,7 @@ pub fn Permissions() -> impl IntoView {
     let UseTauriReturn {
         error: mic_permission_error,
         trigger: mic_permission_trigger,
-        data: mic_permission_data,
+        data: _mic_permission_data,
     } = use_invoke::<MicPermissionPayload, (), bool>(
         common::commands::health::GRANT_MIC_PREMISSION,
     );

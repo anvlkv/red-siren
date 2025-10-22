@@ -188,19 +188,20 @@ where
     for frame in output.chunks_mut(channels) {
         let (l, r) = next_sample();
         let left: T = T::from_sample(l as f64);
-        let right: T = T::from_sample(r as f64);
 
-        if channels == 1 {
+        if frame.len() == 1 {
             frame[0] = left;
             continue;
         }
 
+        let right: T = T::from_sample(r as f64);
         frame[0] = left;
         frame[1] = right;
 
         // Fill any additional channels with silence (or could duplicate).
-        for ch in 2..channels {
-            frame[ch] = T::from_sample(0.0f64);
+        let zero = T::from_sample(0.0f64);
+        for slot in frame.iter_mut().skip(2) {
+            *slot = zero;
         }
     }
 }

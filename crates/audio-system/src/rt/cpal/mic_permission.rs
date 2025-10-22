@@ -45,10 +45,8 @@ where
     let data_cb = move |_: &[S], _: &InputCallbackInfo| {};
     // Error callback writes exactly once into shared flag.
     let err_cb = move |err: StreamError| {
-        if let Ok(mut guard) = err_flag_for_cb.lock() {
-            if guard.is_none() {
-                *guard = Some(format!("{err}"));
-            }
+        if let Ok(mut guard) = err_flag_for_cb.lock() && guard.is_none() {
+            *guard = Some(err.to_string());
         }
     };
     // Build input stream.

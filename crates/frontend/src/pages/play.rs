@@ -45,7 +45,7 @@ pub fn Play() -> impl IntoView {
             if let Some(state) = setup_state() {
                 if state.mic_permission.is_none() {
                     log::info!("Mic permission not set, redirecting to Permissions");
-                    navigate(&RouteId::Permissions.as_ref(), Default::default());
+                    navigate(RouteId::Permissions.as_ref(), Default::default());
                 }
             }
         }

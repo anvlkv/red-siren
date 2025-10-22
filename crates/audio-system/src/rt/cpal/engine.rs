@@ -59,6 +59,7 @@ struct CpalController {
     activation_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
     output_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
     band_controls: RwLock<HashMap<NodeKey, Shared>>,
+    key_controls: RwLock<HashMap<NodeKey, Shared>>,
 
     // Last known state for restarts
     last_layout: RwLock<InstrumentLayout>,
@@ -81,6 +82,7 @@ impl Default for CpalController {
             activation_snoops: RwLock::new(HashMap::new()),
             output_snoops: RwLock::new(HashMap::new()),
             band_controls: RwLock::new(HashMap::new()),
+            key_controls: RwLock::new(HashMap::new()),
             last_layout: RwLock::new(InstrumentLayout::default()),
             last_config: RwLock::new(InstrumentConfig::default()),
             last_source: RwLock::new(ActivationSource::default()),
@@ -219,28 +221,37 @@ impl CpalController {
                 .collect::<HashMap<NodeKey, f32>>()
         };
 
+        let old_key_values = {
+            let stored_key_controls = self.key_controls.read();
+            stored_key_controls
+                .iter()
+                .map(|(k, v)| (*k, v.value()))
+                .collect::<HashMap<NodeKey, f32>>()
+        };
+
         // Build output system graph & retrieve handles.
         let node_handles = crate::create_output_system(config, &mut net, 2);
 
         let mut siren_controls = HashMap::<NodeKey, Shared>::new();
-        let mut band_controls = HashMap::<NodeKey, Shared>::new();
 
         // Store node handle artifacts (activation/output snoops, control vars).
         {
             let mut activation_snoops = self.activation_snoops.write();
             let mut output_snoops = self.output_snoops.write();
             let mut stored_band_controls = self.band_controls.write();
+            let mut stored_key_controls = self.key_controls.write();
 
             activation_snoops.clear();
             output_snoops.clear();
             stored_band_controls.clear();
+            stored_key_controls.clear();
 
             for handle in node_handles {
                 activation_snoops.insert(handle.key, handle.activation_snoop);
                 output_snoops.insert(handle.key, handle.output_snoop);
                 siren_controls.insert(handle.key, handle.siren_control);
-                band_controls.insert(handle.key, handle.band_control.clone());
                 stored_band_controls.insert(handle.key, handle.band_control);
+                stored_key_controls.insert(handle.key, handle.key_control);
             }
 
             // Restore old band control values after insertion
@@ -248,6 +259,14 @@ impl CpalController {
                 if let Some(control) = stored_band_controls.get(&key) {
                     control.set_value(old_value);
                     log::debug!("Restored band control value for {:?}: {}", key, old_value);
+                }
+            }
+
+            // Restore old key control values after insertion
+            for (key, old_value) in old_key_values {
+                if let Some(control) = stored_key_controls.get(&key) {
+                    control.set_value(old_value);
+                    log::debug!("Restored key control value for {:?}: {}", key, old_value);
                 }
             }
         }
@@ -363,10 +382,31 @@ impl CpalController {
         }
     }
 
-    /// Set band control value for a specific node
+    /// Get band control value for a specific node
     pub fn get_band_control(&self, key: NodeKey) -> Result<f32> {
         let band_controls = self.band_controls.read();
         if let Some(control) = band_controls.get(&key) {
+            Ok(control.value())
+        } else {
+            Err(ControlError::NodeNotFound { key }.into())
+        }
+    }
+
+    /// Set key control value for a specific node (0.0 = false/released, 1.0 = true/pressed)
+    pub fn set_key_control(&self, key: NodeKey, value: f32) -> Result<()> {
+        let key_controls = self.key_controls.read();
+        if let Some(control) = key_controls.get(&key) {
+            control.set_value(value);
+            Ok(())
+        } else {
+            Err(ControlError::NodeNotFound { key }.into())
+        }
+    }
+
+    /// Get key control value for a specific node (0.0 = false/released, 1.0 = true/pressed)
+    pub fn get_key_control(&self, key: NodeKey) -> Result<f32> {
+        let key_controls = self.key_controls.read();
+        if let Some(control) = key_controls.get(&key) {
             Ok(control.value())
         } else {
             Err(ControlError::NodeNotFound { key }.into())
@@ -814,6 +854,14 @@ impl StreamController for CpalController {
 
     fn get_band_control(&self, key: NodeKey) -> Result<f32> {
         self.get_band_control(key)
+    }
+
+    fn set_key_control(&self, key: NodeKey, value: f32) -> Result<()> {
+        self.set_key_control(key, value)
+    }
+
+    fn get_key_control(&self, key: NodeKey) -> Result<f32> {
+        self.get_key_control(key)
     }
 }
 /// Factory exposed to the runtime facade.

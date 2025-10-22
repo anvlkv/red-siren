@@ -1,9 +1,4 @@
-use common::{
-    instrument::{GroupChannel, Scale},
-    orientation::LayoutOrientation,
-    safe_area::SafeArea,
-    Line,
-};
+use common::{instrument::GroupChannel, orientation::LayoutOrientation, safe_area::SafeArea, Line};
 use leptos::prelude::*;
 use mint::Vector2;
 
@@ -35,7 +30,6 @@ pub struct LayoutContextReturn {
     pub num_keys_per_group: Memo<u8>,
     pub num_groups: Memo<u8>,
     pub first_group_channel: Memo<GroupChannel>,
-    pub scale: Memo<Scale>,
     pub complete_layout: Memo<common::instrument::Layout>,
     pub key_pad_main: Memo<f32>,
 }
@@ -121,12 +115,6 @@ pub fn expect_layout_contex() -> LayoutContextReturn {
         let has_changed = Some(prop) != old;
         (prop, has_changed)
     });
-    let scale = Memo::new_owning(move |old| {
-        let layout = layout.get();
-        let prop = layout.scale;
-        let has_changed = Some(prop) != old;
-        (prop, has_changed)
-    });
     let key_pad_main = Memo::new_owning(move |old| {
         let l = layout.get();
         let prop = l.key_pad_main();
@@ -149,7 +137,6 @@ pub fn expect_layout_contex() -> LayoutContextReturn {
         num_keys_per_group,
         num_groups,
         first_group_channel,
-        scale,
         key_pad_main,
     }
 }

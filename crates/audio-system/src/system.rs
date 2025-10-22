@@ -12,6 +12,7 @@ pub struct NodeHandles {
     pub output_snoop: Snoop,
     pub siren_control: Shared,
     pub band_control: Shared,
+    pub key_control: Shared,
 }
 
 pub fn create_output_system(

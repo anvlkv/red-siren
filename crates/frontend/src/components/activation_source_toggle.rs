@@ -35,7 +35,7 @@ pub fn ActivationSourceToggle(
         if source == 1 {
             if let Some(false) = mic_permission() {
                 log::info!("Mic permission denied, redirecting to Permissions");
-                navigate(&RouteId::Permissions.as_ref(), Default::default());
+                navigate(RouteId::Permissions.as_ref(), Default::default());
                 return;
             }
         }

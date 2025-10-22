@@ -1,8 +1,8 @@
 use audio_system::rt::ActivationSource;
 
 use common::error::{InstrumentError, Result};
-use common::instrument::commands::UpdateBandControlPayload;
-use common::instrument::events::BAND_CONTROL_G_K;
+use common::instrument::commands::{UpdateBandControlPayload, UpdateKeyControlPayload};
+use common::instrument::events::{BAND_CONTROL_G_K, KEY_CONTROL_G_K};
 use common::instrument::{
     events::{ActivationSourcePayload, PlaybackStatePayload},
     Layout,
@@ -426,6 +426,54 @@ pub fn instrument_update_band_control(
     app.emit(
         BAND_CONTROL_G_K,
         UpdateBandControlPayload { group, key, value },
+    )?;
+
+    Ok(())
+}
+
+/// Update key control state (pressed/released) for a specific key
+#[tauri::command]
+pub fn instrument_update_key_control(
+    group: u8,
+    key: u8,
+    value: f32,
+    state: State<'_, InstrumentEngine>,
+    app: AppHandle,
+) -> Result<()> {
+    log::trace!(
+        "instrument_update_key_control called: group={}, key={}, value={}",
+        group,
+        key,
+        value
+    );
+
+    // Validate NodeKey against current layout
+    let layout = state.layout();
+    let registry = NodeKeyRegistry::new(layout.num_groups.get(), layout.num_keys_per_group.get());
+    let node_key = match registry.create_key(group, key) {
+        Ok(key) => key,
+        Err(err) => {
+            log::warn!("Invalid NodeKey in key control update: {}", err);
+            return Err(common::error::ControlError::NodeNotFound {
+                key: NodeKey::new(group, key),
+            }
+            .into());
+        }
+    };
+
+    state.set_key_control(node_key, value)?;
+
+    log::trace!(
+        "Key control updated for node ({}, {}): value={} ({})",
+        group,
+        key,
+        value,
+        if value > 0.5 { "pressed" } else { "released" }
+    );
+
+    app.emit(
+        KEY_CONTROL_G_K,
+        UpdateKeyControlPayload { group, key, value },
     )?;
 
     Ok(())

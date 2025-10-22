@@ -6,6 +6,8 @@ pub const ACTIVATION_SRC: &str = "instrument_activation_source";
 pub const LAYOUT: &str = "instrument_layout";
 /// Emitted when band control position changes
 pub const BAND_CONTROL_G_K: &str = "instrument_band_control";
+/// Emitted when key control state changes (pressed/released)
+pub const KEY_CONTROL_G_K: &str = "instrument_key_control";
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

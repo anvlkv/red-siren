@@ -1,13 +1,10 @@
 #![allow(clippy::manual_is_multiple_of)]
 
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        mpsc,
-        mpsc::Sender,
-        Arc, Mutex,
-    },
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    mpsc,
+    mpsc::Sender,
+    Arc, Mutex,
 };
 
 use crate::rt::TunerRuntime;

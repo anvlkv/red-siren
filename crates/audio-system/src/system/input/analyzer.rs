@@ -143,11 +143,6 @@ impl FFTAnalyzer {
             .process_big(self.window_size, &input_slices, &mut output_slices);
 
         self.perform_fft_analysis(&processed);
-
-        // Periodic validation (every 1000 samples to avoid performance impact)
-        if self.sample_count % 1000 == 0 {
-            self.validate_sensor_controls();
-        }
     }
 
     /// Validate that sensor data NodeKeys match available activation controls

@@ -1,17 +1,16 @@
 mod channel;
+mod filter;
 mod formant;
 mod node;
 mod siren;
 
 use channel::one_channel_subsystem;
 use common::instrument::{Config, GroupChannel};
-use common::NodeKey;
 use fundsp::hacker32::prelude::*;
 
 use super::NodeHandles;
 
 struct InnerHandles {
-    key: NodeKey,
     activation_snoop: An<SnoopBackend>,
     output_snoop: An<SnoopBackend>,
     siren_control: Var,
@@ -26,7 +25,6 @@ impl Default for InnerHandles {
         let band_control = shared(0.0);
 
         Self {
-            key: NodeKey::new(0, 0),
             activation_snoop,
             output_snoop,
             siren_control: Var::new(&siren_control),

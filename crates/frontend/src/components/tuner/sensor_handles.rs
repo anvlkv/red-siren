@@ -64,7 +64,7 @@ pub fn SensorHandle(
     });
 
     // Handle classes - no border/background, just for interaction
-    let handle_class = "relative cursor-move";
+    let handle_class = "relative cursor-move mix-blend-difference dark:mix-blend-exclusion";
 
     // Create reactive positions that update when config/layout changes
     let min_position = Signal::derive(move || {
@@ -164,10 +164,16 @@ pub fn SensorHandle(
                                 let current_sensor =
                                     cfg.sensor_data.get(index).copied().unwrap_or(sensor);
 
+                                // Constrain min values to be less than max values
+                                let constrained_min_freq =
+                                    freq.min(current_sensor.max_frequency - 1.0);
+                                let constrained_min_mag =
+                                    magnitude.min(current_sensor.max_magnitude - 1.0);
+
                                 on_update.run(UpdateSensorPayload {
                                     index,
-                                    min_frequency: freq,
-                                    min_magnitude: magnitude,
+                                    min_frequency: constrained_min_freq,
+                                    min_magnitude: constrained_min_mag,
                                     max_frequency: current_sensor.max_frequency,
                                     max_magnitude: current_sensor.max_magnitude,
                                 });
@@ -224,12 +230,18 @@ pub fn SensorHandle(
                                 let current_sensor =
                                     cfg.sensor_data.get(index).copied().unwrap_or(sensor);
 
+                                // Constrain max values to be greater than min values
+                                let constrained_max_freq =
+                                    freq.max(current_sensor.min_frequency + 1.0);
+                                let constrained_max_mag =
+                                    magnitude.max(current_sensor.min_magnitude + 1.0);
+
                                 on_update.run(UpdateSensorPayload {
                                     index,
                                     min_frequency: current_sensor.min_frequency,
                                     min_magnitude: current_sensor.min_magnitude,
-                                    max_frequency: freq,
-                                    max_magnitude: magnitude,
+                                    max_frequency: constrained_max_freq,
+                                    max_magnitude: constrained_max_mag,
                                 });
                             }
                         });
@@ -277,21 +289,41 @@ pub fn SensorHandle(
                 }
             >
                 <svg class="w-full h-full pointer-events-none" style="overflow: visible;">
-                    // Semi-circle facing left
+                    // Semi-circle facing left (horizontal) or up (vertical)
                     <path
                         d=move || {
                             let r = sensor_radius.get();
-                            format!(
-                                "M {} {} A {} {} 0 0 1 {} {} L {} {} Z",
-                                r,
-                                0.0,
-                                r,
-                                r,
-                                r,
-                                r * 2.0,
-                                r,
-                                r,
-                            )
+                            layout
+                                .with(|l| {
+                                    match l.as_ref().map(|lay| lay.orientation) {
+                                        Some(common::orientation::LayoutOrientation::Vertical) => {
+                                            format!(
+                                                "M {} {} A {} {} 0 0 1 {} {} L {} {} Z",
+                                                0.0,
+                                                r,
+                                                r,
+                                                r,
+                                                r * 2.0,
+                                                r,
+                                                r,
+                                                r,
+                                            )
+                                        }
+                                        _ => {
+                                            format!(
+                                                "M {} {} A {} {} 0 0 1 {} {} L {} {} Z",
+                                                r,
+                                                0.0,
+                                                r,
+                                                r,
+                                                r,
+                                                r * 2.0,
+                                                r,
+                                                r,
+                                            )
+                                        }
+                                    }
+                                })
                         }
                         class="fill-gray/40 dark:fill-cinnabar/40 stroke-gray dark:stroke-cinnabar stroke-1"
                     />
@@ -318,21 +350,41 @@ pub fn SensorHandle(
                 }
             >
                 <svg class="w-full h-full pointer-events-none" style="overflow: visible;">
-                    // Semi-circle facing right
+                    // Semi-circle facing right (horizontal) or down (vertical)
                     <path
                         d=move || {
                             let r = sensor_radius.get();
-                            format!(
-                                "M {} {} A {} {} 0 0 0 {} {} L {} {} Z",
-                                r,
-                                0.0,
-                                r,
-                                r,
-                                r,
-                                r * 2.0,
-                                r,
-                                r,
-                            )
+                            layout
+                                .with(|l| {
+                                    match l.as_ref().map(|lay| lay.orientation) {
+                                        Some(common::orientation::LayoutOrientation::Vertical) => {
+                                            format!(
+                                                "M {} {} A {} {} 0 0 0 {} {} L {} {} Z",
+                                                0.0,
+                                                r,
+                                                r,
+                                                r,
+                                                r * 2.0,
+                                                r,
+                                                r,
+                                                r,
+                                            )
+                                        }
+                                        _ => {
+                                            format!(
+                                                "M {} {} A {} {} 0 0 0 {} {} L {} {} Z",
+                                                r,
+                                                0.0,
+                                                r,
+                                                r,
+                                                r,
+                                                r * 2.0,
+                                                r,
+                                                r,
+                                            )
+                                        }
+                                    }
+                                })
                         }
                         class="fill-gray/40 dark:fill-cinnabar/40 stroke-gray dark:stroke-cinnabar stroke-1"
                     />
@@ -341,7 +393,7 @@ pub fn SensorHandle(
 
             // Connecting line between handles (visual only, not draggable)
             <svg
-                class="absolute inset-0 pointer-events-none"
+                class="absolute inset-0 pointer-events-none mix-blend-difference dark:mix-blend-exclusion"
                 style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
             >
                 <line

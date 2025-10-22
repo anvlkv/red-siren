@@ -14,7 +14,7 @@ use crate::util::tauri_resource::{use_tauri_resource, UseTauriResourceReturn};
 use common::tuner::{Config, Layout as TunerLayout, SpectrumData, UpdateSensorPayload};
 use common::RouteId;
 
-pub use context::{expect_tuner_service, provide_tuner_service, TunerService};
+pub use context::{expect_tuner_service, provide_tuner_service};
 pub use sensor_handles::SensorHandles;
 pub use spectrum::SpectrumVisualizer;
 

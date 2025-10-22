@@ -114,6 +114,8 @@ fn generate_spectrum_path(
     layout: &TunerLayout,
     sample_rate: f32,
 ) -> String {
+    use common::orientation::LayoutOrientation;
+
     if magnitudes.is_empty() || frequencies.is_empty() {
         return String::new();
     }
@@ -128,8 +130,17 @@ fn generate_spectrum_path(
         sample_rate,
     };
 
-    // Start from the left edge at baseline level
-    path.push_str(&format!("M {} {} ", 0.0, baseline.0.y));
+    // Start from the appropriate edge based on orientation
+    match layout.orientation {
+        LayoutOrientation::Horizontal => {
+            // Start from the left edge at baseline level
+            path.push_str(&format!("M {} {} ", 0.0, baseline.0.y));
+        }
+        LayoutOrientation::Vertical => {
+            // Start from the top edge at baseline position
+            path.push_str(&format!("M {} {} ", baseline.0.x, 0.0));
+        }
+    }
 
     for (i, &mag) in magnitudes.iter().enumerate() {
         if i < frequencies.len() {
@@ -138,9 +149,19 @@ fn generate_spectrum_path(
         }
     }
 
-    // Close path back to baseline at the right edge
-    path.push_str(&format!("L {} {} ", layout.space.x, baseline.0.y));
-    path.push_str(&format!("L {} {} ", 0.0, baseline.0.y));
+    // Close path back to baseline at the opposite edge
+    match layout.orientation {
+        LayoutOrientation::Horizontal => {
+            // Close to right edge, then back to start
+            path.push_str(&format!("L {} {} ", layout.space.x, baseline.0.y));
+            path.push_str(&format!("L {} {} ", 0.0, baseline.0.y));
+        }
+        LayoutOrientation::Vertical => {
+            // Close to bottom edge, then back to start
+            path.push_str(&format!("L {} {} ", baseline.0.x, layout.space.y));
+            path.push_str(&format!("L {} {} ", baseline.0.x, 0.0));
+        }
+    }
 
     path.push_str(" Z");
 

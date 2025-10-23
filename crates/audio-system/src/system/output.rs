@@ -1,4 +1,5 @@
 mod channel;
+mod crossfade;
 mod filter;
 mod formant;
 mod node;

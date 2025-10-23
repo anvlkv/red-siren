@@ -6,7 +6,7 @@ use common::{
 };
 use fundsp::{
     hacker32::prelude::*,
-    typenum::{UInt, UTerm, B1},
+    typenum::{UInt, UTerm, B0, B1},
 };
 
 use super::formant::*;
@@ -15,6 +15,14 @@ use super::InnerHandles;
 
 use crate::util::S;
 
+pub type OscType = Pipe<
+    Pipe<
+        Pipe<Constant<UInt<UTerm, B1>>, Split<UInt<UInt<UTerm, B1>, B0>>>,
+        Stack<Stack<Sine<f32>, WaveSynth<UInt<UTerm, B1>>>, Var>,
+    >,
+    super::crossfade::EqualPowerCrossfade,
+>;
+
 pub type NodeType = Pipe<
     Pipe<
         Pipe<
@@ -22,8 +30,7 @@ pub type NodeType = Pipe<
                 Pipe<
                     Binop<
                         FrameMul<UInt<UTerm, B1>>,
-                        Pipe<Constant<UInt<UTerm, B1>>, Sine<S>>,
-                        // Pipe<Pipe<Var, SnoopBackend>, Siren>,
+                        OscType,
                         Pipe<Pipe<Pipe<Var, Follow<S>>, SnoopBackend>, Siren<S>>,
                     >,
                     Split<UInt<UInt<UTerm, B1>, B1>>,
@@ -44,9 +51,9 @@ pub type NodeType = Pipe<
 >;
 
 pub const ACTIVATION_SNOOP_CAPACITY: usize = 8;
-pub const OUTPUT_SNOOP_CAPACITY: usize = 745;
+pub const OUTPUT_SNOOP_CAPACITY: usize = 1024;
 const FOLLOW_RESPONSE_TIME_S: f32 = (1.0 / 75.0) * 25.0;
-const NODE_BELL_Q: f32 = std::f32::consts::PI / 10.0;
+const NODE_BELL_Q: f32 = 0.95;
 const NODE_BELL_GAIN_DB: f32 = 1.0 / 3.0;
 
 fn create_node(config: &NodeConfig, handles: InnerHandles) -> An<NodeType> {
@@ -58,14 +65,17 @@ fn create_node(config: &NodeConfig, handles: InnerHandles) -> An<NodeType> {
         ..
     } = handles;
 
-    let source = constant(config.base_frequency as S) >> sine_phase::<S>(config.phase as S);
+    let source = constant(config.base_frequency as S)
+        >> split::<U2>()
+        >> (sine_phase::<S>(config.phase as S) | saw() | An(band_control.clone()))
+        >> super::crossfade::equal_power_crossfade();
+
     let siren_activation =
         An(siren_control) >> follow(FOLLOW_RESPONSE_TIME_S) >> activation_snoop >> siren();
     let formants = (formant::<1>(band_control.clone(), config.base_frequency as S) * 1.0)
         | (formant::<2>(band_control.clone(), config.base_frequency as S) * 0.8)
         | (formant::<3>(band_control.clone(), config.base_frequency as S) * 0.6);
 
-    // Source
     (source * siren_activation)
         // Create resonator formants
         >> split::<U3>()

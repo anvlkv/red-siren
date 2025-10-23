@@ -6,6 +6,7 @@ use common::error::{AppError, Result, SetupError};
 use parking_lot::Mutex;
 use serde_json::Value;
 use tauri::{App, Manager};
+use tauri_plugin_safe_area_insets_css::SafeAreaInsetsCssExt;
 use tauri_plugin_store::StoreExt;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 use tauri_plugin_window_state::WindowExt; // parking_lot chosen over tokio::sync::Mutex to avoid awaiting locks and reduce deadlock risk
@@ -56,6 +57,8 @@ pub fn app_setup(app: &mut App) -> Result<()> {
         }
     };
 
+    let safe_area_insets = app.safe_area_insets_css();
+
     // Initialize window state
     let initial_state = Window {
         width: size.width as f64,
@@ -63,9 +66,15 @@ pub fn app_setup(app: &mut App) -> Result<()> {
         dark: state_dark_mode,
         override_dark,
         ui_safe_area: common::safe_area::SafeArea {
-            top: 0.0,
+            top: safe_area_insets
+                .get_top_inset()
+                .map_err(|e| AppError::Tauri(e.to_string()))?
+                .inset as f32,
             right: 0.0,
-            bottom: 0.0,
+            bottom: safe_area_insets
+                .get_bottom_inset()
+                .map_err(|e| AppError::Tauri(e.to_string()))?
+                .inset as f32,
             left: 0.0,
         },
         system_safe_area: common::safe_area::SafeArea::default(),

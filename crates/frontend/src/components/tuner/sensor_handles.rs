@@ -298,7 +298,7 @@ pub fn SensorHandle(
                                     match l.as_ref().map(|lay| lay.orientation) {
                                         Some(common::orientation::LayoutOrientation::Vertical) => {
                                             format!(
-                                                "M {} {} A {} {} 0 0 1 {} {} L {} {} Z",
+                                                "M {} {} A {} {} 0 0 0 {} {} L {} {} Z",
                                                 0.0,
                                                 r,
                                                 r,
@@ -359,7 +359,7 @@ pub fn SensorHandle(
                                     match l.as_ref().map(|lay| lay.orientation) {
                                         Some(common::orientation::LayoutOrientation::Vertical) => {
                                             format!(
-                                                "M {} {} A {} {} 0 0 0 {} {} L {} {} Z",
+                                                "M {} {} A {} {} 0 0 1 {} {} L {} {} Z",
                                                 0.0,
                                                 r,
                                                 r,

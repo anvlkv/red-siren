@@ -94,7 +94,7 @@ where
     let node = busi::<G, _, _>(move |i| {
         let group_handles = mem::take(&mut handles_cell.borrow_mut()[i as usize]);
         super::node::create_group_node::<K>(&groups[i as usize], group_handles)
-    }) >> busi::<F, _, _>(move |i| {
+    }) >> pipei::<F, _, _>(move |i| {
         super::filter::create_filter(filter_handles[i as usize].clone())
     });
     let node_id = net.push(Box::new(node >> dcblock::<S>() >> declick::<S>()));

@@ -39,9 +39,9 @@ impl<F: Real> Siren<F> {
     /// Calculates pause duration based on input amplitude
     /// Higher amplitude = shorter pause, returns positive duration or zero
     fn calculate_pause_duration(&self, a: F) -> F {
-        if a > F::zero() {
+        if (F::zero()..=F::from_f32(0.5)).contains(&a) {
             // Higher amplitude = shorter pause
-            let pause_factor = (F::one() - a).max(F::zero());
+            let pause_factor = (F::from_f32(0.5) - a).max(F::zero());
             F::from_f32(BASE_PAUSE_DURATION) * pause_factor
         } else {
             F::zero()

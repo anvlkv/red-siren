@@ -565,12 +565,9 @@ pub fn KeyboardElement(
                     format!("{pad}px")
                 }
                 style:transform=move || {
-                    let inc = activation_samples
-                        .get()
-                        .map(|s| s.iter().map(|v| v.abs()).sum::<f32>())
-                        .unwrap_or(0.0)
-                        .min(8.0);
-                    format!("scale({s}, {s})", s = 0.75 + inc / 8.0)
+                    let samples = activation_samples.get().unwrap_or_default();
+                    let inc = samples.iter().map(|v| v.abs()).sum::<f32>();
+                    format!("scale({s}, {s})", s = 0.75 + inc / samples.len() as f32)
                 }
                 style:top=move || { format!("{}px", constrained_position().y) }
                 style:left=move || { format!("{}px", constrained_position().x) }

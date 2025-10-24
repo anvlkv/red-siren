@@ -26,6 +26,11 @@ impl NodeKey {
     pub fn is_valid(&self, num_groups: u8, num_keys_per_group: u8) -> bool {
         self.0 < num_groups && self.1 < num_keys_per_group
     }
+
+    /// Get linear index for this NodeKey
+    pub fn idx(&self) -> usize {
+        (self.0 as usize) * 256 + (self.1 as usize)
+    }
 }
 
 /// Utility for managing NodeKeys with layout validation

@@ -5,7 +5,7 @@ use crate::util::hash_str;
 const SIREN_ID: u64 = hash_str(concat!(module_path!(), "::Siren"));
 const SIREN_BASE_HZ: f32 = 0.5;
 const MAX_FREQUENCY_HZ: f32 = 5000.0; // Maximum frequency for interpolation
-
+const EXCITEMENT_PAUSE_LIMIT: f32 = 0.3;
 const BASE_PAUSE_DURATION: f32 = 0.1; // Base pause duration in seconds
 
 /// Siren oscillator with excitement-controlled pauses and frequency.
@@ -39,9 +39,9 @@ impl<F: Real> Siren<F> {
     /// Calculates pause duration based on input amplitude
     /// Higher amplitude = shorter pause, returns positive duration or zero
     fn calculate_pause_duration(&self, a: F) -> F {
-        if (F::zero()..=F::from_f32(0.5)).contains(&a) {
+        if (F::zero()..=F::from_f32(EXCITEMENT_PAUSE_LIMIT)).contains(&a) {
             // Higher amplitude = shorter pause
-            let pause_factor = (F::from_f32(0.5) - a).max(F::zero());
+            let pause_factor = (F::from_f32(EXCITEMENT_PAUSE_LIMIT) - a).max(F::zero());
             F::from_f32(BASE_PAUSE_DURATION) * pause_factor
         } else {
             F::zero()

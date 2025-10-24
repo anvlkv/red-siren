@@ -1,4 +1,5 @@
 mod channel;
+mod chorus;
 mod crossfade;
 mod filter;
 mod formant;

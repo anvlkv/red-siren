@@ -3,6 +3,7 @@ use fundsp::hacker32::prelude::*;
 use crate::util::hash_str;
 
 const FORMANT_ID: u64 = hash_str(concat!(module_path!(), "::Formant"));
+const BASE_Q: f32 = 4.75;
 
 #[derive(Clone)]
 pub struct Formant<const D: u8> {
@@ -24,7 +25,7 @@ impl<const D: u8> AudioNode for Formant<D> {
         let v = self.control.value().clamp(0.0, 1.0);
 
         // Reasonable Q mapping: broader at hight control value
-        let q = 9.5 - v * 9.3;
+        let q = BASE_Q - v * (BASE_Q - f32::EPSILON);
 
         // Keep a consistent spacing between adjacent formants using semitone steps.
         // D indexes the formant band; apply a fixed step and a small detune from control.

@@ -28,22 +28,25 @@ pub type NodeType = Pipe<
         Pipe<
             Pipe<
                 Pipe<
-                    Binop<
-                        FrameMul<UInt<UTerm, B1>>,
-                        OscType,
-                        Pipe<Pipe<Pipe<Var, Follow<S>>, SnoopBackend>, Siren<S>>,
+                    Pipe<
+                        Binop<
+                            FrameMul<UInt<UTerm, B1>>,
+                            OscType,
+                            Pipe<Pipe<Pipe<Var, Follow<S>>, SnoopBackend>, Siren<S>>,
+                        >,
+                        Split<UInt<UInt<UTerm, B1>, B1>>,
                     >,
-                    Split<UInt<UInt<UTerm, B1>, B1>>,
-                >,
-                Stack<
                     Stack<
-                        Unop<Formant<1>, FrameMulScalar<UInt<UTerm, B1>>>,
-                        Unop<Formant<2>, FrameMulScalar<UInt<UTerm, B1>>>,
+                        Stack<
+                            Unop<Formant<1>, FrameMulScalar<UInt<UTerm, B1>>>,
+                            Unop<Formant<2>, FrameMulScalar<UInt<UTerm, B1>>>,
+                        >,
+                        Unop<Formant<3>, FrameMulScalar<UInt<UTerm, B1>>>,
                     >,
-                    Unop<Formant<3>, FrameMulScalar<UInt<UTerm, B1>>>,
                 >,
+                Unop<Join<UInt<UInt<UTerm, B1>, B1>>, FrameMulScalar<UInt<UTerm, B1>>>,
             >,
-            Unop<Join<UInt<UInt<UTerm, B1>, B1>>, FrameMulScalar<UInt<UTerm, B1>>>,
+            super::chorus::Chorus,
         >,
         FixedSvf<S, BellMode<S>>,
     >,
@@ -77,11 +80,10 @@ fn create_node(config: &NodeConfig, handles: InnerHandles) -> An<NodeType> {
         | (formant::<3>(band_control.clone(), config.base_frequency as S) * 0.6);
 
     (source * siren_activation)
-        // Create resonator formants
         >> split::<U3>()
         >> formants
         >> (join::<U3>() * (1.0 / (1.0 + 0.8 + 0.6)))
-        // Node bell filter
+        >> super::chorus::chorus(config.key.idx() as u64, 0.05, 0.75, 0.75)
         >> bell_hz(config.base_frequency as S, NODE_BELL_Q, NODE_BELL_GAIN_DB)
         // Visualize
         >> output_snoop

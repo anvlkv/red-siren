@@ -1,5 +1,3 @@
-use fundsp::hacker32::prelude::*;
-
 pub const fn hash_str(s: &str) -> u64 {
     // FNV-1a hash algorithm (const-friendly)
     let mut hash = 0xcbf29ce484222325u64;

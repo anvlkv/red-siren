@@ -4,9 +4,9 @@ use crate::util::hash_str;
 
 const SIREN_ID: u64 = hash_str(concat!(module_path!(), "::Siren"));
 const SIREN_BASE_HZ: f32 = 0.5;
-const MAX_FREQUENCY_HZ: f32 = 5000.0; // Maximum frequency for interpolation
-const EXCITEMENT_PAUSE_LIMIT: f32 = 0.3;
-const BASE_PAUSE_DURATION: f32 = 0.1; // Base pause duration in seconds
+const MAX_FREQUENCY_HZ: f32 = 775.0; // Maximum frequency for interpolation
+const EXCITEMENT_PAUSE_LIMIT: f32 = 0.4;
+const BASE_PAUSE_DURATION: f32 = 0.25; // Base pause duration in seconds
 
 /// Siren oscillator with excitement-controlled pauses and frequency.
 /// - Input 0: excitement level (a). Zero = silent, positive = oscillate with pauses.

@@ -79,32 +79,6 @@ pub enum Scale {
     In,
 }
 
-impl Scale {
-    fn semitones_12(&self) -> &'static [u8] {
-        match self {
-            Scale::Yo => &[0, 2, 5, 7, 9],
-            Scale::In => &[0, 1, 5, 7, 8],
-        }
-    }
-
-    /// Map the 12-TET semitone degrees into indices for `divisions`-EDO.
-    /// Rounds to nearest division index; duplicates removed.
-    fn mapped_divisions(&self, divisions: u32) -> smallvec::SmallVec<[u32; 8]> {
-        use smallvec::SmallVec;
-        let mut out: SmallVec<[u32; 8]> = self
-            .semitones_12()
-            .iter()
-            .map(|s| {
-                let idx = ((*s as f64) * (divisions as f64) / 12.0).round() as i64;
-                idx.clamp(0, divisions as i64 - 1) as u32
-            })
-            .collect();
-        out.sort_unstable();
-        out.dedup();
-        out
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GroupConfig {
     /// Output channel
@@ -272,8 +246,8 @@ fn build_group_nodes(
     scale: Scale,
     equal_divisions: u32,
 ) -> Vec<NodeConfig> {
-    // Already mapped division indices (sorted, deduped)
-    let divs = scale.mapped_divisions(equal_divisions);
+    // Use uniform equal divisions to guarantee exactly `equal_divisions` nodes per group
+    let divs: Vec<u32> = (0..equal_divisions).collect();
     if divs.is_empty() {
         return Vec::new();
     }
@@ -282,13 +256,24 @@ fn build_group_nodes(
     let mut boundaries: Vec<f64> = Vec::with_capacity(divs.len() + 1);
     boundaries.push(0.0);
     for w in divs.windows(2) {
-        boundaries.push((w[0] as f64 + w[1] as f64) * 0.5);
+        // Bias lower boundary based on scale mood: Yo => brighter (shift up), In => darker (shift down)
+        let lower_boundary_bias: f64 = match scale {
+            Scale::Yo => 0.15,
+            Scale::In => -0.15,
+        };
+        boundaries.push(((w[0] as f64 + w[1] as f64) * 0.5) + lower_boundary_bias);
     }
     boundaries.push(equal_divisions as f64);
 
     let mut nodes = Vec::with_capacity(divs.len());
     for (i, &d) in divs.iter().enumerate() {
-        let center_ratio = 2f64.powf(d as f64 / equal_divisions as f64);
+        let biased_index = ((d as f64)
+            + match scale {
+                Scale::Yo => 0.15,
+                Scale::In => -0.15,
+            })
+        .clamp(0.0, equal_divisions as f64 - 1.0);
+        let center_ratio = 2f64.powf(biased_index / equal_divisions as f64);
         let base_f = group_f_base * center_ratio;
         if base_f > MAX_FREQ_HZ {
             continue;
@@ -405,22 +390,6 @@ mod tests {
         assert_eq!(
             GroupChannel::Right.nth_channel_from_first(1),
             GroupChannel::Left
-        );
-    }
-
-    #[test]
-    fn test_scale_mapped_divisions() {
-        let yo = Scale::Yo;
-        let in_scale = Scale::In;
-        let divs_yo = yo.mapped_divisions(12);
-        let divs_in = in_scale.mapped_divisions(12);
-        assert_eq!(
-            divs_yo,
-            smallvec::SmallVec::<[u32; 8]>::from_vec(vec![0u32, 2, 5, 7, 9])
-        );
-        assert_eq!(
-            divs_in,
-            smallvec::SmallVec::<[u32; 8]>::from_vec(vec![0u32, 1, 5, 7, 8])
         );
     }
 

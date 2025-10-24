@@ -24,7 +24,10 @@
   },
   "bundle": {
     "macOS": {
-      "entitlements": "./RedSiren.entitlements"
+      "entitlements": "./RedSiren.entitlements",
+      "files": {
+        "embedded.provisionprofile": "../references/Red_Siren_Mac.provisionprofile"
+      }
     }
   }
 }

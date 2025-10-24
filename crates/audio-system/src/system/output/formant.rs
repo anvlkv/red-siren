@@ -3,7 +3,7 @@ use fundsp::hacker32::prelude::*;
 use crate::util::hash_str;
 
 const FORMANT_ID: u64 = hash_str(concat!(module_path!(), "::Formant"));
-const BASE_Q: f32 = 4.75;
+const BASE_Q: f32 = 0.9;
 
 #[derive(Clone)]
 pub struct Formant<const D: u8> {

@@ -15,21 +15,21 @@ pub type FilterType = Pipe<
     Pipe<
         Pipe<
             Split<U2>,
-            Stack<Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, Constant<UInt<UTerm, B1>>>, Pass>,
+            Stack<Stack<Stack<Pass, Pass>, Constant<UInt<UTerm, B1>>>, Constant<UInt<UTerm, B1>>>,
         >,
-        Stack<Stack<Svf<S, AllpassMode<S>>, Pass>, Pipe<Var, Follow<f32>>>,
+        Stack<Stack<Pass, Svf<S, AllpassMode<S>>>, Pipe<Var, Follow<f32>>>,
     >,
     super::crossfade::EqualPowerCrossfade,
 >;
 
-const FILTER_Q: f32 = 0.3;
+const FILTER_Q: f32 = 0.6;
 const SWITCH_FOLLOW_RESPONSE_S: f32 = (1.0 / 75.0) * 3.0;
 
 pub fn create_filter(FilterHandles { control, freq }: FilterHandles) -> An<FilterType> {
     let control = An(control) >> follow(SWITCH_FOLLOW_RESPONSE_S);
 
     split::<U2>()
-        >> ((pass() | constant(freq as S) | constant(FILTER_Q)) | pass())
-        >> (allpass() | pass() | control)
+        >> (pass() | pass() | constant(freq as S) | constant(FILTER_Q))
+        >> (pass() | allpass() | control)
         >> super::crossfade::equal_power_crossfade()
 }

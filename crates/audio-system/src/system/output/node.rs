@@ -56,7 +56,7 @@ pub type NodeType = Pipe<
 pub const ACTIVATION_SNOOP_CAPACITY: usize = 8;
 pub const OUTPUT_SNOOP_CAPACITY: usize = 1024;
 const FOLLOW_RESPONSE_TIME_S: f32 = (1.0 / 75.0) * 25.0;
-const NODE_BELL_Q: f32 = 0.95;
+const NODE_BELL_Q: f32 = 0.085;
 const NODE_BELL_GAIN_DB: f32 = 1.0 / 3.0;
 
 fn create_node(config: &NodeConfig, handles: InnerHandles) -> An<NodeType> {
@@ -85,11 +85,10 @@ fn create_node(config: &NodeConfig, handles: InnerHandles) -> An<NodeType> {
         >> (join::<U3>() * (1.0 / (1.0 + 0.8 + 0.6)))
         >> super::chorus::chorus(config.key.idx() as u64, 0.05, 0.75, 0.75)
         >> bell_hz(config.base_frequency as S, NODE_BELL_Q, NODE_BELL_GAIN_DB)
-        // Visualize
         >> output_snoop
 }
 
-pub type GroupType<K> = Pipe<MultiBus<K, NodeType>, FixedSvf<S, HighpassMode<S>>>;
+pub type GroupType<K> = MultiBus<K, NodeType>;
 
 pub fn create_group_node<K>(
     config: &GroupConfig,
@@ -106,6 +105,4 @@ where
         let handle = handles.remove(&key).expect("missing handle for node key");
         create_node(&nodes[i as usize], handle)
     })
-    // High-pass filter to remove low-frequency rumble
-    >> highpass_hz(80.0, 1.0)
 }

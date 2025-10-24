@@ -1,8 +1,8 @@
 use common::instrument::commands::{UpdateBandControlPayload, UpdateKeyControlPayload};
 use leptos::{html, prelude::*};
 use leptos_use::{
-    core::Position, use_draggable_with_options, use_element_bounding, UseDraggableOptions,
-    UseDraggableReturn,
+    core::Position, use_draggable_with_options, use_element_bounding_with_options,
+    UseDraggableOptions, UseDraggableReturn, UseElementBoundingOptions,
 };
 use tauri_use::{use_invoke, use_listen, UseListenReturn, UseTauriReturn};
 
@@ -25,6 +25,7 @@ pub fn KeyboardElement(
         space,
         num_keys_per_group,
         key_band_breadth,
+        complete_layout,
         ..
     } = expect_layout_contex();
 
@@ -43,8 +44,12 @@ pub fn KeyboardElement(
         left: band_left,
         width: band_width,
         height: band_height,
+        update: band_update,
         ..
-    } = use_element_bounding(band_ref);
+    } = use_element_bounding_with_options(
+        band_ref,
+        UseElementBoundingOptions::default().immediate(false),
+    );
 
     // Measure key (wrapper)
     let leptos_use::UseElementBoundingReturn {
@@ -56,8 +61,12 @@ pub fn KeyboardElement(
         left: key_left,
         width: key_width,
         height: key_height,
+        update: key_update,
         ..
-    } = use_element_bounding(key_ref);
+    } = use_element_bounding_with_options(
+        key_ref,
+        UseElementBoundingOptions::default().immediate(false),
+    );
 
     // One-shot guards to attach animation classes only once per element
     let band_should_animate = RwSignal::new(false);
@@ -506,6 +515,15 @@ pub fn KeyboardElement(
         s.push_str(&band_geom_style);
         s
     };
+
+    Effect::new(move |prev: Option<common::instrument::Layout>| {
+        let complete_layout = complete_layout();
+        if prev.is_none_or(|old_layout| old_layout != complete_layout) {
+            band_update();
+            key_update();
+        }
+        complete_layout
+    });
 
     view! {
         <div class=key_wrapper_class node_ref=key_ref style=key_stage1_vars>

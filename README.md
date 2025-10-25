@@ -2,12 +2,6 @@
 
 Red Siren is a noise chime. It pulls the present into focus—a siren's call, loud, brief, true.
 
-## Features
-
-- **Noise-activated**: Responds to your noises in real time
-- **Tunable activation**: Adjust the frequencies that trigger responses
-- **Siren + chime hybrid**: A cry that blooms like a thousand crystal bowls
-- **Open source**: CC-BY-SA licensed
 
 ## Requirements
 

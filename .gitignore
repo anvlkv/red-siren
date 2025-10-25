@@ -41,3 +41,6 @@ references/
 actionlint
 red-siren-test-release.jks
 docs/
+.env
+secrets/
+*.pkg

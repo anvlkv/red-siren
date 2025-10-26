@@ -29,7 +29,6 @@ pub struct FineTunedValues {
 }
 
 #[cfg(feature = "editor")]
-#[derive(Default)]
 pub struct FineTunedSharedValues {
     pub siren_base_hz: Shared,
     pub siren_max_frequency_hz: Shared,
@@ -66,46 +65,34 @@ const INPUT_NY_THRESHOLD: f32 = 0.3;
 const INPUT_NY_RATIO: f32 = 4.0;
 const INPUT_NY_WET_RATIO: f32 = 0.5;
 
+#[cfg(feature = "editor")]
+impl Default for FineTunedSharedValues {
+    fn default() -> Self {
+        Self {
+            siren_base_hz: shared(SIREN_BASE_HZ),
+            siren_max_frequency_hz: shared(SIREN_MAX_FREQUENCY_HZ),
+            siren_excitement_pause_limit: shared(SIREN_EXCITEMENT_PAUSE_LIMIT),
+            siren_base_pause_duration: shared(SIREN_BASE_PAUSE_DURATION),
+            filter_switch_follow_response_s: shared(FILTER_SWITCH_FOLLOW_RESPONSE_S),
+            filter_allpass_q: shared(FILTER_ALLPASS_Q),
+            filter_allpass_freq_ratio: shared(FILTER_ALLPASS_FREQ_RATIO),
+            filter_moog_freq_ratio: shared(FILTER_MOOG_FREQ_RATIO),
+            filter_moog_q: shared(FILTER_MOOG_Q),
+            node_follow_response_time_s: shared(NODE_FOLLOW_RESPONSE_TIME_S),
+            node_bell_q: shared(NODE_BELL_Q),
+            node_bell_gain_db: shared(NODE_BELL_GAIN_DB),
+            formant_base_q: shared(FORMANT_BASE_Q),
+            input_ny_threshold: shared(INPUT_NY_THRESHOLD),
+            input_ny_ratio: shared(INPUT_NY_RATIO),
+            input_ny_wet_ratio: shared(INPUT_NY_WET_RATIO),
+        }
+    }
+}
+
 #[allow(clippy::new_without_default)]
 impl FineTunedValues {
     #[cfg(feature = "editor")]
     pub fn new(shared_values: &FineTunedSharedValues) -> Self {
-        shared_values.siren_base_hz.set_value(SIREN_BASE_HZ);
-        shared_values
-            .siren_max_frequency_hz
-            .set_value(SIREN_MAX_FREQUENCY_HZ);
-        shared_values
-            .siren_excitement_pause_limit
-            .set_value(SIREN_EXCITEMENT_PAUSE_LIMIT);
-        shared_values
-            .siren_base_pause_duration
-            .set_value(SIREN_BASE_PAUSE_DURATION);
-        shared_values
-            .filter_switch_follow_response_s
-            .set_value(FILTER_SWITCH_FOLLOW_RESPONSE_S);
-        shared_values.filter_allpass_q.set_value(FILTER_ALLPASS_Q);
-        shared_values
-            .filter_allpass_freq_ratio
-            .set_value(FILTER_ALLPASS_FREQ_RATIO);
-        shared_values.filter_moog_q.set_value(FILTER_MOOG_Q);
-        shared_values
-            .filter_moog_freq_ratio
-            .set_value(FILTER_MOOG_FREQ_RATIO);
-
-        shared_values
-            .node_follow_response_time_s
-            .set_value(NODE_FOLLOW_RESPONSE_TIME_S);
-        shared_values.node_bell_q.set_value(NODE_BELL_Q);
-        shared_values.node_bell_gain_db.set_value(NODE_BELL_GAIN_DB);
-        shared_values.formant_base_q.set_value(FORMANT_BASE_Q);
-        shared_values
-            .input_ny_threshold
-            .set_value(INPUT_NY_THRESHOLD);
-        shared_values.input_ny_ratio.set_value(INPUT_NY_RATIO);
-        shared_values
-            .input_ny_wet_ratio
-            .set_value(INPUT_NY_WET_RATIO);
-
         Self {
             siren_base_hz: var(&shared_values.siren_base_hz),
             siren_max_frequency_hz: var(&shared_values.siren_max_frequency_hz),
@@ -146,5 +133,49 @@ impl FineTunedValues {
             input_ny_ratio: constant(INPUT_NY_RATIO),
             input_ny_wet_ratio: constant(INPUT_NY_WET_RATIO),
         }
+    }
+}
+
+impl std::fmt::Debug for FineTunedValues {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FineTunedValues")
+            .field("siren_base_hz", &self.siren_base_hz.value())
+            .field(
+                "siren_max_frequency_hz",
+                &self.siren_max_frequency_hz.value(),
+            )
+            .field(
+                "siren_excitement_pause_limit",
+                &self.siren_excitement_pause_limit.value(),
+            )
+            .field(
+                "siren_base_pause_duration",
+                &self.siren_base_pause_duration.value(),
+            )
+            .field(
+                "filter_switch_follow_response_s",
+                &self.filter_switch_follow_response_s.value(),
+            )
+            .field("filter_allpass_q", &self.filter_allpass_q.value())
+            .field(
+                "filter_allpass_freq_ratio",
+                &self.filter_allpass_freq_ratio.value(),
+            )
+            .field(
+                "filter_moog_freq_ratio",
+                &self.filter_moog_freq_ratio.value(),
+            )
+            .field("filter_moog_q", &self.filter_moog_q.value())
+            .field(
+                "node_follow_response_time_s",
+                &self.node_follow_response_time_s.value(),
+            )
+            .field("node_bell_q", &self.node_bell_q.value())
+            .field("node_bell_gain_db", &self.node_bell_gain_db.value())
+            .field("formant_base_q", &self.formant_base_q.value())
+            .field("input_ny_threshold", &self.input_ny_threshold.value())
+            .field("input_ny_ratio", &self.input_ny_ratio.value())
+            .field("input_ny_wet_ratio", &self.input_ny_wet_ratio.value())
+            .finish()
     }
 }

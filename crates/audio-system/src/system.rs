@@ -28,6 +28,8 @@ pub fn create_output_system(
     #[cfg(not(feature = "editor"))]
     let values = &FineTunedValues::new();
 
+    log::debug!("Creating output system with fine-tuned values: {values:#?}");
+
     match num_channels {
         1 => output::mono_system(config, net, values),
         2 => output::stereo_system(config, net, values),
@@ -47,6 +49,8 @@ pub fn create_input_system(
 ) {
     #[cfg(not(feature = "editor"))]
     let values = &FineTunedValues::new();
+
+    log::debug!("Creating input system with fine-tuned values: {values:#?}");
 
     match source {
         ActivationSource::Mic => {

@@ -927,7 +927,7 @@ impl StreamController for CpalController {
         &self,
         payload: common::commands::edit::FineTunedValuesPayload,
     ) -> Result<()> {
-        let shared_values = self.fine_tuned_shared_values.read();
+        let shared_values = self.fine_tuned_shared_values.write();
         shared_values.siren_base_hz.set_value(payload.siren_base_hz);
         shared_values
             .siren_max_frequency_hz

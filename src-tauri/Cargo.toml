@@ -54,7 +54,7 @@ raw-window-handle = "0.6.2"
 tauri-plugin-prevent-default = { version = "3", features = ["platform-windows"] }
 
 [features]
-default = ["audio_rt_cpal", "devtools"]
-audio_rt_cpal = ["audio-system/rt_cpal"]
+default = ["audio_rt_cpal"]
+audio_rt_cpal = ["audio-system/hi_fi", "audio-system/rt_cpal"]
 audio_rt_web = ["audio-system/rt_web"]
 devtools = ["audio-system/editor", "tauri/devtools"]

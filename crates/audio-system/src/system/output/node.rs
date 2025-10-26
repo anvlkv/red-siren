@@ -57,8 +57,10 @@ type FormantBank = Stack<
 >;
 
 // Type alias for the bell filter with its 4 inputs
-type BellFilter =
-    Pipe<Stack<Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, Var>, Var>, Svf<S, BellMode<S>>>;
+type BellFilter = Pipe<
+    Stack<Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>, FineTunedValue>,
+    Svf<S, BellMode<S>>,
+>;
 
 // Complete node type composed from the smaller parts
 pub type NodeType = Pipe<
@@ -108,7 +110,10 @@ fn create_node(
 
     // Get the follow response time value
     let follow_time_node = values.node_follow_response_time_s.clone();
+    #[cfg(feature = "editor")]
     let follow_time = follow_time_node.value();
+    #[cfg(not(feature = "editor"))]
+    let follow_time = follow_time_node.value()[0];
 
     let siren_activation: An<SirenActivation> =
         An(siren_control) >> follow::<S>(follow_time as S) >> activation_snoop;

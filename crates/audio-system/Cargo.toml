@@ -24,7 +24,7 @@ web-sys = { workspace = true, optional = true }
 objc = "0.2"
 
 [features]
-default = ["hi_fi"]
+default = []
 editor = []
 hi_fi = []
 # Native CPAL runtime

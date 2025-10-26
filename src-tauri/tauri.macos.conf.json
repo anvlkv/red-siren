@@ -28,7 +28,7 @@
       "files": {
         "embedded.provisionprofile": "../secrets/Red_Siren_Mac__distribution.provisionprofile"
       },
-      "bundleVersion": "0.1.2"
+      "bundleVersion": "0.1.3"
     }
   }
 }

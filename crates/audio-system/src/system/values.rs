@@ -50,22 +50,23 @@ pub struct FineTunedSharedValues {
 }
 
 const SIREN_BASE_HZ: f32 = 0.5;
-const SIREN_MAX_FREQUENCY_HZ: f32 = 775.0;
+const SIREN_MAX_FREQUENCY_HZ: f32 = 1775.0;
 const SIREN_EXCITEMENT_PAUSE_LIMIT: f32 = 0.4;
 const SIREN_BASE_PAUSE_DURATION: f32 = 0.25;
 const FILTER_SWITCH_FOLLOW_RESPONSE_S: f32 = 0.04;
-const FILTER_ALLPASS_Q: f32 = 0.6;
-const FILTER_ALLPASS_FREQ_RATIO: f32 = 1.0;
-const FILTER_MOOG_Q: f32 = 0.03;
-const FILTER_MOOG_FREQ_RATIO: f32 = 1.0;
-const NODE_FOLLOW_RESPONSE_TIME_S: f32 = 0.33333334;
+const FILTER_ALLPASS_Q: f32 = 0.06;
+const FILTER_ALLPASS_FREQ_RATIO: f32 = 0.7;
+const FILTER_MOOG_Q: f32 = 0.25;
+const FILTER_MOOG_FREQ_RATIO: f32 = 1.3;
+const NODE_FOLLOW_RESPONSE_TIME_S: f32 = 0.34;
 const NODE_BELL_Q: f32 = 0.085;
-const NODE_BELL_GAIN_DB: f32 = 0.33333333;
-const FORMANT_BASE_Q: f32 = 0.9;
+const NODE_BELL_GAIN_DB: f32 = 1.34;
+const FORMANT_BASE_Q: f32 = 0.8;
 const INPUT_NY_THRESHOLD: f32 = 0.3;
 const INPUT_NY_RATIO: f32 = 4.0;
 const INPUT_NY_WET_RATIO: f32 = 0.5;
 
+#[allow(clippy::new_without_default)]
 impl FineTunedValues {
     #[cfg(feature = "editor")]
     pub fn new(shared_values: &FineTunedSharedValues) -> Self {

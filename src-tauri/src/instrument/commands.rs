@@ -500,30 +500,33 @@ pub async fn instrument_edit_finetuned_values(
     input_ny_ratio: f32,
     input_ny_wet_ratio: f32,
     state: State<'_, InstrumentEngine>,
-) -> Result<()> {
+) -> Result<common::commands::edit::FineTunedValuesPayload> {
+    let values = common::commands::edit::FineTunedValuesPayload{
+        siren_base_hz,
+        siren_max_frequency_hz,
+        siren_excitement_pause_limit,
+        siren_base_pause_duration,
+        filter_switch_follow_response_s,
+        node_follow_response_time_s,
+        filter_allpass_q,
+        filter_allpass_freq_ratio,
+        filter_moog_freq_ratio,
+        filter_moog_q,
+        node_bell_q,
+        node_bell_gain_db,
+        formant_base_q,
+        input_ny_threshold,
+        input_ny_ratio,
+        input_ny_wet_ratio,
+    };
     // Update the fine-tuned values
     state.inner.set_finetuned_values(
-        common::commands::edit::FineTunedValuesPayload{
-            siren_base_hz,
-            siren_max_frequency_hz,
-            siren_excitement_pause_limit,
-            siren_base_pause_duration,
-            filter_switch_follow_response_s,
-            node_follow_response_time_s,
-            filter_allpass_q,
-            filter_allpass_freq_ratio,
-            filter_moog_freq_ratio,
-            filter_moog_q,
-            node_bell_q,
-            node_bell_gain_db,
-            formant_base_q,
-            input_ny_threshold,
-            input_ny_ratio,
-            input_ny_wet_ratio,
-        }
+        values
     )?;
 
-    Ok(())
+    log::info!("Fine-tuned values updated via devtools: {values:#?}");
+
+    state.inner.get_finetuned_values()
 }
 
 #[cfg(feature="devtools")]

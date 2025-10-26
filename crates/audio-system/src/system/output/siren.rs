@@ -84,7 +84,6 @@ impl<F: Real> AudioNode for Siren<F> {
         let base_pause_duration = F::from_f32(input[4]);
 
         // Silent when input is zero
-        // Resets freq and direction
         if a <= F::zero() {
             self.pause_timer = F::zero();
             self.previous_sine = F::zero();

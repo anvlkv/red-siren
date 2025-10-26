@@ -14,6 +14,7 @@ pub struct Formant<const D: u8> {
     resonator: Resonator<f32, U3>,
 }
 
+#[allow(clippy::unnecessary_cast)]
 impl<const D: u8> AudioNode for Formant<D> {
     const ID: u64 = FORMANT_ID;
 
@@ -87,6 +88,7 @@ impl<const D: u8> AudioNode for Formant<D> {
     }
 }
 
+#[allow(clippy::unnecessary_cast)]
 pub fn formant<const D: u8>(control: Var, base: S) -> An<Formant<D>> {
     let formant = Formant {
         control,

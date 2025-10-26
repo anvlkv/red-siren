@@ -12,12 +12,18 @@ pub struct FilterHandles {
 }
 
 type AllPassChain = Pipe<
-    Stack<Stack<Pass, Binop<FrameMul<UInt<UTerm, B1>>, Constant<UInt<UTerm, B1>>, Var>>, Var>,
+    Stack<
+        Stack<Pass, Binop<FrameMul<UInt<UTerm, B1>>, Constant<UInt<UTerm, B1>>, FineTunedValue>>,
+        FineTunedValue,
+    >,
     Svf<S, AllpassMode<S>>,
 >;
 
 type MoogChain = Pipe<
-    Stack<Stack<Pass, Binop<FrameMul<UInt<UTerm, B1>>, Constant<UInt<UTerm, B1>>, Var>>, Var>,
+    Stack<
+        Stack<Pass, Binop<FrameMul<UInt<UTerm, B1>>, Constant<UInt<UTerm, B1>>, FineTunedValue>>,
+        FineTunedValue,
+    >,
     Moog<S, UInt<UInt<UTerm, B1>, B1>>,
 >;
 
@@ -38,7 +44,11 @@ pub fn create_filter(
     let FilterHandles { control, freq } = handles;
 
     // Get the follow response time value
+    #[cfg(feature = "editor")]
     let follow_time = filter_switch_follow_response_s.value();
+    #[cfg(not(feature = "editor"))]
+    let follow_time = filter_switch_follow_response_s.value()[0];
+
     let control = An(control) >> follow(follow_time);
 
     let filter_allpass_chain: An<AllPassChain> =

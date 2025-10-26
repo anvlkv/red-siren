@@ -23,10 +23,13 @@ pub fn EditorOverlay() -> impl IntoView {
     let UseTauriReturn {
         trigger: update_values,
         error: update_values_error,
+        data: update_values_data,
         ..
-    } = use_invoke::<common::commands::edit::FineTunedValuesPayload, (), ()>(
-        common::commands::edit::EDIT_FINETUNED_VALUES,
-    );
+    } = use_invoke::<
+        common::commands::edit::FineTunedValuesPayload,
+        (),
+        common::commands::edit::FineTunedValuesPayload,
+    >(common::commands::edit::EDIT_FINETUNED_VALUES);
 
     // Load current values on mount
     Effect::new(move |_| {
@@ -35,7 +38,13 @@ pub fn EditorOverlay() -> impl IntoView {
 
     // Update local state when values are fetched
     Effect::new(move |_| {
-        if let Some(values) = fetch_values_data.get() {
+        if let Some(values) = fetch_values_data() {
+            set_finetuned_values(values)
+        }
+    });
+
+    Effect::new(move |_| {
+        if let Some(values) = update_values_data() {
             set_finetuned_values(values)
         }
     });

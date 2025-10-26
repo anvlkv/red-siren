@@ -110,13 +110,16 @@ mod integration_tests {
         net.set_sample_rate(44100.0);
 
         #[cfg(feature = "editor")]
-        let shared_values = crate::values::FineTunedSharedValues::default();
-        let values = crate::values::FineTunedValues::new(
-            #[cfg(feature = "editor")]
-            &shared_values,
-        );
+        let values =
+            crate::values::FineTunedValues::new(&crate::values::FineTunedSharedValues::default());
 
-        let node_handles = create_output_system(&instrument_config, &mut net, 2, &values);
+        let node_handles = create_output_system(
+            &instrument_config,
+            &mut net,
+            2,
+            #[cfg(feature = "editor")]
+            &values,
+        );
 
         // Collect activation controls
         let mut activations = HashMap::new();
@@ -130,6 +133,7 @@ mod integration_tests {
             &mut net,
             activations.clone(),
             ActivationSource::Mic,
+            #[cfg(feature = "editor")]
             &values,
         );
 
@@ -161,13 +165,16 @@ mod integration_tests {
         net.set_sample_rate(44100.0);
 
         #[cfg(feature = "editor")]
-        let shared_values = crate::values::FineTunedSharedValues::default();
-        let values = crate::values::FineTunedValues::new(
-            #[cfg(feature = "editor")]
-            &shared_values,
-        );
+        let values =
+            crate::values::FineTunedValues::new(&crate::values::FineTunedSharedValues::default());
 
-        let node_handles = create_output_system(&instrument_config, &mut net, 1, &values);
+        let node_handles = create_output_system(
+            &instrument_config,
+            &mut net,
+            1,
+            #[cfg(feature = "editor")]
+            &values,
+        );
 
         // Collect activation controls
         let mut activations = HashMap::new();
@@ -181,6 +188,7 @@ mod integration_tests {
             &mut net,
             activations.clone(),
             ActivationSource::Entropy,
+            #[cfg(feature = "editor")]
             &values,
         );
 
@@ -222,13 +230,17 @@ mod integration_tests {
             net.set_sample_rate(44100.0);
 
             #[cfg(feature = "editor")]
-            let shared_values = crate::values::FineTunedSharedValues::default();
             let values = crate::values::FineTunedValues::new(
-                #[cfg(feature = "editor")]
-                &shared_values,
+                &crate::values::FineTunedSharedValues::default(),
             );
 
-            let node_handles = create_output_system(&instrument_config, &mut net, 1, &values);
+            let node_handles = create_output_system(
+                &instrument_config,
+                &mut net,
+                1,
+                #[cfg(feature = "editor")]
+                &values,
+            );
             let mut activations = HashMap::new();
             for handle in node_handles {
                 activations.insert(handle.key, handle.siren_control);
@@ -239,6 +251,7 @@ mod integration_tests {
                 &mut net,
                 activations,
                 ActivationSource::Mic,
+                #[cfg(feature = "editor")]
                 &values,
             );
             net.check();
@@ -253,13 +266,17 @@ mod integration_tests {
             net.set_sample_rate(44100.0);
 
             #[cfg(feature = "editor")]
-            let shared_values = crate::values::FineTunedSharedValues::default();
             let values = crate::values::FineTunedValues::new(
-                #[cfg(feature = "editor")]
-                &shared_values,
+                &crate::values::FineTunedSharedValues::default(),
             );
 
-            let node_handles = create_output_system(&instrument_config, &mut net, 5, &values);
+            let node_handles = create_output_system(
+                &instrument_config,
+                &mut net,
+                5,
+                #[cfg(feature = "editor")]
+                &values,
+            );
             let mut activations = HashMap::new();
             for handle in node_handles {
                 activations.insert(handle.key, handle.siren_control);
@@ -270,6 +287,7 @@ mod integration_tests {
                 &mut net,
                 activations,
                 ActivationSource::Entropy,
+                #[cfg(feature = "editor")]
                 &values,
             );
             net.check();

@@ -1,16 +1,9 @@
-//! Random activation generator node.
-//!
-//! Generates pseudo-random activation values directly without FFT analysis,
-//! used when activation source is set to Entropy/Random mode.
-//!
-//! MAYA DRY KISS:
-//! - Direct activation generation bypasses FFT overhead
-//! - Reuses slow-growth activation function for consistency
-//! - Minimal complexity for random source activation
-
 use common::NodeKey;
 use fastrand::Rng;
 use fundsp::buffer::{BufferMut, BufferRef};
+#[cfg(feature = "hi_fi")]
+use fundsp::hacker::prelude::*;
+#[cfg(not(feature = "hi_fi"))]
 use fundsp::hacker32::prelude::*;
 use fundsp::signal::SignalFrame;
 use std::collections::HashMap;
@@ -22,7 +15,7 @@ use crate::util::hash_str;
 const RANDOM_ACTIVATOR_ID: u64 = hash_str(concat!(module_path!(), "::RandomActivator"));
 
 /// Update interval in samples (at 44.1kHz, ~100 samples = ~2.3ms)
-const UPDATE_INTERVAL_SAMPLES: usize = 100;
+const UPDATE_INTERVAL_SAMPLES: usize = 4096;
 
 /// Random activator that generates activation values directly
 #[derive(Clone)]
@@ -44,6 +37,9 @@ pub struct RandomActivator {
 
     /// Smoothing factor for transitions
     smoothing: f32,
+
+    /// Internal iteration counter
+    iteration: usize,
 }
 
 impl RandomActivator {
@@ -71,6 +67,7 @@ impl RandomActivator {
             current_activations: Arc::new(parking_lot::Mutex::new(current)),
             target_activations: Arc::new(parking_lot::Mutex::new(target)),
             smoothing: 0.95, // Smooth transitions between random values
+            iteration: 0,
         }
     }
 
@@ -100,20 +97,22 @@ impl RandomActivator {
         let mut targets = self.target_activations.lock();
 
         for (key, target) in targets.iter_mut() {
-            // Generate random value with bias towards lower values
-            // Use multiple random samples to create a distribution
-            let r1 = rng.f32();
-            let r2 = rng.f32();
-            let r3 = rng.f32();
+            *target = if self.iteration.is_multiple_of(2) != key.idx().is_multiple_of(2) {
+                // Generate random value with bias towards lower values
+                // Use multiple random samples to create a distribution
+                let r1 = rng.f32();
+                let r2 = rng.f32();
+                let r3 = rng.f32();
 
-            // Average creates a more centered distribution
-            let avg = (r1 + r2 + r3) / 3.0;
+                // Average creates a more centered distribution
+                let avg = (r1 + r2 + r3) / 3.0;
 
-            // Apply bias towards lower values (square for stronger bias)
-            let biased = avg * avg;
-
-            // Apply slow-growth function for consistency
-            *target = Self::slow_growth_activation(biased);
+                // Apply bias towards lower values (square for stronger bias)
+                let biased = avg * avg;
+                Self::slow_growth_activation(biased)
+            } else {
+                rng.f32()
+            };
 
             if log::log_enabled!(log::Level::Trace) && *target > 0.01 {
                 log::trace!(
@@ -173,6 +172,7 @@ impl AudioUnit for RandomActivator {
             *counter = 0;
             drop(counter); // Release lock before generating
 
+            self.iteration += 1;
             self.generate_random_targets();
         }
 

@@ -4,7 +4,7 @@ use common::{
     instrument::{GroupChannel, GroupConfig},
     NodeKey,
 };
-use fundsp::{hacker32::prelude::*, typenum::op};
+use fundsp::{hacker::prelude::*, typenum::op};
 use u_num_it::u_num_it;
 
 use super::{
@@ -21,9 +21,9 @@ pub fn create_channel_system<G, K, F>(
     net: &mut Net,
 ) -> Vec<NodeHandles>
 where
-    G: Size<f32> + Size<NodeType>,
-    K: Size<f32> + Size<NodeType>,
-    F: Size<f32> + Size<FilterType>,
+    G: Size<S> + Size<NodeType>,
+    K: Size<S> + Size<NodeType>,
+    F: Size<S> + Size<FilterType>,
 {
     let total_nodes: usize = groups.iter().map(|g| g.nodes.len()).sum();
     log::info!(

@@ -478,3 +478,31 @@ pub fn instrument_update_key_control(
 
     Ok(())
 }
+
+#[cfg(feature="devtools")]
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+pub async fn instrument_edit_finetuned_values(
+    siren_base_hz: f32,
+    siren_max_frequency_hz: f32,
+    siren_excitement_pause_limit: f32,
+    siren_base_pause_duration: f32,
+    filter_switch_follow_response_s: f32,
+    node_follow_response_time_s: f32,
+    filter_base_q: f32,
+    node_bell_q: f32,
+    node_bell_gain_db: f32,
+    formant_base_q: f32,
+    input_ny_threshold: f32,
+    input_ny_ratio: f32,
+    input_ny_wet_ratio: f32,
+    state: State<'_, InstrumentEngine>,
+) -> Result<()> {
+    todo!()
+}
+
+#[cfg(feature="devtools")]
+#[tauri::command]
+pub async fn instrument_get_finetuned_values() -> Result<common::commands::edit::FineTunedValuesPayload> {
+    todo!()
+}

@@ -33,6 +33,7 @@ pub fn setup(app: &mut App) -> tauri_plugin_store::Result<()> {
         common::commands::health::SetupStatePayload {
             gui_ready: initial_state.gui_ready,
             mic_permission: initial_state.mic_permission,
+            devtools: cfg!(feature="devtools")
         },
     ).ok(); // Ignore error during setup
 
@@ -71,6 +72,7 @@ pub async fn health_grant_mic_premission(
         common::commands::health::SetupStatePayload {
             gui_ready: health_state.gui_ready,
             mic_permission: health_state.mic_permission,
+            devtools: cfg!(feature="devtools")
         },
     )
     .map_err(|e| HealthError::Emit {
@@ -102,6 +104,7 @@ pub async fn health_on_gui_ready(
         common::commands::health::SetupStatePayload {
             gui_ready: state_lock.gui_ready,
             mic_permission: state_lock.mic_permission,
+            devtools: cfg!(feature="devtools")
         },
     )
     .map_err(|e| HealthError::Emit {
@@ -124,6 +127,7 @@ pub async fn health_setup_state(
     let payload = common::commands::health::SetupStatePayload {
         gui_ready: state_lock.gui_ready,
         mic_permission: state_lock.mic_permission,
+        devtools: cfg!(feature="devtools")
     };
 
     // Also emit the current state
@@ -161,7 +165,7 @@ fn maybe_toggle_windows(
                 .show()
                 .map_err(|e| HealthError::WindowOp { op: "show_main".into(), message: e.to_string() })?;
 
-            #[cfg(debug_assertions)]
+            #[cfg(any(debug_assertions, feature = "devtools"))]
             main_window.open_devtools();
 
             #[cfg(not(debug_assertions))]

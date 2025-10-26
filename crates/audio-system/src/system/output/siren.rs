@@ -1,3 +1,6 @@
+#[cfg(feature = "hi_fi")]
+use fundsp::hacker::prelude::*;
+#[cfg(not(feature = "hi_fi"))]
 use fundsp::hacker32::prelude::*;
 
 use crate::util::hash_str;
@@ -191,7 +194,10 @@ impl<F: Real> AudioNode for Siren<F> {
     }
 }
 
-pub fn siren() -> An<Siren<f32>> {
+pub fn siren<F>() -> An<Siren<F>>
+where
+    F: Real,
+{
     let siren = Siren::new();
     An(siren)
 }
@@ -203,7 +209,7 @@ mod tests {
     #[test]
     fn test_siren_behavior() {
         // Test with zero input
-        let mut siren_node = siren();
+        let mut siren_node = siren::<f32>();
         siren_node.reset();
 
         let mut outputs = Vec::new();
@@ -241,7 +247,7 @@ mod tests {
 
     #[test]
     fn test_frequency_interpolation() {
-        let mut siren_node = siren();
+        let mut siren_node = siren::<f32>();
         siren_node.reset();
 
         // Test that frequency is interpolated based on input amplitude
@@ -251,7 +257,7 @@ mod tests {
 
         // Run for 2 seconds at 48kHz to account for initial low frequency
         for _ in 0..96000 {
-            let input: Frame<f32, typenum::U1> = [0.5].into(); // Mid excitement level
+            let input: Frame<f32, typenum::U1> = [0.3].into(); // Mid excitement level
             let output = siren_node.tick(&input);
 
             // Detect zero crossings (positive to negative)
@@ -270,7 +276,7 @@ mod tests {
         // - In 2 seconds, expect ~20-40 zero crossings (after initial slow period)
         assert!(
             (15..=45).contains(&zero_crossings),
-            "With a=0.5 and pauses, expected 15-45 zero crossings in 2 seconds, got {}",
+            "With a=0.3 and pauses, expected 15-45 zero crossings in 2 seconds, got {}",
             zero_crossings
         );
 

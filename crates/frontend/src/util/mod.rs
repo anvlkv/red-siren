@@ -5,3 +5,4 @@ pub mod raf_fn_fps;
 pub mod tauri_resource;
 pub mod view_transitions;
 pub mod wave;
+pub mod secondary_window;

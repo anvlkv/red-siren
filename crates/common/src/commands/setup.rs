@@ -1,12 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+use crate::RouteId;
+
 /// Update window appearance (dark mode or light mode)
 pub const UPDATE_WINDOW_APPEARANCE: &str = "update_window_appearance";
 /// Update window appearance override
 pub const WINDOW_APPEARANCE_OVERRIDE: &str = "update_window_appearance_dark_override";
 /// Update window size (width and height)
 pub const UPDATE_WINDOW_SIZE: &str = "update_window_size";
-
+/// Open page in new window
+pub const OPEN_NEW_WIDNOW: &str = "open_in_new_window";
 /// Get value of appearance override
 pub const GET_WINDOW_APPEARANCE_OVERRIDE: &str = "window_appearance_override";
 
@@ -33,4 +36,10 @@ pub struct UpdateWindowAppearanceOverridePayload {
 pub struct UpdateWindowSizePayload {
     pub width: f64,
     pub height: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenInNewWindowPayload {
+    pub route: RouteId,
 }

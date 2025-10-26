@@ -1,3 +1,6 @@
+#[cfg(feature = "hi_fi")]
+use fundsp::hacker::prelude::*;
+#[cfg(not(feature = "hi_fi"))]
 use fundsp::hacker32::prelude::*;
 
 use crate::util::S;
@@ -37,7 +40,7 @@ pub type PreampType = Pipe<
         >,
         Join<U5>,
     >,
-    Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>,
+    super::new_york::StaticNewYork<S>,
 >;
 
 pub fn create_sensors_preamp() -> An<PreampType> {
@@ -47,19 +50,19 @@ pub fn create_sensors_preamp() -> An<PreampType> {
     // Frequency calibration points and their gains
     let freq_20hz = 20.0;
     let gain_20hz_db = -2.7;
-    let gain_20hz_linear = 10.0_f32.powf(gain_20hz_db / 20.0);
+    let gain_20hz_linear = 10.0_f64.powf(gain_20hz_db / 20.0) as S;
 
     let freq_100hz = 100.0;
     let gain_100hz_db = 0.7;
-    let gain_100hz_linear = 10.0_f32.powf(gain_100hz_db / 20.0);
+    let gain_100hz_linear = 10.0_f64.powf(gain_100hz_db / 20.0) as S;
 
     let freq_1khz = 1000.0;
     let gain_1khz_db = 0.5;
-    let gain_1khz_linear = 10.0_f32.powf(gain_1khz_db / 20.0);
+    let gain_1khz_linear = 10.0_f64.powf(gain_1khz_db / 20.0) as S;
 
     let freq_10khz = 10000.0;
     let gain_10khz_db = 3.5;
-    let gain_10khz_linear = 10.0_f32.powf(gain_10khz_db / 20.0);
+    let gain_10khz_linear = 10.0_f64.powf(gain_10khz_db / 20.0) as S;
 
     // Calculate Q factors for non-overlapping bands
     // Given frequency ratios: 100/20=5, 1000/100=10, 10000/1000=10
@@ -89,7 +92,7 @@ pub fn create_sensors_preamp() -> An<PreampType> {
             | bell_hz(freq_10khz, q_10khz, gain_10khz_linear)
             | pass())
         >> join::<U5>()
-        >> mul(1.0 / 5.0)
+        >> super::new_york::new_york_with::<S>(0.3, 4.0, 0.4)
 }
 
 #[cfg(test)]

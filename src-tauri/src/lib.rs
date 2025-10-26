@@ -11,7 +11,7 @@ pub fn run() {
      * ---------- Plugins ----------
      */
 
-    #[cfg(not(debug_assertions))]
+    #[cfg(all(not(debug_assertions), not(feature = "devtools")))]
     {
         builder = builder.plugin(tauri_plugin_prevent_default::init());
     }
@@ -34,8 +34,10 @@ pub fn run() {
             // .level(log::LevelFilter::Debug)
             .level(if cfg!(debug_assertions) {
                 log::LevelFilter::Trace
-            } else {
+            } else if cfg!(feature = "devtools") {
                 log::LevelFilter::Debug
+            } else {
+                log::LevelFilter::Error
             })
             .build(),
     );
@@ -51,6 +53,7 @@ pub fn run() {
         setup::update_window_size,
         setup::update_window_appearance_dark_override,
         setup::window_appearance_override,
+        setup::open_in_new_window,
         health::health_on_gui_ready,
         health::health_grant_mic_premission,
         health::health_setup_state,

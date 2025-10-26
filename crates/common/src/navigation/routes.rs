@@ -36,4 +36,15 @@ impl RouteId {
     pub fn is_content(&self) -> bool {
         !matches!(self, Self::Play | Self::Tune)
     }
+
+    pub fn title(&self) -> &'static str {
+        match self {
+            Self::Home => "Home",
+            Self::About => "About",
+            Self::Donate => "Donate",
+            Self::Play => "Play",
+            Self::Tune => "Tune",
+            Self::Permissions => "Permissions",
+        }
+    }
 }

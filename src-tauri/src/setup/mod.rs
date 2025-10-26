@@ -66,6 +66,12 @@ pub fn app_setup(app: &mut App) -> Result<()> {
         dark: state_dark_mode,
         override_dark,
         ui_safe_area: common::safe_area::SafeArea {
+            top: 0.0,
+            right: 0.0,
+            bottom: 0.0,
+            left: 0.0,
+        },
+        system_safe_area: common::safe_area::SafeArea {
             top: safe_area_insets
                 .get_top_inset()
                 .map_err(|e| AppError::Tauri(e.to_string()))?
@@ -77,7 +83,6 @@ pub fn app_setup(app: &mut App) -> Result<()> {
                 .inset as f32,
             left: 0.0,
         },
-        system_safe_area: common::safe_area::SafeArea::default(),
     };
 
     app.manage(Mutex::new(initial_state));
@@ -89,6 +94,15 @@ pub fn app_setup(app: &mut App) -> Result<()> {
                 & tauri_plugin_window_state::StateFlags::POSITION,
         )
         .map_err(|e| SetupError::window_state_op("restore_state", e))?;
+
+    main_window.on_window_event({
+        let app_handle = app.app_handle().clone();
+        move |event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                app_handle.exit(0);
+            }
+        }
+    });
 
     Ok(())
 }

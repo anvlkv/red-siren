@@ -13,6 +13,9 @@ use common::{
     tuner::{Config as TunerConfig, SpectrumData},
 };
 use cpal::traits::HostTrait;
+#[cfg(feature = "hi_fi")]
+use fundsp::hacker::prelude::*;
+#[cfg(not(feature = "hi_fi"))]
 use fundsp::hacker32::prelude::*;
 
 use super::stream::{self, spawn_owned_input_stream, ProdType};

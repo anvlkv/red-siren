@@ -1,8 +1,9 @@
 use common::{
     commands::setup::UpdateWindowAppearanceOverridePayload,
     error::{Result, SetupError},
+    RouteId,
 };
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_store::StoreExt;
 
 use super::WindowState;
@@ -64,49 +65,27 @@ pub fn update_window_appearance_dark_override(
     // Persist the override (Option<bool>)
     store.set(super::DARK_OVERRIDE_KEY, dark);
 
+    let mut system_dark = false;
+
     // Will hold the resolved effective dark value after applying logic
-    let effective_dark: bool = if let Some(forced) = dark {
-        // 2a. Override present: apply immediately
-        let mut main_window = app
-            .get_webview_window("main")
-            .ok_or(SetupError::MainWindowMissing)?;
-        #[cfg(target_os = "macos")]
-        {
-            super::setup_mac_window::update_appearance(&mut main_window, forced)
+    #[cfg(target_os = "macos")]
+    for (_, window) in app.webview_windows().iter_mut() {
+        if let Some(forced) = dark {
+            super::setup_mac_window::update_appearance(window, forced)
                 .map_err(SetupError::appearance)?;
-        }
-        {
-            let mut guard = state.lock();
-            guard.dark = forced;
-        }
-        forced
-    } else {
-        // 2b. Override removed: recompute system appearance
-        let mut main_window = app
-            .get_webview_window("main")
-            .ok_or(SetupError::MainWindowMissing)?;
-
-        let system_dark = {
-            #[cfg(target_os = "macos")]
-            {
-                super::setup_mac_window::setup(&mut main_window, None)
-                    .map_err(SetupError::appearance)?
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
-                false
-            }
+        } else {
+            system_dark =
+                super::setup_mac_window::setup(window, None).map_err(SetupError::appearance)?;
         };
+    }
 
-        {
-            let mut guard = state.lock();
-            guard.dark = system_dark;
-        }
-        system_dark
+    if let Some(forced) = dark {
+        let mut guard = state.lock();
+        guard.dark = forced;
+    } else {
+        let mut guard = state.lock();
+        guard.dark = system_dark;
     };
-
-    // 3. Persist resolved (effective) dark value separately
-    store.set("dark", Some(effective_dark));
 
     // 4. Emit override state payload (consumer can know if override active)
     app.emit(
@@ -149,6 +128,56 @@ pub fn update_window_size(
 
     app.emit(common::events::setup::UPDATE_WINDOW_SIZE, ())
         .map_err(|e| SetupError::emit(common::events::setup::UPDATE_WINDOW_SIZE, e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_in_new_window(
+    route: RouteId,
+    state: State<'_, WindowState>,
+    app: AppHandle,
+) -> Result<()> {
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    {
+        let path: &'static str = route.into();
+        let title = route.title();
+        log::info!("Opening new window for route {:?} (path: {})", route, path);
+
+        let main_window_size = app
+            .get_webview_window("main")
+            .and_then(|w| {
+                w.inner_size()
+                    .ok()
+                    .map(|s| (s.width as f64, s.height as f64))
+            })
+            .unwrap_or((800.0, 600.0));
+
+        let mut window = WebviewWindowBuilder::new(
+            &app,
+            format!("secondary:{}", title.to_lowercase()).as_str(),
+            WebviewUrl::App(format!("{path}?secondary=true").into()),
+        )
+        .title(title)
+        .decorations(true)
+        .title_bar_style(tauri::TitleBarStyle::Transparent)
+        .resizable(true)
+        .maximizable(false)
+        .minimizable(false)
+        .maximized(false)
+        .inner_size(main_window_size.0, main_window_size.1)
+        .build()?;
+
+        let dark = {
+            let guard = state.lock();
+            guard.dark
+        };
+        #[cfg(target_os = "macos")]
+        {
+            super::setup_mac_window::update_appearance(&mut window, dark)
+                .map_err(SetupError::appearance)?;
+        }
+    }
 
     Ok(())
 }

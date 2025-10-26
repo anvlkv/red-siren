@@ -1,5 +1,3 @@
-//! Tuner component for spectrum visualization and sensor configuration
-
 mod context;
 mod sensor_handles;
 mod spectrum;
@@ -164,11 +162,13 @@ pub fn Tuner() -> impl IntoView {
     let tuner_layout = Signal::derive(tuner_layout);
 
     view! {
-        <div class="relative w-full h-full overflow-hidden">
-            // Spectrum visualization layer
+        <div
+            class="relative overflow-hidden"
+            style:width=move || format!("{}px", tuner_layout().unwrap_or_default().space.x)
+            style:height=move || format!("{}px", tuner_layout().unwrap_or_default().space.y)
+        >
             <SpectrumVisualizer spectrum=spectrum_signal layout=tuner_layout />
 
-            // Sensor handles layer
             <SensorHandles
                 config=config_signal
                 layout=tuner_layout

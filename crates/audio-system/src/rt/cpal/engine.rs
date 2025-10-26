@@ -12,6 +12,9 @@ use common::{
     NodeKey, NodeKeyRegistry,
 };
 use cpal::traits::{DeviceTrait, HostTrait};
+#[cfg(feature="hi_fi")]
+use fundsp::hacker::prelude::*;
+#[cfg(not(feature="hi_fi"))]
 use fundsp::hacker32::prelude::*;
 use parking_lot::RwLock;
 use ringbuf::{

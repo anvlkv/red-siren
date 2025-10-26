@@ -7,6 +7,9 @@ mod integration_tests {
     use common::instrument::{Config as InstrumentConfig, GroupConfig, NodeConfig};
     use common::tuner::{Config as TunerConfig, SensorData};
     use common::NodeKey;
+    #[cfg(feature = "hi_fi")]
+    use fundsp::hacker::prelude::*;
+    #[cfg(not(feature = "hi_fi"))]
     use fundsp::hacker32::prelude::*;
     use fundsp::net::Net;
     use std::collections::HashMap;

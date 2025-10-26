@@ -171,16 +171,8 @@ impl InstrumentEngine {
         self.inner.set_band_control(key, value)
     }
 
-    pub fn get_band_control(&self, key: common::NodeKey) -> common::error::Result<f32> {
-        self.inner.get_band_control(key)
-    }
-
     pub fn set_key_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()> {
         self.inner.set_key_control(key, value)
-    }
-
-    pub fn get_key_control(&self, key: common::NodeKey) -> common::error::Result<f32> {
-        self.inner.get_key_control(key)
     }
 }
 
@@ -490,24 +482,10 @@ impl Inner {
         Ok(())
     }
 
-    fn get_band_control(&self, key: common::NodeKey) -> common::error::Result<f32> {
-        if let Some(ctrl) = self.stream_controller.read().as_ref() {
-            return ctrl.get_band_control(key);
-        }
-        Ok(0.0)
-    }
-
     fn set_key_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()> {
         if let Some(ctrl) = self.stream_controller.read().as_ref() {
             return ctrl.set_key_control(key, value);
         }
         Ok(())
-    }
-
-    fn get_key_control(&self, key: common::NodeKey) -> common::error::Result<f32> {
-        if let Some(ctrl) = self.stream_controller.read().as_ref() {
-            return ctrl.get_key_control(key);
-        }
-        Ok(0.0)
     }
 }

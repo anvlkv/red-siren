@@ -1,7 +1,7 @@
-use common::commands::setup::{UpdateWindowAppearancePayload, UpdateWindowSizePayload};
+use common::commands::setup::UpdateWindowAppearancePayload;
 use leptos::prelude::*;
 use leptos_router::components::*;
-use leptos_use::{signal_debounced, use_preferred_dark, use_window_size, UseWindowSizeReturn};
+use leptos_use::use_preferred_dark;
 use tauri_use::{
     use_command, use_invoke, use_listen, EventType, UseListenReturn, UseTauriReturn,
     UseTauriWithReturn,
@@ -38,12 +38,6 @@ pub fn App() -> impl IntoView {
         common::commands::setup::UPDATE_WINDOW_APPEARANCE,
     );
 
-    let UseTauriReturn {
-        trigger: trigger_update_window_size,
-        error: error_update_window_size,
-        ..
-    } = use_invoke::<UpdateWindowSizePayload, (), ()>(common::commands::setup::UPDATE_WINDOW_SIZE);
-
     let UseTauriResourceReturn {
         data: window_appearance_override,
         ..
@@ -52,9 +46,6 @@ pub fn App() -> impl IntoView {
     );
 
     let preferred_dark = use_preferred_dark();
-    let UseWindowSizeReturn { width, height } = use_window_size();
-    let width = signal_debounced(width, 70.0);
-    let height = signal_debounced(height, 70.0);
 
     let window_appearance_class = Signal::derive(move || {
         let os_theme = preferred_dark();
@@ -91,25 +82,12 @@ pub fn App() -> impl IntoView {
                 common::commands::setup::UPDATE_WINDOW_APPEARANCE
             );
         }
-        if let Some(err) = error_update_window_size() {
-            log::error!(
-                "Error invoking {}: {err}",
-                common::commands::setup::UPDATE_WINDOW_SIZE
-            );
-        }
     });
 
     Effect::new(move |_| {
         let dark = preferred_dark();
         log::info!("Preferred dark mode: {dark}",);
         trigger_update_window_appearance(Some((UpdateWindowAppearancePayload { dark }, ())));
-    });
-
-    Effect::new(move |_| {
-        let width = width();
-        let height = height();
-        log::info!("Detected window resize: {width}, {height}");
-        trigger_update_window_size(Some((UpdateWindowSizePayload { width, height }, ())));
     });
 
     on_cleanup(move || {

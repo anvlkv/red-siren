@@ -1,8 +1,11 @@
-use leptos::prelude::*;
 use common::events::intro::IntroSnoopBatchPayload;
+use leptos::prelude::*;
 use tauri_use::{use_command, UseTauriWithReturn};
 
-use crate::util::raf_fn_fps::{use_raf_fn_with_fps, UseRafFnCallbackArgs};
+use crate::util::{
+    raf_fn_fps::{use_raf_fn_with_fps, UseRafFnCallbackArgs},
+    secondary_window::is_secondary_window,
+};
 
 // Wave geometry (tiled, taller, centered under sun)
 const WAVE_TOP_Y: f32 = 210.0; // anchor under sun
@@ -19,7 +22,8 @@ const STROKE_WIDTH: f32 = 3.5;
 
 #[component]
 pub fn Wavering(#[prop(into)] paused: Signal<bool>) -> impl IntoView {
-    // Commands (resume/pause sampling)
+    let is_secondary_window = is_secondary_window();
+
     let UseTauriWithReturn {
         trigger: trigger_resume,
         error: resume_error,
@@ -61,8 +65,10 @@ pub fn Wavering(#[prop(into)] paused: Signal<bool>) -> impl IntoView {
         }
     });
 
-    // Route‑aware pause/resume (MAYA DRY KISS: single reactive effect)
     Effect::new(move |_| {
+        if is_secondary_window() {
+            return;
+        }
         if paused() {
             trigger_pause(Some(()));
         } else {

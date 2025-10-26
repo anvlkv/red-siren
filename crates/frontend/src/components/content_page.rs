@@ -2,7 +2,10 @@ use common::RouteId;
 use leptos::prelude::*;
 use leptos_router::{hooks::use_navigate, NavigateOptions};
 
-use crate::components::{Button, Card, Icon, UiPlacement, UiSize, UiVariant};
+use crate::{
+    components::{Button, Card, Icon, UiPlacement, UiSize, UiVariant},
+    util::secondary_window::is_secondary_window,
+};
 
 /// Generic Page component (client-driven).
 #[component]
@@ -29,6 +32,7 @@ pub fn ContentPage(
     #[prop(optional, into)] no_back_button: bool,
 ) -> impl IntoView {
     let navigate = use_navigate();
+    let is_secondary_window = is_secondary_window();
 
     // Merge base card class with user-supplied class
     let merged_card_class = Signal::derive(move || {
@@ -76,7 +80,7 @@ pub fn ContentPage(
         <div class="w-full h-full flex items-center justify-center">
             <Card class=merged_card_class card_animation_direction first_appear=first_appear>
                 <div class="flex items-center justify-between flex-wrap gap-4 mb-6 w-full">
-                    <Show when=move || !no_back_button>
+                    <Show when=move || { !no_back_button && !is_secondary_window() }>
                         <Button
                             size=UiSize::Md
                             variant=UiVariant::Outline

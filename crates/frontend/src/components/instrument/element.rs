@@ -542,7 +542,7 @@ pub fn KeyboardElement(
                         ""
                     };
                     format!(
-                        "border-none text-thin md:text-base text-sm absolute {} {}",
+                        "border-none text-thin md:text-base text-sm absolute {} {} will-change-[transform, top, left]",
                         if is_dragging() { "cursor-grabbing" } else { "cursor-grab" },
                         ring,
                     )

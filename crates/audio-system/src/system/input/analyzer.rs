@@ -2,6 +2,9 @@ use std::collections::HashMap;
 
 use common::{tuner::Config, NodeKey};
 use fundsp::audiounit::BigBlockAdapter;
+#[cfg(feature = "hi_fi")]
+use fundsp::hacker::prelude::*;
+#[cfg(not(feature = "hi_fi"))]
 use fundsp::hacker32::prelude::*;
 use spectrum_analyzer::{
     samples_fft_to_spectrum, windows::hann_window, FrequencyLimit, FrequencySpectrum,

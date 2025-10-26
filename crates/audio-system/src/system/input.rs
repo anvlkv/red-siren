@@ -1,3 +1,5 @@
+mod new_york;
+
 pub mod analyzer;
 pub mod preamp;
 pub mod random_activator;
@@ -7,6 +9,9 @@ pub use random_activator::RandomActivator;
 
 use common::tuner::Config;
 use common::NodeKey;
+#[cfg(feature = "hi_fi")]
+use fundsp::hacker::prelude::*;
+#[cfg(not(feature = "hi_fi"))]
 use fundsp::hacker32::prelude::*;
 use preamp::create_sensors_preamp;
 use std::collections::HashMap;

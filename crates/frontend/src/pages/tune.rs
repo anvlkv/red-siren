@@ -5,6 +5,7 @@ use crate::{
     },
     util::{
         layout_context::{expect_layout_contex, LayoutContextReturn},
+        secondary_window::is_secondary_window,
         tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
     },
 };
@@ -15,6 +16,8 @@ use leptos::prelude::*;
 pub fn Tune() -> impl IntoView {
     // Access long-lived tuner service (commands + shared state)
     let tuner_service = expect_tuner_service();
+
+    let is_secondary_window = is_secondary_window();
 
     // Tuner config resource (refetch after reset)
     let UseTauriResourceReturn { refetch, .. } =
@@ -55,29 +58,31 @@ pub fn Tune() -> impl IntoView {
     });
 
     // Reset handler
-    let on_reset = {
+    let on_reset = Callback::new({
         let tuner_service = tuner_service.clone();
-        move |_| {
+        move |_: ()| {
             tuner_service.reset.run(());
             refetch(); // Refresh config after reset
         }
-    };
+    });
 
     view! {
         <div class="relative w-full h-full">
             <Tuner />
-            <CompactMenu items=menu_items placement=placement>
-                <Button
-                    on:click=on_reset
-                    size=UiSize::Sm
-                    variant=UiVariant::Outline
-                    placement=placement
-                    attr:r#type="reset"
-                >
-                    <Icon name="reset" size=UiSize::Sm />
-                    <span class="inline-block flex-grow text-center">Reset</span>
-                </Button>
-            </CompactMenu>
+            <Show when=move || !is_secondary_window()>
+                <CompactMenu items=menu_items placement=placement>
+                    <Button
+                        on:click=move |_| on_reset.run(())
+                        size=UiSize::Sm
+                        variant=UiVariant::Outline
+                        placement=placement
+                        attr:r#type="reset"
+                    >
+                        <Icon name="reset" size=UiSize::Sm />
+                        <span class="inline-block flex-grow text-center">Reset</span>
+                    </Button>
+                </CompactMenu>
+            </Show>
         </div>
     }
 }

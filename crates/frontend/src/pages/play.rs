@@ -9,6 +9,7 @@ use crate::{
     util::{
         layout_context::{expect_layout_contex, LayoutContextReturn},
         playback_service::{expect_playback_service, PlaybackService},
+        secondary_window::is_secondary_window,
         tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
     },
 };
@@ -21,6 +22,8 @@ pub fn Play() -> impl IntoView {
     } = use_tauri_resource::<common::instrument::events::PlaybackStatePayload>(
         common::instrument::events::PLAYBACK_STATE,
     );
+
+    let is_secondary_window = is_secondary_window();
 
     // Get navigation function
     let navigate = use_navigate();
@@ -124,13 +127,17 @@ pub fn Play() -> impl IntoView {
         cb_stop.run(());
     });
 
+    let editor = Signal::derive(move || setup_state().map(|e| e.devtools).unwrap_or_default());
+
     view! {
         <div>
-            <Instrument />
-            <CompactMenu items=menu_items placement>
-                <ActivationSourceToggle placement mic_permission />
-                <AppearanceToggle placement />
-            </CompactMenu>
+            <Instrument editor />
+            <Show when=move || !is_secondary_window()>
+                <CompactMenu items=menu_items placement>
+                    <ActivationSourceToggle placement mic_permission />
+                    <AppearanceToggle placement />
+                </CompactMenu>
+            </Show>
         </div>
     }
 }

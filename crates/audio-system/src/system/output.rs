@@ -1,3 +1,4 @@
+mod abs;
 mod channel;
 mod chorus;
 mod crossfade;
@@ -8,6 +9,9 @@ mod siren;
 
 use channel::one_channel_subsystem;
 use common::instrument::{Config, GroupChannel};
+#[cfg(feature = "hi_fi")]
+use fundsp::hacker::prelude::*;
+#[cfg(not(feature = "hi_fi"))]
 use fundsp::hacker32::prelude::*;
 
 use super::NodeHandles;

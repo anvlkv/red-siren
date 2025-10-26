@@ -11,4 +11,8 @@ pub const fn hash_str(s: &str) -> u64 {
     hash
 }
 
+#[cfg(not(feature="hi_fi"))]
 pub type S = f32;
+
+#[cfg(feature="hi_fi")]
+pub type S = f64;

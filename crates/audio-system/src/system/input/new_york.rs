@@ -124,17 +124,6 @@ where
     An(NewYork::new())
 }
 
-pub type StaticNewYork<F> =
-    Pipe<Stack<Stack<Stack<Pass, Constant<U1>>, Constant<U1>>, Constant<U1>>, NewYork<F>>;
-
-/// Create a New York compressor with custom parameters
-pub fn new_york_with<F>(threshold: f32, ratio: f32, wet_mix: f32) -> An<StaticNewYork<F>>
-where
-    F: Real,
-{
-    (pass() | constant(threshold) | constant(ratio) | constant(wet_mix)) >> An(NewYork::new())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

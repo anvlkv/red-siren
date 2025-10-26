@@ -488,4 +488,25 @@ impl Inner {
         }
         Ok(())
     }
+
+    #[cfg(feature = "devtools")]
+    pub fn get_finetuned_values(
+        &self,
+    ) -> common::error::Result<common::commands::edit::FineTunedValuesPayload> {
+        if let Some(ctrl) = self.stream_controller.read().as_ref() {
+            return ctrl.get_finetuned_values();
+        }
+        Err(common::error::InstrumentError::NotInitialized.into())
+    }
+
+    #[cfg(feature = "devtools")]
+    pub fn set_finetuned_values(
+        &self,
+        payload: common::commands::edit::FineTunedValuesPayload,
+    ) -> common::error::Result<()> {
+        if let Some(ctrl) = self.stream_controller.read().as_ref() {
+            return ctrl.set_finetuned_values(payload);
+        }
+        Err(common::error::InstrumentError::NotInitialized.into())
+    }
 }

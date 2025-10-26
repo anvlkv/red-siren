@@ -172,7 +172,11 @@ impl AudioUnit for RandomActivator {
             *counter = 0;
             drop(counter); // Release lock before generating
 
-            self.iteration += 1;
+            if let Some(v) = self.iteration.checked_add(1) {
+                self.iteration = v;
+            } else {
+                self.iteration = 0;
+            }
             self.generate_random_targets();
         }
 

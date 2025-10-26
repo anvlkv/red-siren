@@ -1,7 +1,10 @@
 use leptos::prelude::*;
 use tauri_use::{use_command, UseTauriWithReturn};
 
-use crate::util::layout_context::{expect_layout_contex, LayoutContextReturn};
+use crate::{
+    components::Fold,
+    util::layout_context::{expect_layout_contex, LayoutContextReturn},
+};
 
 const REFRESH_FPS: f64 = 12.0; // small & cheap; good enough to spot trends
 
@@ -61,7 +64,7 @@ pub fn DebugOverlay() -> impl IntoView {
     // Overlay geometry:
     // - top-left, non-interactive, tiny readable tiles
     // - grid: rows = groups, cols = keys-per-group
-    let overlay_class = "absolute top-2 left-2 z-50 pointer-events-none select-none";
+    let overlay_class = "absolute top-2 left-2 z-50";
     let grid_style = move || {
         let rows = num_groups();
         let cols = num_keys_per_group();
@@ -73,48 +76,47 @@ pub fn DebugOverlay() -> impl IntoView {
 
     view! {
         <div class=overlay_class>
-            <div class="rounded bg-white/70 dark:bg-black/60 border border-black/20 dark:border-red/20 p-1 shadow-sm">
-                <div class="text-[10px] leading-tight text-black dark:text-red mb-1 opacity-80">
-                    Siren debug: Activation vs Output
-                </div>
-                <div style=grid_style class="text-[10px]">
-                    {move || {
-                        let ng = num_groups();
-                        let nk = num_keys_per_group();
-                        (0..ng as usize)
-                            .flat_map(move |g| {
-                                (0..nk as usize)
-                                    .map(move |k| {
-                                        let act_samples = Signal::derive({
-                                            move || {
-                                                activation_batch()
-                                                    .and_then(|b| {
-                                                        b.snoops
-                                                            .iter()
-                                                            .find(|e| e.group as usize == g && e.key as usize == k)
-                                                            .map(|e| e.samples.clone())
-                                                    })
-                                            }
-                                        });
-                                        let out_samples = Signal::derive({
-                                            move || {
-                                                output_batch()
-                                                    .and_then(|b| {
-                                                        b.snoops
-                                                            .iter()
-                                                            .find(|e| e.group as usize == g && e.key as usize == k)
-                                                            .map(|e| e.samples.clone())
-                                                    })
-                                            }
-                                        });
-                                        // Derive per-tile signals by pairing activation/output entries
+            <div class="rounded bg-red/70 dark:bg-black/60 border border-black/20 dark:border-red/20 p-1 shadow-sm">
+                <Fold title="Siren debug: Activation vs Output">
+                    <div style=grid_style class="text-[10px] pointer-events-none select-none">
+                        {move || {
+                            let ng = num_groups();
+                            let nk = num_keys_per_group();
+                            (0..ng as usize)
+                                .flat_map(move |g| {
+                                    (0..nk as usize)
+                                        .map(move |k| {
+                                            let act_samples = Signal::derive({
+                                                move || {
+                                                    activation_batch()
+                                                        .and_then(|b| {
+                                                            b.snoops
+                                                                .iter()
+                                                                .find(|e| e.group as usize == g && e.key as usize == k)
+                                                                .map(|e| e.samples.clone())
+                                                        })
+                                                }
+                                            });
+                                            let out_samples = Signal::derive({
+                                                move || {
+                                                    output_batch()
+                                                        .and_then(|b| {
+                                                            b.snoops
+                                                                .iter()
+                                                                .find(|e| e.group as usize == g && e.key as usize == k)
+                                                                .map(|e| e.samples.clone())
+                                                        })
+                                                }
+                                            });
+                                            // Derive per-tile signals by pairing activation/output entries
 
-                                        view! { <PairTile g k act_samples out_samples /> }
-                                    })
-                            })
-                            .collect_view()
-                    }}
-                </div>
+                                            view! { <PairTile g k act_samples out_samples /> }
+                                        })
+                                })
+                                .collect_view()
+                        }}
+                    </div>
+                </Fold>
             </div>
         </div>
     }

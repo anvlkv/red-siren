@@ -585,7 +585,7 @@ pub fn KeyboardElement(
                 style:transform=move || {
                     let samples = activation_samples.get().unwrap_or_default();
                     let inc = samples.iter().map(|v| v.abs()).sum::<f32>();
-                    format!("scale({s}, {s})", s = 0.75 + inc / samples.len() as f32)
+                    format!("scale({s}, {s})", s = 0.75 + (inc / samples.len() as f32) * 0.275)
                 }
                 style:top=move || { format!("{}px", constrained_position().y) }
                 style:left=move || { format!("{}px", constrained_position().x) }

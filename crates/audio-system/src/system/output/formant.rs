@@ -6,7 +6,6 @@ use fundsp::hacker32::prelude::*;
 use crate::util::{hash_str, S};
 
 const FORMANT_ID: u64 = hash_str(concat!(module_path!(), "::Formant"));
-const BASE_Q: S = 0.9;
 
 #[derive(Clone)]
 pub struct Formant<const D: u8> {
@@ -18,7 +17,9 @@ pub struct Formant<const D: u8> {
 impl<const D: u8> AudioNode for Formant<D> {
     const ID: u64 = FORMANT_ID;
 
-    type Inputs = U1;
+    // Input 0: audio signal
+    // Input 1: base Q value
+    type Inputs = U2;
 
     type Outputs = U1;
 
@@ -27,8 +28,11 @@ impl<const D: u8> AudioNode for Formant<D> {
         // Map control to [0, 1]
         let v = self.control.value().clamp(0.0, 1.0) as S;
 
+        // Get base Q from input
+        let base_q = input[1] as S;
+
         // Reasonable Q mapping: broader at hight control value
-        let q = (BASE_Q - v * (BASE_Q - S::EPSILON)) as f32;
+        let q = (base_q - v * (base_q - S::EPSILON)) as f32;
 
         // Keep a consistent spacing between adjacent formants using semitone steps.
         // D indexes the formant band; apply a fixed step and a small detune from control.
@@ -55,8 +59,11 @@ impl<const D: u8> AudioNode for Formant<D> {
         // Extract control value once per batch since it's shared
         let v = self.control.value().clamp(0.0, 1.0) as S;
 
+        // Get base Q from input
+        let base_q = input.at_f32(1, 0) as S;
+
         // Reasonable Q mapping: broader at high control value
-        let q = (BASE_Q - v * (BASE_Q - S::EPSILON)) as f32;
+        let q = (base_q - v * (base_q - S::EPSILON)) as f32;
 
         // Calculate frequency parameters once per batch
         let step_semitones = 5.0; // distance between adjacent formants

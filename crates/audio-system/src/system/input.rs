@@ -16,7 +16,14 @@ use fundsp::hacker32::prelude::*;
 use preamp::create_sensors_preamp;
 use std::collections::HashMap;
 
-pub fn sensors_system(config: &Config, net: &mut Net, activations: HashMap<NodeKey, Shared>) {
+use crate::system::values::FineTunedValues;
+
+pub fn sensors_system(
+    config: &Config,
+    net: &mut Net,
+    activations: HashMap<NodeKey, Shared>,
+    values: &FineTunedValues,
+) {
     log::info!(
         "Creating sensors system with {} sensor configs and {} activation controls",
         config.sensor_data.len(),
@@ -58,7 +65,7 @@ pub fn sensors_system(config: &Config, net: &mut Net, activations: HashMap<NodeK
     }
 
     // Create preamp for input calibration
-    let preamp = create_sensors_preamp();
+    let preamp = create_sensors_preamp(values);
 
     // Create FFT analyzer with siren activation
     let analyzer = FFTAnalyzer::new(
@@ -80,7 +87,7 @@ pub fn sensors_system(config: &Config, net: &mut Net, activations: HashMap<NodeK
 
 /// Create a random activation system that bypasses FFT analysis
 /// Used when activation source is Entropy/Random
-pub fn random_sensors_system(net: &mut Net, activations: HashMap<NodeKey, Shared>) {
+pub fn randomized_system(_config: &Config, net: &mut Net, activations: HashMap<NodeKey, Shared>) {
     log::info!(
         "Creating random sensors system with {} activation controls",
         activations.len()

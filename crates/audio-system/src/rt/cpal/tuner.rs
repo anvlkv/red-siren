@@ -80,7 +80,13 @@ impl CpalTunerRuntime {
     }
 
     fn build_analyzer(&self, config: &TunerConfig, sample_rate: f64) -> Box<FFTAnalyzer> {
-        let preamp = crate::input::preamp::create_sensors_preamp();
+        #[cfg(feature = "editor")]
+        let shared_values = crate::system::values::FineTunedSharedValues::default();
+        let values = crate::system::values::FineTunedValues::new(
+            #[cfg(feature = "editor")]
+            &shared_values,
+        );
+        let preamp = crate::input::preamp::create_sensors_preamp(&values);
 
         let mut analyzer = Box::new(FFTAnalyzer::new_tuner_stub(
             Box::new(preamp),

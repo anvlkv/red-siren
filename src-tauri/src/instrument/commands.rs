@@ -489,7 +489,10 @@ pub async fn instrument_edit_finetuned_values(
     siren_base_pause_duration: f32,
     filter_switch_follow_response_s: f32,
     node_follow_response_time_s: f32,
-    filter_base_q: f32,
+    filter_allpass_q: f32,
+    filter_allpass_freq_ratio: f32,
+    filter_moog_freq_ratio: f32,
+    filter_moog_q: f32,
     node_bell_q: f32,
     node_bell_gain_db: f32,
     formant_base_q: f32,
@@ -498,11 +501,35 @@ pub async fn instrument_edit_finetuned_values(
     input_ny_wet_ratio: f32,
     state: State<'_, InstrumentEngine>,
 ) -> Result<()> {
-    todo!()
+    // Update the fine-tuned values
+    state.inner.set_finetuned_values(
+        common::commands::edit::FineTunedValuesPayload{
+            siren_base_hz,
+            siren_max_frequency_hz,
+            siren_excitement_pause_limit,
+            siren_base_pause_duration,
+            filter_switch_follow_response_s,
+            node_follow_response_time_s,
+            filter_allpass_q,
+            filter_allpass_freq_ratio,
+            filter_moog_freq_ratio,
+            filter_moog_q,
+            node_bell_q,
+            node_bell_gain_db,
+            formant_base_q,
+            input_ny_threshold,
+            input_ny_ratio,
+            input_ny_wet_ratio,
+        }
+    )?;
+
+    Ok(())
 }
 
 #[cfg(feature="devtools")]
 #[tauri::command]
-pub async fn instrument_get_finetuned_values() -> Result<common::commands::edit::FineTunedValuesPayload> {
-    todo!()
+pub async fn instrument_get_finetuned_values(
+    state: State<'_, InstrumentEngine>,
+) -> Result<common::commands::edit::FineTunedValuesPayload> {
+    state.inner.get_finetuned_values()
 }

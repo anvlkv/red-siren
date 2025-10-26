@@ -214,6 +214,8 @@ pub enum InstrumentError {
     BackendMissing { op: String },
     #[error("instrument config error: {0}")]
     ConfigError(#[from] InstrumentConfigError),
+    #[error("instrument not initialized")]
+    NotInitialized,
 }
 
 #[derive(Debug, Error, Serialize, Deserialize)]

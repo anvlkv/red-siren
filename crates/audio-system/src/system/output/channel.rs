@@ -13,12 +13,14 @@ use super::{
     InnerHandles, NodeHandles,
 };
 
+use crate::system::values::FineTunedValues;
 use crate::util::S;
 
 pub fn create_channel_system<G, K, F>(
     groups: &[GroupConfig],
     channel: usize,
     net: &mut Net,
+    values: &FineTunedValues,
 ) -> Vec<NodeHandles>
 where
     G: Size<S> + Size<NodeType>,
@@ -91,11 +93,25 @@ where
 
     let groups = groups.to_vec();
     let handles_cell = RefCell::new(inner_handles);
+    let values_clone = values.clone();
+    let filter_allpass_q = values.filter_allpass_q.clone();
+    let filter_allpass_freq_ratio = values.filter_allpass_freq_ratio.clone();
+    let filter_moog_freq_ratio = values.filter_moog_freq_ratio.clone();
+    let filter_moog_q = values.filter_moog_q.clone();
+    let filter_switch_follow = values.filter_switch_follow_response_s.clone();
+
     let node = busi::<G, _, _>(move |i| {
         let group_handles = mem::take(&mut handles_cell.borrow_mut()[i as usize]);
-        super::node::create_group_node::<K>(&groups[i as usize], group_handles)
+        super::node::create_group_node::<K>(&groups[i as usize], group_handles, &values_clone)
     }) >> pipei::<F, _, _>(move |i| {
-        super::filter::create_filter(filter_handles[i as usize].clone())
+        super::filter::create_filter(
+            filter_handles[i as usize].clone(),
+            filter_allpass_q.clone(),
+            filter_allpass_freq_ratio.clone(),
+            filter_moog_freq_ratio.clone(),
+            filter_moog_q.clone(),
+            filter_switch_follow.clone(),
+        )
     });
     let node_id = net.push(Box::new(node >> dcblock::<S>() >> declick::<S>()));
     net.connect_output(node_id, 0, channel);
@@ -107,6 +123,7 @@ pub fn one_channel_subsystem(
     nodes_count_per_group: usize,
     channel: GroupChannel,
     net: &mut Net,
+    values: &FineTunedValues,
 ) -> Vec<NodeHandles> {
     let channel_groups_count = channel_groups.len();
     let mut node_handles = Vec::new();
@@ -129,6 +146,7 @@ pub fn one_channel_subsystem(
                                 channel_groups,
                                 channel as usize,
                                 net,
+                                values,
                             ));
                             log::info!("created stereo [{channel:?}] channel system: groups={channel_groups_count}, nodes={nodes_count_per_group}");
                         }

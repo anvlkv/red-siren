@@ -1,9 +1,9 @@
 use fundsp::{
     hacker::prelude::*,
-    typenum::{UInt, UTerm, B0, B1},
+    typenum::{UInt, UTerm, B1},
 };
 
-use crate::util::S;
+use crate::{system::values::FineTunedValue, util::S};
 
 #[derive(Clone)]
 pub struct FilterHandles {
@@ -11,28 +11,45 @@ pub struct FilterHandles {
     pub freq: f64,
 }
 
-pub type FilterType = Pipe<
-    Pipe<
-        Pipe<
-            Split<UInt<UInt<UTerm, B1>, B0>>,
-            Stack<Stack<Stack<Pass, Pass>, Constant<UInt<UTerm, B1>>>, Constant<UInt<UTerm, B1>>>,
-        >,
-        Stack<
-            Stack<Pass, Pipe<Svf<S, AllpassMode<S>>, Moog<S, UInt<UTerm, B1>>>>,
-            Pipe<Var, Follow<S>>,
-        >,
-    >,
-    super::crossfade::EqualPowerCrossfade,
+type AllPassChain = Pipe<
+    Stack<Stack<Pass, Binop<FrameMul<UInt<UTerm, B1>>, Constant<UInt<UTerm, B1>>, Var>>, Var>,
+    Svf<S, AllpassMode<S>>,
 >;
 
-const FILTER_Q: S = 0.6;
-const SWITCH_FOLLOW_RESPONSE_S: S = (1.0 / 75.0) * 3.0;
+type MoogChain = Pipe<
+    Stack<Stack<Pass, Binop<FrameMul<UInt<UTerm, B1>>, Constant<UInt<UTerm, B1>>, Var>>, Var>,
+    Moog<S, UInt<UInt<UTerm, B1>, B1>>,
+>;
 
-pub fn create_filter(FilterHandles { control, freq }: FilterHandles) -> An<FilterType> {
-    let control = An(control) >> follow(SWITCH_FOLLOW_RESPONSE_S);
+type CrossFadeChain =
+    Pipe<Stack<Stack<Pass, Pass>, Pipe<Var, Follow<f32>>>, super::crossfade::EqualPowerCrossfade>;
 
-    split::<U2>()
-        >> (pass() | pass() | constant(freq as f32) | constant(FILTER_Q as f32))
-        >> (pass() | (allpass() >> moog_hz((freq * 0.7) as S, FILTER_Q)) | control)
-        >> super::crossfade::equal_power_crossfade()
+pub type FilterType =
+    Pipe<Pipe<Split<U2>, Stack<Pass, Pipe<AllPassChain, MoogChain>>>, CrossFadeChain>;
+
+pub fn create_filter(
+    handles: FilterHandles,
+    filter_allpass_q: An<FineTunedValue>,
+    filter_allpass_freq_ratio: An<FineTunedValue>,
+    filter_moog_freq_ratio: An<FineTunedValue>,
+    filter_moog_q: An<FineTunedValue>,
+    filter_switch_follow_response_s: An<FineTunedValue>,
+) -> An<FilterType> {
+    let FilterHandles { control, freq } = handles;
+
+    // Get the follow response time value
+    let follow_time = filter_switch_follow_response_s.value();
+    let control = An(control) >> follow(follow_time);
+
+    let filter_allpass_chain: An<AllPassChain> =
+        (pass() | (constant(freq as f32) * filter_allpass_freq_ratio) | filter_allpass_q)
+            >> allpass::<S>();
+
+    let filter_moog_chain: An<MoogChain> =
+        (pass() | (constant(freq as f32) * filter_moog_freq_ratio) | filter_moog_q) >> moog::<S>();
+
+    let cross_fade_chain: An<CrossFadeChain> =
+        (pass() | pass() | control) >> super::crossfade::equal_power_crossfade();
+
+    split::<U2>() >> (pass() | (filter_allpass_chain >> filter_moog_chain)) >> cross_fade_chain
 }

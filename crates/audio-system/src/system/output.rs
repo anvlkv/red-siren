@@ -15,6 +15,7 @@ use fundsp::hacker::prelude::*;
 use fundsp::hacker32::prelude::*;
 
 use super::NodeHandles;
+use crate::system::values::FineTunedValues;
 
 struct InnerHandles {
     activation_snoop: An<SnoopBackend>,
@@ -39,14 +40,20 @@ impl Default for InnerHandles {
     }
 }
 
-pub fn mono_system(config: &Config, net: &mut Net) -> Vec<NodeHandles> {
+pub fn mono_system(config: &Config, net: &mut Net, values: &FineTunedValues) -> Vec<NodeHandles> {
     let nodes_count_per_group = config.num_nodes_per_group();
     let groups = config.0.as_slice();
 
-    one_channel_subsystem(groups, nodes_count_per_group, GroupChannel::Left, net)
+    one_channel_subsystem(
+        groups,
+        nodes_count_per_group,
+        GroupChannel::Left,
+        net,
+        values,
+    )
 }
 
-pub fn stereo_system(config: &Config, net: &mut Net) -> Vec<NodeHandles> {
+pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -> Vec<NodeHandles> {
     log::info!(
         "Creating stereo output system with {} total groups",
         config.num_groups()
@@ -71,12 +78,14 @@ pub fn stereo_system(config: &Config, net: &mut Net) -> Vec<NodeHandles> {
         nodes_count_per_group,
         GroupChannel::Left,
         net,
+        values,
     ));
     node_handles.extend(one_channel_subsystem(
         right_groups.as_slice(),
         nodes_count_per_group,
         GroupChannel::Right,
         net,
+        values,
     ));
 
     node_handles
@@ -86,6 +95,7 @@ pub fn multi_channel_system(
     _config: &Config,
     _net: &mut Net,
     _num_channels: usize,
+    _values: &FineTunedValues,
 ) -> Vec<NodeHandles> {
     todo!("multi_channel_system")
 }

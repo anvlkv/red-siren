@@ -4,25 +4,28 @@ use fundsp::hacker::prelude::*;
 use fundsp::hacker32::prelude::*;
 
 #[cfg(not(feature = "editor"))]
-pub type FineTunedValue = An<Constant<U1>>;
+pub type FineTunedValue = Constant<U1>;
 #[cfg(feature = "editor")]
-pub type FineTunedValue = An<Var>;
+pub type FineTunedValue = Var;
 
 #[derive(Clone)]
 pub struct FineTunedValues {
-    pub siren_base_hz: FineTunedValue,
-    pub siren_max_frequency_hz: FineTunedValue,
-    pub siren_excitement_pause_limit: FineTunedValue,
-    pub siren_base_pause_duration: FineTunedValue,
-    pub filter_switch_follow_response_s: FineTunedValue,
-    pub node_follow_response_time_s: FineTunedValue,
-    pub filter_base_q: FineTunedValue,
-    pub node_bell_q: FineTunedValue,
-    pub node_bell_gain_db: FineTunedValue,
-    pub formant_base_q: FineTunedValue,
-    pub input_ny_threshold: FineTunedValue,
-    pub input_ny_ratio: FineTunedValue,
-    pub input_ny_wet_ratio: FineTunedValue,
+    pub siren_base_hz: An<FineTunedValue>,
+    pub siren_max_frequency_hz: An<FineTunedValue>,
+    pub siren_excitement_pause_limit: An<FineTunedValue>,
+    pub siren_base_pause_duration: An<FineTunedValue>,
+    pub filter_switch_follow_response_s: An<FineTunedValue>,
+    pub node_follow_response_time_s: An<FineTunedValue>,
+    pub filter_allpass_q: An<FineTunedValue>,
+    pub filter_allpass_freq_ratio: An<FineTunedValue>,
+    pub filter_moog_freq_ratio: An<FineTunedValue>,
+    pub filter_moog_q: An<FineTunedValue>,
+    pub node_bell_q: An<FineTunedValue>,
+    pub node_bell_gain_db: An<FineTunedValue>,
+    pub formant_base_q: An<FineTunedValue>,
+    pub input_ny_threshold: An<FineTunedValue>,
+    pub input_ny_ratio: An<FineTunedValue>,
+    pub input_ny_wet_ratio: An<FineTunedValue>,
 }
 
 #[cfg(feature = "editor")]
@@ -34,7 +37,10 @@ pub struct FineTunedSharedValues {
     pub siren_base_pause_duration: Shared,
     pub filter_switch_follow_response_s: Shared,
     pub node_follow_response_time_s: Shared,
-    pub filter_base_q: Shared,
+    pub filter_allpass_q: Shared,
+    pub filter_allpass_freq_ratio: Shared,
+    pub filter_moog_freq_ratio: Shared,
+    pub filter_moog_q: Shared,
     pub node_bell_q: Shared,
     pub node_bell_gain_db: Shared,
     pub formant_base_q: Shared,
@@ -48,7 +54,10 @@ const SIREN_MAX_FREQUENCY_HZ: f32 = 775.0;
 const SIREN_EXCITEMENT_PAUSE_LIMIT: f32 = 0.4;
 const SIREN_BASE_PAUSE_DURATION: f32 = 0.25;
 const FILTER_SWITCH_FOLLOW_RESPONSE_S: f32 = 0.04;
-const FILTER_BASE_Q: f32 = 0.6;
+const FILTER_ALLPASS_Q: f32 = 0.6;
+const FILTER_ALLPASS_FREQ_RATIO: f32 = 1.0;
+const FILTER_MOOG_Q: f32 = 0.03;
+const FILTER_MOOG_FREQ_RATIO: f32 = 1.0;
 const NODE_FOLLOW_RESPONSE_TIME_S: f32 = 0.33333334;
 const NODE_BELL_Q: f32 = 0.085;
 const NODE_BELL_GAIN_DB: f32 = 0.33333333;
@@ -73,7 +82,15 @@ impl FineTunedValues {
         shared_values
             .filter_switch_follow_response_s
             .set_value(FILTER_SWITCH_FOLLOW_RESPONSE_S);
-        shared_values.filter_base_q.set_value(FILTER_BASE_Q);
+        shared_values.filter_allpass_q.set_value(FILTER_ALLPASS_Q);
+        shared_values
+            .filter_allpass_freq_ratio
+            .set_value(FILTER_ALLPASS_FREQ_RATIO);
+        shared_values.filter_moog_q.set_value(FILTER_MOOG_Q);
+        shared_values
+            .filter_moog_freq_ratio
+            .set_value(FILTER_MOOG_FREQ_RATIO);
+
         shared_values
             .node_follow_response_time_s
             .set_value(NODE_FOLLOW_RESPONSE_TIME_S);
@@ -94,7 +111,10 @@ impl FineTunedValues {
             siren_excitement_pause_limit: var(&shared_values.siren_excitement_pause_limit),
             siren_base_pause_duration: var(&shared_values.siren_base_pause_duration),
             filter_switch_follow_response_s: var(&shared_values.filter_switch_follow_response_s),
-            filter_base_q: var(&shared_values.filter_base_q),
+            filter_allpass_q: var(&shared_values.filter_allpass_q),
+            filter_allpass_freq_ratio: var(&shared_values.filter_allpass_freq_ratio),
+            filter_moog_freq_ratio: var(&shared_values.filter_moog_freq_ratio),
+            filter_moog_q: var(&shared_values.filter_moog_q),
             node_follow_response_time_s: var(&shared_values.node_follow_response_time_s),
             node_bell_q: var(&shared_values.node_bell_q),
             node_bell_gain_db: var(&shared_values.node_bell_gain_db),
@@ -113,7 +133,10 @@ impl FineTunedValues {
             siren_excitement_pause_limit: constant(SIREN_EXCITEMENT_PAUSE_LIMIT),
             siren_base_pause_duration: constant(SIREN_BASE_PAUSE_DURATION),
             filter_switch_follow_response_s: constant(FILTER_SWITCH_FOLLOW_RESPONSE_S),
-            filter_base_q: constant(FILTER_BASE_Q),
+            filter_allpass_q: constant(FILTER_ALLPASS_Q),
+            filter_allpass_freq_ratio: constant(FILTER_ALLPASS_FREQ_RATIO),
+            filter_moog_freq_ratio: constant(FILTER_MOOG_FREQ_RATIO),
+            filter_moog_q: constant(FILTER_MOOG_Q),
             node_follow_response_time_s: constant(NODE_FOLLOW_RESPONSE_TIME_S),
             node_bell_q: constant(NODE_BELL_Q),
             node_bell_gain_db: constant(NODE_BELL_GAIN_DB),

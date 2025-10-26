@@ -82,6 +82,10 @@ pub fn run() {
         instrument::instrument_all_activation_snoops,
         instrument::instrument_update_band_control,
         instrument::instrument_update_key_control,
+        #[cfg(feature = "devtools")]
+        instrument::instrument_edit_finetuned_values,
+        #[cfg(feature = "devtools")]
+        instrument::instrument_get_finetuned_values,
     ]);
 
     // Setup logic

@@ -109,7 +109,14 @@ mod integration_tests {
         let mut net = Net::new(1, 2);
         net.set_sample_rate(44100.0);
 
-        let node_handles = create_output_system(&instrument_config, &mut net, 2);
+        #[cfg(feature = "editor")]
+        let shared_values = crate::values::FineTunedSharedValues::default();
+        let values = crate::values::FineTunedValues::new(
+            #[cfg(feature = "editor")]
+            &shared_values,
+        );
+
+        let node_handles = create_output_system(&instrument_config, &mut net, 2, &values);
 
         // Collect activation controls
         let mut activations = HashMap::new();
@@ -123,6 +130,7 @@ mod integration_tests {
             &mut net,
             activations.clone(),
             ActivationSource::Mic,
+            &values,
         );
 
         // Network should be valid
@@ -152,7 +160,14 @@ mod integration_tests {
         let mut net = Net::new(1, 2);
         net.set_sample_rate(44100.0);
 
-        let node_handles = create_output_system(&instrument_config, &mut net, 2);
+        #[cfg(feature = "editor")]
+        let shared_values = crate::values::FineTunedSharedValues::default();
+        let values = crate::values::FineTunedValues::new(
+            #[cfg(feature = "editor")]
+            &shared_values,
+        );
+
+        let node_handles = create_output_system(&instrument_config, &mut net, 1, &values);
 
         // Collect activation controls
         let mut activations = HashMap::new();
@@ -166,6 +181,7 @@ mod integration_tests {
             &mut net,
             activations.clone(),
             ActivationSource::Entropy,
+            &values,
         );
 
         // Network should be valid
@@ -202,16 +218,29 @@ mod integration_tests {
 
         // Test Mic source first
         {
-            let mut net = Net::new(1, 2);
+            let mut net = Net::new(0, 1);
             net.set_sample_rate(44100.0);
 
-            let node_handles = create_output_system(&instrument_config, &mut net, 2);
+            #[cfg(feature = "editor")]
+            let shared_values = crate::values::FineTunedSharedValues::default();
+            let values = crate::values::FineTunedValues::new(
+                #[cfg(feature = "editor")]
+                &shared_values,
+            );
+
+            let node_handles = create_output_system(&instrument_config, &mut net, 1, &values);
             let mut activations = HashMap::new();
             for handle in node_handles {
                 activations.insert(handle.key, handle.siren_control);
             }
 
-            create_input_system(&tuner_config, &mut net, activations, ActivationSource::Mic);
+            create_input_system(
+                &tuner_config,
+                &mut net,
+                activations,
+                ActivationSource::Mic,
+                &values,
+            );
             net.check();
             net.allocate();
 
@@ -220,10 +249,17 @@ mod integration_tests {
 
         // Test Entropy source
         {
-            let mut net = Net::new(1, 2);
+            let mut net = Net::new(0, 5);
             net.set_sample_rate(44100.0);
 
-            let node_handles = create_output_system(&instrument_config, &mut net, 2);
+            #[cfg(feature = "editor")]
+            let shared_values = crate::values::FineTunedSharedValues::default();
+            let values = crate::values::FineTunedValues::new(
+                #[cfg(feature = "editor")]
+                &shared_values,
+            );
+
+            let node_handles = create_output_system(&instrument_config, &mut net, 5, &values);
             let mut activations = HashMap::new();
             for handle in node_handles {
                 activations.insert(handle.key, handle.siren_control);
@@ -234,6 +270,7 @@ mod integration_tests {
                 &mut net,
                 activations,
                 ActivationSource::Entropy,
+                &values,
             );
             net.check();
             net.allocate();

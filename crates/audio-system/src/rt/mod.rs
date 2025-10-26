@@ -79,6 +79,16 @@ pub trait StreamController {
     fn set_key_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()>;
 
     fn get_key_control(&self, key: common::NodeKey) -> common::error::Result<f32>;
+
+    // Fine-tuned values (editor feature)
+    #[cfg(feature = "editor")]
+    fn get_finetuned_values(&self) -> common::error::Result<common::commands::edit::FineTunedValuesPayload>;
+
+    #[cfg(feature = "editor")]
+    fn set_finetuned_values(
+        &self,
+        payload: common::commands::edit::FineTunedValuesPayload
+    ) -> common::error::Result<()>;
 }
 
 /// Null / no-op runtime used when no concrete backend feature is enabled.
@@ -91,13 +101,24 @@ pub trait StreamController {
 pub struct NullController;
 
 impl StreamController for NullController {
-    fn start(
+    #[cfg(feature = "editor")]
+    fn get_finetuned_values(&self) -> common::error::Result<common::commands::edit::FineTunedValuesPayload> {
+        Err(common::error::InstrumentError::NotInitialized.into())
+    }
+
+    #[cfg(feature = "editor")]
+    #[allow(clippy::too_many_arguments)]
+    fn set_finetuned_values(
         &self,
-        _layout: &InstrumentLayout,
-        _config: &InstrumentConfig,
-        _source: ActivationSource,
-        _tuner_config: &TunerConfig,
+        _payload: common::commands::edit::FineTunedValuesPayload
     ) -> common::error::Result<()> {
+        Ok(())
+    }
+
+    fn start(&self, _layout: &InstrumentLayout,
+    _config: &InstrumentConfig,
+    _source: ActivationSource,
+    _tuner_config: &TunerConfig,) -> common::error::Result<()> {
         Ok(())
     }
 

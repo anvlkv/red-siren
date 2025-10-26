@@ -12,9 +12,9 @@ use common::{
     NodeKey, NodeKeyRegistry,
 };
 use cpal::traits::{DeviceTrait, HostTrait};
-#[cfg(feature="hi_fi")]
+#[cfg(feature = "hi_fi")]
 use fundsp::hacker::prelude::*;
-#[cfg(not(feature="hi_fi"))]
+#[cfg(not(feature = "hi_fi"))]
 use fundsp::hacker32::prelude::*;
 use parking_lot::RwLock;
 use ringbuf::{
@@ -24,6 +24,8 @@ use ringbuf::{
 };
 
 use crate::rt::{ActivationSource, StreamController};
+#[cfg(feature = "editor")]
+use crate::system::values::{FineTunedSharedValues, FineTunedValues};
 
 use super::stream::{
     spawn_owned_input_stream, spawn_owned_noise_stream, spawn_owned_output_stream, Control,
@@ -49,6 +51,10 @@ struct CpalController {
     dsp_primary_node_id: RwLock<Option<NodeId>>,
     sample_rate: RwLock<Option<f64>>,
     gain_param: RwLock<Option<Shared>>,
+
+    // Fine-tuned values for editor mode
+    #[cfg(feature = "editor")]
+    fine_tuned_shared_values: RwLock<FineTunedSharedValues>,
 
     // Stream control
     control_tx: RwLock<Option<Sender<Control>>>,
@@ -78,6 +84,8 @@ impl Default for CpalController {
             dsp_primary_node_id: RwLock::new(None),
             sample_rate: RwLock::new(None),
             gain_param: RwLock::new(None),
+            #[cfg(feature = "editor")]
+            fine_tuned_shared_values: RwLock::new(FineTunedSharedValues::default()),
             control_tx: RwLock::new(None),
             output_thread: RwLock::new(None),
             activation_sender: RwLock::new(None),
@@ -233,8 +241,22 @@ impl CpalController {
                 .collect::<HashMap<NodeKey, f32>>()
         };
 
+        // Initialize fine-tuned values if in editor mode
+        #[cfg(feature = "editor")]
+        let fine_tuned_values = {
+            let shared_values_lock = self.fine_tuned_shared_values.read();
+
+            FineTunedValues::new(&shared_values_lock)
+        };
+
         // Build output system graph & retrieve handles.
-        let node_handles = crate::create_output_system(config, &mut net, 2);
+        let node_handles = crate::create_output_system(
+            config,
+            &mut net,
+            2,
+            #[cfg(feature = "editor")]
+            &fine_tuned_values,
+        );
 
         let mut siren_controls = HashMap::<NodeKey, Shared>::new();
 
@@ -279,7 +301,14 @@ impl CpalController {
             "Created {} siren controls for input system",
             siren_controls.len()
         );
-        crate::create_input_system(tuner_config, &mut net, siren_controls, source);
+        crate::create_input_system(
+            tuner_config,
+            &mut net,
+            siren_controls,
+            source,
+            #[cfg(feature = "editor")]
+            &fine_tuned_values,
+        );
 
         net.allocate();
         log::debug!("created network: {}", net.display());
@@ -867,6 +896,77 @@ impl StreamController for CpalController {
 
     fn get_key_control(&self, key: NodeKey) -> Result<f32> {
         self.get_key_control(key)
+    }
+
+    #[cfg(feature = "editor")]
+    fn get_finetuned_values(&self) -> Result<common::commands::edit::FineTunedValuesPayload> {
+        let shared_values = self.fine_tuned_shared_values.read();
+        Ok(common::commands::edit::FineTunedValuesPayload {
+            siren_base_hz: shared_values.siren_base_hz.value(),
+            siren_max_frequency_hz: shared_values.siren_max_frequency_hz.value(),
+            siren_excitement_pause_limit: shared_values.siren_excitement_pause_limit.value(),
+            siren_base_pause_duration: shared_values.siren_base_pause_duration.value(),
+            filter_switch_follow_response_s: shared_values.filter_switch_follow_response_s.value(),
+            node_follow_response_time_s: shared_values.node_follow_response_time_s.value(),
+            filter_allpass_q: shared_values.filter_allpass_q.value(),
+            filter_allpass_freq_ratio: shared_values.filter_allpass_freq_ratio.value(),
+            filter_moog_freq_ratio: shared_values.filter_moog_freq_ratio.value(),
+            filter_moog_q: shared_values.filter_moog_q.value(),
+            node_bell_q: shared_values.node_bell_q.value(),
+            node_bell_gain_db: shared_values.node_bell_gain_db.value(),
+            formant_base_q: shared_values.formant_base_q.value(),
+            input_ny_threshold: shared_values.input_ny_threshold.value(),
+            input_ny_ratio: shared_values.input_ny_ratio.value(),
+            input_ny_wet_ratio: shared_values.input_ny_wet_ratio.value(),
+        })
+    }
+
+    #[cfg(feature = "editor")]
+    #[allow(clippy::too_many_arguments)]
+    fn set_finetuned_values(
+        &self,
+        payload: common::commands::edit::FineTunedValuesPayload,
+    ) -> Result<()> {
+        let shared_values = self.fine_tuned_shared_values.read();
+        shared_values.siren_base_hz.set_value(payload.siren_base_hz);
+        shared_values
+            .siren_max_frequency_hz
+            .set_value(payload.siren_max_frequency_hz);
+        shared_values
+            .siren_excitement_pause_limit
+            .set_value(payload.siren_excitement_pause_limit);
+        shared_values
+            .siren_base_pause_duration
+            .set_value(payload.siren_base_pause_duration);
+        shared_values
+            .filter_switch_follow_response_s
+            .set_value(payload.filter_switch_follow_response_s);
+        shared_values
+            .node_follow_response_time_s
+            .set_value(payload.node_follow_response_time_s);
+        shared_values
+            .filter_allpass_q
+            .set_value(payload.filter_allpass_q);
+        shared_values.node_bell_q.set_value(payload.node_bell_q);
+        shared_values
+            .node_bell_gain_db
+            .set_value(payload.node_bell_gain_db);
+        shared_values
+            .formant_base_q
+            .set_value(payload.formant_base_q);
+        shared_values
+            .input_ny_threshold
+            .set_value(payload.input_ny_threshold);
+        shared_values
+            .input_ny_ratio
+            .set_value(payload.input_ny_ratio);
+        shared_values
+            .input_ny_wet_ratio
+            .set_value(payload.input_ny_wet_ratio);
+
+        self.update_primary_node(&self.last_config.read(), &self.last_tuner_config.read());
+
+        Ok(())
     }
 }
 /// Factory exposed to the runtime facade.

@@ -3,6 +3,7 @@ use fundsp::hacker::prelude::*;
 #[cfg(not(feature = "hi_fi"))]
 use fundsp::hacker32::prelude::*;
 
+use crate::system::values::{FineTunedValue, FineTunedValues};
 use crate::util::S;
 
 /*
@@ -26,24 +27,27 @@ Frequencies outside table range are clamped to nearest endpoint.
 pub type PreampType = Pipe<
     Pipe<
         Pipe<
-            Pipe<DCBlock<S>, Split<U5>>,
-            Stack<
+            Pipe<
+                Pipe<DCBlock<S>, Split<U5>>,
                 Stack<
                     Stack<
-                        Stack<FixedSvf<S, BellMode<S>>, FixedSvf<S, BellMode<S>>>,
+                        Stack<
+                            Stack<FixedSvf<S, BellMode<S>>, FixedSvf<S, BellMode<S>>>,
+                            FixedSvf<S, BellMode<S>>,
+                        >,
                         FixedSvf<S, BellMode<S>>,
                     >,
-                    FixedSvf<S, BellMode<S>>,
+                    Pass,
                 >,
-                Pass,
             >,
+            Join<U5>,
         >,
-        Join<U5>,
+        Stack<Stack<Stack<Pass, FineTunedValue>, FineTunedValue>, FineTunedValue>,
     >,
-    super::new_york::StaticNewYork<S>,
+    super::new_york::NewYork<S>,
 >;
 
-pub fn create_sensors_preamp() -> An<PreampType> {
+pub fn create_sensors_preamp(values: &FineTunedValues) -> An<PreampType> {
     // Calibration points from the tuner input gain calibration table
     // Converting dB to linear amplitude: gain = 10^(dB/20)
 
@@ -92,7 +96,11 @@ pub fn create_sensors_preamp() -> An<PreampType> {
             | bell_hz(freq_10khz, q_10khz, gain_10khz_linear)
             | pass())
         >> join::<U5>()
-        >> super::new_york::new_york_with::<S>(0.3, 4.0, 0.4)
+        >> (pass()
+            | values.input_ny_threshold.clone()
+            | values.input_ny_ratio.clone()
+            | values.input_ny_wet_ratio.clone())
+        >> super::new_york::new_york::<S>()
 }
 
 #[cfg(test)]
@@ -101,7 +109,13 @@ mod tests {
 
     #[test]
     fn test_preamp_creation() {
-        let mut preamp = create_sensors_preamp();
+        #[cfg(feature = "editor")]
+        let shared = crate::values::FineTunedSharedValues::default();
+        let values = crate::system::values::FineTunedValues::new(
+            #[cfg(feature = "editor")]
+            &shared,
+        );
+        let mut preamp = create_sensors_preamp(&values);
 
         // Test that preamp has correct I/O configuration
         assert_eq!(preamp.inputs(), 1);

@@ -1,6 +1,6 @@
-#[cfg(feature="hi_fi")]
+#[cfg(feature = "hi_fi")]
 use fundsp::hacker::prelude::*;
-#[cfg(not(feature="hi_fi"))]
+#[cfg(not(feature = "hi_fi"))]
 use fundsp::hacker32::prelude::*;
 
 use crate::util::hash_str;
@@ -52,7 +52,7 @@ impl DelayBuffer {
     }
 }
 
-/// Mono chorus with 5 voices. For stereo, stack two of these using different seed values.
+/// Mono chorus with 5 voices.
 #[derive(Clone)]
 pub struct Chorus {
     seed: u64,

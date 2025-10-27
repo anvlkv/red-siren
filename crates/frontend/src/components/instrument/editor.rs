@@ -214,6 +214,80 @@ pub fn EditorOverlay() -> impl IntoView {
                                     });
                             })
                         />
+
+                        <EditorRangeSlider
+                            label="Shelf freq ratio"
+                            value=Signal::derive(move || {
+                                finetuned_values().filter_shelf_freq_ratio
+                            })
+                            min=0.1
+                            max=2.0
+                            step=0.01
+                            on_input=Callback::new(move |val| {
+                                set_finetuned_values
+                                    .update(|values| {
+                                        values.filter_shelf_freq_ratio = val;
+                                    });
+                            })
+                        />
+
+                        <EditorRangeSlider
+                            label="Shelf Q"
+                            value=Signal::derive(move || { finetuned_values().filter_shelf_q })
+                            min=0.1
+                            max=2.0
+                            step=0.01
+                            on_input=Callback::new(move |val| {
+                                set_finetuned_values
+                                    .update(|values| {
+                                        values.filter_shelf_q = val;
+                                    });
+                            })
+                        />
+
+                        <EditorRangeSlider
+                            label="Shelf Gain dB"
+                            value=Signal::derive(move || { finetuned_values().filter_shelf_gain })
+                            min=-24.0
+                            max=24.0
+                            step=0.1
+                            on_input=Callback::new(move |val| {
+                                set_finetuned_values
+                                    .update(|values| {
+                                        values.filter_shelf_gain = val;
+                                    });
+                            })
+                        />
+
+                        <EditorRangeSlider
+                            label="Pass freq ratio"
+                            value=Signal::derive(move || {
+                                finetuned_values().filter_pass_freq_ratio
+                            })
+                            min=0.1
+                            max=2.0
+                            step=0.01
+                            on_input=Callback::new(move |val| {
+                                set_finetuned_values
+                                    .update(|values| {
+                                        values.filter_pass_freq_ratio = val;
+                                    });
+                            })
+                        />
+
+                        <EditorRangeSlider
+                            label="Pass Q"
+                            value=Signal::derive(move || { finetuned_values().filter_pass_q })
+                            min=0.1
+                            max=2.0
+                            step=0.01
+                            on_input=Callback::new(move |val| {
+                                set_finetuned_values
+                                    .update(|values| {
+                                        values.filter_pass_q = val;
+                                    });
+                            })
+                        />
                     </fieldset>
 
                     <fieldset class="flex flex-col gap-2">

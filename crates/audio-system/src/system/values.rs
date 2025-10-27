@@ -20,6 +20,11 @@ pub struct FineTunedValues {
     pub filter_allpass_freq_ratio: An<FineTunedValue>,
     pub filter_moog_freq_ratio: An<FineTunedValue>,
     pub filter_moog_q: An<FineTunedValue>,
+    pub filter_shelf_freq_ratio: An<FineTunedValue>,
+    pub filter_shelf_q: An<FineTunedValue>,
+    pub filter_shelf_gain: An<FineTunedValue>,
+    pub filter_pass_freq_ratio: An<FineTunedValue>,
+    pub filter_pass_q: An<FineTunedValue>,
     pub node_bell_q: An<FineTunedValue>,
     pub node_bell_gain_db: An<FineTunedValue>,
     pub formant_base_q: An<FineTunedValue>,
@@ -40,6 +45,11 @@ pub struct FineTunedSharedValues {
     pub filter_allpass_freq_ratio: Shared,
     pub filter_moog_freq_ratio: Shared,
     pub filter_moog_q: Shared,
+    pub filter_shelf_freq_ratio: Shared,
+    pub filter_shelf_q: Shared,
+    pub filter_shelf_gain: Shared,
+    pub filter_pass_freq_ratio: Shared,
+    pub filter_pass_q: Shared,
     pub node_bell_q: Shared,
     pub node_bell_gain_db: Shared,
     pub formant_base_q: Shared,
@@ -49,21 +59,26 @@ pub struct FineTunedSharedValues {
 }
 
 const SIREN_BASE_HZ: f32 = 0.5;
-const SIREN_MAX_FREQUENCY_HZ: f32 = 1775.0;
+const SIREN_MAX_FREQUENCY_HZ: f32 = 4775.0;
 const SIREN_EXCITEMENT_PAUSE_LIMIT: f32 = 0.4;
-const SIREN_BASE_PAUSE_DURATION: f32 = 0.25;
+const SIREN_BASE_PAUSE_DURATION: f32 = 0.5;
 const FILTER_SWITCH_FOLLOW_RESPONSE_S: f32 = 0.04;
-const FILTER_ALLPASS_Q: f32 = 0.06;
-const FILTER_ALLPASS_FREQ_RATIO: f32 = 0.7;
-const FILTER_MOOG_Q: f32 = 0.25;
+const FILTER_ALLPASS_Q: f32 = 0.19;
+const FILTER_ALLPASS_FREQ_RATIO: f32 = 1.7;
+const FILTER_MOOG_Q: f32 = 1.85;
 const FILTER_MOOG_FREQ_RATIO: f32 = 1.3;
+const FILTER_SHELF_FREQ_RATIO: f32 = 1.0;
+const FILTER_SHELF_Q: f32 = 1.0;
+const FILTER_SHELF_GAIN: f32 = 1.0;
+const FILTER_PASS_FREQ_RATIO: f32 = 1.0;
+const FILTER_PASS_Q: f32 = 1.0;
 const NODE_FOLLOW_RESPONSE_TIME_S: f32 = 0.34;
-const NODE_BELL_Q: f32 = 0.085;
-const NODE_BELL_GAIN_DB: f32 = 1.34;
+const NODE_BELL_Q: f32 = 1.085;
+const NODE_BELL_GAIN_DB: f32 = 3.34;
 const FORMANT_BASE_Q: f32 = 0.8;
 const INPUT_NY_THRESHOLD: f32 = 0.3;
 const INPUT_NY_RATIO: f32 = 4.0;
-const INPUT_NY_WET_RATIO: f32 = 0.5;
+const INPUT_NY_WET_RATIO: f32 = 0.7;
 
 #[cfg(feature = "editor")]
 impl Default for FineTunedSharedValues {
@@ -78,6 +93,11 @@ impl Default for FineTunedSharedValues {
             filter_allpass_freq_ratio: shared(FILTER_ALLPASS_FREQ_RATIO),
             filter_moog_freq_ratio: shared(FILTER_MOOG_FREQ_RATIO),
             filter_moog_q: shared(FILTER_MOOG_Q),
+            filter_shelf_freq_ratio: shared(FILTER_SHELF_FREQ_RATIO),
+            filter_shelf_q: shared(FILTER_SHELF_Q),
+            filter_shelf_gain: shared(FILTER_SHELF_GAIN),
+            filter_pass_freq_ratio: shared(FILTER_PASS_FREQ_RATIO),
+            filter_pass_q: shared(FILTER_PASS_Q),
             node_follow_response_time_s: shared(NODE_FOLLOW_RESPONSE_TIME_S),
             node_bell_q: shared(NODE_BELL_Q),
             node_bell_gain_db: shared(NODE_BELL_GAIN_DB),
@@ -103,6 +123,11 @@ impl FineTunedValues {
             filter_allpass_freq_ratio: var(&shared_values.filter_allpass_freq_ratio),
             filter_moog_freq_ratio: var(&shared_values.filter_moog_freq_ratio),
             filter_moog_q: var(&shared_values.filter_moog_q),
+            filter_shelf_freq_ratio: var(&shared_values.filter_shelf_freq_ratio),
+            filter_shelf_q: var(&shared_values.filter_shelf_q),
+            filter_shelf_gain: var(&shared_values.filter_shelf_gain),
+            filter_pass_freq_ratio: var(&shared_values.filter_pass_freq_ratio),
+            filter_pass_q: var(&shared_values.filter_pass_q),
             node_follow_response_time_s: var(&shared_values.node_follow_response_time_s),
             node_bell_q: var(&shared_values.node_bell_q),
             node_bell_gain_db: var(&shared_values.node_bell_gain_db),
@@ -125,6 +150,11 @@ impl FineTunedValues {
             filter_allpass_freq_ratio: constant(FILTER_ALLPASS_FREQ_RATIO),
             filter_moog_freq_ratio: constant(FILTER_MOOG_FREQ_RATIO),
             filter_moog_q: constant(FILTER_MOOG_Q),
+            filter_shelf_freq_ratio: constant(FILTER_SHELF_FREQ_RATIO),
+            filter_shelf_q: constant(FILTER_SHELF_Q),
+            filter_shelf_gain: constant(FILTER_SHELF_GAIN),
+            filter_pass_freq_ratio: constant(FILTER_PASS_FREQ_RATIO),
+            filter_pass_q: constant(FILTER_PASS_Q),
             node_follow_response_time_s: constant(NODE_FOLLOW_RESPONSE_TIME_S),
             node_bell_q: constant(NODE_BELL_Q),
             node_bell_gain_db: constant(NODE_BELL_GAIN_DB),
@@ -166,6 +196,17 @@ impl std::fmt::Debug for FineTunedValues {
                 &self.filter_moog_freq_ratio.value(),
             )
             .field("filter_moog_q", &self.filter_moog_q.value())
+            .field(
+                "filter_shelf_freq_ratio",
+                &self.filter_shelf_freq_ratio.value(),
+            )
+            .field("filter_shelf_q", &self.filter_shelf_q.value())
+            .field("filter_shelf_gain", &self.filter_shelf_gain.value())
+            .field(
+                "filter_pass_freq_ratio",
+                &self.filter_pass_freq_ratio.value(),
+            )
+            .field("filter_pass_q", &self.filter_pass_q.value())
             .field(
                 "node_follow_response_time_s",
                 &self.node_follow_response_time_s.value(),

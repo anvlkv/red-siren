@@ -102,6 +102,18 @@ fn create_node(
         ..
     } = handles;
 
+    let FineTunedValues {
+        node_follow_response_time_s,
+        siren_base_hz,
+        siren_max_frequency_hz,
+        siren_excitement_pause_limit,
+        siren_base_pause_duration,
+        formant_base_q,
+        node_bell_q,
+        node_bell_gain_db,
+        ..
+    } = values.clone();
+
     let source: An<SourceOscillator> = ((super::abs::abs() >> clip_to(0.95, 1.0))
         * constant(config.base_frequency as f32))
         >> split::<U2>()
@@ -110,36 +122,34 @@ fn create_node(
 
     // Get the follow response time value
     #[cfg(feature = "editor")]
-    let follow_time = values.node_follow_response_time_s.value();
+    let follow_time = node_follow_response_time_s.value();
     #[cfg(not(feature = "editor"))]
-    let follow_time = values.node_follow_response_time_s.value()[0];
+    let follow_time = node_follow_response_time_s.value()[0];
 
     let siren_activation: An<SirenActivation> =
         An(siren_control) >> follow::<S>(follow_time as S) >> activation_snoop;
 
     // Stack inputs for siren (5 inputs total: excitement + 4 fine-tuned values)
     let siren_output: An<SirenWithInputs> = (siren_activation
-        | values.siren_base_hz.clone()
-        | values.siren_max_frequency_hz.clone()
-        | values.siren_excitement_pause_limit.clone()
-        | values.siren_base_pause_duration.clone())
+        | siren_base_hz
+        | siren_max_frequency_hz
+        | siren_excitement_pause_limit
+        | siren_base_pause_duration)
         >> siren::<S>();
 
     // Formants with base_q as input
-    let formant1: An<FormantFilter<1>> = (pass() | values.formant_base_q.clone())
+    let formant1: An<FormantFilter<1>> = (pass() | formant_base_q.clone())
         >> formant::<1>(band_control.clone(), config.base_frequency as S);
-    let formant2: An<FormantFilter<2>> = (pass() | values.formant_base_q.clone())
+    let formant2: An<FormantFilter<2>> = (pass() | formant_base_q.clone())
         >> formant::<2>(band_control.clone(), config.base_frequency as S);
-    let formant3: An<FormantFilter<3>> = (pass() | values.formant_base_q.clone())
-        >> formant::<3>(band_control.clone(), config.base_frequency as S);
+    let formant3: An<FormantFilter<3>> =
+        (pass() | formant_base_q) >> formant::<3>(band_control.clone(), config.base_frequency as S);
 
     let formants: An<FormantBank> = (formant1 * 1.0) | (formant2 * 0.8) | (formant3 * 0.6);
 
-    let bell_filter: An<BellFilter> = (pass()
-        | constant(config.base_frequency as f32)
-        | values.node_bell_q.clone()
-        | values.node_bell_gain_db.clone())
-        >> bell();
+    let bell_filter: An<BellFilter> =
+        (pass() | constant(config.base_frequency as f32) | node_bell_q | node_bell_gain_db)
+            >> bell();
 
     siren_output
         >> split::<U2>()
@@ -147,7 +157,7 @@ fn create_node(
         >> split::<U3>()
         >> formants
         >> join::<U3>()
-        >> super::chorus::chorus(config.key.idx() as u64, 0.05, 0.75, 0.75)
+        >> super::chorus::chorus(config.key.idx() as u64, 0.15, 0.75, 0.75)
         >> bell_filter
         >> output_snoop
 }

@@ -18,6 +18,38 @@ pub enum MenuItem {
     },
 }
 
+impl PartialEq for MenuItem {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                MenuItem::Navigate {
+                    route: r1,
+                    icon: i1,
+                    ..
+                },
+                MenuItem::Navigate {
+                    route: r2,
+                    icon: i2,
+                    ..
+                },
+            ) => r1 == r2 && i1 == i2,
+            (
+                MenuItem::Action {
+                    label: l1,
+                    icon: i1,
+                    ..
+                },
+                MenuItem::Action {
+                    label: l2,
+                    icon: i2,
+                    ..
+                },
+            ) => l1 == l2 && i1 == i2,
+            _ => false,
+        }
+    }
+}
+
 impl MenuItem {
     pub fn icon(&self) -> &'static str {
         match self {

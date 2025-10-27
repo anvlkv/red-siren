@@ -79,7 +79,12 @@ pub fn ContentPage(
     let show_back_button = Signal::derive(move || !no_back_button && !is_secondary_window());
 
     view! {
-        <div class="w-full h-full flex items-center justify-center">
+        <div class=move || {
+            format!(
+                "{} flex items-center justify-center",
+                if is_secondary_window() { "w-screen h-screen" } else { "w-full h-full" },
+            )
+        }>
             <Card class=merged_card_class card_animation_direction first_appear=first_appear>
                 <div class="flex items-center justify-between flex-wrap gap-4 mb-6 w-full">
                     <Show when=move || show_back_button()>

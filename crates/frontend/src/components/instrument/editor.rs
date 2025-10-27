@@ -3,6 +3,22 @@ use tauri_use::{use_command, use_invoke, UseTauriReturn, UseTauriWithReturn};
 
 use crate::components::{Button, Fold};
 
+const FREQ_RATIO_MAX: f32 = 4.0;
+const FREQ_RATIO_MIN: f32 = 0.001;
+const FREQ_RATIO_STEP: f32 = 0.001;
+
+const Q_MAX: f32 = 10.0;
+const Q_MIN: f32 = 0.001;
+const Q_STEP: f32 = 0.001;
+
+const GAIN_MAX: f32 = 24.0;
+const GAIN_MIN: f32 = -24.0;
+const GAIN_STEP: f32 = 0.1;
+
+const TIME_MAX: f32 = 10.0;
+const TIME_MIN: f32 = 0.01;
+const TIME_STEP: f32 = 0.01;
+
 #[component]
 pub fn EditorOverlay() -> impl IntoView {
     // Local state for form values
@@ -124,9 +140,9 @@ pub fn EditorOverlay() -> impl IntoView {
                             value=Signal::derive(move || {
                                 finetuned_values().siren_base_pause_duration
                             })
-                            min=0.01
-                            max=1.0
-                            step=0.01
+                            min=TIME_MIN
+                            max=TIME_MAX
+                            step=TIME_STEP
                             on_input=Callback::new(move |val| {
                                 set_finetuned_values
                                     .update(|values| {
@@ -144,9 +160,9 @@ pub fn EditorOverlay() -> impl IntoView {
                             value=Signal::derive(move || {
                                 finetuned_values().filter_switch_follow_response_s
                             })
-                            min=0.001
-                            max=0.2
-                            step=0.001
+                            min=TIME_MIN
+                            max=TIME_MAX
+                            step=TIME_STEP
                             on_input=Callback::new(move |val| {
                                 set_finetuned_values
                                     .update(|values| {
@@ -155,139 +171,157 @@ pub fn EditorOverlay() -> impl IntoView {
                             })
                         />
 
-                        <EditorRangeSlider
-                            label="Allpass Q"
-                            value=Signal::derive(move || { finetuned_values().filter_allpass_q })
-                            min=0.1
-                            max=2.0
-                            step=0.01
-                            on_input=Callback::new(move |val| {
-                                set_finetuned_values
-                                    .update(|values| {
-                                        values.filter_allpass_q = val;
-                                    });
-                            })
-                        />
+                        <div class="flex gap-2">
+                            <fieldset class="flex flex-col gap-2">
+                                <legend>"Active key"</legend>
+                                <EditorRangeSlider
+                                    label="Allpass Q"
+                                    value=Signal::derive(move || {
+                                        finetuned_values().filter_allpass_q
+                                    })
+                                    min=Q_MIN
+                                    max=Q_MAX
+                                    step=Q_STEP
+                                    on_input=Callback::new(move |val| {
+                                        set_finetuned_values
+                                            .update(|values| {
+                                                values.filter_allpass_q = val;
+                                            });
+                                    })
+                                />
 
-                        <EditorRangeSlider
-                            label="Moog Q"
-                            value=Signal::derive(move || { finetuned_values().filter_moog_q })
-                            min=0.1
-                            max=2.0
-                            step=0.01
-                            on_input=Callback::new(move |val| {
-                                set_finetuned_values
-                                    .update(|values| {
-                                        values.filter_moog_q = val;
-                                    });
-                            })
-                        />
+                                <EditorRangeSlider
+                                    label="Moog Q"
+                                    value=Signal::derive(move || {
+                                        finetuned_values().filter_moog_q
+                                    })
+                                    min=Q_MIN
+                                    max=Q_MAX
+                                    step=Q_STEP
+                                    on_input=Callback::new(move |val| {
+                                        set_finetuned_values
+                                            .update(|values| {
+                                                values.filter_moog_q = val;
+                                            });
+                                    })
+                                />
 
-                        <EditorRangeSlider
-                            label="Allpass freq ratio"
-                            value=Signal::derive(move || {
-                                finetuned_values().filter_allpass_freq_ratio
-                            })
-                            min=0.1
-                            max=2.0
-                            step=0.01
-                            on_input=Callback::new(move |val| {
-                                set_finetuned_values
-                                    .update(|values| {
-                                        values.filter_allpass_freq_ratio = val;
-                                    });
-                            })
-                        />
+                                <EditorRangeSlider
+                                    label="Allpass freq ratio"
+                                    value=Signal::derive(move || {
+                                        finetuned_values().filter_allpass_freq_ratio
+                                    })
+                                    min=Q_MIN
+                                    max=Q_MAX
+                                    step=Q_STEP
+                                    on_input=Callback::new(move |val| {
+                                        set_finetuned_values
+                                            .update(|values| {
+                                                values.filter_allpass_freq_ratio = val;
+                                            });
+                                    })
+                                />
 
-                        <EditorRangeSlider
-                            label="Moog freq ratio"
-                            value=Signal::derive(move || {
-                                finetuned_values().filter_moog_freq_ratio
-                            })
-                            min=0.1
-                            max=2.0
-                            step=0.01
-                            on_input=Callback::new(move |val| {
-                                set_finetuned_values
-                                    .update(|values| {
-                                        values.filter_moog_freq_ratio = val;
-                                    });
-                            })
-                        />
+                                <EditorRangeSlider
+                                    label="Moog freq ratio"
+                                    value=Signal::derive(move || {
+                                        finetuned_values().filter_moog_freq_ratio
+                                    })
+                                    min=FREQ_RATIO_MIN
+                                    max=FREQ_RATIO_MAX
+                                    step=FREQ_RATIO_STEP
+                                    on_input=Callback::new(move |val| {
+                                        set_finetuned_values
+                                            .update(|values| {
+                                                values.filter_moog_freq_ratio = val;
+                                            });
+                                    })
+                                />
+                            </fieldset>
+                            <fieldset>
+                                <legend>"Plain key"</legend>
+                                <EditorRangeSlider
+                                    label="Shelf freq ratio"
+                                    value=Signal::derive(move || {
+                                        finetuned_values().filter_shelf_freq_ratio
+                                    })
+                                    min=FREQ_RATIO_MIN
+                                    max=FREQ_RATIO_MAX
+                                    step=FREQ_RATIO_STEP
+                                    on_input=Callback::new(move |val| {
+                                        set_finetuned_values
+                                            .update(|values| {
+                                                values.filter_shelf_freq_ratio = val;
+                                            });
+                                    })
+                                />
 
-                        <EditorRangeSlider
-                            label="Shelf freq ratio"
-                            value=Signal::derive(move || {
-                                finetuned_values().filter_shelf_freq_ratio
-                            })
-                            min=0.1
-                            max=2.0
-                            step=0.01
-                            on_input=Callback::new(move |val| {
-                                set_finetuned_values
-                                    .update(|values| {
-                                        values.filter_shelf_freq_ratio = val;
-                                    });
-                            })
-                        />
+                                <EditorRangeSlider
+                                    label="Shelf Q"
+                                    value=Signal::derive(move || {
+                                        finetuned_values().filter_shelf_q
+                                    })
+                                    min=Q_MIN
+                                    max=Q_MAX
+                                    step=Q_STEP
+                                    on_input=Callback::new(move |val| {
+                                        set_finetuned_values
+                                            .update(|values| {
+                                                values.filter_shelf_q = val;
+                                            });
+                                    })
+                                />
 
-                        <EditorRangeSlider
-                            label="Shelf Q"
-                            value=Signal::derive(move || { finetuned_values().filter_shelf_q })
-                            min=0.1
-                            max=2.0
-                            step=0.01
-                            on_input=Callback::new(move |val| {
-                                set_finetuned_values
-                                    .update(|values| {
-                                        values.filter_shelf_q = val;
-                                    });
-                            })
-                        />
+                                <EditorRangeSlider
+                                    label="Shelf Gain dB"
+                                    value=Signal::derive(move || {
+                                        finetuned_values().filter_shelf_gain
+                                    })
+                                    min=GAIN_MIN
+                                    max=GAIN_MAX
+                                    step=GAIN_STEP
+                                    on_input=Callback::new(move |val| {
+                                        set_finetuned_values
+                                            .update(|values| {
+                                                values.filter_shelf_gain = val;
+                                            });
+                                    })
+                                />
 
-                        <EditorRangeSlider
-                            label="Shelf Gain dB"
-                            value=Signal::derive(move || { finetuned_values().filter_shelf_gain })
-                            min=-24.0
-                            max=24.0
-                            step=0.1
-                            on_input=Callback::new(move |val| {
-                                set_finetuned_values
-                                    .update(|values| {
-                                        values.filter_shelf_gain = val;
-                                    });
-                            })
-                        />
+                                <EditorRangeSlider
+                                    label="Pass freq ratio"
+                                    value=Signal::derive(move || {
+                                        finetuned_values().filter_pass_freq_ratio
+                                    })
+                                    min=FREQ_RATIO_MIN
+                                    max=FREQ_RATIO_MAX
+                                    step=FREQ_RATIO_STEP
+                                    on_input=Callback::new(move |val| {
+                                        set_finetuned_values
+                                            .update(|values| {
+                                                values.filter_pass_freq_ratio = val;
+                                            });
+                                    })
+                                />
 
-                        <EditorRangeSlider
-                            label="Pass freq ratio"
-                            value=Signal::derive(move || {
-                                finetuned_values().filter_pass_freq_ratio
-                            })
-                            min=0.1
-                            max=2.0
-                            step=0.01
-                            on_input=Callback::new(move |val| {
-                                set_finetuned_values
-                                    .update(|values| {
-                                        values.filter_pass_freq_ratio = val;
-                                    });
-                            })
-                        />
+                                <EditorRangeSlider
+                                    label="Pass Q"
+                                    value=Signal::derive(move || {
+                                        finetuned_values().filter_pass_q
+                                    })
+                                    min=Q_MIN
+                                    max=Q_MAX
+                                    step=Q_STEP
+                                    on_input=Callback::new(move |val| {
+                                        set_finetuned_values
+                                            .update(|values| {
+                                                values.filter_pass_q = val;
+                                            });
+                                    })
+                                />
+                            </fieldset>
+                        </div>
 
-                        <EditorRangeSlider
-                            label="Pass Q"
-                            value=Signal::derive(move || { finetuned_values().filter_pass_q })
-                            min=0.1
-                            max=2.0
-                            step=0.01
-                            on_input=Callback::new(move |val| {
-                                set_finetuned_values
-                                    .update(|values| {
-                                        values.filter_pass_q = val;
-                                    });
-                            })
-                        />
                     </fieldset>
 
                     <fieldset class="flex flex-col gap-2">
@@ -298,9 +332,9 @@ pub fn EditorOverlay() -> impl IntoView {
                             value=Signal::derive(move || {
                                 finetuned_values().node_follow_response_time_s
                             })
-                            min=0.01
-                            max=1.0
-                            step=0.001
+                            min=TIME_MIN
+                            max=TIME_MAX
+                            step=TIME_STEP
                             on_input=Callback::new(move |val| {
                                 set_finetuned_values
                                     .update(|values| {
@@ -312,9 +346,9 @@ pub fn EditorOverlay() -> impl IntoView {
                         <EditorRangeSlider
                             label="Bell Q"
                             value=Signal::derive(move || { finetuned_values().node_bell_q })
-                            min=0.01
-                            max=1.5
-                            step=0.001
+                            min=Q_MIN
+                            max=Q_MAX
+                            step=Q_STEP
                             on_input=Callback::new(move |val| {
                                 set_finetuned_values
                                     .update(|values| {
@@ -326,9 +360,9 @@ pub fn EditorOverlay() -> impl IntoView {
                         <EditorRangeSlider
                             label="Bell Gain dB"
                             value=Signal::derive(move || { finetuned_values().node_bell_gain_db })
-                            min=0.0
-                            max=10.0
-                            step=0.1
+                            min=GAIN_MIN
+                            max=GAIN_MAX
+                            step=GAIN_STEP
                             on_input=Callback::new(move |val| {
                                 set_finetuned_values
                                     .update(|values| {
@@ -344,9 +378,9 @@ pub fn EditorOverlay() -> impl IntoView {
                         <EditorRangeSlider
                             label="Base Q"
                             value=Signal::derive(move || { finetuned_values().formant_base_q })
-                            min=0.1
-                            max=2.0
-                            step=0.01
+                            min=Q_MIN
+                            max=Q_MAX
+                            step=Q_STEP
                             on_input=Callback::new(move |val| {
                                 set_finetuned_values
                                     .update(|values| {
@@ -425,9 +459,10 @@ fn EditorRangeSlider(
 ) -> impl IntoView {
     view! {
         <label class="flex flex-col gap-1">
-            <span class="block">{move || format!("{label}: {:.3}", value())}</span>
+            <span class="block w-full">{label}</span>
             <input
                 type="range"
+                class="w-48"
                 min=min.to_string()
                 max=max.to_string()
                 step=step.to_string()
@@ -438,6 +473,7 @@ fn EditorRangeSlider(
                     }
                 }
             />
+            <span class="block w-full text-right">{move || format!("{:.3}", value())}</span>
         </label>
     }
 }

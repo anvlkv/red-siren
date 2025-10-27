@@ -23,18 +23,24 @@ pub fn Tune() -> impl IntoView {
     let UseTauriResourceReturn { refetch, .. } =
         use_tauri_resource::<common::tuner::Config>(common::commands::tuner::CONFIG);
 
-    let (menu_items, _set_menu_items) = signal(vec![
-        MenuItem::Navigate {
-            route: RouteId::Play,
-            icon: "play",
-            label: "Play",
-        },
-        MenuItem::Navigate {
-            route: RouteId::About,
-            icon: "info",
-            label: "About",
-        },
-    ]);
+    let menu_items = Memo::new(move |_| {
+        if is_secondary_window() {
+            vec![]
+        } else {
+            vec![
+                MenuItem::Navigate {
+                    route: RouteId::Play,
+                    icon: "play",
+                    label: "Play",
+                },
+                MenuItem::Navigate {
+                    route: RouteId::About,
+                    icon: "info",
+                    label: "About",
+                },
+            ]
+        }
+    });
 
     let LayoutContextReturn { orientation, .. } = expect_layout_contex();
 
@@ -69,20 +75,18 @@ pub fn Tune() -> impl IntoView {
     view! {
         <div class="relative w-full h-full">
             <Tuner />
-            <Show when=move || !is_secondary_window()>
-                <CompactMenu items=menu_items placement=placement>
-                    <Button
-                        on:click=move |_| on_reset.run(())
-                        size=UiSize::Sm
-                        variant=UiVariant::Outline
-                        placement=placement
-                        attr:r#type="reset"
-                    >
-                        <Icon name="reset" size=UiSize::Sm />
-                        <span class="inline-block flex-grow text-center">Reset</span>
-                    </Button>
-                </CompactMenu>
-            </Show>
+            <CompactMenu items=menu_items placement=placement>
+                <Button
+                    on:click=move |_| on_reset.run(())
+                    size=UiSize::Sm
+                    variant=UiVariant::Outline
+                    placement=placement
+                    attr:r#type="reset"
+                >
+                    <Icon name="reset" size=UiSize::Sm />
+                    <span class="inline-block flex-grow text-center">Reset</span>
+                </Button>
+            </CompactMenu>
         </div>
     }
 }

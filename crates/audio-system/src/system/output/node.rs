@@ -102,18 +102,17 @@ fn create_node(
         ..
     } = handles;
 
-    let source: An<SourceOscillator> = ((super::abs::abs() >> clip_to(0.75, 1.0))
+    let source: An<SourceOscillator> = ((super::abs::abs() >> clip_to(0.95, 1.0))
         * constant(config.base_frequency as f32))
         >> split::<U2>()
         >> (sine_phase::<S>(config.phase as f32) | saw() | An(band_control.clone()))
         >> super::crossfade::equal_power_crossfade();
 
     // Get the follow response time value
-    let follow_time_node = values.node_follow_response_time_s.clone();
     #[cfg(feature = "editor")]
-    let follow_time = follow_time_node.value();
+    let follow_time = values.node_follow_response_time_s.value();
     #[cfg(not(feature = "editor"))]
-    let follow_time = follow_time_node.value()[0];
+    let follow_time = values.node_follow_response_time_s.value()[0];
 
     let siren_activation: An<SirenActivation> =
         An(siren_control) >> follow::<S>(follow_time as S) >> activation_snoop;

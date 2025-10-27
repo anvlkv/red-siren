@@ -93,7 +93,7 @@ pub fn EditorOverlay() -> impl IntoView {
                                 finetuned_values().siren_max_frequency_hz
                             })
                             min=100.0
-                            max=5000.0
+                            max=15000.0
                             step=1.0
                             on_input=Callback::new(move |val| {
                                 set_finetuned_values
@@ -351,7 +351,7 @@ fn EditorRangeSlider(
 ) -> impl IntoView {
     view! {
         <label class="flex flex-col gap-1">
-            <span class="block">{move || format!("{label}: {:.6}", value())}</span>
+            <span class="block">{move || format!("{label}: {:.3}", value())}</span>
             <input
                 type="range"
                 min=min.to_string()

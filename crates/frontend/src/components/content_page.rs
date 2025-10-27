@@ -76,11 +76,13 @@ pub fn ContentPage(
         );
     });
 
+    let show_back_button = Signal::derive(move || !no_back_button && !is_secondary_window());
+
     view! {
         <div class="w-full h-full flex items-center justify-center">
             <Card class=merged_card_class card_animation_direction first_appear=first_appear>
                 <div class="flex items-center justify-between flex-wrap gap-4 mb-6 w-full">
-                    <Show when=move || { !no_back_button && !is_secondary_window() }>
+                    <Show when=move || show_back_button()>
                         <Button
                             size=UiSize::Md
                             variant=UiVariant::Outline
@@ -90,7 +92,12 @@ pub fn ContentPage(
                             <span class="inline-block ml-2 flex-grow text-center">Back</span>
                         </Button>
                     </Show>
-                    <h1 class="block flex-grow md:text-5xl text-2xl text-center italic">{title}</h1>
+                    <h1 class=move || {
+                        format!(
+                            "block flex-grow md:text-5xl text-2xl italic {}",
+                            if show_back_button() { "text-right" } else { "text-center" },
+                        )
+                    }>{title}</h1>
                 </div>
                 {children()}
             </Card>

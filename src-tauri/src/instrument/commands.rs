@@ -7,7 +7,7 @@ use common::instrument::{
     events::{ActivationSourcePayload, PlaybackStatePayload},
     Layout,
 };
-use common::{NodeKey, NodeKeyRegistry};
+use common::NodeKey;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::{health::HealthSetupState, instrument::engine::InstrumentEngine};
@@ -20,19 +20,20 @@ pub fn instrument_playback_start(state: State<'_, InstrumentEngine>, app: AppHan
     match state.start_playback()? {
         true => {
             log::info!("Starting playback");
-            app.emit(
-                common::instrument::events::PLAYBACK_STATE,
-                PlaybackStatePayload { playing: true },
-            )
-            .map_err(|e| InstrumentError::ResumeFailed {
-                detail: Some(e.to_string()),
-            })?;
-            log::info!("Emitted playback state: playing");
         }
         false => {
             log::warn!("Playback already active; no action taken");
         }
     }
+
+    app.emit(
+        common::instrument::events::PLAYBACK_STATE,
+        PlaybackStatePayload { playing: true },
+    )
+    .map_err(|e| InstrumentError::ResumeFailed {
+        detail: Some(e.to_string()),
+    })?;
+    log::info!("Emitted playback state: playing");
 
     Ok(())
 }
@@ -402,7 +403,7 @@ pub fn instrument_update_band_control(
 
     // Validate NodeKey against current layout
     let layout = state.layout();
-    let registry = NodeKeyRegistry::new(layout.num_groups.get(), layout.num_keys_per_group.get());
+    let registry = layout.registry();
     let node_key = match registry.create_key(group, key) {
         Ok(key) => key,
         Err(err) => {
@@ -449,7 +450,7 @@ pub fn instrument_update_key_control(
 
     // Validate NodeKey against current layout
     let layout = state.layout();
-    let registry = NodeKeyRegistry::new(layout.num_groups.get(), layout.num_keys_per_group.get());
+    let registry = layout.registry();
     let node_key = match registry.create_key(group, key) {
         Ok(key) => key,
         Err(err) => {

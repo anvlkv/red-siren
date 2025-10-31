@@ -72,10 +72,12 @@ pub fn Tune() -> impl IntoView {
         }
     });
 
+    let title = Signal::derive(move || if is_secondary_window(){ Some("Tune")} else {None});
+
     view! {
         <div class="relative w-full h-full">
             <Tuner />
-            <CompactMenu items=menu_items placement=placement>
+            <CompactMenu items=menu_items placement hide_home=is_secondary_window title>
                 <Button
                     on:click=move |_| on_reset.run(())
                     size=UiSize::Sm

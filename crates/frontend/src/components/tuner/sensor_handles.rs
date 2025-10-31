@@ -171,7 +171,7 @@ pub fn SensorHandle(
                                     magnitude.min(current_sensor.max_magnitude - 1.0);
 
                                 on_update.run(UpdateSensorPayload {
-                                    index,
+                                    key: current_sensor.key,
                                     min_frequency: constrained_min_freq,
                                     min_magnitude: constrained_min_mag,
                                     max_frequency: current_sensor.max_frequency,
@@ -237,7 +237,7 @@ pub fn SensorHandle(
                                     magnitude.max(current_sensor.min_magnitude + 1.0);
 
                                 on_update.run(UpdateSensorPayload {
-                                    index,
+                                    key: current_sensor.key,
                                     min_frequency: current_sensor.min_frequency,
                                     min_magnitude: current_sensor.min_magnitude,
                                     max_frequency: constrained_max_freq,

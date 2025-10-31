@@ -8,7 +8,6 @@ use crate::{NodeKey, NodeKeyRegistry};
 #[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     pub sensor_data: Vec<SensorData>,
-    pub fft_size: usize,
     pub sample_rate: f32,
 }
 
@@ -22,6 +21,28 @@ pub struct SensorData {
 }
 
 impl Config {
+    pub fn new(tuner_layout: Layout, sample_rate: f32, registry: NodeKeyRegistry) -> Self {
+        // Calculate total keys from layout - ensure consistency
+        let total_keys = registry.total_keys();
+
+        // Validate total_keys matches tuner layout
+        if total_keys != tuner_layout.num_sensors.get() as usize {
+            log::warn!(
+                "Tuner layout total keys mismatch: registry={}, layout={}",
+                total_keys,
+                tuner_layout.num_sensors.get()
+            );
+        }
+
+        // Generate logarithmically spaced frequency ranges
+        let sensor_data = generate_default_sensors(total_keys, &registry);
+
+        Self {
+            sensor_data,
+            sample_rate,
+        }
+    }
+
     pub fn frequency_magnitude_to_space(
         &self,
         layout: &Layout,
@@ -119,41 +140,8 @@ impl Config {
     }
 }
 
-impl From<crate::instrument::Layout> for Config {
-    fn from(layout: crate::instrument::Layout) -> Self {
-        // Use existing Layout conversion
-        let tuner_layout: Layout = layout.into();
-
-        // Calculate total keys from layout - ensure consistency
-        let registry =
-            NodeKeyRegistry::new(layout.num_groups.get(), layout.num_keys_per_group.get());
-        let total_keys = registry.total_keys();
-
-        // Validate total_keys matches tuner layout
-        if total_keys != tuner_layout.num_sensors.get() as usize {
-            log::warn!(
-                "Tuner layout total keys mismatch: registry={}, layout={}",
-                total_keys,
-                tuner_layout.num_sensors.get()
-            );
-        }
-
-        // Generate logarithmically spaced frequency ranges
-        let sensor_data = generate_default_sensors(total_keys, &layout);
-
-        Self {
-            sensor_data,
-            fft_size: 2048,
-            sample_rate: 48000.0,
-        }
-    }
-}
-
 /// Generate default sensors with logarithmic frequency spacing
-fn generate_default_sensors(
-    total_keys: usize,
-    layout: &crate::instrument::Layout,
-) -> Vec<SensorData> {
+fn generate_default_sensors(total_keys: usize, registry: &NodeKeyRegistry) -> Vec<SensorData> {
     let mut sensors = Vec::with_capacity(total_keys);
 
     // Frequency range for sensors (20Hz to 20kHz covers human hearing)
@@ -168,9 +156,6 @@ fn generate_default_sensors(
     // Default magnitude thresholds (dB)
     let default_min_magnitude = -80.0;
     let default_max_magnitude = -20.0;
-
-    // Create NodeKey registry for validation
-    let registry = NodeKeyRegistry::new(layout.num_groups.get(), layout.num_keys_per_group.get());
 
     // Generate sensors for each key using registry
     let mut sensor_idx = 0;

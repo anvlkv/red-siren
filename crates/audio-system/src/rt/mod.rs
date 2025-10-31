@@ -42,7 +42,7 @@ impl From<ActivationSource> for u8 {
 /// - Audio I/O lifecycle (start/stop/pause/resume).
 /// - Activation source switching (mic vs entropy).
 /// - Data snoops (per-string sample snapshots).
-pub trait StreamController {
+pub trait AudioRuntime {
     // Lifecycle
     fn start(
         &self,
@@ -89,6 +89,15 @@ pub trait StreamController {
         &self,
         payload: common::commands::edit::FineTunedValuesPayload
     ) -> common::error::Result<()>;
+
+    // Tuner integration
+    fn start_tuner_only(&self, tuner_config: &TunerConfig) -> common::error::Result<()>;
+    fn poll_tuner_spectrum(&self) -> Option<spectrum_analyzer::FrequencySpectrum>;
+    fn start_tap_tuner_audio(&self) -> common::error::Result<()>;
+    fn stop_tap_tuner_audio(&self) -> common::error::Result<()>;
+    fn update_tuner_config(&self, tuner_config: &TunerConfig) -> common::error::Result<()>;
+
+    fn get_sample_rate(&self) -> f64;
 }
 
 /// Null / no-op runtime used when no concrete backend feature is enabled.
@@ -100,7 +109,7 @@ pub trait StreamController {
 #[derive(Debug, Default)]
 pub struct NullController;
 
-impl StreamController for NullController {
+impl AudioRuntime for NullController {
     #[cfg(feature = "editor")]
     fn get_finetuned_values(&self) -> common::error::Result<common::commands::edit::FineTunedValuesPayload> {
         Err(common::error::InstrumentError::NotInitialized.into())
@@ -178,6 +187,30 @@ impl StreamController for NullController {
     fn get_key_control(&self, _key: common::NodeKey) -> common::error::Result<f32> {
         Ok(0.0)
     }
+
+    fn start_tuner_only(&self, _tuner_config: &TunerConfig) -> common::error::Result<()> {
+        Ok(())
+    }
+
+    fn update_tuner_config(&self, _tuner_config: &TunerConfig) -> common::error::Result<()> {
+        Ok(())
+    }
+
+    fn start_tap_tuner_audio(&self) -> common::error::Result<()> {
+        Ok(())
+    }
+
+    fn stop_tap_tuner_audio(&self) -> common::error::Result<()> {
+        Ok(())
+    }
+
+    fn poll_tuner_spectrum(&self) -> Option<spectrum_analyzer::FrequencySpectrum> {
+        None
+    }
+
+    fn get_sample_rate(&self) -> f64 {
+        44100.0
+    }
 }
 
 /// Factory returning the highest-precedence available runtime.
@@ -187,7 +220,7 @@ impl StreamController for NullController {
 /// 2. rt_web
 /// 3. NullController (fallback)
 #[allow(unreachable_code)]
-pub fn make_stream_controller() -> common::error::Result<Box<dyn StreamController + Send + Sync>> {
+pub fn make_stream_controller() -> common::error::Result<Box<dyn AudioRuntime + Send + Sync>> {
     #[cfg(feature = "rt_cpal")]
     {
         return cpal::make_stream_controller();
@@ -226,45 +259,4 @@ pub async fn check_mic_permission() -> Result<(), common::error::HealthError> {
             detail: Some("no_mic_runtime".into()),
         });
     }
-}
-/// Spectrum / tuner runtime abstraction.
-///
-/// Backend polls `poll_spectrum` periodically (e.g. every 20ms). Implementations
-/// may accumulate samples internally until a full frame (FFT) is ready.
-pub trait TunerRuntime: Send + Sync {
-    fn start(&self, config: &common::tuner::Config) -> common::error::Result<()>;
-    fn stop(&self);
-    fn update_config(&self, config: &common::tuner::Config);
-    /// Poll for latest spectrum data (non-blocking). Returns None if not ready.
-    fn poll_spectrum(&self) -> Option<common::tuner::SpectrumData>;
-}
-/// Null (no-op) tuner runtime.
-#[derive(Default)]
-struct NullTunerRuntime;
-impl TunerRuntime for NullTunerRuntime {
-    fn start(&self, _config: &common::tuner::Config) -> common::error::Result<()> {
-        Ok(())
-    }
-    fn stop(&self) {}
-    fn update_config(&self, _config: &common::tuner::Config) {}
-    fn poll_spectrum(&self) -> Option<common::tuner::SpectrumData> {
-        None
-    }
-}
-/// Factory producing a tuner runtime (CPAL, web, or null).
-#[allow(unreachable_code)]
-pub fn make_tuner_runtime() -> Box<dyn TunerRuntime + Send + Sync> {
-    #[cfg(feature = "rt_cpal")]
-    {
-        if let Some(r) = cpal::make_tuner_runtime() {
-            return r;
-        }
-    }
-    #[cfg(all(not(feature = "rt_cpal"), feature = "rt_web"))]
-    {
-        if let Some(r) = web::make_tuner_runtime() {
-            return r;
-        }
-    }
-    Box::new(NullTunerRuntime)
 }

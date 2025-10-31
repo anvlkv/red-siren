@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::NodeKey;
+
 /// Spectrum data from FFT analysis
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -33,7 +35,7 @@ pub struct SpectrumData {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSensorPayload {
     /// Index of the sensor to update
-    pub index: usize,
+    pub key: NodeKey,
 
     /// Minimum frequency in Hz
     pub min_frequency: f32,

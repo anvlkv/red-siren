@@ -1,5 +1,5 @@
 pub mod input;
-mod output;
+pub mod output;
 pub mod values;
 
 use std::collections::HashMap;
@@ -18,7 +18,16 @@ pub struct NodeHandles {
     pub key_control: Shared,
 }
 
+pub struct SensorHandles {
+    pub key: NodeKey,
+    pub min_frequency: Shared,
+    pub max_frequency: Shared,
+    pub min_magnitude: Shared,
+    pub max_magnitude: Shared,
+}
+
 /// Create output subsystem for live playback.
+#[must_use]
 pub fn create_output_system(
     config: &common::instrument::Config,
     net: &mut Net,
@@ -40,13 +49,16 @@ pub fn create_output_system(
     }
 }
 
+#[must_use]
 pub fn create_input_system(
     config: &common::tuner::Config,
     net: &mut Net,
     activations: HashMap<NodeKey, Shared>,
     source: ActivationSource,
+    spectrum_thb: &input::analyzer::SpectrumBuffer,
+    tap_channel: usize,
     #[cfg(feature = "editor")] values: &FineTunedValues,
-) {
+) -> Vec<SensorHandles> {
     #[cfg(not(feature = "editor"))]
     let values = &FineTunedValues::new();
 
@@ -55,11 +67,13 @@ pub fn create_input_system(
     match source {
         ActivationSource::Mic => {
             // Use FFT analyzer for microphone input
-            input::sensors_system(config, net, activations, values)
+            input::sensors_system(config, net, activations, values, spectrum_thb, tap_channel)
         }
         ActivationSource::Entropy => {
             // Use random activator for entropy source
-            input::randomized_system(config, net, activations)
+            input::randomized_system(config, net, activations);
+
+            vec![]
         }
     }
 }

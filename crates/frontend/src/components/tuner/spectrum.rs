@@ -126,7 +126,6 @@ fn generate_spectrum_path(
     // Use Config mapping for coordinates
     let cfg = Config {
         sensor_data: vec![],
-        fft_size: 0,
         sample_rate,
     };
 

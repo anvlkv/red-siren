@@ -12,7 +12,9 @@ mod integration_tests {
     #[cfg(not(feature = "hi_fi"))]
     use fundsp::hacker32::prelude::*;
     use fundsp::net::Net;
+    use fundsp::thingbuf::ThingBuf;
     use std::collections::HashMap;
+    use std::sync::Arc;
 
     fn create_test_instrument_config() -> InstrumentConfig {
         // Create test config with 2 groups, 2 nodes each (minimum required)
@@ -66,7 +68,6 @@ mod integration_tests {
     fn create_test_tuner_config() -> TunerConfig {
         TunerConfig {
             sample_rate: 44100.0,
-            fft_size: 2048,
             sensor_data: vec![
                 SensorData {
                     key: NodeKey::new(0, 0),
@@ -106,7 +107,7 @@ mod integration_tests {
         let tuner_config = create_test_tuner_config();
 
         // Create output system first
-        let mut net = Net::new(1, 2);
+        let mut net = Net::new(1, 3);
         net.set_sample_rate(44100.0);
 
         #[cfg(feature = "editor")]
@@ -127,12 +128,16 @@ mod integration_tests {
             activations.insert(handle.key, handle.siren_control);
         }
 
+        let spectrum_thb = Arc::new(ThingBuf::new(10));
+
         // Create input system with Mic source (FFT analyzer)
-        create_input_system(
+        let handles = create_input_system(
             &tuner_config,
             &mut net,
             activations.clone(),
             ActivationSource::Mic,
+            &spectrum_thb,
+            2,
             #[cfg(feature = "editor")]
             &values,
         );
@@ -153,6 +158,8 @@ mod integration_tests {
         for control in activations.values() {
             assert_eq!(control.value(), 0.0, "Mic activation should start at 0");
         }
+
+        assert!(!handles.is_empty())
     }
 
     #[test]
@@ -161,7 +168,7 @@ mod integration_tests {
         let tuner_config = create_test_tuner_config();
 
         // Create output system first
-        let mut net = Net::new(1, 2);
+        let mut net = Net::new(1, 3);
         net.set_sample_rate(44100.0);
 
         #[cfg(feature = "editor")]
@@ -182,12 +189,15 @@ mod integration_tests {
             activations.insert(handle.key, handle.siren_control.clone());
         }
 
+        let spectrum_thb = Arc::new(ThingBuf::new(10));
         // Create input system with Entropy source (RandomActivator)
-        create_input_system(
+        let handles = create_input_system(
             &tuner_config,
             &mut net,
             activations.clone(),
             ActivationSource::Entropy,
+            &spectrum_thb,
+            2,
             #[cfg(feature = "editor")]
             &values,
         );
@@ -210,13 +220,14 @@ mod integration_tests {
 
         // At least one activation should have changed from 0
         // (RandomActivator generates random values)
-        let _any_activation = activations.values().any(|control| control.value() > 0.0);
+        let any_activation = activations.values().any(|control| control.value() > 0.0);
 
-        // Note: We can't guarantee activations will be > 0 immediately
-        // due to randomness and smoothing, but after 1000 ticks,
-        // it's highly likely at least one will have changed.
-        // If this test is flaky, we can increase the iteration count
-        // or check for any change in a different way.
+        assert!(!handles.is_empty());
+
+        assert!(
+            any_activation,
+            "At least one activation should be greater than 0 with Entropy source"
+        );
     }
 
     #[test]
@@ -226,7 +237,7 @@ mod integration_tests {
 
         // Test Mic source first
         {
-            let mut net = Net::new(0, 1);
+            let mut net = Net::new(0, 2);
             net.set_sample_rate(44100.0);
 
             #[cfg(feature = "editor")]
@@ -246,23 +257,26 @@ mod integration_tests {
                 activations.insert(handle.key, handle.siren_control);
             }
 
-            create_input_system(
+            let spectrum_thb = Arc::new(ThingBuf::new(10));
+            let handles = create_input_system(
                 &tuner_config,
                 &mut net,
                 activations,
                 ActivationSource::Mic,
+                &spectrum_thb,
+                1,
                 #[cfg(feature = "editor")]
                 &values,
             );
             net.check();
             net.allocate();
 
-            // Should complete without panic
+            assert!(!handles.is_empty());
         }
 
         // Test Entropy source
         {
-            let mut net = Net::new(0, 5);
+            let mut net = Net::new(0, 6);
             net.set_sample_rate(44100.0);
 
             #[cfg(feature = "editor")]
@@ -282,18 +296,21 @@ mod integration_tests {
                 activations.insert(handle.key, handle.siren_control);
             }
 
-            create_input_system(
+            let spectrum_thb = Arc::new(ThingBuf::new(10));
+            let handles = create_input_system(
                 &tuner_config,
                 &mut net,
                 activations,
                 ActivationSource::Entropy,
+                &spectrum_thb,
+                5,
                 #[cfg(feature = "editor")]
                 &values,
             );
             net.check();
             net.allocate();
 
-            // Should complete without panic
+            assert!(!handles.is_empty());
         }
     }
 
@@ -333,37 +350,5 @@ mod integration_tests {
                 value
             );
         }
-    }
-
-    #[test]
-    fn test_fft_analyzer_multi_frequency_probing() {
-        // This test verifies that the FFT analyzer now tests min, center, and max frequencies
-        use crate::system::input::FFTAnalyzer;
-
-        let config = TunerConfig {
-            sample_rate: 44100.0,
-            fft_size: 2048,
-            sensor_data: vec![SensorData {
-                key: NodeKey::new(0, 0),
-                min_frequency: 100.0,
-                max_frequency: 1000.0,
-                min_magnitude: -40.0,
-                max_magnitude: 0.0,
-            }],
-        };
-
-        let mut controls = HashMap::new();
-        let control = shared(0.0);
-        controls.insert(NodeKey::new(0, 0), control.clone());
-
-        let inner_net = Box::new(pass());
-        let mut analyzer = FFTAnalyzer::new(inner_net, 2048, config, controls);
-
-        analyzer.set_sample_rate(44100.0);
-        analyzer.reset();
-
-        // The analyzer should now be testing three frequency points:
-        // 100 Hz (min), 550 Hz (center), and 1000 Hz (max)
-        // This gives better coverage of the sensor's frequency range
     }
 }

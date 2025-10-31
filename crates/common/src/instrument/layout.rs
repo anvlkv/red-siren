@@ -7,7 +7,7 @@ use crate::{
     instrument::GroupChannel,
     orientation::LayoutOrientation,
     safe_area::{SafeArea, DEFAULT_SAFE_AREA},
-    Line,
+    Line, NodeKeyRegistry,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -94,6 +94,10 @@ impl Layout {
         }
         let required = groups * self.key_band_length + (groups - 1.0) * self.groups_gap;
         ((safe_len - required) / 2.0).max(0.0)
+    }
+
+    pub fn registry(&self) -> NodeKeyRegistry {
+        NodeKeyRegistry::new(self.num_groups.get(), self.num_keys_per_group.get())
     }
 }
 

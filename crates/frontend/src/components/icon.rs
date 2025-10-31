@@ -15,6 +15,7 @@ const RESET_ICON: &str = include_str!("./icon/reset.svg");
 const DARK_ICON: &str = include_str!("./icon/dark.svg");
 const BRIGHT_ICON: &str = include_str!("./icon/bright.svg");
 const SYSTEM_ICON: &str = include_str!("./icon/system.svg");
+const PROBE_ICON: &str = include_str!("./icon/probe.svg");
 
 #[component]
 pub fn Icon(
@@ -57,6 +58,7 @@ pub fn Icon(
                     "dark" => DARK_ICON,
                     "bright" => BRIGHT_ICON,
                     "system" => SYSTEM_ICON,
+                    "probe" => PROBE_ICON,
                     _ => "No such icon",
                 };
                 decorate_svg(raw, size())

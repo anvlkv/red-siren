@@ -4,8 +4,7 @@ pub mod analyzer;
 pub mod preamp;
 pub mod random_activator;
 
-pub use analyzer::{FFTAnalyzer, FFT_WINDOW_SIZE};
-pub use random_activator::RandomActivator;
+use std::collections::HashMap;
 
 use common::tuner::Config;
 use common::NodeKey;
@@ -13,17 +12,23 @@ use common::NodeKey;
 use fundsp::hacker::prelude::*;
 #[cfg(not(feature = "hi_fi"))]
 use fundsp::hacker32::prelude::*;
-use preamp::create_sensors_preamp;
-use std::collections::HashMap;
+use u_num_it::u_num_it;
 
 use crate::system::values::FineTunedValues;
+
+use super::SensorHandles;
+
+pub(crate) use analyzer::FFTAnalyzer;
+pub(crate) use random_activator::RandomActivator;
 
 pub fn sensors_system(
     config: &Config,
     net: &mut Net,
     activations: HashMap<NodeKey, Shared>,
     values: &FineTunedValues,
-) {
+    spectrum_thb: &analyzer::SpectrumBuffer,
+    tap_channel: usize,
+) -> Vec<SensorHandles> {
     log::info!(
         "Creating sensors system with {} sensor configs and {} activation controls",
         config.sensor_data.len(),
@@ -64,25 +69,78 @@ pub fn sensors_system(
         );
     }
 
-    // Create preamp for input calibration
-    let preamp = create_sensors_preamp(values);
+    let sensor_handles = create_sensor_handles(config);
+
+    let sensor_shared = sensor_handles
+        .iter()
+        .flat_map(|h| {
+            [
+                &h.min_frequency,
+                &h.max_frequency,
+                &h.min_magnitude,
+                &h.max_magnitude,
+            ]
+        })
+        .collect::<Vec<&Shared>>();
+
+    let sensor_inputs = sensor_shared.len();
 
     // Create FFT analyzer with siren activation
-    let analyzer = FFTAnalyzer::new(
-        Box::new(preamp),
-        FFT_WINDOW_SIZE,
-        config.clone(),
-        activations,
+    let analyzer = u_num_it!(
+        [
+            0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84,
+            88, 92, 96, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 148, 152, 156,
+            160, 164, 168, 172, 176, 180, 184, 188, 192, 196, 200, 204, 208, 212, 216, 220, 224,
+            228, 232, 236, 240, 244, 248, 252, 256, 260, 264, 268, 272, 276, 280, 284
+        ], // Multiples of 4 up to 284 (71 sensors * 4 params)
+        match sensor_inputs {
+            U => {
+                type SensorInputs = NumType;
+
+                let stacks = preamp::create_sensors_preamp(values)
+                    | stacki::<SensorInputs, _, _>(|i| var(sensor_shared[i as usize]));
+
+                FFTAnalyzer::new(
+                    Box::new(stacks),
+                    config.clone(),
+                    activations,
+                    spectrum_thb.clone(),
+                )
+            }
+            _ => {
+                panic!("unexpected number of sesnsors")
+            }
+        }
     );
 
     // Add analyzer to the network
     let id = net.push(Box::new(analyzer));
     net.connect_input(0, id, 0);
+    net.connect_output(id, 0, tap_channel);
 
     log::info!(
         "Sensors system created successfully with analyzer node id: {:?}",
         id
     );
+
+    sensor_handles
+}
+
+/// Create shared values for sensor parameters
+fn create_sensor_handles(config: &Config) -> Vec<SensorHandles> {
+    let mut handles = Vec::with_capacity(config.sensor_data.len());
+
+    for sensor in &config.sensor_data {
+        handles.push(SensorHandles {
+            key: sensor.key,
+            min_frequency: shared(sensor.min_frequency),
+            max_frequency: shared(sensor.max_frequency),
+            min_magnitude: shared(sensor.min_magnitude),
+            max_magnitude: shared(sensor.max_magnitude),
+        });
+    }
+
+    handles
 }
 
 /// Create a random activation system that bypasses FFT analysis

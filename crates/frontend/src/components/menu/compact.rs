@@ -13,6 +13,8 @@ use super::item::{MenuItem, MenuItemView};
 pub fn CompactMenu(
     #[prop(into)] items: Signal<Vec<MenuItem>>,
     #[prop(into)] placement: Signal<UiPlacement>,
+    #[prop(into, optional)] title: Signal<Option<String>>,
+    #[prop(into, optional)] hide_home: Signal<bool>,
     children: Children,
 ) -> impl IntoView {
     // Materialize children once
@@ -133,14 +135,21 @@ pub fn CompactMenu(
         <div class=edge_container_cls node_ref=el>
             <Card padding="Sm".to_string() class=card_variant card_animation_direction=placement>
                 <div class=inner_flex_class>
-                    <A href=RouteId::Home.as_ref() attr:class="contents">
-                        <h1
-                            class="block md:text-3xl text-xl italic cursor-pointer hover:underline focus:underline"
-                            style=title_style
-                        >
-                            "Red Siren"
-                        </h1>
-                    </A>
+                    <Show when=move || !hide_home()>
+                        <A href=RouteId::Home.as_ref() attr:class="contents">
+                            <h1
+                                class="block md:text-3xl text-xl italic cursor-pointer hover:underline focus:underline"
+                                style=title_style
+                            >
+                                "Red Siren"
+                            </h1>
+                        </A>
+                    </Show>
+                    <Show when=move || title().is_some()>
+                        <h2 class="block md:text-2xl text-lg italic" style=title_style>
+                            {move || title().unwrap_or_default()}
+                        </h2>
+                    </Show>
                     {child_view}
                     {move || {
                         items()

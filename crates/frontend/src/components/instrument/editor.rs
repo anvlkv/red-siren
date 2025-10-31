@@ -3,7 +3,7 @@ use tauri_use::{use_command, use_invoke, UseTauriReturn, UseTauriWithReturn};
 
 use crate::components::{Button, Fold};
 
-const FREQ_RATIO_MAX: f32 = 4.0;
+const FREQ_RATIO_MAX: f32 = 14.0;
 const FREQ_RATIO_MIN: f32 = 0.001;
 const FREQ_RATIO_STEP: f32 = 0.001;
 

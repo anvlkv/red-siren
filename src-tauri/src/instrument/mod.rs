@@ -10,10 +10,11 @@ use tauri::{async_runtime::spawn, App, Emitter, Listener, Manager};
 use crate::setup::WindowState;
 
 pub use commands::*;
+pub use engine::InstrumentEngine;
 
 
 pub fn setup(app: &mut App) -> Result<()> {
-    let is_new = app.manage(engine::InstrumentEngine::new(app.handle()));
+    let is_new = app.manage(engine::InstrumentEngine::new(app.handle())?);
 
     if is_new {
         log::debug!("Instrument engine initialized and managed state created");

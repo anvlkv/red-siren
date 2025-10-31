@@ -10,12 +10,14 @@ use cpal::{
     SampleFormat, Stream, StreamConfig, SupportedStreamConfig,
 };
 
+use crate::util::S;
+
 use super::{Control, ControlInvocationResult, STREAM_TIMEOUT_S};
 
 /// Producer callback type used by the input stream owner thread.
 /// It receives a slice of f64 mono samples (already down-mixed) and
 /// returns the number of samples successfully pushed into its buffer.
-pub type ProdType = dyn FnMut(&[f64]) -> usize + Send;
+pub type ProdType = dyn FnMut(&[S]) -> usize + Send;
 
 /// Spawn a dedicated owner thread that:
 /// - Builds and owns the CPAL input stream (kept on that thread).
@@ -124,13 +126,13 @@ fn run_input(
         cpal::SupportedBufferSize::Unknown => 2048,
     };
     let channels = default_cfg.channels() as usize;
-    let mut data_buff: Vec<f64> = Vec::with_capacity(max_frames * channels);
+    let mut data_buff: Vec<S> = Vec::with_capacity(max_frames * channels);
 
     match default_cfg.sample_format() {
         SampleFormat::F32 => device.build_input_stream(
             config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                log::trace!("input stream tick: {} samples", data.len());
+                log::debug!("input stream callback: received {} f32 samples", data.len());
                 write_data(data, channels, &mut data_buff, &mut produce_sample)
             },
             err_cb,
@@ -139,7 +141,7 @@ fn run_input(
         SampleFormat::I16 => device.build_input_stream(
             config,
             move |data: &[i16], _: &cpal::InputCallbackInfo| {
-                log::trace!("input stream tick: {} samples", data.len());
+                log::debug!("input stream callback: received {} i16 samples", data.len());
                 write_data(data, channels, &mut data_buff, &mut produce_sample)
             },
             err_cb,
@@ -148,7 +150,7 @@ fn run_input(
         SampleFormat::U16 => device.build_input_stream(
             config,
             move |data: &[u16], _: &cpal::InputCallbackInfo| {
-                log::trace!("input stream tick: {} samples", data.len());
+                log::debug!("input stream callback: received {} u16 samples", data.len());
                 write_data(data, channels, &mut data_buff, &mut produce_sample)
             },
             err_cb,
@@ -173,14 +175,15 @@ fn run_input(
 fn write_data<T>(
     input: &[T],
     channels: usize,
-    data_buff: &mut Vec<f64>,
+    data_buff: &mut Vec<S>,
     produce_sample: &mut ProdType,
 ) where
-    T: cpal::SizedSample + dasp_sample::ToSample<f64>,
+    T: cpal::SizedSample + dasp_sample::ToSample<S>,
 {
     let frames = if channels > 0 {
         input.len() / channels
     } else {
+        log::warn!("write_data: channels is 0, no frames to process");
         0
     };
     if data_buff.capacity() < frames {
@@ -188,22 +191,30 @@ fn write_data<T>(
     }
     data_buff.clear();
 
+    log::trace!(
+        "write_data: processing {} frames from {} channels",
+        frames,
+        channels
+    );
+
     if channels <= 1 {
         // Already mono
         data_buff.extend(input.iter().map(|s| s.to_sample()));
     } else {
         // Average across channels per frame
         for f in 0..frames {
-            let mut acc = 0.0f64;
+            let mut acc = 0.0 as S;
             for c in 0..channels {
-                acc += input[f * channels + c].to_sample::<f64>();
+                acc += input[f * channels + c].to_sample::<S>();
             }
-            data_buff.push(acc / channels as f64);
+            data_buff.push(acc / channels as S);
         }
     }
 
     let took = produce_sample(data_buff.as_slice());
     if let Some(remaining) = frames.checked_sub(took).filter(|r| *r > 0) {
-        log::trace!("input stream: produced {took} samples, {remaining} unconsumed");
+        log::debug!("input stream: produced {took} samples, {remaining} unconsumed");
+    } else {
+        log::trace!("input stream: all {} samples consumed", took);
     }
 }

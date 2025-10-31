@@ -14,7 +14,6 @@ fundsp = { workspace = true, default-features = false, features = ["std"] }
 js-sys = { workspace = true, optional = true }
 log = { workspace = true }
 parking_lot = "0.12"
-ringbuf = { workspace = true }
 spectrum-analyzer = "1.7.0"
 u-num-it = "0.3.1"
 wasm-bindgen = { workspace = true, optional = true }

@@ -8,13 +8,13 @@ pub fn About() -> impl IntoView {
         <ContentPage title="About" card_animation_direction=UiPlacement::Left>
             <div class="flex flex-col items-center justify-center gap-6">
                 <h2 class="md:text-2xl text-lg text-bold max-w-md lg:max-w-[42ch] italic">
-                    "Red Siren is a noise chime"
+                    "Red Siren is a noise chime: a call and an answer, a mirror of breath, traffic, kettle, wind. It sings only when you do, a vessel of tone. It does not repeat the world; it refracts it into sound. You will not hear the source; you will hear its answer."
                 </h2>
                 <p class="md:text-xl text-base max-w-md lg:max-w-[42ch] ">
-                    "It pulls the present into focus — a siren's call, loud and true. A sound that blooms, that bends, that sharpens to the edge you set. It is a siren that sings only when you do, a mirror of noise, a vessel of tone."
+                    "Begin as you are. Let chance or the room speak first, or guide it with your hands. Touch the keys; hold several at once. Each touch bends the whole. Slide along them to shift the grain and glow. Place a few quiet listeners where you want it to hear. Tilt the mood toward bright or toward dark."
                 </p>
                 <p class="md:text-xl text-base max-w-md lg:max-w-[42ch] ">
-                    "It hums with what you give it — loud, brief, true. A thousand crystal bowls shattering into light, a frequency tuned to the shape of your breath. Strike it, and it strikes back. Call it, and it calls you forward."
+                    "Sometimes you will know what called it; sometimes not. Play until the edges soften. When you stop, notice what remains."
                 </p>
                 <p class="md:text-xl text-base max-w-md lg:max-w-[42ch] ">
                     "Red Siren is free and open source under the CC‑BY‑SA license — take the code, remix it, and share what you make. If it speaks to you, show some love:"

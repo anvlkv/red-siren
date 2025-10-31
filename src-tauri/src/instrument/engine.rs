@@ -1,11 +1,12 @@
 use parking_lot::RwLock;
 
-use audio_system::rt::{make_stream_controller, ActivationSource, StreamController};
+use audio_system::rt::{make_stream_controller, ActivationSource, AudioRuntime};
 
+use common::error::Result;
 use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout};
 use common::tuner::Config as TunerConfig;
 use mint::Vector2;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 /// Public wrapper so higher layers (commands) only hold one handle.
 pub struct InstrumentEngine {
@@ -14,17 +15,17 @@ pub struct InstrumentEngine {
 }
 
 impl InstrumentEngine {
-    pub fn new(app: &AppHandle) -> Self {
-        InstrumentEngine {
+    pub fn new(app: &AppHandle) -> Result<Self> {
+        Ok(InstrumentEngine {
             app: app.clone(),
             inner: Inner {
                 playing: RwLock::new(false),
                 activation_source: RwLock::new(ActivationSource::default()),
                 layout: RwLock::new(InstrumentLayout::default()),
                 config: RwLock::new(InstrumentConfig::default()),
-                stream_controller: RwLock::new(None),
+                stream_controller: RwLock::new(make_stream_controller()?),
             },
-        }
+        })
     }
 
     pub fn layout(&self) -> InstrumentLayout {
@@ -41,7 +42,7 @@ impl InstrumentEngine {
 
     pub fn start_playback(&self) -> common::error::Result<bool> {
         let tuner_state = self.app.state::<crate::tuner::TunerState>();
-        let tuner_config = tuner_state.tuner_config.read();
+        let tuner_config = tuner_state.tuner_config();
         {
             log::trace!("InstrumentEngine.start_playback()");
             let res = self.inner.start_playback(&tuner_config);
@@ -107,7 +108,7 @@ impl InstrumentEngine {
 
     pub fn set_activation_source(&self, src: ActivationSource) -> common::error::Result<bool> {
         let tuner_state = self.app.state::<crate::tuner::TunerState>();
-        let tuner_config = tuner_state.tuner_config.read();
+        let tuner_config = tuner_state.tuner_config();
         {
             log::trace!("InstrumentEngine.set_activation_source({:?})", src);
             let res = self.inner.set_activation_source(src, &tuner_config);
@@ -122,19 +123,30 @@ impl InstrumentEngine {
                     res.as_ref().err()
                 );
             }
+
+            self.app
+                .emit(
+                    common::instrument::events::ACTIVATION_SRC,
+                    common::instrument::events::ActivationSourcePayload { source: src.into() },
+                )
+                .map_err(|e| common::error::InstrumentError::Emit {
+                    event: common::instrument::events::ACTIVATION_SRC.to_string(),
+                    message: e.to_string(),
+                })?;
+
             res
         }
     }
 
     pub fn set_is_dark(&self, is_dark: bool) -> common::error::Result<()> {
         let tuner_state = self.app.state::<crate::tuner::TunerState>();
-        let tuner_config = tuner_state.tuner_config.read();
+        let tuner_config = tuner_state.tuner_config();
         self.inner.set_is_dark(is_dark, &tuner_config)
     }
 
     pub fn set_size(&self, width: f64, height: f64) -> common::error::Result<()> {
         let tuner_state = self.app.state::<crate::tuner::TunerState>();
-        let tuner_config = tuner_state.tuner_config.read();
+        let tuner_config = tuner_state.tuner_config();
         self.inner.set_size(width, height, &tuner_config)
     }
 
@@ -146,7 +158,7 @@ impl InstrumentEngine {
         left: f32,
     ) -> common::error::Result<()> {
         let tuner_state = self.app.state::<crate::tuner::TunerState>();
-        let tuner_config = tuner_state.tuner_config.read();
+        let tuner_config = tuner_state.tuner_config();
         self.inner
             .set_safe_area(top, right, bottom, left, &tuner_config)
     }
@@ -174,6 +186,24 @@ impl InstrumentEngine {
     pub fn set_key_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()> {
         self.inner.set_key_control(key, value)
     }
+
+    pub fn sample_rate(&self) -> f64 {
+        self.inner.stream_controller.read().get_sample_rate()
+    }
+
+    pub fn poll_spectrum(&self) -> Option<audio_system::FrequencySpectrum> {
+        self.inner.stream_controller.read().poll_tuner_spectrum()
+    }
+
+    pub fn start_tuner_only_stream(&self, tuner_config: &TunerConfig) -> Result<()> {
+        self.inner
+            .stream_controller
+            .read()
+            .start_tuner_only(tuner_config)
+    }
+    pub fn stop_tuner_only_stream(&self) -> Result<()> {
+        self.inner.stream_controller.read().stop()
+    }
 }
 
 /// Internal engine state.
@@ -185,7 +215,7 @@ pub(super) struct Inner {
     config: RwLock<InstrumentConfig>,
 
     // Runtime stream controller (lazy; concrete backend chosen by audio_system::rt)
-    stream_controller: RwLock<Option<Box<dyn StreamController + Send + Sync>>>,
+    stream_controller: RwLock<Box<dyn AudioRuntime + Send + Sync>>,
 }
 
 impl Inner {
@@ -222,21 +252,17 @@ impl Inner {
         }
 
         {
-            let mut controller = self.stream_controller.write();
-            if controller.is_none() {
-                *controller = Some(make_stream_controller()?);
-            }
-            if let Some(ctrl) = controller.as_ref() {
-                let layout = self.layout.read();
-                let config = self.config.read();
-                let source = *self.activation_source.read();
-                log::trace!(
-                    "Inner.start_playback: starting stream with source={:?}",
-                    source
-                );
-                ctrl.start(&layout, &config, source, tuner_config)?;
-                log::trace!("Inner.start_playback: ctrl.start() returned Ok");
-            }
+            let ctrl = self.stream_controller.read();
+
+            let layout = self.layout.read();
+            let config = self.config.read();
+            let source = *self.activation_source.read();
+            log::trace!(
+                "Inner.start_playback: starting stream with source={:?}",
+                source
+            );
+            ctrl.start(&layout, &config, source, tuner_config)?;
+            log::trace!("Inner.start_playback: ctrl.start() returned Ok");
         }
 
         Ok(true)
@@ -247,12 +273,10 @@ impl Inner {
             return Ok(false);
         }
 
-        if let Some(ctrl) = self.stream_controller.read().as_ref() {
-            // Even if stop errors, proceed to mark stopped for consistency
-            log::trace!("Inner.stop_playback: calling ctrl.stop()");
-            let _ = ctrl.stop();
-            log::trace!("Inner.stop_playback: ctrl.stop() returned");
-        }
+        // Even if stop errors, proceed to mark stopped for consistency
+        log::trace!("Inner.stop_playback: calling ctrl.stop()");
+        let _ = self.stream_controller.read().stop();
+        log::trace!("Inner.stop_playback: ctrl.stop() returned");
 
         {
             let mut p = self.playing.write();
@@ -270,11 +294,9 @@ impl Inner {
             return Ok(false);
         }
 
-        if let Some(ctrl) = self.stream_controller.read().as_ref() {
-            log::trace!("Inner.pause_playback: calling ctrl.pause()");
-            ctrl.pause()?;
-            log::trace!("Inner.pause_playback: ctrl.pause() returned");
-        }
+        log::trace!("Inner.pause_playback: calling ctrl.pause()");
+        self.stream_controller.read().pause()?;
+        log::trace!("Inner.pause_playback: ctrl.pause() returned");
 
         {
             let mut p = self.playing.write();
@@ -292,11 +314,9 @@ impl Inner {
             return Ok(false);
         }
 
-        if let Some(ctrl) = self.stream_controller.read().as_ref() {
-            log::trace!("Inner.resume_playback: calling ctrl.resume()");
-            ctrl.resume()?;
-            log::trace!("Inner.resume_playback: ctrl.resume() returned");
-        }
+        log::trace!("Inner.resume_playback: calling ctrl.resume()");
+        self.stream_controller.read().resume()?;
+        log::trace!("Inner.resume_playback: ctrl.resume() returned");
 
         {
             let mut p = self.playing.write();
@@ -330,16 +350,15 @@ impl Inner {
 
         if changed {
             log::trace!("Inner.set_activation_source: changed to {:?}", src);
-            if let Some(ctrl) = self.stream_controller.read().as_ref() {
-                log::trace!("Inner.set_activation_source: notifying stream controller");
-                ctrl.on_activation_source_changed(src)?;
+            let ctrl = self.stream_controller.read();
+            log::trace!("Inner.set_activation_source: notifying stream controller");
+            ctrl.on_activation_source_changed(src)?;
 
-                // Also trigger layout change to ensure proper system recreation with new tuner config
-                let layout = self.layout.read();
-                let config = self.config.read();
-                ctrl.on_layout_changed(&layout, &config, tuner_config)?;
-                log::info!("Recreated audio systems after activation source change");
-            }
+            // Also trigger layout change to ensure proper system recreation with new tuner config
+            let layout = self.layout.read();
+            let config = self.config.read();
+            ctrl.on_layout_changed(&layout, &config, tuner_config)?;
+            log::info!("Recreated audio systems after activation source change");
         } else {
             log::trace!("Inner.set_activation_source: no-op (already {:?})", src);
         }
@@ -367,12 +386,12 @@ impl Inner {
             *cfg = new_cfg;
         }
 
-        if let Some(ctrl) = self.stream_controller.read().as_ref() {
-            let layout = self.layout.read();
-            let config = self.config.read();
-            ctrl.on_layout_changed(&layout, &config, tuner_config)?;
-            log::info!("Recreated audio systems after dark mode change");
-        }
+        let layout = self.layout.read();
+        let config = self.config.read();
+        self.stream_controller
+            .read()
+            .on_layout_changed(&layout, &config, tuner_config)?;
+        log::info!("Recreated audio systems after dark mode change");
 
         Ok(())
     }
@@ -400,12 +419,12 @@ impl Inner {
             *cfg = new_cfg;
         }
 
-        if let Some(ctrl) = self.stream_controller.read().as_ref() {
-            let layout = self.layout.read();
-            let config = self.config.read();
-            ctrl.on_layout_changed(&layout, &config, tuner_config)?;
-            log::info!("Recreated audio systems after size change");
-        }
+        let layout = self.layout.read();
+        let config = self.config.read();
+        self.stream_controller
+            .read()
+            .on_layout_changed(&layout, &config, tuner_config)?;
+        log::info!("Recreated audio systems after size change");
 
         Ok(())
     }
@@ -433,12 +452,12 @@ impl Inner {
             *cfg = new_cfg;
         }
 
-        if let Some(ctrl) = self.stream_controller.read().as_ref() {
-            let layout = self.layout.read();
-            let config = self.config.read();
-            ctrl.on_layout_changed(&layout, &config, tuner_config)?;
-            log::info!("Recreated audio systems after safe area change");
-        }
+        let layout = self.layout.read();
+        let config = self.config.read();
+        self.stream_controller
+            .read()
+            .on_layout_changed(&layout, &config, tuner_config)?;
+        log::info!("Recreated audio systems after safe area change");
 
         Ok(())
     }
@@ -448,55 +467,40 @@ impl Inner {
     // ---------------------------------------------------------------------
 
     fn snapshot_output_snoop(&self, group: usize, key: usize) -> Vec<f32> {
-        if let Some(ctrl) = self.stream_controller.read().as_ref() {
-            return ctrl.snapshot_output_snoop(group, key);
-        }
-        Vec::new()
+        self.stream_controller
+            .read()
+            .snapshot_output_snoop(group, key)
     }
 
     fn snapshot_all_output_snoops(&self) -> Vec<(u8, u8, Vec<f32>)> {
-        if let Some(ctrl) = self.stream_controller.read().as_ref() {
-            return ctrl.snapshot_all_output_snoops();
-        }
-        Vec::new()
+        self.stream_controller.read().snapshot_all_output_snoops()
     }
 
     fn snapshot_activation_snoop(&self, group: usize, key: usize) -> Vec<f32> {
-        if let Some(ctrl) = self.stream_controller.read().as_ref() {
-            return ctrl.snapshot_activation_snoop(group, key);
-        }
-        Vec::new()
+        self.stream_controller
+            .read()
+            .snapshot_activation_snoop(group, key)
     }
 
     fn snapshot_all_activation_snoops(&self) -> Vec<(u8, u8, Vec<f32>)> {
-        if let Some(ctrl) = self.stream_controller.read().as_ref() {
-            return ctrl.snapshot_all_activation_snoops();
-        }
-        Vec::new()
+        self.stream_controller
+            .read()
+            .snapshot_all_activation_snoops()
     }
 
     fn set_band_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()> {
-        if let Some(ctrl) = self.stream_controller.read().as_ref() {
-            return ctrl.set_band_control(key, value);
-        }
-        Ok(())
+        self.stream_controller.read().set_band_control(key, value)
     }
 
     fn set_key_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()> {
-        if let Some(ctrl) = self.stream_controller.read().as_ref() {
-            return ctrl.set_key_control(key, value);
-        }
-        Ok(())
+        self.stream_controller.read().set_key_control(key, value)
     }
 
     #[cfg(feature = "devtools")]
     pub fn get_finetuned_values(
         &self,
     ) -> common::error::Result<common::commands::edit::FineTunedValuesPayload> {
-        if let Some(ctrl) = self.stream_controller.read().as_ref() {
-            return ctrl.get_finetuned_values();
-        }
-        Err(common::error::InstrumentError::NotInitialized.into())
+        self.stream_controller.read().get_finetuned_values()
     }
 
     #[cfg(feature = "devtools")]
@@ -504,9 +508,6 @@ impl Inner {
         &self,
         payload: common::commands::edit::FineTunedValuesPayload,
     ) -> common::error::Result<()> {
-        if let Some(ctrl) = self.stream_controller.read().as_ref() {
-            return ctrl.set_finetuned_values(payload);
-        }
-        Err(common::error::InstrumentError::NotInitialized.into())
+        self.stream_controller.read().set_finetuned_values(payload)
     }
 }

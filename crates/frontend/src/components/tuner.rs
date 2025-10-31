@@ -145,7 +145,7 @@ pub fn Tuner() -> impl IntoView {
 
     // Callback for updating sensors
     let on_update_sensor = Callback::new(move |payload: UpdateSensorPayload| {
-        log::debug!("Updating sensor {}: {:?}", payload.index, payload);
+        log::debug!("Updating sensor: {:#?}", payload);
         update_sensor_invoke(Some((payload, ())));
     });
 

@@ -321,6 +321,9 @@ pub enum TunerError {
 
     #[error("invalid magnitude range: {min_mag} to {max_mag}")]
     InvalidMagnitudeRange { min_mag: f32, max_mag: f32 },
+
+    #[error("missing required parameter: [{0}]")]
+    MissingParameter(String),
 }
 
 impl InstrumentConfigError {

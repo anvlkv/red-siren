@@ -1,35 +1,41 @@
 use std::{
     collections::HashMap,
-    sync::mpsc::{self, Sender},
+    sync::{
+        mpsc::{self, Sender},
+        Arc,
+    },
     thread,
     time::Duration,
 };
 
-use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout};
 use common::tuner::Config as TunerConfig;
 use common::{
+    error::TunerError,
+    instrument::{Config as InstrumentConfig, Layout as InstrumentLayout},
+};
+use common::{
     error::{ControlError, InstrumentError, Result},
-    NodeKey, NodeKeyRegistry,
+    NodeKey,
 };
 use cpal::traits::{DeviceTrait, HostTrait};
 #[cfg(feature = "hi_fi")]
 use fundsp::hacker::prelude::*;
 #[cfg(not(feature = "hi_fi"))]
 use fundsp::hacker32::prelude::*;
+use fundsp::thingbuf::ThingBuf;
 use parking_lot::RwLock;
-use ringbuf::{
-    storage::Heap,
-    traits::{Consumer, Producer, Split},
-    SharedRb,
-};
 
-use crate::rt::{ActivationSource, StreamController};
 #[cfg(feature = "editor")]
 use crate::system::values::{FineTunedSharedValues, FineTunedValues};
+use crate::{
+    rt::{cpal::stream::spawn_owned_input_stream, ActivationSource, AudioRuntime},
+    util::S,
+    SensorHandles,
+};
 
+use super::audio_session;
 use super::stream::{
-    spawn_owned_input_stream, spawn_owned_noise_stream, spawn_owned_output_stream, Control,
-    ControlInvocationResult, GenType, ProdType,
+    spawn_owned_output_stream, Control, ControlInvocationResult, GenType, ProdType,
 };
 
 #[cfg(target_os = "ios")]
@@ -41,6 +47,7 @@ const CONTROL_INVOKE_TIMEOUT_MS: u64 = 500;
 const FADE_DURATION_MS: u64 = 120;
 const FOLLOW_RESPONSE_SECS: f32 = 0.01;
 const BUFFER_DURATION_MS: u64 = 100;
+const SPECTRUM_BUFFER_CAPACITY: usize = 8;
 
 /// CPAL-backed stream controller implementing audio I/O and DSP graph
 /// lifecycle. The higher-level runtime facade instantiates this when the
@@ -51,6 +58,7 @@ struct CpalController {
     dsp_primary_node_id: RwLock<Option<NodeId>>,
     sample_rate: RwLock<Option<f64>>,
     gain_param: RwLock<Option<Shared>>,
+    tuner_tap_gain_param: RwLock<Option<Shared>>,
 
     // Fine-tuned values for editor mode
     #[cfg(feature = "editor")]
@@ -61,20 +69,31 @@ struct CpalController {
     output_thread: RwLock<Option<thread::JoinHandle<()>>>,
 
     // Activation system (input/noise)
-    activation_sender: RwLock<Option<Sender<Control>>>,
-    activation_thread: RwLock<Option<thread::JoinHandle<()>>>,
+    input_sender: RwLock<Option<Sender<Control>>>,
+    input_thread: RwLock<Option<thread::JoinHandle<()>>>,
 
     // Per-string data taps and controls
     activation_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
     output_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
     band_controls: RwLock<HashMap<NodeKey, Shared>>,
     key_controls: RwLock<HashMap<NodeKey, Shared>>,
+    sensor_controls: RwLock<HashMap<NodeKey, SensorHandles>>,
+
+    // Spectrum data tap
+    spectrum_data_thb: crate::system::input::analyzer::SpectrumBuffer,
 
     // Last known state for restarts
     last_layout: RwLock<InstrumentLayout>,
     last_config: RwLock<InstrumentConfig>,
     last_source: RwLock<ActivationSource>,
     last_tuner_config: RwLock<TunerConfig>,
+
+    // devices
+    output_device: RwLock<Option<cpal::Device>>,
+    input_device: RwLock<Option<cpal::Device>>,
+
+    // operation
+    tuner_only_mode: RwLock<bool>,
 }
 
 impl Default for CpalController {
@@ -84,134 +103,282 @@ impl Default for CpalController {
             dsp_primary_node_id: RwLock::new(None),
             sample_rate: RwLock::new(None),
             gain_param: RwLock::new(None),
+            tuner_tap_gain_param: RwLock::new(None),
             #[cfg(feature = "editor")]
             fine_tuned_shared_values: RwLock::new(FineTunedSharedValues::default()),
             control_tx: RwLock::new(None),
             output_thread: RwLock::new(None),
-            activation_sender: RwLock::new(None),
-            activation_thread: RwLock::new(None),
+            input_sender: RwLock::new(None),
+            input_thread: RwLock::new(None),
             activation_snoops: RwLock::new(HashMap::new()),
             output_snoops: RwLock::new(HashMap::new()),
             band_controls: RwLock::new(HashMap::new()),
             key_controls: RwLock::new(HashMap::new()),
+            sensor_controls: RwLock::new(HashMap::new()),
+            spectrum_data_thb: Arc::new(ThingBuf::new(SPECTRUM_BUFFER_CAPACITY)),
             last_layout: RwLock::new(InstrumentLayout::default()),
             last_config: RwLock::new(InstrumentConfig::default()),
             last_source: RwLock::new(ActivationSource::default()),
             last_tuner_config: RwLock::new(TunerConfig::default()),
+            output_device: RwLock::new(None),
+            input_device: RwLock::new(None),
+            tuner_only_mode: RwLock::new(false),
         }
     }
-}
-
-#[cfg(target_os = "ios")]
-#[allow(unexpected_cfgs)]
-unsafe fn configure_ios_audio_session() -> Result<()> {
-    // Get the shared AVAudioSession singleton instance
-    let audio_session: *mut Object = msg_send![class!(AVAudioSession), sharedInstance];
-
-    // Create category string for playAndRecord (duplex audio)
-    let category_str: *mut Object = msg_send![
-        class!(NSString),
-        stringWithUTF8String: "AVAudioSessionCategoryPlayAndRecord\0".as_ptr()
-    ];
-
-    // Create mode string for default mode
-    let mode_str: *mut Object = msg_send![
-        class!(NSString),
-        stringWithUTF8String: "AVAudioSessionModeDefault\0".as_ptr()
-    ];
-
-    // Set category and mode with options
-    // Options: 0x8 = DefaultToSpeaker, 0x4 = AllowBluetooth
-    let options: u64 = 0x8 | 0x4; // DefaultToSpeaker | AllowBluetooth
-    let mut error: *mut Object = std::ptr::null_mut();
-
-    let success: BOOL = msg_send![
-        audio_session,
-        setCategory: category_str
-        mode: mode_str
-        options: options
-        error: &mut error
-    ];
-
-    if success != YES {
-        log::error!("Failed to set iOS audio session category");
-        if !error.is_null() {
-            let description: *mut Object = msg_send![error, localizedDescription];
-            let c_str: *const std::os::raw::c_char = msg_send![description, UTF8String];
-            if !c_str.is_null() {
-                let err_msg = std::ffi::CStr::from_ptr(c_str).to_string_lossy();
-                log::error!("Error details: {}", err_msg);
-            }
-        }
-        return Err(InstrumentError::DeviceUnavailable.into());
-    }
-
-    // Activate the audio session
-    let mut error: *mut Object = std::ptr::null_mut();
-    let success: BOOL = msg_send![
-        audio_session,
-        setActive: YES
-        error: &mut error
-    ];
-
-    if success != YES {
-        log::error!("Failed to activate iOS audio session");
-        if !error.is_null() {
-            let description: *mut Object = msg_send![error, localizedDescription];
-            let c_str: *const std::os::raw::c_char = msg_send![description, UTF8String];
-            if !c_str.is_null() {
-                let err_msg = std::ffi::CStr::from_ptr(c_str).to_string_lossy();
-                log::error!("Error details: {}", err_msg);
-            }
-        }
-        return Err(InstrumentError::DeviceUnavailable.into());
-    }
-
-    log::trace!("iOS audio session configured successfully for duplex audio");
-    Ok(())
-}
-
-#[cfg(target_os = "ios")]
-#[allow(unexpected_cfgs)]
-unsafe fn deactivate_ios_audio_session() {
-    // Deactivate on background thread as it can block for ~0.5 seconds
-    std::thread::spawn(|| {
-        unsafe {
-            let audio_session: *mut Object = msg_send![class!(AVAudioSession), sharedInstance];
-            let mut error: *mut Object = std::ptr::null_mut();
-
-            // Use NotifyOthersOnDeactivation option (0x1)
-            let options: u64 = 0x1;
-            let success: BOOL = msg_send![
-                audio_session,
-                setActive: NO
-                withOptions: options
-                error: &mut error
-            ];
-
-            if success != YES {
-                log::warn!("Failed to deactivate iOS audio session");
-                if !error.is_null() {
-                    let description: *mut Object = msg_send![error, localizedDescription];
-                    let c_str: *const std::os::raw::c_char = msg_send![description, UTF8String];
-                    if !c_str.is_null() {
-                        let err_msg = std::ffi::CStr::from_ptr(c_str).to_string_lossy();
-                        log::warn!("Error details: {}", err_msg);
-                    }
-                }
-            } else {
-                log::trace!("iOS audio session deactivated");
-            }
-        }
-    });
 }
 
 impl CpalController {
-    fn create_network(
+    fn output_device(&self) -> Option<cpal::Device> {
+        { self.output_device.read().clone() }.or_else(|| {
+            let host = cpal::default_host();
+            log::trace!("using CPAL host: {}", host.id().name());
+            let device = host.default_output_device();
+
+            {
+                *self.output_device.write() = device.clone();
+            }
+
+            device
+        })
+    }
+
+    fn sample_rate(&self) -> f64 {
+        { *self.sample_rate.read() }
+            .or_else(|| {
+                self.output_device()
+                    .and_then(|d| d.default_output_config().ok())
+                    .map(|c| {
+                        let sample_rate = c.sample_rate().0;
+                        {
+                            *self.sample_rate.write() = Some(sample_rate as f64);
+                        }
+                        sample_rate as f64
+                    })
+            })
+            .unwrap_or(44100.0)
+    }
+
+    fn input_device(&self) -> Option<cpal::Device> {
+        { self.input_device.read().clone() }
+            .or_else(|| {
+                let device = self.output_device().filter(|d| d.supports_input());
+
+                {
+                    *self.input_device.write() = device.clone();
+                }
+
+                device
+            })
+            .or_else(|| {
+                let host = cpal::default_host();
+                log::trace!("using CPAL host: {}", host.id().name());
+                let device = host.default_input_device();
+
+                {
+                    *self.input_device.write() = device.clone();
+                }
+
+                device
+            })
+    }
+
+    fn start_input_stream(&self) -> Result<Arc<ThingBuf<S>>> {
+        let input_device = self
+            .input_device()
+            .ok_or(InstrumentError::DeviceUnavailable)?;
+
+        let input_device_name = input_device
+            .name()
+            .unwrap_or_else(|e| format!("(error getting name: {e})"));
+        log::debug!("input device: {}", input_device_name);
+        let input_default_cfg = input_device
+            .default_input_config()
+            .map_err(|_| InstrumentError::InputConfigUnavailable)?;
+
+        // Get sample rate from InputStreamManager or use output rate
+        let input_sr = input_default_cfg.sample_rate().0 as f64;
+
+        let samples_per_ms = input_sr / 1000.0;
+        let cap_samples = (samples_per_ms * BUFFER_DURATION_MS as f64).ceil() as usize;
+        let capacity = cap_samples.next_power_of_two();
+
+        let thb = Arc::new(ThingBuf::<S>::new(capacity));
+
+        let stream_cfg = input_default_cfg.config();
+
+        let prod = thb.clone();
+
+        let (input_sx, input_handle) =
+            spawn_owned_input_stream(input_device, input_default_cfg, stream_cfg, move || {
+                Box::new(move |samples: &[S]| -> usize {
+                    let mut took = 0;
+                    for s in samples {
+                        if prod.push(*s).is_err() {
+                            log::warn!("input buffer full");
+                            break;
+                        }
+                        took += 1;
+                    }
+
+                    took
+                }) as Box<ProdType>
+            })?;
+
+        // Persist input thread / control handles.
+        {
+            *self.input_sender.write() = Some(input_sx);
+            *self.input_thread.write() = Some(input_handle);
+        }
+
+        Ok(thb)
+    }
+
+    fn start_output_stream(
+        &self,
+        input_buffer: Option<Arc<ThingBuf<S>>>,
+        mut backend: NetBackend,
+    ) -> Result<()> {
+        let output_device = self
+            .output_device()
+            .ok_or(InstrumentError::DeviceUnavailable)?;
+
+        let output_default_cfg = output_device
+            .default_output_config()
+            .map_err(|_| InstrumentError::OutputConfigUnavailable)?;
+
+        let stream_cfg: cpal::StreamConfig = output_default_cfg.clone().into();
+
+        let output_channels = std::cmp::Ord::min(output_default_cfg.channels(), 2) as usize;
+
+        // Spawn output stream owner.
+        let (tx, handle) = spawn_owned_output_stream(
+            output_device,
+            output_default_cfg,
+            stream_cfg,
+            output_channels,
+            move || {
+                // Activation consumer captured inside closure.
+                let mut in_sample = [0_f32];
+                let mut out_sample = [0_f32; 2];
+                let input_buffer = input_buffer.clone();
+                let next_value = move || {
+                    if let Some(sample) = input_buffer.as_ref().and_then(|a| a.pop()) {
+                        in_sample[0] = sample as f32;
+                    }
+                    backend.tick(&in_sample, &mut out_sample);
+                    (out_sample[0], out_sample[1])
+                };
+                let boxed: Box<GenType> = Box::new(next_value);
+                boxed
+            },
+        )?;
+
+        // Persist output thread / control handles.
+        {
+            *self.control_tx.write() = Some(tx);
+            *self.output_thread.write() = Some(handle);
+        }
+
+        Ok(())
+    }
+
+    fn create_main_network(&self, output_channels: usize, subnet: Net) -> Net {
+        let mut net = Net::new(1, output_channels);
+
+        let main_node_id = net.push(Box::new(subnet));
+
+        // Insert smoothed gain after main node for fade in/out.
+        let gain_param = shared(1.0f32);
+        let tuner_tap_gain = shared(0.0f32);
+        let gain_id = if output_channels == 2 {
+            net.push(Box::new(
+                (pass() | pass() | (pass() >> delay(0.25)))
+                    >> (((var(&gain_param) >> follow(FOLLOW_RESPONSE_SECS)) * pass())
+                        | ((var(&gain_param) >> follow(FOLLOW_RESPONSE_SECS)) * pass())
+                        | ((pass() * var(&tuner_tap_gain)) >> split::<U2>()))
+                    >> (pass() | reverse::<U2>() | pass())
+                    >> (join::<U2>() | join::<U2>()),
+            ))
+        } else {
+            net.push(Box::new(
+                (join::<U2>() | (pass() >> delay(0.25)))
+                    >> (((var(&gain_param) >> follow(FOLLOW_RESPONSE_SECS)) * pass())
+                        | (pass() * var(&tuner_tap_gain)))
+                    >> join::<U2>(),
+            ))
+        };
+        net.pipe_all(main_node_id, gain_id);
+        net.pipe_input(main_node_id);
+        net.pipe_output(gain_id);
+
+        net.set_sample_rate(self.sample_rate());
+        net.allocate();
+        net.check();
+
+        {
+            *self.gain_param.write() = Some(gain_param.clone());
+            *self.tuner_tap_gain_param.write() = Some(tuner_tap_gain.clone());
+            *self.dsp_primary_node_id.write() = Some(main_node_id);
+        }
+
+        net
+    }
+
+    fn create_tuner_only_network(&self, tuner_config: &TunerConfig) -> Net {
+        log::info!("Creating tuner only network.",);
+
+        let mut net = Net::new(1, 3);
+
+        let stub = net.push(Box::new(constant(0.0) | constant(0.0)));
+        net.pipe_output(stub);
+
+        let siren_controls_stub = HashMap::<NodeKey, Shared>::from_iter(
+            tuner_config
+                .sensor_data
+                .iter()
+                .map(|s| (s.key, shared(0.0))),
+        );
+
+        // Initialize fine-tuned values if in editor mode
+        #[cfg(feature = "editor")]
+        let fine_tuned_values = {
+            let shared_values_lock = self.fine_tuned_shared_values.read();
+
+            FineTunedValues::new(&shared_values_lock)
+        };
+
+        let handles = crate::create_input_system(
+            tuner_config,
+            &mut net,
+            siren_controls_stub,
+            ActivationSource::Mic,
+            &self.spectrum_data_thb,
+            2,
+            #[cfg(feature = "editor")]
+            &fine_tuned_values,
+        );
+
+        {
+            log::trace!("Storing {} sensor controls", handles.len());
+            *self.sensor_controls.write() =
+                HashMap::from_iter(handles.into_iter().map(|h| (h.key, h)));
+            log::trace!("setting tuner_only_mode to true");
+            *self.tuner_only_mode.write() = true;
+            log::trace!("stored sensor controls");
+        }
+
+        net.set_sample_rate(self.sample_rate());
+        net.allocate();
+        net.check();
+
+        log::debug!("created network: {}", net.display());
+        net
+    }
+
+    fn create_instrument_network(
         &self,
         config: &InstrumentConfig,
         tuner_config: &TunerConfig,
-        sample_rate: f64,
         source: ActivationSource,
     ) -> Net {
         log::info!(
@@ -220,9 +387,7 @@ impl CpalController {
             config.0.first().map(|g| g.nodes.len()).unwrap_or(0)
         );
 
-        // For now hard-code (1 input, 2 outputs). Multi-channel path to come.
-        let mut net = Net::new(1, 2);
-        net.set_sample_rate(sample_rate);
+        let mut net = Net::new(1, 3);
 
         // Preserve old control values before clearing
         let old_band_values = {
@@ -301,16 +466,30 @@ impl CpalController {
             "Created {} siren controls for input system",
             siren_controls.len()
         );
-        crate::create_input_system(
+        let handles = crate::create_input_system(
             tuner_config,
             &mut net,
             siren_controls,
             source,
+            &self.spectrum_data_thb,
+            2,
             #[cfg(feature = "editor")]
             &fine_tuned_values,
         );
 
+        {
+            log::trace!("Storing {} sensor controls", handles.len());
+            *self.sensor_controls.write() =
+                HashMap::from_iter(handles.into_iter().map(|h| (h.key, h)));
+            log::trace!("setting tuner_only_mode to false");
+            *self.tuner_only_mode.write() = false;
+            log::trace!("stored sensor controls");
+        }
+
+        net.set_sample_rate(self.sample_rate());
         net.allocate();
+        net.check();
+
         log::debug!("created network: {}", net.display());
         net
     }
@@ -325,9 +504,13 @@ impl CpalController {
         };
 
         log::info!("Updating primary DSP node due to state change");
-        let sample_rate = self.sample_rate.read().unwrap_or(44100.0);
-        let source = *self.last_source.read();
-        let new_node = self.create_network(config, tuner_config, sample_rate, source);
+
+        let new_node = if *self.tuner_only_mode.read() {
+            self.create_tuner_only_network(tuner_config)
+        } else {
+            let source = *self.last_source.read();
+            self.create_instrument_network(config, tuner_config, source)
+        };
 
         let mut guard = self.dsp_net_frontend.write();
         let Some(net) = guard.as_mut() else {
@@ -378,7 +561,7 @@ impl CpalController {
         }
 
         // Activation stream shutdown
-        if let Some(act_tx) = self.activation_sender.write().take() {
+        if let Some(act_tx) = self.input_sender.write().take() {
             let (ack_tx, ack_rx) = mpsc::channel();
             if act_tx.send(Control::Shutdown(ack_tx)).is_ok() {
                 let _ = ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS));
@@ -387,7 +570,7 @@ impl CpalController {
 
         // Release thread handles
         *self.output_thread.write() = None;
-        *self.activation_thread.write() = None;
+        *self.input_thread.write() = None;
 
         // Clear DSP & handles
         self.dsp_net_frontend.write().take();
@@ -395,18 +578,16 @@ impl CpalController {
         self.gain_param.write().take();
         self.activation_snoops.write().clear();
         self.output_snoops.write().clear();
-
-        // Deactivate iOS audio session
-        #[cfg(target_os = "ios")]
-        unsafe {
-            deactivate_ios_audio_session();
-        }
+        self.band_controls.write().clear();
+        self.key_controls.write().clear();
+        self.sensor_controls.write().clear();
+        self.sample_rate.write().take();
 
         Ok(())
     }
 
     /// Set band control value for a specific node
-    pub fn set_band_control(&self, key: NodeKey, value: f32) -> Result<()> {
+    fn set_band_control(&self, key: NodeKey, value: f32) -> Result<()> {
         let band_controls = self.band_controls.read();
         if let Some(control) = band_controls.get(&key) {
             control.set_value(value);
@@ -417,7 +598,7 @@ impl CpalController {
     }
 
     /// Get band control value for a specific node
-    pub fn get_band_control(&self, key: NodeKey) -> Result<f32> {
+    fn get_band_control(&self, key: NodeKey) -> Result<f32> {
         let band_controls = self.band_controls.read();
         if let Some(control) = band_controls.get(&key) {
             Ok(control.value())
@@ -427,7 +608,7 @@ impl CpalController {
     }
 
     /// Set key control value for a specific node (0.0 = false/released, 1.0 = true/pressed)
-    pub fn set_key_control(&self, key: NodeKey, value: f32) -> Result<()> {
+    fn set_key_control(&self, key: NodeKey, value: f32) -> Result<()> {
         let key_controls = self.key_controls.read();
         if let Some(control) = key_controls.get(&key) {
             control.set_value(value);
@@ -438,7 +619,7 @@ impl CpalController {
     }
 
     /// Get key control value for a specific node (0.0 = false/released, 1.0 = true/pressed)
-    pub fn get_key_control(&self, key: NodeKey) -> Result<f32> {
+    fn get_key_control(&self, key: NodeKey) -> Result<f32> {
         let key_controls = self.key_controls.read();
         if let Some(control) = key_controls.get(&key) {
             Ok(control.value())
@@ -448,7 +629,7 @@ impl CpalController {
     }
 }
 
-impl StreamController for CpalController {
+impl AudioRuntime for CpalController {
     fn start(
         &self,
         layout: &InstrumentLayout,
@@ -458,27 +639,24 @@ impl StreamController for CpalController {
     ) -> Result<()> {
         log::trace!("CpalController.start: begin with source={:?}", source);
 
-        // Configure iOS audio session before creating any streams
-        #[cfg(target_os = "ios")]
-        unsafe {
-            configure_ios_audio_session()?;
-        }
+        // Ensure audio session is configured (iOS)
+        audio_session::ensure_configured()?;
 
         // Snapshot for potential restarts.
         {
+            log::trace!("acquring write lock layout");
             *self.last_layout.write() = *layout;
+            log::trace!("acquring write lock config");
             *self.last_config.write() = config.clone();
+            log::trace!("acquring write lock source");
             *self.last_source.write() = source;
+            log::trace!("acquring write lock tuner_config");
             *self.last_tuner_config.write() = tuner_config.clone();
+            log::trace!("sotred layout/config/source/tuner_config");
         }
 
-        let host = cpal::default_host();
-        log::trace!(
-            "CpalController.start: using CPAL host: {}",
-            host.id().name()
-        );
-        let output_device = host
-            .default_output_device()
+        let output_device = self
+            .output_device()
             .ok_or(InstrumentError::DeviceUnavailable)?;
         let output_device_name = output_device
             .name()
@@ -510,154 +688,27 @@ impl StreamController for CpalController {
             "CpalController.start: selecting activation source branch: {:?}",
             source
         );
-        let (act_sx, act_handle, activator_cons) = if matches!(source, ActivationSource::Mic) {
-            // Use the same device for input (already selected above)
-            let input_device = if output_device.supports_input() {
-                output_device.clone()
-            } else {
-                host.default_input_device()
-                    .ok_or(InstrumentError::DeviceUnavailable)?
-            };
-            let input_device_name = input_device
-                .name()
-                .unwrap_or_else(|e| format!("(error getting name: {e})"));
-            log::trace!(
-                "CpalController.start: default input device: {}",
-                input_device_name
-            );
-            let input_default_cfg = input_device
-                .default_input_config()
-                .map_err(|_| InstrumentError::InputConfigUnavailable)?;
-            log::trace!(
-                "CpalController.start: input default cfg: format={:?}, channels={}, sample_rate={} Hz, buffer={:?}",
-                input_default_cfg.sample_format(),
-                input_default_cfg.channels(),
-                input_default_cfg.sample_rate().0,
-                input_default_cfg.buffer_size(),
-            );
 
-            log::trace!("CpalController.start: using Mic activation");
-            let stream_cfg: cpal::StreamConfig = input_default_cfg.clone().into();
-            log::trace!(
-                "CpalController.start: input stream_cfg: channels={}, sample_rate={} Hz",
-                stream_cfg.channels,
-                stream_cfg.sample_rate.0
-            );
-            let channels_in = stream_cfg.channels as usize;
-
-            let samples_per_ms = stream_cfg.sample_rate.0 as f64 / 1000.0;
-            let cap_samples = ((samples_per_ms * BUFFER_DURATION_MS as f64).ceil() as usize)
-                .saturating_mul(channels_in);
-            let capacity = cap_samples.next_power_of_two();
-
-            let (mut buffer_prod, buffer_cons) = SharedRb::<Heap<f64>>::new(capacity).split();
-
-            let (sx, join) =
-                spawn_owned_input_stream(input_device, input_default_cfg, stream_cfg, move || {
-                    // Downmix to mono when pushing into ring buffer.
-                    let ch = channels_in;
-                    let mut mono = Vec::<f64>::new();
-                    let prod = move |sample: &[f64]| -> usize {
-                        if ch <= 1 {
-                            buffer_prod.push_slice(sample)
-                        } else {
-                            mono.clear();
-                            mono.reserve(sample.len() / ch);
-                            for frame in sample.chunks(ch) {
-                                let sum: f64 = frame.iter().copied().sum();
-                                mono.push(sum / ch as f64);
-                            }
-                            buffer_prod.push_slice(&mono)
-                        }
-                    };
-                    let boxed: Box<ProdType> = Box::new(prod);
-                    boxed
-                })?;
-
-            (sx, join, buffer_cons)
+        let input_buffer = if matches!(source, ActivationSource::Mic) {
+            log::debug!("CpalController.start: using Mic activation");
+            Some(self.start_input_stream()?)
         } else {
-            // Entropy / noise activation
-            log::trace!("CpalController.start: using Noise activation");
-            let channels_in = 1usize;
-            let samples_per_ms = output_default_cfg.sample_rate().0 as f64 / 1000.0;
-            let cap_samples = ((samples_per_ms * BUFFER_DURATION_MS as f64).ceil() as usize)
-                .saturating_mul(channels_in);
-            let capacity = cap_samples.next_power_of_two();
-            let (mut buffer_prod, buffer_cons) = SharedRb::<Heap<f64>>::new(capacity).split();
-            let (sx, join) = spawn_owned_noise_stream(move || {
-                let prod = move |sample: &[f64]| buffer_prod.push_slice(sample);
-                let boxed: Box<ProdType> = Box::new(prod);
-                boxed
-            })?;
-            (sx, join, buffer_cons)
+            None
         };
 
-        // Create primary subnet & top-level net.
-        let output_sample_rate = output_default_cfg.sample_rate().0 as f64;
-        *self.sample_rate.write() = Some(output_sample_rate);
-        let subnet = self.create_network(config, tuner_config, output_sample_rate, source);
-        let mut net = Net::new(1, output_channels);
-        net.set_sample_rate(output_sample_rate);
+        let subnet = self.create_instrument_network(config, tuner_config, source);
 
-        let main_node_id = net.push(Box::new(subnet));
-
-        // Insert smoothed gain after main node for fade in/out.
-        let gain_param = shared(1.0f32);
-        let gain_id = net.push(Box::new(
-            ((var(&gain_param) >> follow(FOLLOW_RESPONSE_SECS)) * pass())
-                | ((var(&gain_param) >> follow(FOLLOW_RESPONSE_SECS)) * pass()),
-        ));
-        net.pipe_all(main_node_id, gain_id);
-        net.pipe_input(main_node_id);
-        net.pipe_output(gain_id);
-
-        net.allocate();
-        net.check();
+        let mut net = self.create_main_network(output_channels, subnet);
 
         // Split -> backend tick side & retained frontend mutation side.
-        let mut backend = net.backend();
+        let backend = net.backend();
         let front = net;
 
-        // Prepare CPAL output stream config.
-        let stream_cfg: cpal::StreamConfig = output_default_cfg.clone().into();
+        self.start_output_stream(input_buffer, backend)?;
 
         // Store references
         {
             *self.dsp_net_frontend.write() = Some(front);
-            *self.dsp_primary_node_id.write() = Some(main_node_id);
-            *self.gain_param.write() = Some(gain_param.clone());
-        }
-
-        // Spawn output stream owner.
-        let (tx, handle) = spawn_owned_output_stream(
-            output_device,
-            output_default_cfg,
-            stream_cfg,
-            output_channels,
-            move || {
-                // Activation consumer captured inside closure.
-                let mut activator_cons = activator_cons;
-                let mut in_sample = [0_f32];
-                let mut out_sample = [0_f32, 0_f32];
-                let next_value = move || {
-                    let mut tmp = [0.0f64; 1];
-                    if activator_cons.pop_slice(&mut tmp) > 0 {
-                        in_sample[0] = tmp[0] as f32;
-                    }
-                    backend.tick(&in_sample, &mut out_sample);
-                    (out_sample[0], out_sample[1])
-                };
-                let boxed: Box<GenType> = Box::new(next_value);
-                boxed
-            },
-        )?;
-
-        // Persist thread / control handles.
-        {
-            *self.control_tx.write() = Some(tx);
-            *self.output_thread.write() = Some(handle);
-            *self.activation_sender.write() = Some(act_sx);
-            *self.activation_thread.write() = Some(act_handle);
         }
 
         Ok(())
@@ -666,6 +717,7 @@ impl StreamController for CpalController {
     fn stop(&self) -> Result<()> {
         log::trace!("CpalController.stop: begin");
         self.fade_out();
+
         let res = self.shutdown_streams();
         if res.is_ok() {
             log::trace!("CpalController.stop: shutdown_streams Ok");
@@ -762,8 +814,7 @@ impl StreamController for CpalController {
         );
 
         // Validate NodeKey consistency between configs
-        let registry =
-            NodeKeyRegistry::new(layout.num_groups.get(), layout.num_keys_per_group.get());
+        let registry = layout.registry();
 
         // Check for invalid NodeKeys in tuner config
         let sensor_keys: std::collections::HashMap<NodeKey, ()> = tuner_config
@@ -789,8 +840,7 @@ impl StreamController for CpalController {
 
     fn snapshot_output_snoop(&self, group: usize, key: usize) -> Vec<f32> {
         let layout = *self.last_layout.read();
-        let registry =
-            NodeKeyRegistry::new(layout.num_groups.get(), layout.num_keys_per_group.get());
+        let registry = layout.registry();
 
         let node_key = match registry.create_key(group as u8, key as u8) {
             Ok(key) => key,
@@ -814,8 +864,7 @@ impl StreamController for CpalController {
 
     fn snapshot_all_output_snoops(&self) -> Vec<(u8, u8, Vec<f32>)> {
         let layout = *self.last_layout.read();
-        let registry =
-            NodeKeyRegistry::new(layout.num_groups.get(), layout.num_keys_per_group.get());
+        let registry = layout.registry();
 
         let mut result = Vec::with_capacity(registry.total_keys());
         let mut snoops = self.output_snoops.write();
@@ -836,8 +885,7 @@ impl StreamController for CpalController {
 
     fn snapshot_activation_snoop(&self, group: usize, key: usize) -> Vec<f32> {
         let layout = *self.last_layout.read();
-        let registry =
-            NodeKeyRegistry::new(layout.num_groups.get(), layout.num_keys_per_group.get());
+        let registry = layout.registry();
 
         let node_key = match registry.create_key(group as u8, key as u8) {
             Ok(key) => key,
@@ -862,8 +910,7 @@ impl StreamController for CpalController {
 
     fn snapshot_all_activation_snoops(&self) -> Vec<(u8, u8, Vec<f32>)> {
         let layout = *self.last_layout.read();
-        let registry =
-            NodeKeyRegistry::new(layout.num_groups.get(), layout.num_keys_per_group.get());
+        let registry = layout.registry();
 
         let mut result = Vec::with_capacity(registry.total_keys());
         let mut snoops = self.activation_snoops.write();
@@ -896,6 +943,83 @@ impl StreamController for CpalController {
 
     fn get_key_control(&self, key: NodeKey) -> Result<f32> {
         self.get_key_control(key)
+    }
+
+    fn poll_tuner_spectrum(&self) -> Option<spectrum_analyzer::FrequencySpectrum> {
+        self.spectrum_data_thb.pop().and_then(Arc::into_inner)
+    }
+
+    fn start_tuner_only(&self, tuner_config: &TunerConfig) -> common::error::Result<()> {
+        {
+            *self.last_tuner_config.write() = tuner_config.clone();
+        }
+
+        let input_stream = self.start_input_stream()?;
+
+        let subnet = self.create_tuner_only_network(tuner_config);
+
+        let mut net = self.create_main_network(1, subnet);
+
+        let backend = net.backend();
+        let front = net;
+
+        self.start_output_stream(Some(input_stream), backend)?;
+
+        {
+            *self.dsp_net_frontend.write() = Some(front);
+        }
+
+        Ok(())
+    }
+
+    fn start_tap_tuner_audio(&self) -> common::error::Result<()> {
+        if let Some(tuner_tap_gain_param) = self.tuner_tap_gain_param.read().as_ref() {
+            tuner_tap_gain_param.set_value(1.0);
+            Ok(())
+        } else {
+            Err(TunerError::MissingParameter("tap gain".to_string()).into())
+        }
+    }
+
+    fn stop_tap_tuner_audio(&self) -> common::error::Result<()> {
+        if let Some(tuner_tap_gain_param) = self.tuner_tap_gain_param.read().as_ref() {
+            tuner_tap_gain_param.set_value(0.0);
+            Ok(())
+        } else {
+            Err(TunerError::MissingParameter("tap gain".to_string()).into())
+        }
+    }
+
+    fn update_tuner_config(&self, new_config: &TunerConfig) -> common::error::Result<()> {
+        let old_config = self.last_tuner_config.read().clone();
+        {
+            *self.last_tuner_config.write() = new_config.clone();
+        }
+        if old_config.sensor_data.len() != new_config.sensor_data.len() {
+            self.update_primary_node(&self.last_config.read(), new_config);
+        } else {
+            let controls = self.sensor_controls.read();
+            for sensor_data in &new_config.sensor_data {
+                if let Some(ctrl) = controls.get(&sensor_data.key) {
+                    ctrl.max_frequency.set_value(sensor_data.max_frequency);
+                    ctrl.min_frequency.set_value(sensor_data.min_frequency);
+                    ctrl.max_magnitude.set_value(sensor_data.max_magnitude);
+                    ctrl.min_magnitude.set_value(sensor_data.min_magnitude);
+                } else {
+                    return Err(TunerError::MissingParameter(format!(
+                        "controls for node key: {:?}",
+                        sensor_data.key
+                    ))
+                    .into());
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn get_sample_rate(&self) -> f64 {
+        self.sample_rate()
     }
 
     #[cfg(feature = "editor")]
@@ -997,6 +1121,6 @@ impl StreamController for CpalController {
     }
 }
 /// Factory exposed to the runtime facade.
-pub fn make_stream_controller() -> Result<Box<dyn StreamController + Send + Sync>> {
+pub fn make_stream_controller() -> Result<Box<dyn AudioRuntime + Send + Sync>> {
     Ok(Box::new(CpalController::default()))
 }

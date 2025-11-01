@@ -12,7 +12,8 @@
         "visible": false,
         "titleBarStyle": "Transparent",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "backgroundThrottling": "throttle"
       },
       {
         "label": "splashscreen",

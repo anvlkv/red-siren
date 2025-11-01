@@ -59,7 +59,7 @@ unsafe fn configure_ios() -> Result<()> {
     // Create mode string for default mode
     let mode_str: *mut Object = msg_send![
         class!(NSString),
-        stringWithUTF8String: "AVAudioSessionModeDefault\0".as_ptr()
+        stringWithUTF8String: "AVAudioSessionModeMeasurement\0".as_ptr()
     ];
 
     // Set category and mode with options

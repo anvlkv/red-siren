@@ -31,11 +31,10 @@ pub fn run() {
     builder = builder.plugin(
         tauri_plugin_log::Builder::new()
             .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepOne)
-            // .level(log::LevelFilter::Debug)
             .level(if cfg!(debug_assertions) {
                 log::LevelFilter::Trace
             } else if cfg!(feature = "devtools") {
-                log::LevelFilter::Debug
+                log::LevelFilter::Info
             } else {
                 log::LevelFilter::Error
             })
@@ -70,6 +69,7 @@ pub fn run() {
         tuner::tuner_reset_config,
         tuner::tuner_start_stream,
         tuner::tuner_stop_stream,
+        tuner::tuner_toggle_probe,
         instrument::instrument_playback_pause,
         instrument::instrument_playback_resume,
         instrument::instrument_activation_source,

@@ -8,9 +8,11 @@ use common::tuner::{Config, Layout as TunerLayout, SpectrumData};
 #[component]
 pub fn SpectrumVisualizer(
     /// Spectrum data signal
+    #[prop(into)]
     spectrum: Signal<Option<SpectrumData>>,
 
     /// Tuner layout (space, orientation, baseline, sensors count)
+    #[prop(into)]
     layout: Signal<Option<TunerLayout>>,
 ) -> impl IntoView {
     // Get baseline from layout (no fallback)
@@ -134,10 +136,18 @@ fn generate_spectrum_path(
         LayoutOrientation::Horizontal => {
             // Start from the left edge at baseline level
             path.push_str(&format!("M {} {} ", 0.0, baseline.0.y));
+            if let Some((mag, freq)) = magnitudes.first().zip(frequencies.first()) {
+                let p = cfg.frequency_magnitude_to_space(layout, *freq, *mag);
+                path.push_str(&format!("L {} {} ", 0.0, p.y));
+            }
         }
         LayoutOrientation::Vertical => {
             // Start from the top edge at baseline position
             path.push_str(&format!("M {} {} ", baseline.0.x, 0.0));
+            if let Some((mag, freq)) = magnitudes.first().zip(frequencies.first()) {
+                let p = cfg.frequency_magnitude_to_space(layout, *freq, *mag);
+                path.push_str(&format!("L {} {} ", p.x, 0.0));
+            }
         }
     }
 
@@ -151,11 +161,19 @@ fn generate_spectrum_path(
     // Close path back to baseline at the opposite edge
     match layout.orientation {
         LayoutOrientation::Horizontal => {
+            if let Some((mag, freq)) = magnitudes.last().zip(frequencies.last()) {
+                let p = cfg.frequency_magnitude_to_space(layout, *freq, *mag);
+                path.push_str(&format!("L {} {} ", layout.space.x, p.y));
+            }
             // Close to right edge, then back to start
             path.push_str(&format!("L {} {} ", layout.space.x, baseline.0.y));
             path.push_str(&format!("L {} {} ", 0.0, baseline.0.y));
         }
         LayoutOrientation::Vertical => {
+            if let Some((mag, freq)) = magnitudes.last().zip(frequencies.last()) {
+                let p = cfg.frequency_magnitude_to_space(layout, *freq, *mag);
+                path.push_str(&format!("L {} {} ", p.x, layout.space.y));
+            }
             // Close to bottom edge, then back to start
             path.push_str(&format!("L {} {} ", baseline.0.x, layout.space.y));
             path.push_str(&format!("L {} {} ", baseline.0.x, 0.0));

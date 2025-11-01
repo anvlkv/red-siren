@@ -313,7 +313,7 @@ pub fn instrument_string_snoop_data(
     key: usize,
     state: tauri::State<'_, crate::instrument::engine::InstrumentEngine>,
 ) -> common::error::Result<common::instrument::data::StringSnoopDataResponse> {
-    let samples = state.snapshot_output_snoop(group, key);
+    let samples = state.snapshot_output_snoop(NodeKey::new(group as u8, key as u8));
     Ok(common::instrument::data::StringSnoopDataResponse { samples })
 }
 
@@ -327,7 +327,7 @@ pub fn instrument_all_string_snoops(
         .snapshot_all_output_snoops()
         .into_iter()
         .map(
-            |(group, key, samples)| common::instrument::data::StringSnoopEntry {
+            |(NodeKey(group, key), samples)| common::instrument::data::StringSnoopEntry {
                 group,
                 key,
                 samples,
@@ -352,7 +352,7 @@ pub fn instrument_activation_snoop_data(
     key: usize,
     state: tauri::State<'_, crate::instrument::engine::InstrumentEngine>,
 ) -> common::error::Result<common::instrument::data::ActivationSnoopDataResponse> {
-    let samples = state.snapshot_activation_snoop(group, key);
+    let samples = state.snapshot_activation_snoop(NodeKey::new(group as u8, key as u8));
     Ok(common::instrument::data::ActivationSnoopDataResponse { samples })
 }
 
@@ -366,7 +366,7 @@ pub fn instrument_all_activation_snoops(
         .snapshot_all_activation_snoops()
         .into_iter()
         .map(
-            |(group, key, samples)| common::instrument::data::ActivationSnoopEntry {
+            |(NodeKey(group, key), samples)| common::instrument::data::ActivationSnoopEntry {
                 group,
                 key,
                 samples,
@@ -531,13 +531,13 @@ pub async fn instrument_edit_finetuned_values(
         input_ny_wet_ratio,
     };
     // Update the fine-tuned values
-    state.inner.set_finetuned_values(
+    state.set_finetuned_values(
         values
     )?;
 
     log::info!("Fine-tuned values updated via devtools: {values:#?}");
 
-    state.inner.get_finetuned_values()
+    state.get_finetuned_values()
 }
 
 #[cfg(feature="devtools")]
@@ -545,5 +545,5 @@ pub async fn instrument_edit_finetuned_values(
 pub async fn instrument_get_finetuned_values(
     state: State<'_, InstrumentEngine>,
 ) -> Result<common::commands::edit::FineTunedValuesPayload> {
-    state.inner.get_finetuned_values()
+    state.get_finetuned_values()
 }

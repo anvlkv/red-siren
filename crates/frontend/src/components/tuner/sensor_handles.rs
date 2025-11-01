@@ -19,14 +19,19 @@ pub fn SensorHandle(
     #[prop(into)]
     index: usize,
     /// Configuration signal
+    #[prop(into)]
     config: Signal<Option<Config>>,
     /// Tuner layout signal
+    #[prop(into)]
     layout: Signal<Option<TunerLayout>>,
     /// Callback for updating sensor
+    #[prop(into)]
     on_update: Callback<UpdateSensorPayload>,
     /// Whether this sensor is active/selected
+    #[prop(into)]
     is_active: Signal<bool>,
     /// Callback for selecting this sensor
+    #[prop(into)]
     on_select: Callback<Option<usize>>,
 ) -> impl IntoView {
     let min_handle_ref = NodeRef::<html::Div>::new();
@@ -436,14 +441,19 @@ pub fn SensorHandle(
 #[component]
 pub fn SensorHandles(
     /// Configuration signal
+    #[prop(into)]
     config: Signal<Option<Config>>,
     /// Tuner layout signal
+    #[prop(into)]
     layout: Signal<Option<TunerLayout>>,
     /// Callback for updating sensors
+    #[prop(into)]
     on_update: Callback<UpdateSensorPayload>,
     /// Currently active sensor index
+    #[prop(into)]
     active_sensor: Signal<Option<usize>>,
     /// Callback for selecting a sensor
+    #[prop(into)]
     on_select: Callback<Option<usize>>,
 ) -> impl IntoView {
     let handles = move || {

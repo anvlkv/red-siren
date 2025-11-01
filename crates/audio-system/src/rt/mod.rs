@@ -4,6 +4,7 @@ pub mod cpal;
 #[cfg(feature = "rt_web")]
 pub mod web;
 
+use common::NodeKey;
 use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout};
 use common::tuner::Config as TunerConfig;
 
@@ -65,10 +66,10 @@ pub trait AudioRuntime {
     ) -> common::error::Result<()>;
 
     // Data taps
-    fn snapshot_output_snoop(&self, group: usize, key: usize) -> Vec<f32>;
-    fn snapshot_all_output_snoops(&self) -> Vec<(u8, u8, Vec<f32>)>;
-    fn snapshot_activation_snoop(&self, group: usize, key: usize) -> Vec<f32>;
-    fn snapshot_all_activation_snoops(&self) -> Vec<(u8, u8, Vec<f32>)>;
+    fn snapshot_output_snoop(&self, key: NodeKey) -> Vec<f32>;
+    fn snapshot_all_output_snoops(&self) -> Vec<(NodeKey, Vec<f32>)>;
+    fn snapshot_activation_snoop(&self, key: NodeKey) -> Vec<f32>;
+    fn snapshot_all_activation_snoops(&self) -> Vec<(NodeKey, Vec<f32>)>;
 
     // Band control
     fn set_band_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()>;
@@ -92,11 +93,11 @@ pub trait AudioRuntime {
 
     // Tuner integration
     fn start_tuner_only(&self, tuner_config: &TunerConfig) -> common::error::Result<()>;
-    fn poll_tuner_spectrum(&self) -> Option<spectrum_analyzer::FrequencySpectrum>;
+    fn poll_tuner_spectrum(&self) -> Option<common::tuner::SpectrumSnapshot>;
     fn start_tap_tuner_audio(&self) -> common::error::Result<()>;
     fn stop_tap_tuner_audio(&self) -> common::error::Result<()>;
     fn update_tuner_config(&self, tuner_config: &TunerConfig) -> common::error::Result<()>;
-
+    fn poll_tuner_activations(&self) -> Vec<(NodeKey, f32)>;
     fn get_sample_rate(&self) -> f64;
 }
 
@@ -156,19 +157,19 @@ impl AudioRuntime for NullController {
         Ok(())
     }
 
-    fn snapshot_output_snoop(&self, _group: usize, _key: usize) -> Vec<f32> {
+    fn snapshot_output_snoop(&self, _key: NodeKey) -> Vec<f32> {
         Vec::new()
     }
 
-    fn snapshot_all_output_snoops(&self) -> Vec<(u8, u8, Vec<f32>)> {
+    fn snapshot_all_output_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
         Vec::new()
     }
 
-    fn snapshot_activation_snoop(&self, _group: usize, _key: usize) -> Vec<f32> {
+    fn snapshot_activation_snoop(&self, _key: NodeKey) -> Vec<f32> {
         Vec::new()
     }
 
-    fn snapshot_all_activation_snoops(&self) -> Vec<(u8, u8, Vec<f32>)> {
+    fn snapshot_all_activation_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
         Vec::new()
     }
 
@@ -204,8 +205,12 @@ impl AudioRuntime for NullController {
         Ok(())
     }
 
-    fn poll_tuner_spectrum(&self) -> Option<spectrum_analyzer::FrequencySpectrum> {
+    fn poll_tuner_spectrum(&self) -> Option<common::tuner::SpectrumSnapshot> {
         None
+    }
+
+    fn poll_tuner_activations(&self) -> Vec<(NodeKey, f32)> {
+        vec![]
     }
 
     fn get_sample_rate(&self) -> f64 {

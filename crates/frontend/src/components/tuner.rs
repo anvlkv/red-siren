@@ -5,8 +5,11 @@ mod spectrum;
 use leptos::callback::Callback;
 use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
-use tauri_use::{use_invoke, use_listen, UseListenReturn, UseTauriReturn};
+use tauri_use::{
+    use_command, use_invoke, use_listen, UseListenReturn, UseTauriReturn, UseTauriWithReturn,
+};
 
+use crate::util::raf_fn_fps::use_raf_fn_with_fps;
 use crate::util::tauri_resource::{use_tauri_resource, UseTauriResourceReturn};
 
 use common::tuner::{Config, Layout as TunerLayout, SpectrumData, UpdateSensorPayload};
@@ -48,15 +51,11 @@ pub fn Tuner() -> impl IntoView {
     } = use_listen::<Config>(tauri_use::EventType::Custom(common::events::tuner::CONFIG));
 
     // Listen for spectrum data
-    let UseListenReturn {
+    let UseTauriWithReturn {
         data: spectrum_data,
         error: spectrum_error,
-        open: spectrum_open,
-        close: close_spectrum,
-        ..
-    } = use_listen::<SpectrumData>(tauri_use::EventType::Custom(
-        common::events::tuner::SPECTRUM_DATA,
-    ));
+        trigger: poll_spectrum,
+    } = use_command::<SpectrumData>(common::commands::tuner::SPECTRUM_DATA);
 
     // Update sensor command
     let UseTauriReturn {
@@ -105,13 +104,6 @@ pub fn Tuner() -> impl IntoView {
         }
     });
 
-    // Update context with spectrum data
-    Effect::new(move |_| {
-        if let Some(data) = spectrum_data() {
-            context.spectrum.set(Some(data));
-        }
-    });
-
     // Log errors
     Effect::new(move |_| {
         if let Some(err) = config_error() {
@@ -134,13 +126,11 @@ pub fn Tuner() -> impl IntoView {
     // Start listening when component mounts (stream lifetime handled at page level via TunerService)
     Effect::new(move |_| {
         config_update_open();
-        spectrum_open();
     });
 
     // Cleanup listeners on unmount (stream stop handled at page level)
     on_cleanup(move || {
         close_config_update();
-        close_spectrum();
     });
 
     // Callback for updating sensors
@@ -154,12 +144,15 @@ pub fn Tuner() -> impl IntoView {
         context.active_sensor.set(index);
     });
 
-    // Derived signals for visualization
-    let config_signal = Signal::derive(move || context.config.get());
-    let spectrum_signal = Signal::derive(move || context.spectrum.get());
-    let active_sensor_signal = Signal::derive(move || context.active_sensor.get());
-
-    let tuner_layout = Signal::derive(tuner_layout);
+    _ = use_raf_fn_with_fps(
+        move |_| {
+            poll_spectrum(Some(()));
+            if let Some(data) = spectrum_data() {
+                context.spectrum.set(Some(data));
+            }
+        },
+        20.0,
+    );
 
     view! {
         <div
@@ -167,13 +160,13 @@ pub fn Tuner() -> impl IntoView {
             style:width=move || format!("{}px", tuner_layout().unwrap_or_default().space.x)
             style:height=move || format!("{}px", tuner_layout().unwrap_or_default().space.y)
         >
-            <SpectrumVisualizer spectrum=spectrum_signal layout=tuner_layout />
+            <SpectrumVisualizer spectrum=context.spectrum layout=tuner_layout />
 
             <SensorHandles
-                config=config_signal
+                config=context.config
                 layout=tuner_layout
                 on_update=on_update_sensor
-                active_sensor=active_sensor_signal
+                active_sensor=context.active_sensor
                 on_select=on_select_sensor
             />
         </div>

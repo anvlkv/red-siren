@@ -72,7 +72,21 @@ pub fn Tune() -> impl IntoView {
         }
     });
 
-    let title = Signal::derive(move || if is_secondary_window(){ Some("Tune")} else {None});
+    // Probe handler
+    let on_probe = Callback::new({
+        let tuner_service = tuner_service.clone();
+        move |_: ()| {
+            tuner_service.probe.run(());
+        }
+    });
+
+    let title = Signal::derive(move || {
+        if is_secondary_window() {
+            Some("Tune")
+        } else {
+            None
+        }
+    });
 
     view! {
         <div class="relative w-full h-full">
@@ -86,7 +100,30 @@ pub fn Tune() -> impl IntoView {
                     attr:r#type="reset"
                 >
                     <Icon name="reset" size=UiSize::Sm />
-                    <span class="inline-block flex-grow text-center">Reset</span>
+                    <span class="inline-block flex-grow text-center">"Reset"</span>
+                </Button>
+                <Button
+                    on:click=move |_| on_probe.run(())
+                    size=UiSize::Sm
+                    variant=Signal::derive(move || {
+                        if !tuner_service.probe_active.get() {
+                            UiVariant::Outline
+                        } else {
+                            UiVariant::Solid
+                        }
+                    })
+                    placement=placement
+                >
+                    <Icon name="probe" size=UiSize::Sm />
+                    <span class="inline-block flex-grow text-center">
+                        {move || {
+                            if !tuner_service.probe_active.get() {
+                                "Probe audio"
+                            } else {
+                                "Stop probing"
+                            }
+                        }}
+                    </span>
                 </Button>
             </CompactMenu>
         </div>

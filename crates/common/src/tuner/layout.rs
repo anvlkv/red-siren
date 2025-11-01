@@ -39,7 +39,7 @@ impl Default for Layout {
 
 impl From<crate::instrument::Layout> for Layout {
     fn from(value: crate::instrument::Layout) -> Self {
-        let total_keys = (value.num_groups.get() as u32) * (value.num_keys_per_group.get() as u32);
+        let total_keys = value.registry().total_keys();
 
         // Compute spectrum baseline from safe-area: bottom-most for Horizontal, left-most for Vertical
         let baseline = match value.orientation {
@@ -71,7 +71,7 @@ impl From<crate::instrument::Layout> for Layout {
             safe_area_padding: value.safe_area_padding,
             line_position: baseline,
             sensor_radius: value.key_radius,
-            num_sensors: NonZero::new(total_keys).expect("total_keys > 0"),
+            num_sensors: NonZero::new(total_keys as u32).expect("total_keys > 0"),
         }
     }
 }

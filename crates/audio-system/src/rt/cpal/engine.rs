@@ -38,16 +38,11 @@ use super::stream::{
     spawn_owned_output_stream, Control, ControlInvocationResult, GenType, ProdType,
 };
 
-#[cfg(target_os = "ios")]
-use objc::runtime::{Object, BOOL, NO, YES};
-#[cfg(target_os = "ios")]
-use objc::{class, msg_send, sel, sel_impl};
-
 const CONTROL_INVOKE_TIMEOUT_MS: u64 = 500;
 const FADE_DURATION_MS: u64 = 120;
 const FOLLOW_RESPONSE_SECS: f32 = 0.01;
 const BUFFER_DURATION_MS: u64 = 100;
-const SPECTRUM_BUFFER_CAPACITY: usize = 8;
+const SPECTRUM_BUFFER_CAPACITY: usize = 2;
 
 /// CPAL-backed stream controller implementing audio I/O and DSP graph
 /// lifecycle. The higher-level runtime facade instantiates this when the
@@ -81,6 +76,7 @@ struct CpalController {
 
     // Spectrum data tap
     spectrum_data_thb: crate::system::input::analyzer::SpectrumBuffer,
+    siren_activations: RwLock<HashMap<NodeKey, Var>>,
 
     // Last known state for restarts
     last_layout: RwLock<InstrumentLayout>,
@@ -116,6 +112,7 @@ impl Default for CpalController {
             key_controls: RwLock::new(HashMap::new()),
             sensor_controls: RwLock::new(HashMap::new()),
             spectrum_data_thb: Arc::new(ThingBuf::new(SPECTRUM_BUFFER_CAPACITY)),
+            siren_activations: RwLock::new(HashMap::new()),
             last_layout: RwLock::new(InstrumentLayout::default()),
             last_config: RwLock::new(InstrumentConfig::default()),
             last_source: RwLock::new(ActivationSource::default()),
@@ -316,9 +313,10 @@ impl CpalController {
         net.check();
 
         {
-            *self.gain_param.write() = Some(gain_param.clone());
-            *self.tuner_tap_gain_param.write() = Some(tuner_tap_gain.clone());
+            *self.gain_param.write() = Some(gain_param);
+            *self.tuner_tap_gain_param.write() = Some(tuner_tap_gain);
             *self.dsp_primary_node_id.write() = Some(main_node_id);
+            log::trace!("stored primary node id and gain params");
         }
 
         net
@@ -338,6 +336,14 @@ impl CpalController {
                 .iter()
                 .map(|s| (s.key, shared(0.0))),
         );
+
+        {
+            *self.siren_activations.write() = HashMap::from_iter(
+                siren_controls_stub
+                    .iter()
+                    .map(|(key, shared)| (*key, Var::new(shared))),
+            );
+        }
 
         // Initialize fine-tuned values if in editor mode
         #[cfg(feature = "editor")]
@@ -466,6 +472,15 @@ impl CpalController {
             "Created {} siren controls for input system",
             siren_controls.len()
         );
+
+        {
+            *self.siren_activations.write() = HashMap::from_iter(
+                siren_controls
+                    .iter()
+                    .map(|(key, shared)| (*key, Var::new(shared))),
+            );
+        }
+
         let handles = crate::create_input_system(
             tuner_config,
             &mut net,
@@ -478,10 +493,8 @@ impl CpalController {
         );
 
         {
-            log::trace!("Storing {} sensor controls", handles.len());
             *self.sensor_controls.write() =
                 HashMap::from_iter(handles.into_iter().map(|h| (h.key, h)));
-            log::trace!("setting tuner_only_mode to false");
             *self.tuner_only_mode.write() = false;
             log::trace!("stored sensor controls");
         }
@@ -644,13 +657,9 @@ impl AudioRuntime for CpalController {
 
         // Snapshot for potential restarts.
         {
-            log::trace!("acquring write lock layout");
             *self.last_layout.write() = *layout;
-            log::trace!("acquring write lock config");
             *self.last_config.write() = config.clone();
-            log::trace!("acquring write lock source");
             *self.last_source.write() = source;
-            log::trace!("acquring write lock tuner_config");
             *self.last_tuner_config.write() = tuner_config.clone();
             log::trace!("sotred layout/config/source/tuner_config");
         }
@@ -838,17 +847,7 @@ impl AudioRuntime for CpalController {
         Ok(())
     }
 
-    fn snapshot_output_snoop(&self, group: usize, key: usize) -> Vec<f32> {
-        let layout = *self.last_layout.read();
-        let registry = layout.registry();
-
-        let node_key = match registry.create_key(group as u8, key as u8) {
-            Ok(key) => key,
-            Err(err) => {
-                log::warn!("Invalid NodeKey in snapshot_output_snoop: {}", err);
-                return Vec::new();
-            }
-        };
+    fn snapshot_output_snoop(&self, node_key: NodeKey) -> Vec<f32> {
         let mut out = Vec::new();
         let mut snoops = self.output_snoops.write();
         if let Some(snoop) = snoops.get_mut(&node_key) {
@@ -862,7 +861,7 @@ impl AudioRuntime for CpalController {
         out
     }
 
-    fn snapshot_all_output_snoops(&self) -> Vec<(u8, u8, Vec<f32>)> {
+    fn snapshot_all_output_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
         let layout = *self.last_layout.read();
         let registry = layout.registry();
 
@@ -877,24 +876,13 @@ impl AudioRuntime for CpalController {
                 for rev in (0..cap).rev() {
                     samples.push(snoop.at(rev));
                 }
-                result.push((node_key.group(), node_key.key(), samples));
+                result.push((node_key, samples));
             }
         });
         result
     }
 
-    fn snapshot_activation_snoop(&self, group: usize, key: usize) -> Vec<f32> {
-        let layout = *self.last_layout.read();
-        let registry = layout.registry();
-
-        let node_key = match registry.create_key(group as u8, key as u8) {
-            Ok(key) => key,
-            Err(err) => {
-                log::warn!("Invalid NodeKey in snapshot_activation_snoop: {}", err);
-                return Vec::new();
-            }
-        };
-
+    fn snapshot_activation_snoop(&self, node_key: NodeKey) -> Vec<f32> {
         let mut out = Vec::new();
         let mut snoops = self.activation_snoops.write();
         if let Some(snoop) = snoops.get_mut(&node_key) {
@@ -908,7 +896,7 @@ impl AudioRuntime for CpalController {
         out
     }
 
-    fn snapshot_all_activation_snoops(&self) -> Vec<(u8, u8, Vec<f32>)> {
+    fn snapshot_all_activation_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
         let layout = *self.last_layout.read();
         let registry = layout.registry();
 
@@ -923,7 +911,7 @@ impl AudioRuntime for CpalController {
                 for rev in (0..cap).rev() {
                     samples.push(snoop.at(rev));
                 }
-                result.push((node_key.group(), node_key.key(), samples));
+                result.push((node_key, samples));
             }
         });
         result
@@ -945,8 +933,27 @@ impl AudioRuntime for CpalController {
         self.get_key_control(key)
     }
 
-    fn poll_tuner_spectrum(&self) -> Option<spectrum_analyzer::FrequencySpectrum> {
-        self.spectrum_data_thb.pop().and_then(Arc::into_inner)
+    fn poll_tuner_spectrum(&self) -> Option<common::tuner::SpectrumSnapshot> {
+        self.spectrum_data_thb.pop().map(|d| {
+            common::tuner::SpectrumSnapshot(
+                d.data()
+                    .iter()
+                    .map(|(freq, mag)| (freq.val(), mag.val()))
+                    .collect(),
+            )
+        })
+    }
+
+    fn poll_tuner_activations(&self) -> Vec<(NodeKey, f32)> {
+        let mut data = self
+            .siren_activations
+            .read()
+            .iter()
+            .map(|(k, v)| (*k, v.value()))
+            .collect::<Vec<_>>();
+        data.sort_by_key(|(k, _)| *k);
+
+        data
     }
 
     fn start_tuner_only(&self, tuner_config: &TunerConfig) -> common::error::Result<()> {
@@ -958,7 +965,21 @@ impl AudioRuntime for CpalController {
 
         let subnet = self.create_tuner_only_network(tuner_config);
 
-        let mut net = self.create_main_network(1, subnet);
+        let output_device = self
+            .output_device()
+            .ok_or(InstrumentError::DeviceUnavailable)?;
+
+        let output_default_cfg = output_device
+            .default_output_config()
+            .map_err(|_| InstrumentError::OutputConfigUnavailable)?;
+
+        let output_channels = std::cmp::Ord::min(output_default_cfg.channels(), 2) as usize;
+        log::trace!(
+            "CpalController.start: using {} output channels",
+            output_channels
+        );
+
+        let mut net = self.create_main_network(output_channels, subnet);
 
         let backend = net.backend();
         let front = net;
@@ -995,7 +1016,17 @@ impl AudioRuntime for CpalController {
         {
             *self.last_tuner_config.write() = new_config.clone();
         }
-        if old_config.sensor_data.len() != new_config.sensor_data.len() {
+        if old_config
+            .sensor_data
+            .iter()
+            .map(|d| d.key)
+            .collect::<Vec<_>>()
+            != new_config
+                .sensor_data
+                .iter()
+                .map(|d| d.key)
+                .collect::<Vec<_>>()
+        {
             self.update_primary_node(&self.last_config.read(), new_config);
         } else {
             let controls = self.sensor_controls.read();

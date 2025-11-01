@@ -49,3 +49,10 @@ pub struct UpdateSensorPayload {
     /// Maximum magnitude threshold in dB (20*log10)
     pub max_magnitude: f32,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Payload representing a snapshot of the frequency spectrum
+///
+/// Each tuple contains (frequency in Hz, magnitude in dB)
+pub struct SpectrumSnapshot(pub Vec<(f32, f32)>);

@@ -238,19 +238,33 @@ impl FFTAnalyzer {
         }
 
         if let Err(full) = self.spectrum_thb.push(Arc::new(spectrum)) {
-            log::warn!("fft_analyzer: failed to push spectrum data");
+            log::debug!("fft_analyzer: failed to push spectrum data, cathing up");
             _ = self.spectrum_thb.pop();
-            self.spectrum_thb.push(full.into_inner()).unwrap();
+            match self.spectrum_thb.push(full.into_inner()) {
+                Ok(_) => {}
+                Err(_) => {
+                    log::error!("fft_analyzer: failed to push spectrum data after pop");
+                }
+            }
         }
     }
 
     fn consume_thb_window(&mut self, sensor_inputs: &[f32]) {
         if self.window_thb.len() >= FFT_WINDOW_SIZE {
+            log::trace!(
+                "fft_analyzer: consume_thb_window with {} samples available",
+                self.window_thb.len()
+            );
             let mut window = [0.0; FFT_WINDOW_SIZE];
 
-            (0..FFT_WINDOW_SIZE).for_each(|i| {
-                window[i] = self.window_thb.pop().unwrap();
-            });
+            for frame in window.iter_mut() {
+                if let Some(sample) = self.window_thb.pop() {
+                    *frame = sample
+                } else {
+                    log::error!("fft_analyzer: insufficient samples in window_thb");
+                    break;
+                }
+            }
 
             self.perform_fft_analysis(&window, sensor_inputs);
         }

@@ -30,6 +30,7 @@ pub struct TunerState {
     current_activations: Arc<RwLock<Vec<f32>>>,
     frequencies: Arc<RwLock<Vec<f32>>>,
     spectrum_polling_thread: RwLock<Option<thread::JoinHandle<()>>>,
+    audio_probe: RwLock<bool>,
 }
 
 impl TunerState {
@@ -44,6 +45,7 @@ impl TunerState {
             current_activations: Arc::new(RwLock::new(Vec::new())),
             frequencies: Arc::new(RwLock::new(Vec::new())),
             spectrum_polling_thread: RwLock::new(None),
+            audio_probe: RwLock::new(false),
         }
     }
 
@@ -55,9 +57,29 @@ impl TunerState {
         self.current_layout.read().iter().copied().next()
     }
 
-    pub fn reset(&self, config: &Config, layout: &TunerLayout) {
+    pub fn reset(&self, config: &Config, layout: &TunerLayout) -> Result<()> {
+        let instrument = self.app.state::<InstrumentEngine>();
+        instrument.update_tuner_config(config)?;
+
         *self.tuner_config.write() = config.clone();
         *self.current_layout.write() = Some(*layout);
+
+        self.app
+            .emit(common::events::tuner::CONFIG, config)?;
+
+        Ok(())
+    }
+
+    pub fn toggle_probe(&self) -> Result<bool> {
+        let mut probe = self.audio_probe.write();
+        *probe = !*probe;
+        let instrument = self.app.state::<InstrumentEngine>();
+        if *probe {
+            instrument.start_tap_tuner_audio()?;
+        } else {
+            instrument.stop_tap_tuner_audio()?;
+        }
+        Ok(*probe)
     }
 
     pub fn update_layout(
@@ -120,6 +142,10 @@ impl TunerState {
                 }
             }
 
+
+            let instrument = self.app.state::<InstrumentEngine>();
+            instrument.update_tuner_config(&new_config)?;
+
             *self.tuner_config.write() = new_config.clone();
 
             self.app
@@ -152,6 +178,12 @@ impl TunerState {
             );
         }
 
+        let instrument = self.app.state::<InstrumentEngine>();
+        instrument.update_tuner_config(&config)?;
+
+        self.app
+            .emit(common::events::tuner::CONFIG, config.clone())?;
+
         Ok(config.clone())
     }
 
@@ -174,8 +206,11 @@ impl TunerState {
             instrument.start_tuner_only_stream(&self.tuner_config())?;
         }
 
-        let dur =
-            Duration::from_secs_f32(FFT_WINDOW_SIZE as f32 / self.tuner_config.read().sample_rate);
+        let dur = Duration::from_secs_f32(
+            1.0 / (self.tuner_config.read().sample_rate / FFT_WINDOW_SIZE as f32),
+        );
+
+        log::debug!("Starting tuner stream with polling interval: {:?}", dur);
 
         let handle = self.app.clone();
         let max_hold_magnitudes = Arc::clone(&self.max_hold_magnitudes);
@@ -186,54 +221,63 @@ impl TunerState {
 
         *self.spectrum_polling_thread.write() = Some(thread::spawn(move || loop {
             let instrument_state = handle.state::<InstrumentEngine>();
-            if let Some(spectrum) = instrument_state.poll_spectrum() {
-                let data = spectrum.data();
+            while let Some(spectrum) = instrument_state.poll_spectrum() {
+                log::trace!("Received spectrum data");
 
-                let mut frequencies = frequencies.write();
-                let mut current_magnitudes = current_magnitudes.write();
-                let mut max_hold_magnitudes = max_hold_magnitudes.write();
-
-                if data.len() != frequencies.len()
-                    || data.len() != current_magnitudes.len()
-                    || data.len() != max_hold_magnitudes.len()
                 {
-                    // Resize vectors
-                    *frequencies = vec![0.0; data.len()];
-                    *current_magnitudes = vec![0.0; data.len()];
-                    *max_hold_magnitudes = vec![0.0; data.len()];
-                }
+                    let data = spectrum.0;
+                    let num_entries = data.len();
 
-                for (at, (freq, mag)) in data.iter().enumerate() {
-                    frequencies[at] = freq.val();
-                    current_magnitudes[at] = mag.val();
-                    // Update max hold with decay
-                    max_hold_magnitudes[at] *= HOLD_DECAY;
-                    if mag.val() > max_hold_magnitudes[at] {
-                        max_hold_magnitudes[at] = mag.val();
+                    let mut frequencies = frequencies.write();
+                    let mut current_magnitudes = current_magnitudes.write();
+                    let mut max_hold_magnitudes = max_hold_magnitudes.write();
+
+                    if num_entries != frequencies.len()
+                        || num_entries != current_magnitudes.len()
+                        || num_entries != max_hold_magnitudes.len()
+                    {
+                        // Resize vectors
+                        *frequencies = vec![0_f32; num_entries];
+                        *current_magnitudes = vec![0_f32; num_entries];
+                        *max_hold_magnitudes = vec![0_f32; num_entries];
+                    }
+
+                    for ((((freq, mag), frequency), current_magnitude), max_magnitude) in data
+                        .iter()
+                        .zip(frequencies.iter_mut())
+                        .zip(current_magnitudes.iter_mut())
+                        .zip(max_hold_magnitudes.iter_mut())
+                    {
+                        *frequency = *freq;
+                        *current_magnitude = *mag;
+                        *max_magnitude = f32::min(*mag, *max_magnitude * HOLD_DECAY);
                     }
                 }
 
-                let activations = instrument_state.snapshot_all_activation_snoops();
-                let num_sensors = activations.len();
-                let mut max_hold_activations = max_hold_activations.write();
-                let mut current_activations = current_activations.write();
-                if num_sensors != current_activations.len()
-                    || num_sensors != max_hold_activations.len()
                 {
-                    // Resize vectors
-                    *current_activations = vec![0.0; num_sensors];
-                    *max_hold_activations = vec![0.0; num_sensors];
-                }
+                    let activations = instrument_state.poll_activations();
+                    let num_sensors = activations.len();
+                    let mut max_hold_activations = max_hold_activations.write();
+                    let mut current_activations = current_activations.write();
+                    if num_sensors != current_activations.len()
+                        || num_sensors != max_hold_activations.len()
+                    {
+                        // Resize vectors
+                        *current_activations = vec![0_f32; num_sensors];
+                        *max_hold_activations = vec![0_f32; num_sensors];
+                    }
 
-                for (at, (_, _, activation)) in activations.iter().enumerate() {
-                    let activation = activation.iter().sum::<f32>() / activation.len() as f32;
-                    current_activations[at] = activation;
-                    // Update max hold with decay
-                    max_hold_activations[at] *= HOLD_DECAY;
-                    if activation > max_hold_activations[at] {
-                        max_hold_activations[at] = activation;
+                    for (((_, activation), current), max_activation) in activations
+                        .iter()
+                        .zip(current_activations.iter_mut())
+                        .zip(max_hold_activations.iter_mut())
+                    {
+                        *current = *activation;
+                        *max_activation = f32::max(*activation, *max_activation * HOLD_DECAY);
                     }
                 }
+
+                log::trace!("Updated spectrum and activation data");
             }
 
             thread::sleep(dur);
@@ -260,13 +304,15 @@ impl TunerState {
         Ok(())
     }
 
-    pub fn spectrum_data(&self) -> SpectrumData {
-        let max_hold_magnitudes = self.max_hold_magnitudes.read();
-        let max_hold_activations = self.max_hold_activations.read();
-        let current_magnitudes = self.current_magnitudes.read();
-        let current_activations = self.current_activations.read();
-        let frequencies = self.frequencies.read();
-        let sample_rate = self.tuner_config.read().sample_rate;
+    pub fn spectrum_data(handle: &AppHandle) -> SpectrumData {
+        let state = handle.state::<Self>();
+
+        let max_hold_magnitudes = state.max_hold_magnitudes.read();
+        let max_hold_activations = state.max_hold_activations.read();
+        let current_magnitudes = state.current_magnitudes.read();
+        let current_activations = state.current_activations.read();
+        let frequencies = state.frequencies.read();
+        let sample_rate = state.tuner_config.read().sample_rate;
 
         SpectrumData {
             current_magnitudes: current_magnitudes.clone(),

@@ -29,6 +29,9 @@ pub fn InstrumentStrings() -> impl IntoView {
         common::instrument::data::GET_ALL_STRING_SNOOPS,
     );
 
+    let (visualize_batch, set_visualize_batch) =
+        signal(Vec::<common::instrument::StringSnoopEntry>::new());
+
     // Log errors for the batch command
     Effect::new(move |_| {
         if let Some(err) = batch_error() {
@@ -43,6 +46,9 @@ pub fn InstrumentStrings() -> impl IntoView {
     let _raf = crate::util::raf_fn_fps::use_raf_fn_with_fps(
         move |_| {
             fetch_batch(Some(()));
+            if let Some(batch) = batch_data() {
+                set_visualize_batch(batch.snoops);
+            }
         },
         20.0,
     );
@@ -129,13 +135,10 @@ pub fn InstrumentStrings() -> impl IntoView {
                                     let k = k as usize;
                                     let g = g as usize;
                                     let samples = Signal::derive(move || {
-                                        batch_data()
-                                            .and_then(|b| {
-                                                b.snoops
-                                                    .iter()
-                                                    .find(|e| e.group as usize == g && e.key as usize == k)
-                                                    .map(|e| e.samples.clone())
-                                            })
+                                        visualize_batch()
+                                            .into_iter()
+                                            .find(|e| e.group as usize == g && e.key as usize == k)
+                                            .map(|e| e.samples)
                                     });
                                     view! {
                                         <StringView

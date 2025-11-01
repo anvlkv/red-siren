@@ -29,21 +29,15 @@ pub fn setup(app: &mut App) -> Result<()> {
                 Ok(_) => {
                     log::debug!("Set initial instrument layout for window size: {}x{}", size.width, size.height);
                     let layout = state.layout();
-
-
-
                     // Emit initial layouts and config
                     if let Err(e) = base_handle_new.emit(common::instrument::events::LAYOUT, layout) {
                         log::error!("Failed emitting initial instrument layout: {e}");
                     }
-
-
                 }
                 Err(e) => {
                     log::error!("error setting initial instrument layout: {e}");
                 }
             }
-
         });
     } else {
         log::debug!("Instrument engine state already exists; skipping initialization");

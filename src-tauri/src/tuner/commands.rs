@@ -1,7 +1,7 @@
 use common::error::{Result, TunerError};
 use common::tuner::{Config, Layout as TunerLayout, SpectrumData};
 use common::NodeKey;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, State};
 
 use crate::instrument::InstrumentEngine;
 
@@ -25,21 +25,14 @@ pub fn tuner_layout(
     let instrument_layout = instrument.layout();
     let tuner_layout: TunerLayout = instrument_layout.into();
     let registry = instrument_layout.registry();
-    if let Some(updated_config) = state.update_layout(tuner_layout, registry)? {
-        // Emit config update event
-        app.emit(common::events::tuner::CONFIG, updated_config.clone())
-            .map_err(|e| TunerError::Emit {
-                event: common::events::tuner::CONFIG.to_string(),
-                message: e.to_string(),
-            })?;
-    }
+    _ = state.update_layout(tuner_layout, registry)?;
 
     Ok(tuner_layout)
 }
 
 #[tauri::command]
-pub fn tuner_spectrum_data(state: State<'_, TunerState>) -> Result<SpectrumData> {
-    Ok(state.spectrum_data())
+pub fn tuner_spectrum_data(app: AppHandle) -> Result<SpectrumData> {
+    Ok(TunerState::spectrum_data(&app))
 }
 
 #[tauri::command]
@@ -53,20 +46,13 @@ pub fn tuner_update_sensor(
     max_magnitude: f32,
 ) -> Result<()> {
     // Update tuner config
-    let updated_config = state.update_sensor_valuess(
+    _ = state.update_sensor_valuess(
         key,
         min_frequency,
         max_frequency,
         min_magnitude,
         max_magnitude,
     )?;
-
-    // Emit config update event
-    app.emit(common::events::tuner::CONFIG, updated_config.clone())
-        .map_err(|e| TunerError::Emit {
-            event: common::events::tuner::CONFIG.to_string(),
-            message: e.to_string(),
-        })?;
 
     Ok(())
 }
@@ -84,14 +70,7 @@ pub fn tuner_reset_config(
     let new_config = Config::new(tuner_layout, sample_rate, inst_layout.registry());
 
     // Update tuner config
-    state.reset(&new_config, &tuner_layout);
-
-    // Emit config update event
-    app.emit(common::events::tuner::CONFIG, new_config.clone())
-        .map_err(|e| TunerError::Emit {
-            event: common::events::tuner::CONFIG.to_string(),
-            message: e.to_string(),
-        })?;
+    state.reset(&new_config, &tuner_layout)?;
 
     Ok(())
 }
@@ -104,4 +83,9 @@ pub fn tuner_start_stream(state: State<'_, TunerState>) -> Result<()> {
 #[tauri::command]
 pub fn tuner_stop_stream(state: State<'_, TunerState>) -> Result<()> {
     state.stop_tuner_stream()
+}
+
+#[tauri::command]
+pub fn tuner_toggle_probe(state: State<'_, TunerState>) -> Result<bool> {
+    state.toggle_probe()
 }

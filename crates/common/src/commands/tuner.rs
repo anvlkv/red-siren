@@ -20,3 +20,6 @@ pub const START_STREAM: &str = "tuner_start_stream";
 
 /// Stop tuner input stream
 pub const STOP_STREAM: &str = "tuner_stop_stream";
+
+/// Toggle probe state for preamplified audio
+pub const TOGGLE_PROBE: &str = "tuner_toggle_probe";

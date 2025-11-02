@@ -1,9 +1,10 @@
-use log::{Level, LevelFilter, Log, Metadata, Record};
 use std::sync::Once;
+
+use log::{Level, LevelFilter, Log, Metadata, Record};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
-
+use web_sys::console;
 use js_sys::{Object, Reflect};
 
 #[wasm_bindgen]
@@ -106,6 +107,15 @@ impl Log for TauriLogger {
             // Fire and forget; ignore the result.
             let _ = JsFuture::from(invoke("plugin:log|log", &args)).await;
         });
+
+        let msg = JsValue::from_str(&message);
+        match record.level() {
+            Level::Error => console::error_1(&msg),
+            Level::Warn => console::warn_1(&msg),
+            Level::Info => console::info_1(&msg),
+            Level::Debug => console::log_1(&msg),
+            Level::Trace => console::debug_1(&msg),
+        }
     }
 
     fn flush(&self) {

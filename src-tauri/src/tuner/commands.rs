@@ -1,4 +1,4 @@
-use common::error::{Result, TunerError};
+use common::error::Result;
 use common::tuner::{Config, Layout as TunerLayout, SpectrumData};
 use common::NodeKey;
 use tauri::{AppHandle, State};
@@ -16,7 +16,6 @@ pub fn tuner_config(state: State<'_, TunerState>) -> Result<Config> {
 pub fn tuner_layout(
     state: State<'_, TunerState>,
     instrument: State<'_, InstrumentEngine>,
-    app: AppHandle,
 ) -> Result<TunerLayout> {
     if let Some(l) = state.tuner_layout() {
         return Ok(l);
@@ -38,7 +37,6 @@ pub fn tuner_spectrum_data(app: AppHandle) -> Result<SpectrumData> {
 #[tauri::command]
 pub fn tuner_update_sensor(
     state: State<'_, TunerState>,
-    app: AppHandle,
     key: NodeKey,
     min_frequency: f32,
     max_frequency: f32,
@@ -61,7 +59,6 @@ pub fn tuner_update_sensor(
 pub fn tuner_reset_config(
     state: State<'_, TunerState>,
     instrument: State<'_, InstrumentEngine>,
-    app: AppHandle,
 ) -> Result<()> {
     let inst_layout = instrument.layout();
     let sample_rate = instrument.sample_rate() as f32;

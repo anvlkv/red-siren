@@ -1036,6 +1036,7 @@ impl AudioRuntime for CpalController {
                     ctrl.min_frequency.set_value(sensor_data.min_frequency);
                     ctrl.max_magnitude.set_value(sensor_data.max_magnitude);
                     ctrl.min_magnitude.set_value(sensor_data.min_magnitude);
+                    log::info!("Updated tuner sensor control for key {:?}", sensor_data.key);
                 } else {
                     return Err(TunerError::MissingParameter(format!(
                         "controls for node key: {:?}",

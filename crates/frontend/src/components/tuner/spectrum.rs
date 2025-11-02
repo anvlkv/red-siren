@@ -56,7 +56,6 @@ pub fn SpectrumVisualizer(
 
     let activations = Signal::derive(move || spectrum().map(|data| data.sensor_activations));
     let max_activations = Signal::derive(move || spectrum().map(|data| data.max_activations));
-    // fft_size not needed for dB scaling
 
     view! {
         <svg class="absolute inset-0 w-full h-full">
@@ -67,23 +66,20 @@ pub fn SpectrumVisualizer(
                     y1=move || baseline.get().unwrap().0.y
                     x2=move || baseline.get().unwrap().1.x
                     y2=move || baseline.get().unwrap().1.y
-                    class="stroke-gray/20 dark:stroke-cinnabar/20 stroke-1"
+                    class="stroke-gray/20 dark:stroke-cinnabar/20 stroke-1 mix-blend-plus-darker dark:mix-blend-plus-lighter"
                 />
             </Show>
 
             // Max-hold sensor activation outline bars
             <Show when=move || spectrum().is_some() && layout().is_some()>
-                <g
-                    class="fill-none stroke-gray/40 dark:stroke-cinnabar/40 stroke-[0.5]"
-                    style="mix-blend-mode: multiply"
-                >
+                <g class="fill-none stroke-gray/40 dark:stroke-cinnabar/40 stroke-[0.5] mix-blend-plus-darker dark:mix-blend-plus-lighter">
                     <ActivationBars activations=max_activations layout=layout baseline=baseline />
                 </g>
             </Show>
 
             // Sensor activation bars (highest opacity - 60%)
             <Show when=move || spectrum().is_some() && layout().is_some()>
-                <g class="fill-gray/20 dark:fill-cinnabar/20" style="mix-blend-mode: multiply">
+                <g class="fill-gray/20 dark:fill-cinnabar/20 mix-blend-plus-darker dark:mix-blend-plus-lighter">
                     <ActivationBars activations=activations layout=layout baseline=baseline />
                 </g>
             </Show>
@@ -92,8 +88,7 @@ pub fn SpectrumVisualizer(
             <Show when=move || max_path.get().is_some()>
                 <path
                     d=move || max_path.get().unwrap_or_default()
-                    class="fill-gray/30 dark:fill-cinnabar/30 stroke-gray/50 dark:stroke-cinnabar/50 stroke-1"
-                    style="mix-blend-mode: multiply"
+                    class="fill-gray/30 dark:fill-cinnabar/30 stroke-gray/50 dark:stroke-cinnabar/50 stroke-1 mix-blend-plus-darker dark:mix-blend-plus-lighter"
                 />
             </Show>
 
@@ -101,8 +96,7 @@ pub fn SpectrumVisualizer(
             <Show when=move || current_path.get().is_some()>
                 <path
                     d=move || current_path.get().unwrap_or_default()
-                    class="fill-gray/40 dark:fill-cinnabar/40 stroke-gray/60 dark:stroke-cinnabar/60 stroke-1"
-                    style="mix-blend-mode: multiply"
+                    class="fill-gray/40 dark:fill-cinnabar/40 stroke-gray/60 dark:stroke-cinnabar/60 stroke-1 mix-blend-plus-darker dark:mix-blend-plus-lighter"
                 />
             </Show>
         </svg>

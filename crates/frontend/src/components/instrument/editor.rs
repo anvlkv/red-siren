@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use tauri_use::{use_command, use_invoke, UseTauriReturn, UseTauriWithReturn};
 
-use crate::components::{Button, Fold};
+use crate::components::{Button, EditorRangeSlider, Fold};
 
 const FREQ_RATIO_MAX: f32 = 14.0;
 const FREQ_RATIO_MIN: f32 = 0.001;
@@ -396,9 +396,9 @@ pub fn EditorOverlay() -> impl IntoView {
                         <EditorRangeSlider
                             label="Threshold"
                             value=Signal::derive(move || { finetuned_values().input_ny_threshold })
-                            min=0.0
+                            min=f32::EPSILON
                             max=1.0
-                            step=0.01
+                            step=0.00001
                             on_input=Callback::new(move |val| {
                                 set_finetuned_values
                                     .update(|values| {
@@ -410,9 +410,9 @@ pub fn EditorOverlay() -> impl IntoView {
                         <EditorRangeSlider
                             label="Ratio"
                             value=Signal::derive(move || { finetuned_values().input_ny_ratio })
-                            min=1.0
+                            min=0.001
                             max=10.0
-                            step=0.1
+                            step=0.001
                             on_input=Callback::new(move |val| {
                                 set_finetuned_values
                                     .update(|values| {
@@ -445,35 +445,5 @@ pub fn EditorOverlay() -> impl IntoView {
                 </form>
             </Fold>
         </div>
-    }
-}
-
-#[component]
-fn EditorRangeSlider(
-    label: &'static str,
-    value: Signal<f32>,
-    min: f32,
-    max: f32,
-    step: f32,
-    on_input: Callback<f32>,
-) -> impl IntoView {
-    view! {
-        <label class="flex flex-col gap-1">
-            <span class="block w-full">{label}</span>
-            <input
-                type="range"
-                class="w-48"
-                min=min.to_string()
-                max=max.to_string()
-                step=step.to_string()
-                prop:value=value
-                on:input=move |ev| {
-                    if let Ok(val) = event_target_value(&ev).parse::<f32>() {
-                        on_input.run(val);
-                    }
-                }
-            />
-            <span class="block w-full text-right">{move || format!("{:.3}", value())}</span>
-        </label>
     }
 }

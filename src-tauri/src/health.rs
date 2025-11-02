@@ -173,11 +173,6 @@ fn maybe_toggle_windows(
                 .set_focus()
                 .map_err(|e| HealthError::WindowOp { op: "focus_main".into(), message: e.to_string() })?;
         }
-
-        app.emit(common::events::health::APP_READY, ())
-            .map_err(|e| HealthError::Emit { event: common::events::health::APP_READY.to_string(), message: e.to_string() })?;
-
-        log::debug!("Emited: {}", common::events::health::APP_READY);
     } else {
         log::debug!(
             "GUI ready: {}.",

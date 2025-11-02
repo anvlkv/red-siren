@@ -16,6 +16,12 @@ const DARK_ICON: &str = include_str!("./icon/dark.svg");
 const BRIGHT_ICON: &str = include_str!("./icon/bright.svg");
 const SYSTEM_ICON: &str = include_str!("./icon/system.svg");
 const PROBE_ICON: &str = include_str!("./icon/probe.svg");
+const CANCEL_ICON: &str = include_str!("./icon/cancel.svg");
+const CHEVRON_LEFT_ICON: &str = include_str!("./icon/chevron-left.svg");
+const CHEVRON_RIGHT_ICON: &str = include_str!("./icon/chevron-right.svg");
+const SKULL_ICON: &str = include_str!("./icon/skull.svg");
+const OK_ICON: &str = include_str!("./icon/ok.svg");
+const WARNING_ICON: &str = include_str!("./icon/warning.svg");
 
 #[component]
 pub fn Icon(
@@ -30,6 +36,35 @@ pub fn Icon(
         UiSize::Lg => "md:text-5xl text-3xl",
     };
 
+    let decorated_svg = Signal::derive(move || {
+        let name = name();
+        let name = name.as_str();
+        let raw = match name {
+            "info" => INFO_ICON,
+            "play" => PLAY_ICON,
+            "tune" => TUNE_ICON,
+            "back" => BACK_ICON,
+            "resume" => RESUME_ICON,
+            "pause" => PAUSE_ICON,
+            "donate" => DONATE_ICON,
+            "mic" => MIC_ICON,
+            "entropy" => ENTROPY_ICON,
+            "reset" => RESET_ICON,
+            "dark" => DARK_ICON,
+            "bright" => BRIGHT_ICON,
+            "system" => SYSTEM_ICON,
+            "probe" => PROBE_ICON,
+            "cancel" => CANCEL_ICON,
+            "chevron-left" => CHEVRON_LEFT_ICON,
+            "chevron-right" => CHEVRON_RIGHT_ICON,
+            "skull" => SKULL_ICON,
+            "ok" => OK_ICON,
+            "warning" => WARNING_ICON,
+            i => panic!("No such icon: [{i}]"),
+        };
+        decorate_svg(raw, size(), name)
+    });
+
     view! {
         <i
             class=move || {
@@ -43,26 +78,7 @@ pub fn Icon(
                 )
             }
             style="line-height:1;"
-            inner_html=move || {
-                let raw = match name().as_str() {
-                    "info" => INFO_ICON,
-                    "play" => PLAY_ICON,
-                    "tune" => TUNE_ICON,
-                    "back" => BACK_ICON,
-                    "resume" => RESUME_ICON,
-                    "pause" => PAUSE_ICON,
-                    "donate" => DONATE_ICON,
-                    "mic" => MIC_ICON,
-                    "entropy" => ENTROPY_ICON,
-                    "reset" => RESET_ICON,
-                    "dark" => DARK_ICON,
-                    "bright" => BRIGHT_ICON,
-                    "system" => SYSTEM_ICON,
-                    "probe" => PROBE_ICON,
-                    _ => "No such icon",
-                };
-                decorate_svg(raw, size())
-            }
+            inner_html=decorated_svg
         />
     }
 }
@@ -119,10 +135,10 @@ fn remove_attr(tag: &str, name: &str) -> String {
     s
 }
 
-fn decorate_svg(svg: &str, size: UiSize) -> String {
+fn decorate_svg(svg: &str, size: UiSize, name: &str) -> String {
     debug_assert!(
-        svg.contains(r#"viewBox="0 0 1024 1024""#),
-        "incorrect svg viewBox"
+        svg.contains("viewBox=\"0 0 1024 1024\""),
+        "incorrect svg viewBox: [{name}]"
     );
 
     // Determine stroke width based on size - thicker for smaller icons

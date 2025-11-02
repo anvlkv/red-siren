@@ -5,13 +5,16 @@ mod appearance_toggle;
 mod button;
 mod card;
 mod content_page;
+mod editor_range_slider;
 mod error_template;
 mod fold;
 mod icon;
 mod instrument;
 mod intro;
 mod menu;
+mod notifications;
 mod switch;
+mod toaster;
 mod tooltip;
 mod tuner;
 
@@ -20,16 +23,18 @@ pub use appearance_toggle::*;
 pub use button::*;
 pub use card::*;
 pub use content_page::*;
+pub use editor_range_slider::*;
 pub use error_template::*;
 pub use fold::*;
 pub use icon::*;
 pub use instrument::*;
 pub use intro::*;
 pub use menu::*;
+pub use notifications::*;
 pub use switch::*;
+pub use toaster::*;
 pub use tooltip::*;
 pub use tuner::*;
-pub use tuner::{expect_tuner_service, provide_tuner_service};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, strum::EnumString)]
 pub enum UiVariant {

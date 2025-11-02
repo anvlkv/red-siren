@@ -10,6 +10,7 @@ use crate::{
         layout_context::{expect_layout_contex, LayoutContextReturn},
         playback_service::{expect_playback_service, PlaybackService},
         secondary_window::is_secondary_window,
+        setup_context::{is_devtools_enabled, is_mic_premission_granted},
         tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
     },
 };
@@ -29,33 +30,18 @@ pub fn Play() -> impl IntoView {
     let navigate = use_navigate();
 
     // Get setup state to check mic permission
-    let UseTauriResourceReturn {
-        data: setup_state,
-        error: setup_state_error,
-        ..
-    } = use_tauri_resource::<common::commands::health::SetupStatePayload>(
-        common::commands::health::SETUP_STATE,
-    );
+    let mic_permission = is_mic_premission_granted();
 
     // Check mic permission on mount and redirect if needed
     Effect::new({
         let navigate = navigate.clone();
         move |_| {
-            if let Some(err) = setup_state_error() {
-                log::error!("Error getting setup state: {err}");
-            }
-
-            if let Some(state) = setup_state() {
-                if state.mic_permission.is_none() {
-                    log::info!("Mic permission not set, redirecting to Permissions");
-                    navigate(RouteId::Permissions.as_ref(), Default::default());
-                }
+            if mic_permission().is_none() {
+                log::info!("Mic permission not set, redirecting to Permissions");
+                navigate(RouteId::Permissions.as_ref(), Default::default());
             }
         }
     });
-
-    // Derive mic permission state for ActivationSourceToggle
-    let mic_permission = Signal::derive(move || setup_state().and_then(|s| s.mic_permission));
 
     // Derive compact menu placement from current instrument layout orientation
     let LayoutContextReturn { orientation, .. } = expect_layout_contex();
@@ -127,7 +113,7 @@ pub fn Play() -> impl IntoView {
         cb_stop.run(());
     });
 
-    let editor = Signal::derive(move || setup_state().map(|e| e.devtools).unwrap_or_default());
+    let editor = is_devtools_enabled();
 
     view! {
         <div>

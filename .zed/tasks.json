@@ -14,6 +14,15 @@
     "use_new_terminal": true
   },
   {
+    "label": "Build in release mode with devtools",
+    "command": "cargo tauri build --bundles app --features devtools",
+    "env": {
+      "RUST_BACKTRACE": "1"
+    },
+    "reveal": "always",
+    "use_new_terminal": true
+  },
+  {
     "label": "Cargo docs",
     "command": "cargo doc --target-dir docs/rust --workspace",
     "reveal": "never"

@@ -1,39 +1,17 @@
 use leptos::prelude::*;
 use tauri_use::{use_command, UseTauriWithReturn};
 
-use common::tuner::{Config, SpectrumData};
+use common::tuner::{Config, Layout, SpectrumData};
 
-/// TunerService centralizes:
-/// - Reactive tuner state shared across tuner UI layers (config, spectrum frame, active sensor selection)
-/// - Stable command callbacks (reset config, start stream, stop stream)
-/// - Centralized command error logging (DRY)
-///
-/// Rationale:
-/// - Mirrored after `PlaybackService` to avoid race conditions when invoking
-///   start/stop during scope teardown (page cleanup).
-/// - Pages/components call these callbacks instead of wiring ephemeral `use_invoke`/`use_command`
-///   instances that might be dropped too early.
-/// - Keeps wiring + logging in one place (MAYA / DRY / KISS).
-///
-/// Provide once high in the app tree with `provide_tuner_service()`.
-/// Access anywhere with `expect_tuner_service()`.
-///
-/// Example (in a page like `Tune`):
-/// ```ignore
-/// let tuner = expect_tuner_service();
-/// Effect::new(move |_| tuner.start_stream.run(()));
-/// on_cleanup(move || tuner.stop_stream.run(()));
-/// let on_reset = move |_| tuner.reset.run(());
-/// ```
+use crate::util::tauri_resource::{use_tauri_resource, UseTauriResourceReturn};
+
 #[derive(Clone)]
 pub struct TunerService {
     /// Current tuner configuration (populated by listener/resource logic outside service)
     pub config: RwSignal<Option<Config>>,
+    pub layout: RwSignal<Option<Layout>>,
     /// Latest spectrum snapshot
     pub spectrum: RwSignal<Option<SpectrumData>>,
-    /// Currently selected sensor index (UI state)
-    pub active_sensor: RwSignal<Option<usize>>,
-
     /// Reset tuner configuration to defaults (backend: `tuner_reset_config`)
     pub reset: Callback<()>,
     /// Start tuner input / spectrum stream (backend: `tuner_start_stream`)
@@ -74,11 +52,19 @@ pub fn provide_tuner_service() {
         data: probe_active,
     } = use_command::<bool>(common::commands::tuner::TOGGLE_PROBE);
 
+    // Get tuner config resource
+    let UseTauriResourceReturn { data: config, .. } =
+        use_tauri_resource::<Config>(common::commands::tuner::CONFIG);
+
+    // Get tuner layout resource (safe-area-aware baseline, orientation, etc.)
+    let UseTauriResourceReturn { data: layout, .. } =
+        use_tauri_resource::<Layout>(common::commands::tuner::LAYOUT);
+
     // Construct service with stable callbacks
     let service = TunerService {
         config: RwSignal::new(None),
+        layout: RwSignal::new(None),
         spectrum: RwSignal::new(None),
-        active_sensor: RwSignal::new(None),
         reset: Callback::new(move |_| trigger_reset(Some(()))),
         start_stream: Callback::new(move |_| trigger_start(Some(()))),
         stop_stream: Callback::new(move |_| trigger_stop(Some(()))),
@@ -111,6 +97,18 @@ pub fn provide_tuner_service() {
                 "Error invoking {}: {err}",
                 common::commands::tuner::TOGGLE_PROBE
             );
+        }
+    });
+
+    Effect::new(move |_| {
+        if let Some(cfg) = config() {
+            service.config.set(Some(cfg));
+        }
+    });
+
+    Effect::new(move |_| {
+        if let Some(lay) = layout() {
+            service.layout.set(Some(lay));
         }
     });
 

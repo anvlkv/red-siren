@@ -6,11 +6,12 @@ use crate::{
     util::{
         layout_context::{expect_layout_contex, LayoutContextReturn},
         secondary_window::is_secondary_window,
-        tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
+        setup_context::{is_devtools_enabled, is_mic_premission_granted},
     },
 };
 use common::RouteId;
 use leptos::prelude::*;
+use leptos_router::hooks::use_navigate;
 
 #[component]
 pub fn Tune() -> impl IntoView {
@@ -18,10 +19,6 @@ pub fn Tune() -> impl IntoView {
     let tuner_service = expect_tuner_service();
 
     let is_secondary_window = is_secondary_window();
-
-    // Tuner config resource (refetch after reset)
-    let UseTauriResourceReturn { refetch, .. } =
-        use_tauri_resource::<common::tuner::Config>(common::commands::tuner::CONFIG);
 
     let menu_items = Memo::new(move |_| {
         if is_secondary_window() {
@@ -68,7 +65,6 @@ pub fn Tune() -> impl IntoView {
         let tuner_service = tuner_service.clone();
         move |_: ()| {
             tuner_service.reset.run(());
-            refetch(); // Refresh config after reset
         }
     });
 
@@ -88,9 +84,27 @@ pub fn Tune() -> impl IntoView {
         }
     });
 
+    // Derive editor flag from setup context
+    let editor = is_devtools_enabled();
+
+    // Get navigation function
+    let navigate = use_navigate();
+
+    // Check mic permission on mount and redirect if needed
+    let mic_permission = is_mic_premission_granted();
+    Effect::new({
+        let navigate = navigate.clone();
+        move |_| {
+            if mic_permission() != Some(true) {
+                log::info!("Mic permission required for tuner, redirecting to Permissions");
+                navigate(RouteId::Permissions.as_ref(), Default::default());
+            }
+        }
+    });
+
     view! {
         <div class="relative w-full h-full">
-            <Tuner />
+            <Tuner editor />
             <CompactMenu items=menu_items placement hide_home=is_secondary_window title>
                 <Button
                     on:click=move |_| on_reset.run(())

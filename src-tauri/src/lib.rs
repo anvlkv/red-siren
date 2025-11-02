@@ -38,6 +38,9 @@ pub fn run() {
             } else {
                 log::LevelFilter::Error
             })
+            .target(tauri_plugin_log::Target::new(
+                tauri_plugin_log::TargetKind::Webview,
+            ))
             .build(),
     );
     builder = builder.plugin(tauri_plugin_opener::init());

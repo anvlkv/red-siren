@@ -2,17 +2,17 @@ use common::commands::setup::UpdateWindowAppearancePayload;
 use leptos::prelude::*;
 use leptos_router::components::*;
 use leptos_use::use_preferred_dark;
-use tauri_use::{
-    use_command, use_invoke, use_listen, EventType, UseListenReturn, UseTauriReturn,
-    UseTauriWithReturn,
-};
+use tauri_use::{use_command, use_invoke, UseTauriReturn, UseTauriWithReturn};
 
 use crate::{
-    components::provide_tuner_service,
+    components::{provide_tuner_service, Notifications},
     routes::AppRoutes,
-    util::layout_context::provide_layout_context,
-    util::playback_service::provide_playback_service,
-    util::tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
+    util::{
+        layout_context::provide_layout_context,
+        playback_service::provide_playback_service,
+        setup_context::provide_setup_context,
+        tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
+    },
 };
 
 #[component]
@@ -21,14 +21,6 @@ pub fn App() -> impl IntoView {
         trigger: trigger_gui_ready,
         ..
     } = use_command::<()>(common::commands::health::GUI_READY);
-
-    let UseListenReturn {
-        event_id: _app_ready,
-        open,
-        error,
-        close: close_app_ready,
-        ..
-    } = use_listen::<()>(EventType::Custom(common::events::health::APP_READY));
 
     let UseTauriReturn {
         trigger: trigger_update_window_appearance,
@@ -62,20 +54,11 @@ pub fn App() -> impl IntoView {
     crate::util::view_transitions::provide_view_transition_class_toggler();
 
     Effect::new(move |_| {
-        open();
-
         log::info!("App mounted, reporting GUI ready");
         trigger_gui_ready(Some(()));
     });
 
     Effect::new(move |_| {
-        if let Some(err) = error() {
-            log::error!(
-                "Error listening to {}: {err}",
-                common::events::health::APP_READY
-            )
-        }
-
         if let Some(err) = error_update_window_appearance() {
             log::error!(
                 "Error invoking {}: {err}",
@@ -90,22 +73,20 @@ pub fn App() -> impl IntoView {
         trigger_update_window_appearance(Some((UpdateWindowAppearancePayload { dark }, ())));
     });
 
-    on_cleanup(move || {
-        close_app_ready();
-    });
-
     provide_layout_context();
     provide_playback_service();
     provide_tuner_service();
+    provide_setup_context();
 
     view! {
         <>
             <leptos_styling::StyleSheets />
             <div class=window_appearance_class>
-                <main class="bg-red dark:bg-black font-serif text-black dark:text-red relative min-h-screen min-w-screen select-none">
+                <main class="bg-red dark:bg-black font-serif text-black dark:text-red relative h-screen w-screen select-none overflow-hidden">
                     <Router>
                         <AppRoutes />
                     </Router>
+                    <Notifications />
                 </main>
             </div>
         </>

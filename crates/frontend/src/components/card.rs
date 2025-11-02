@@ -14,8 +14,8 @@ style_sheet!(
 /// Features:
 /// - Variants: Solid | Outline | Ghost
 /// - Padding: None | Sm | Md | Lg
-/// - Rounded corners by default (can toggle)
-/// - Optional interactive state (hover/active transitions; on_click)
+/// - Rounded corners by default
+/// - Optional interactive state
 /// - Full-width toggle
 #[component]
 pub fn Card(

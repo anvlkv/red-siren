@@ -19,7 +19,7 @@ pub use spectrum::SpectrumVisualizer;
 pub fn Tuner(#[prop(into, optional)] editor: Signal<bool>) -> impl IntoView {
     let context = expect_tuner_service();
 
-    // Listen for spectrum data
+    // Fetch spectrum data
     let UseTauriWithReturn {
         data: spectrum_data,
         error: spectrum_error,

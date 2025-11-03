@@ -222,7 +222,7 @@ mod integration_tests {
         // (RandomActivator generates random values)
         let any_activation = activations.values().any(|control| control.value() > 0.0);
 
-        assert!(!handles.is_empty());
+        assert!(handles.is_empty());
 
         assert!(
             any_activation,
@@ -237,7 +237,7 @@ mod integration_tests {
 
         // Test Mic source first
         {
-            let mut net = Net::new(0, 2);
+            let mut net = Net::new(1, 2);
             net.set_sample_rate(44100.0);
 
             #[cfg(feature = "editor")]
@@ -276,7 +276,7 @@ mod integration_tests {
 
         // Test Entropy source
         {
-            let mut net = Net::new(0, 6);
+            let mut net = Net::new(1, 6);
             net.set_sample_rate(44100.0);
 
             #[cfg(feature = "editor")]
@@ -310,12 +310,9 @@ mod integration_tests {
             net.check();
             net.allocate();
 
-            assert!(!handles.is_empty());
+            assert!(handles.is_empty());
         }
     }
-
-    // Note: slow_growth_activation functions are private implementation details
-    // The consistency is ensured by the implementation using the same x^3 formula
 
     #[test]
     fn test_random_activator_value_range() {

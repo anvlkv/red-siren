@@ -92,10 +92,12 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
 }
 
 pub fn multi_channel_system(
-    _config: &Config,
-    _net: &mut Net,
-    _num_channels: usize,
-    _values: &FineTunedValues,
+    config: &Config,
+    net: &mut Net,
+    num_channels: usize,
+    values: &FineTunedValues,
 ) -> Vec<NodeHandles> {
-    todo!("multi_channel_system")
+    log::warn!("Using only two channels of [{num_channels}]");
+
+    stereo_system(config, net, values)
 }

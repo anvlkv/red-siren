@@ -5,7 +5,7 @@ use leptos_use::use_preferred_dark;
 use tauri_use::{use_command, use_invoke, UseTauriReturn, UseTauriWithReturn};
 
 use crate::{
-    components::{provide_tuner_service, Notifications},
+    components::{provide_tuner_service, Notifications, Tooltips},
     routes::AppRoutes,
     util::{
         layout_context::provide_layout_context,
@@ -87,6 +87,7 @@ pub fn App() -> impl IntoView {
                         <AppRoutes />
                     </Router>
                     <Notifications />
+                    <Tooltips />
                 </main>
             </div>
         </>

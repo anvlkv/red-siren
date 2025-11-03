@@ -1,4 +1,7 @@
+use std::collections::HashMap;
+
 use crate::components::UiPlacement;
+use common::Rect;
 use leptos::prelude::*;
 
 #[component]
@@ -46,3 +49,23 @@ pub fn Tooltip(
         </div>
     }
 }
+
+pub fn with_tooltip<E>(element: NodeRef<E>, content: String, placement: Option<UiPlacement>)
+where
+    E: leptos::html::ElementType,
+    E::Output: 'static,
+{
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct TooltipEntry {
+    placement: UiPlacement,
+    content: String,
+    ui_rect: Rect,
+}
+
+#[derive(Clone)]
+struct TooltipsContext(RwSignal<HashMap<usize, TooltipEntry>>);
+
+#[component]
+pub fn Tooltips() -> impl IntoView {}

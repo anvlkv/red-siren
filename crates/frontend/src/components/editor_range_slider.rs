@@ -14,7 +14,7 @@ pub fn EditorRangeSlider(
             <span class="block w-full">{label}</span>
             <input
                 type="range"
-                class="w-48"
+                class="w-64"
                 min=min.to_string()
                 max=max.to_string()
                 step=step.to_string()
@@ -25,7 +25,9 @@ pub fn EditorRangeSlider(
                     }
                 }
             />
-            <span class="block w-full text-right">{move || format!("{:.3}", value())}</span>
+            <span class="block w-full text-right overflow-x-hidden text-ellipsis">
+                {move || value().to_string()}
+            </span>
         </label>
     }
 }

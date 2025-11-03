@@ -29,7 +29,7 @@ impl NodeKey {
 
     /// Get linear index for this NodeKey
     pub fn idx(&self) -> usize {
-        (self.0 as usize) * 256 + (self.1 as usize)
+        16 + (self.0 as usize) * 256 + (self.1 as usize)
     }
 }
 

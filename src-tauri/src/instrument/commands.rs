@@ -1,10 +1,10 @@
-use audio_system::rt::ActivationSource;
+use audio_system::rt::ExcitementSource;
 
 use common::error::{InstrumentError, Result};
 use common::instrument::commands::{UpdateBandControlPayload, UpdateKeyControlPayload};
 use common::instrument::events::{BAND_CONTROL_G_K, KEY_CONTROL_G_K};
 use common::instrument::{
-    events::{ActivationSourcePayload, PlaybackStatePayload},
+    events::{ExcitementSourcePayload, PlaybackStatePayload},
     Layout,
 };
 use common::NodeKey;
@@ -77,36 +77,36 @@ pub fn instrument_playback_state(
 }
 
 #[tauri::command]
-/// Returns current instrument activation source (mic or entropy)
-pub fn instrument_activation_source(
+/// Returns current instrument excitement source (mic or entropy)
+pub fn instrument_excitement_source(
     state: State<'_, InstrumentEngine>,
-) -> Result<ActivationSourcePayload> {
-    log::debug!("instrument_activation_source called");
-    let source = state.activation_source();
-    log::debug!("Current activation source (enum): {:?}", source);
-    Ok(ActivationSourcePayload {
+) -> Result<ExcitementSourcePayload> {
+    log::debug!("instrument_excitement_source called");
+    let source = state.excitement_source();
+    log::debug!("Current excitement source (enum): {:?}", source);
+    Ok(ExcitementSourcePayload {
         source: source.into(),
     })
 }
 
 #[tauri::command]
-/// Returns current instrument activation source (mic or entropy)
-pub fn instrument_set_activation_source(
+/// Returns current instrument excitement source (mic or entropy)
+pub fn instrument_set_excitement_source(
     source: u8,
     state: State<'_, InstrumentEngine>,
     health: State<'_, HealthSetupState>,
     app: AppHandle,
 ) -> Result<()> {
     log::trace!(
-        "instrument_set_activation_source called with source={}",
+        "instrument_set_excitement_source called with source={}",
         source
     );
 
     let src_u8 = source;
-    let requested: ActivationSource = source.into();
-    let current: ActivationSource = state.activation_source();
+    let requested: ExcitementSource = source.into();
+    let current: ExcitementSource = state.excitement_source();
     log::trace!(
-        "Activation source change requested: current={:?}, requested={:?} (code={})",
+        "Excitement source change requested: current={:?}, requested={:?} (code={})",
         current,
         requested,
         src_u8
@@ -115,7 +115,7 @@ pub fn instrument_set_activation_source(
     // If no change, just log and return
     if current == requested {
         log::trace!(
-            "Activation source unchanged (still {:?}, code={}) - no action taken",
+            "Excitement source unchanged (still {:?}, code={}) - no action taken",
             current,
             src_u8
         );
@@ -132,35 +132,35 @@ pub fn instrument_set_activation_source(
     };
 
     // Permission check if Mic requested
-    if matches!(requested, ActivationSource::Mic) && mic_permission_opt != Some(true) {
-        log::warn!("Won't enable mic activation source without mic permission");
+    if matches!(requested, ExcitementSource::Mic) && mic_permission_opt != Some(true) {
+        log::warn!("Won't enable mic excitement source without mic permission");
         return Err(InstrumentError::MicPermissionMissing.into());
     }
 
     // Apply change via inner method
-    log::trace!("Invoking engine.set_activation_source({:?})", requested);
-    match state.set_activation_source(requested)? {
+    log::trace!("Invoking engine.set_excitement_source({:?})", requested);
+    match state.set_excitement_source(requested)? {
         true => {
             log::info!(
-                "Setting activation source to {:?} (code={})",
+                "Setting excitement source to {:?} (code={})",
                 requested,
                 src_u8
             );
             app.emit(
-                common::instrument::events::ACTIVATION_SRC,
-                ActivationSourcePayload {
+                common::instrument::events::EXCITEMENT_SRC,
+                ExcitementSourcePayload {
                     source: requested.into(),
                 },
             )
             .map_err(|e| InstrumentError::Emit {
-                event: common::instrument::events::ACTIVATION_SRC.to_string(),
+                event: common::instrument::events::EXCITEMENT_SRC.to_string(),
                 message: e.to_string(),
             })?;
-            log::info!("Emitted activation source event: code={}", src_u8);
+            log::info!("Emitted excitement source event: code={}", src_u8);
         }
         false => {
             log::warn!(
-                "Inner reported activation source not changed for {:?} (code={})",
+                "Inner reported excitement source not changed for {:?} (code={})",
                 requested,
                 src_u8
             );
@@ -347,26 +347,26 @@ pub fn instrument_all_string_snoops(
 }
 
 #[tauri::command]
-pub fn instrument_activation_snoop_data(
+pub fn instrument_excitement_snoop_data(
     group: usize,
     key: usize,
     state: tauri::State<'_, crate::instrument::engine::InstrumentEngine>,
-) -> common::error::Result<common::instrument::data::ActivationSnoopDataResponse> {
-    let samples = state.snapshot_activation_snoop(NodeKey::new(group as u8, key as u8));
-    Ok(common::instrument::data::ActivationSnoopDataResponse { samples })
+) -> common::error::Result<common::instrument::data::ExcitementSnoopDataResponse> {
+    let samples = state.snapshot_excitement_snoop(NodeKey::new(group as u8, key as u8));
+    Ok(common::instrument::data::ExcitementSnoopDataResponse { samples })
 }
 
 #[tauri::command]
-pub fn instrument_all_activation_snoops(
+pub fn instrument_all_excitement_snoops(
     state: tauri::State<'_, crate::instrument::engine::InstrumentEngine>,
-) -> common::error::Result<common::instrument::data::ActivationSnoopBatchPayload> {
+) -> common::error::Result<common::instrument::data::ExcitementSnoopBatchPayload> {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     let entries = state
-        .snapshot_all_activation_snoops()
+        .snapshot_all_excitement_snoops()
         .into_iter()
         .map(
-            |(NodeKey(group, key), samples)| common::instrument::data::ActivationSnoopEntry {
+            |(NodeKey(group, key), samples)| common::instrument::data::ExcitementSnoopEntry {
                 group,
                 key,
                 samples,
@@ -379,7 +379,7 @@ pub fn instrument_all_activation_snoops(
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0);
 
-    Ok(common::instrument::data::ActivationSnoopBatchPayload {
+    Ok(common::instrument::data::ExcitementSnoopBatchPayload {
         t_unix_ms,
         snoops: entries,
     })
@@ -484,10 +484,9 @@ pub fn instrument_update_key_control(
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn instrument_edit_finetuned_values(
-    siren_base_hz: f32,
-    siren_max_frequency_hz: f32,
-    siren_excitement_pause_limit: f32,
-    siren_base_pause_duration: f32,
+    siren_alpha: f32,
+    siren_beta: f32,
+    siren_gamma: f32,
     node_follow_response_time_s: f32,
     filter_switch_follow_response_s: f32,
     filter_allpass_q: f32,
@@ -508,10 +507,9 @@ pub async fn instrument_edit_finetuned_values(
     state: State<'_, InstrumentEngine>,
 ) -> Result<common::commands::edit::FineTunedValuesPayload> {
     let values = common::commands::edit::FineTunedValuesPayload{
-        siren_base_hz,
-        siren_max_frequency_hz,
-        siren_excitement_pause_limit,
-        siren_base_pause_duration,
+        siren_alpha,
+        siren_beta,
+        siren_gamma,
         filter_switch_follow_response_s,
         node_follow_response_time_s,
         filter_allpass_q,

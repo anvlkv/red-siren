@@ -20,7 +20,7 @@
 //!   1. Manages a WebAudio graph (likely via wasm-bindgen / web-sys).
 //!   2. Mirrors the behavior of the CPAL controller regarding:
 //!        - start/stop/pause/resume
-//!        - activation source switching (Mic vs entropy)
+//!        - excitement source switching (Mic vs entropy)
 //!        - layout/config graph rebuild (crossfade semantics may differ
 //!          on WebAudio; emulate or approximate as needed).
 //!        - output snoop snapshots (could be implemented by tapping nodes
@@ -60,7 +60,7 @@ pub fn make_stream_controller() -> common::error::Result<Box<dyn StreamControlle
 //         &self,
 //         _layout: &common::instrument::Layout,
 //         _config: &common::instrument::Config,
-//         _source: crate::rt::ActivationSource,
+//         _source: crate::rt::ExcitementSource,
 //     ) -> common::error::Result<()> {
 //         // TODO: Initialize / connect WebAudio graph
 //         Ok(())
@@ -68,9 +68,9 @@ pub fn make_stream_controller() -> common::error::Result<Box<dyn StreamControlle
 //     fn stop(&self) -> common::error::Result<()> { Ok(()) }
 //     fn pause(&self) -> common::error::Result<()> { Ok(()) }
 //     fn resume(&self) -> common::error::Result<()> { Ok(()) }
-//     fn on_activation_source_changed(
+//     fn on_excitement_source_changed(
 //         &self,
-//         _source: crate::rt::ActivationSource,
+//         _source: crate::rt::ExcitementSource,
 //     ) -> common::error::Result<()> { Ok(()) }
 //     fn on_layout_changed(
 //         &self,

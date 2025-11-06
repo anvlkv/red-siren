@@ -4,14 +4,14 @@ pub mod values;
 
 use std::collections::HashMap;
 
-use crate::rt::ActivationSource;
+use crate::rt::ExcitementSource;
 use common::NodeKey;
 use fundsp::{net::Net, shared::Shared, snoop::Snoop};
 use values::FineTunedValues;
 
 pub struct NodeHandles {
     pub key: NodeKey,
-    pub activation_snoop: Snoop,
+    pub excitement_snoop: Snoop,
     pub output_snoop: Snoop,
     pub siren_control: Shared,
     pub band_control: Shared,
@@ -53,8 +53,8 @@ pub fn create_output_system(
 pub fn create_input_system(
     config: &common::tuner::Config,
     net: &mut Net,
-    activations: HashMap<NodeKey, Shared>,
-    source: ActivationSource,
+    excitements: HashMap<NodeKey, Shared>,
+    source: ExcitementSource,
     spectrum_thb: &input::analyzer::SpectrumBuffer,
     tap_channel: usize,
     #[cfg(feature = "editor")] values: &FineTunedValues,
@@ -65,13 +65,13 @@ pub fn create_input_system(
     log::debug!("Creating input system with fine-tuned values: {values:#?}");
 
     match source {
-        ActivationSource::Mic => {
+        ExcitementSource::Mic => {
             // Use FFT analyzer for microphone input
-            input::sensors_system(config, net, activations, values, spectrum_thb, tap_channel)
+            input::sensors_system(config, net, excitements, values, spectrum_thb, tap_channel)
         }
-        ActivationSource::Entropy => {
-            // Use random activator for entropy source
-            input::randomized_system(config, net, activations);
+        ExcitementSource::Entropy => {
+            // Use random excitor for entropy source
+            input::randomized_system(config, net, excitements);
 
             vec![]
         }

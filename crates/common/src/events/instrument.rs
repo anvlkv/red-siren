@@ -1,7 +1,7 @@
 /// Emited when playback state changes
 pub const PLAYBACK_STATE: &str = "instrument_playback_state";
-/// Emited when instrument activation source changes
-pub const ACTIVATION_SRC: &str = "instrument_activation_source";
+/// Emited when instrument excitement source changes
+pub const EXCITEMENT_SRC: &str = "instrument_excitement_source";
 /// Emitted when instrument layout changes (invoke & event share this string)
 pub const LAYOUT: &str = "instrument_layout";
 /// Emitted when band control position changes
@@ -17,6 +17,6 @@ pub struct PlaybackStatePayload {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ActivationSourcePayload {
+pub struct ExcitementSourcePayload {
     pub source: u8,
 }

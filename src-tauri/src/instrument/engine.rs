@@ -1,7 +1,7 @@
 use common::NodeKey;
 use parking_lot::RwLock;
 
-use audio_system::rt::{make_stream_controller, ActivationSource, AudioRuntime};
+use audio_system::rt::{make_stream_controller, AudioRuntime, ExcitementSource};
 
 use common::error::Result;
 use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout};
@@ -19,7 +19,7 @@ pub struct InstrumentEngine {
 pub(super) struct Inner {
     // Playback & instrument state
     playing: RwLock<bool>,
-    activation_source: RwLock<ActivationSource>,
+    excitement_source: RwLock<ExcitementSource>,
     layout: RwLock<InstrumentLayout>,
     config: RwLock<InstrumentConfig>,
 
@@ -33,7 +33,7 @@ impl InstrumentEngine {
             app: app.clone(),
             inner: Inner {
                 playing: RwLock::new(false),
-                activation_source: RwLock::new(ActivationSource::default()),
+                excitement_source: RwLock::new(ExcitementSource::default()),
                 layout: RwLock::new(InstrumentLayout::default()),
                 config: RwLock::new(InstrumentConfig::default()),
                 stream_controller: RwLock::new(make_stream_controller()?),
@@ -49,8 +49,8 @@ impl InstrumentEngine {
         *self.inner.playing.read()
     }
 
-    pub fn activation_source(&self) -> ActivationSource {
-        *self.inner.activation_source.read()
+    pub fn excitement_source(&self) -> ExcitementSource {
+        *self.inner.excitement_source.read()
     }
 
     pub fn start_playback(&self) -> common::error::Result<bool> {
@@ -75,7 +75,7 @@ impl InstrumentEngine {
 
                 let layout = self.inner.layout.read();
                 let config = self.inner.config.read();
-                let source = *self.inner.activation_source.read();
+                let source = *self.inner.excitement_source.read();
                 log::trace!(
                     "Inner.start_playback: starting stream with source={:?}",
                     source
@@ -152,12 +152,12 @@ impl InstrumentEngine {
         Ok(true)
     }
 
-    pub fn set_activation_source(&self, src: ActivationSource) -> common::error::Result<bool> {
+    pub fn set_excitement_source(&self, src: ExcitementSource) -> common::error::Result<bool> {
         let tuner_state = self.app.state::<crate::tuner::TunerState>();
         let tuner_config = tuner_state.tuner_config();
-        log::trace!("InstrumentEngine.set_activation_source({:?})", src);
+        log::trace!("InstrumentEngine.set_excitement_source({:?})", src);
         let changed = {
-            let mut current = self.inner.activation_source.write();
+            let mut current = self.inner.excitement_source.write();
             if *current != src {
                 *current = src;
                 true
@@ -167,27 +167,27 @@ impl InstrumentEngine {
         };
 
         if changed {
-            log::trace!("Inner.set_activation_source: changed to {:?}", src);
+            log::trace!("Inner.set_excitement_source: changed to {:?}", src);
             let ctrl = self.inner.stream_controller.read();
-            log::trace!("Inner.set_activation_source: notifying stream controller");
-            ctrl.on_activation_source_changed(src)?;
+            log::trace!("Inner.set_excitement_source: notifying stream controller");
+            ctrl.on_excitement_source_changed(src)?;
 
             // Also trigger layout change to ensure proper system recreation with new tuner config
             let layout = self.inner.layout.read();
             let config = self.inner.config.read();
             ctrl.on_layout_changed(&layout, &config, &tuner_config)?;
-            log::info!("Recreated audio systems after activation source change");
+            log::info!("Recreated audio systems after excitement source change");
         } else {
-            log::trace!("Inner.set_activation_source: no-op (already {:?})", src);
+            log::trace!("Inner.set_excitement_source: no-op (already {:?})", src);
         }
 
         self.app
             .emit(
-                common::instrument::events::ACTIVATION_SRC,
-                common::instrument::events::ActivationSourcePayload { source: src.into() },
+                common::instrument::events::EXCITEMENT_SRC,
+                common::instrument::events::ExcitementSourcePayload { source: src.into() },
             )
             .map_err(|e| common::error::InstrumentError::Emit {
-                event: common::instrument::events::ACTIVATION_SRC.to_string(),
+                event: common::instrument::events::EXCITEMENT_SRC.to_string(),
                 message: e.to_string(),
             })?;
 
@@ -318,18 +318,18 @@ impl InstrumentEngine {
             .snapshot_all_output_snoops()
     }
 
-    pub fn snapshot_activation_snoop(&self, key: NodeKey) -> Vec<f32> {
+    pub fn snapshot_excitement_snoop(&self, key: NodeKey) -> Vec<f32> {
         self.inner
             .stream_controller
             .read()
-            .snapshot_activation_snoop(key)
+            .snapshot_excitement_snoop(key)
     }
 
-    pub fn snapshot_all_activation_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
+    pub fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
         self.inner
             .stream_controller
             .read()
-            .snapshot_all_activation_snoops()
+            .snapshot_all_excitement_snoops()
     }
 
     pub fn sample_rate(&self) -> f64 {
@@ -340,8 +340,8 @@ impl InstrumentEngine {
         self.inner.stream_controller.read().poll_tuner_spectrum()
     }
 
-    pub fn poll_activations(&self) -> Vec<(NodeKey, f32)> {
-        self.inner.stream_controller.read().poll_tuner_activations()
+    pub fn poll_excitements(&self) -> Vec<(NodeKey, f32)> {
+        self.inner.stream_controller.read().poll_tuner_excitements()
     }
 
     pub fn start_tuner_only_stream(&self, tuner_config: &TunerConfig) -> Result<()> {

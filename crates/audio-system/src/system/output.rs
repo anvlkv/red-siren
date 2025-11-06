@@ -18,7 +18,7 @@ use super::NodeHandles;
 use crate::system::values::FineTunedValues;
 
 struct InnerHandles {
-    activation_snoop: An<SnoopBackend>,
+    excitement_snoop: An<SnoopBackend>,
     output_snoop: An<SnoopBackend>,
     siren_control: Var,
     band_control: Var,
@@ -26,13 +26,13 @@ struct InnerHandles {
 
 impl Default for InnerHandles {
     fn default() -> Self {
-        let (_, activation_snoop) = snoop(node::ACTIVATION_SNOOP_CAPACITY);
+        let (_, excitement_snoop) = snoop(node::ACTIVATION_SNOOP_CAPACITY);
         let (_, output_snoop) = snoop(node::OUTPUT_SNOOP_CAPACITY);
         let siren_control = shared(0.0);
         let band_control = shared(0.0);
 
         Self {
-            activation_snoop,
+            excitement_snoop,
             output_snoop,
             siren_control: Var::new(&siren_control),
             band_control: Var::new(&band_control),

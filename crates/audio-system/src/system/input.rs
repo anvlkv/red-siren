@@ -2,7 +2,7 @@ mod new_york;
 
 pub mod analyzer;
 pub mod preamp;
-pub mod random_activator;
+pub mod random_excitor;
 
 use std::collections::HashMap;
 
@@ -19,42 +19,42 @@ use crate::system::values::FineTunedValues;
 use super::SensorHandles;
 
 pub(crate) use analyzer::FFTAnalyzer;
-pub(crate) use random_activator::RandomActivator;
+pub(crate) use random_excitor::RandomExcitor;
 
 pub fn sensors_system(
     config: &Config,
     net: &mut Net,
-    activations: HashMap<NodeKey, Shared>,
+    excitements: HashMap<NodeKey, Shared>,
     values: &FineTunedValues,
     spectrum_thb: &analyzer::SpectrumBuffer,
     tap_channel: usize,
 ) -> Vec<SensorHandles> {
     log::info!(
-        "Creating sensors system with {} sensor configs and {} activation controls",
+        "Creating sensors system with {} sensor configs and {} excitement controls",
         config.sensor_data.len(),
-        activations.len()
+        excitements.len()
     );
 
-    // Validate that sensor data and activations have compatible NodeKeys
+    // Validate that sensor data and excitements have compatible NodeKeys
     let sensor_keys: std::collections::HashSet<NodeKey> =
         config.sensor_data.iter().map(|s| s.key).collect();
-    let activation_keys: std::collections::HashSet<NodeKey> = activations.keys().copied().collect();
+    let excitement_keys: std::collections::HashSet<NodeKey> = excitements.keys().copied().collect();
 
-    let missing_activations: Vec<NodeKey> =
-        sensor_keys.difference(&activation_keys).copied().collect();
-    let orphaned_activations: Vec<NodeKey> =
-        activation_keys.difference(&sensor_keys).copied().collect();
+    let missing_excitements: Vec<NodeKey> =
+        sensor_keys.difference(&excitement_keys).copied().collect();
+    let orphaned_excitements: Vec<NodeKey> =
+        excitement_keys.difference(&sensor_keys).copied().collect();
 
-    if !missing_activations.is_empty() {
+    if !missing_excitements.is_empty() {
         log::warn!(
-            "Sensor configs without activation controls: {:?}",
-            missing_activations
+            "Sensor configs without excitement controls: {:?}",
+            missing_excitements
         );
     }
-    if !orphaned_activations.is_empty() {
+    if !orphaned_excitements.is_empty() {
         log::warn!(
-            "Activation controls without sensor configs: {:?}",
-            orphaned_activations
+            "Excitement controls without sensor configs: {:?}",
+            orphaned_excitements
         );
     }
 
@@ -85,7 +85,7 @@ pub fn sensors_system(
 
     let sensor_inputs = sensor_shared.len();
 
-    // Create FFT analyzer with siren activation
+    // Create FFT analyzer with siren excitement
     let analyzer = u_num_it!(
         [
             0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84,
@@ -103,7 +103,7 @@ pub fn sensors_system(
                 FFTAnalyzer::new(
                     Box::new(stacks),
                     config.clone(),
-                    activations,
+                    excitements,
                     spectrum_thb.clone(),
                 )
             }
@@ -143,23 +143,23 @@ fn create_sensor_handles(config: &Config) -> Vec<SensorHandles> {
     handles
 }
 
-/// Create a random activation system that bypasses FFT analysis
-/// Used when activation source is Entropy/Random
-pub fn randomized_system(_config: &Config, net: &mut Net, activations: HashMap<NodeKey, Shared>) {
+/// Create a random excitement system that bypasses FFT analysis
+/// Used when excitement source is Entropy/Random
+pub fn randomized_system(_config: &Config, net: &mut Net, excitements: HashMap<NodeKey, Shared>) {
     log::info!(
-        "Creating random sensors system with {} activation controls",
-        activations.len()
+        "Creating random sensors system with {} excitement controls",
+        excitements.len()
     );
 
-    // Create RandomActivator node
-    let random_activator = RandomActivator::new(activations);
+    // Create RandomExcitor node
+    let random_excitor = RandomExcitor::new(excitements);
 
     // Add to network
-    let id = net.push(Box::new(random_activator));
+    let id = net.push(Box::new(random_excitor));
     net.connect_input(0, id, 0);
 
     log::info!(
-        "Random sensors system created successfully with activator node id: {:?}",
+        "Random sensors system created successfully with excitor node id: {:?}",
         id
     );
 }

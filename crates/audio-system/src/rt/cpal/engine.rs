@@ -28,7 +28,7 @@ use parking_lot::RwLock;
 #[cfg(feature = "editor")]
 use crate::system::values::{FineTunedSharedValues, FineTunedValues};
 use crate::{
-    rt::{cpal::stream::spawn_owned_input_stream, ActivationSource, AudioRuntime},
+    rt::{cpal::stream::spawn_owned_input_stream, AudioRuntime, ExcitementSource},
     util::S,
     SensorHandles,
 };
@@ -63,12 +63,12 @@ struct CpalController {
     control_tx: RwLock<Option<Sender<Control>>>,
     output_thread: RwLock<Option<thread::JoinHandle<()>>>,
 
-    // Activation system (input/noise)
+    // Excitement system (input/noise)
     input_sender: RwLock<Option<Sender<Control>>>,
     input_thread: RwLock<Option<thread::JoinHandle<()>>>,
 
     // Per-string data taps and controls
-    activation_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
+    excitement_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
     output_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
     band_controls: RwLock<HashMap<NodeKey, Shared>>,
     key_controls: RwLock<HashMap<NodeKey, Shared>>,
@@ -76,12 +76,12 @@ struct CpalController {
 
     // Spectrum data tap
     spectrum_data_thb: crate::system::input::analyzer::SpectrumBuffer,
-    siren_activations: RwLock<HashMap<NodeKey, Var>>,
+    siren_excitements: RwLock<HashMap<NodeKey, Var>>,
 
     // Last known state for restarts
     last_layout: RwLock<InstrumentLayout>,
     last_config: RwLock<InstrumentConfig>,
-    last_source: RwLock<ActivationSource>,
+    last_source: RwLock<ExcitementSource>,
     last_tuner_config: RwLock<TunerConfig>,
 
     // devices
@@ -106,16 +106,16 @@ impl Default for CpalController {
             output_thread: RwLock::new(None),
             input_sender: RwLock::new(None),
             input_thread: RwLock::new(None),
-            activation_snoops: RwLock::new(HashMap::new()),
+            excitement_snoops: RwLock::new(HashMap::new()),
             output_snoops: RwLock::new(HashMap::new()),
             band_controls: RwLock::new(HashMap::new()),
             key_controls: RwLock::new(HashMap::new()),
             sensor_controls: RwLock::new(HashMap::new()),
             spectrum_data_thb: Arc::new(ThingBuf::new(SPECTRUM_BUFFER_CAPACITY)),
-            siren_activations: RwLock::new(HashMap::new()),
+            siren_excitements: RwLock::new(HashMap::new()),
             last_layout: RwLock::new(InstrumentLayout::default()),
             last_config: RwLock::new(InstrumentConfig::default()),
-            last_source: RwLock::new(ActivationSource::default()),
+            last_source: RwLock::new(ExcitementSource::default()),
             last_tuner_config: RwLock::new(TunerConfig::default()),
             output_device: RwLock::new(None),
             input_device: RwLock::new(None),
@@ -254,7 +254,7 @@ impl CpalController {
             stream_cfg,
             output_channels,
             move || {
-                // Activation consumer captured inside closure.
+                // Excitement consumer captured inside closure.
                 let mut in_sample = [0_f32];
                 let mut out_sample = [0_f32; 2];
                 let input_buffer = input_buffer.clone();
@@ -338,7 +338,7 @@ impl CpalController {
         );
 
         {
-            *self.siren_activations.write() = HashMap::from_iter(
+            *self.siren_excitements.write() = HashMap::from_iter(
                 siren_controls_stub
                     .iter()
                     .map(|(key, shared)| (*key, Var::new(shared))),
@@ -357,7 +357,7 @@ impl CpalController {
             tuner_config,
             &mut net,
             siren_controls_stub,
-            ActivationSource::Mic,
+            ExcitementSource::Mic,
             &self.spectrum_data_thb,
             2,
             #[cfg(feature = "editor")]
@@ -385,7 +385,7 @@ impl CpalController {
         &self,
         config: &InstrumentConfig,
         tuner_config: &TunerConfig,
-        source: ActivationSource,
+        source: ExcitementSource,
     ) -> Net {
         log::info!(
             "Creating network with {} groups, {} keys per group",
@@ -431,20 +431,20 @@ impl CpalController {
 
         let mut siren_controls = HashMap::<NodeKey, Shared>::new();
 
-        // Store node handle artifacts (activation/output snoops, control vars).
+        // Store node handle artifacts (excitement/output snoops, control vars).
         {
-            let mut activation_snoops = self.activation_snoops.write();
+            let mut excitement_snoops = self.excitement_snoops.write();
             let mut output_snoops = self.output_snoops.write();
             let mut stored_band_controls = self.band_controls.write();
             let mut stored_key_controls = self.key_controls.write();
 
-            activation_snoops.clear();
+            excitement_snoops.clear();
             output_snoops.clear();
             stored_band_controls.clear();
             stored_key_controls.clear();
 
             for handle in node_handles {
-                activation_snoops.insert(handle.key, handle.activation_snoop);
+                excitement_snoops.insert(handle.key, handle.excitement_snoop);
                 output_snoops.insert(handle.key, handle.output_snoop);
                 siren_controls.insert(handle.key, handle.siren_control);
                 stored_band_controls.insert(handle.key, handle.band_control);
@@ -474,7 +474,7 @@ impl CpalController {
         );
 
         {
-            *self.siren_activations.write() = HashMap::from_iter(
+            *self.siren_excitements.write() = HashMap::from_iter(
                 siren_controls
                     .iter()
                     .map(|(key, shared)| (*key, Var::new(shared))),
@@ -573,7 +573,7 @@ impl CpalController {
             }
         }
 
-        // Activation stream shutdown
+        // Excitement stream shutdown
         if let Some(act_tx) = self.input_sender.write().take() {
             let (ack_tx, ack_rx) = mpsc::channel();
             if act_tx.send(Control::Shutdown(ack_tx)).is_ok() {
@@ -589,7 +589,7 @@ impl CpalController {
         self.dsp_net_frontend.write().take();
         self.dsp_primary_node_id.write().take();
         self.gain_param.write().take();
-        self.activation_snoops.write().clear();
+        self.excitement_snoops.write().clear();
         self.output_snoops.write().clear();
         self.band_controls.write().clear();
         self.key_controls.write().clear();
@@ -647,7 +647,7 @@ impl AudioRuntime for CpalController {
         &self,
         layout: &InstrumentLayout,
         config: &InstrumentConfig,
-        source: ActivationSource,
+        source: ExcitementSource,
         tuner_config: &TunerConfig,
     ) -> Result<()> {
         log::trace!("CpalController.start: begin with source={:?}", source);
@@ -692,14 +692,14 @@ impl AudioRuntime for CpalController {
             output_channels
         );
 
-        // Prepare activation ring buffer & activation source thread.
+        // Prepare excitement ring buffer & excitement source thread.
         log::trace!(
-            "CpalController.start: selecting activation source branch: {:?}",
+            "CpalController.start: selecting excitement source branch: {:?}",
             source
         );
 
-        let input_buffer = if matches!(source, ActivationSource::Mic) {
-            log::debug!("CpalController.start: using Mic activation");
+        let input_buffer = if matches!(source, ExcitementSource::Mic) {
+            log::debug!("CpalController.start: using Mic excitement");
             Some(self.start_input_stream()?)
         } else {
             None
@@ -782,30 +782,30 @@ impl AudioRuntime for CpalController {
         }
     }
 
-    fn on_activation_source_changed(&self, source: ActivationSource) -> Result<()> {
+    fn on_excitement_source_changed(&self, source: ExcitementSource) -> Result<()> {
         log::trace!(
-            "CpalController.on_activation_source_changed: requested={:?}",
+            "CpalController.on_excitement_source_changed: requested={:?}",
             source
         );
         *self.last_source.write() = source;
         let started = self.control_tx.read().is_some();
         log::trace!(
-            "CpalController.on_activation_source_changed: controller started? {}",
+            "CpalController.on_excitement_source_changed: controller started? {}",
             started
         );
         if !started {
-            log::trace!("CpalController.on_activation_source_changed: backend not started; caching source and returning Ok");
+            log::trace!("CpalController.on_excitement_source_changed: backend not started; caching source and returning Ok");
             return Ok(());
         }
         // Restart streaming pipeline with new source
-        log::trace!("CpalController.on_activation_source_changed: preparing to restart streams");
+        log::trace!("CpalController.on_excitement_source_changed: preparing to restart streams");
         let layout = *self.last_layout.read();
         let config = self.last_config.read().clone();
         let tuner_config = self.last_tuner_config.read().clone();
-        log::trace!("CpalController.on_activation_source_changed: state cloned; calling stop()");
+        log::trace!("CpalController.on_excitement_source_changed: state cloned; calling stop()");
         self.stop()?;
         log::trace!(
-            "CpalController.on_activation_source_changed: stop() returned Ok; calling start()"
+            "CpalController.on_excitement_source_changed: stop() returned Ok; calling start()"
         );
         self.start(&layout, &config, source, &tuner_config)
     }
@@ -882,9 +882,9 @@ impl AudioRuntime for CpalController {
         result
     }
 
-    fn snapshot_activation_snoop(&self, node_key: NodeKey) -> Vec<f32> {
+    fn snapshot_excitement_snoop(&self, node_key: NodeKey) -> Vec<f32> {
         let mut out = Vec::new();
-        let mut snoops = self.activation_snoops.write();
+        let mut snoops = self.excitement_snoops.write();
         if let Some(snoop) = snoops.get_mut(&node_key) {
             snoop.update();
             let cap = snoop.capacity();
@@ -896,12 +896,12 @@ impl AudioRuntime for CpalController {
         out
     }
 
-    fn snapshot_all_activation_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
+    fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
         let layout = *self.last_layout.read();
         let registry = layout.registry();
 
         let mut result = Vec::with_capacity(registry.total_keys());
-        let mut snoops = self.activation_snoops.write();
+        let mut snoops = self.excitement_snoops.write();
 
         registry.iter_keys(|node_key| {
             if let Some(snoop) = snoops.get_mut(&node_key) {
@@ -944,9 +944,9 @@ impl AudioRuntime for CpalController {
         })
     }
 
-    fn poll_tuner_activations(&self) -> Vec<(NodeKey, f32)> {
+    fn poll_tuner_excitements(&self) -> Vec<(NodeKey, f32)> {
         let mut data = self
-            .siren_activations
+            .siren_excitements
             .read()
             .iter()
             .map(|(k, v)| (*k, v.value()))
@@ -1058,10 +1058,9 @@ impl AudioRuntime for CpalController {
     fn get_finetuned_values(&self) -> Result<common::commands::edit::FineTunedValuesPayload> {
         let shared_values = self.fine_tuned_shared_values.read();
         Ok(common::commands::edit::FineTunedValuesPayload {
-            siren_base_hz: shared_values.siren_base_hz.value(),
-            siren_max_frequency_hz: shared_values.siren_max_frequency_hz.value(),
-            siren_excitement_pause_limit: shared_values.siren_excitement_pause_limit.value(),
-            siren_base_pause_duration: shared_values.siren_base_pause_duration.value(),
+            siren_alpha: shared_values.siren_alpha.value(),
+            siren_beta: shared_values.siren_beta.value(),
+            siren_gamma: shared_values.siren_gamma.value(),
             filter_switch_follow_response_s: shared_values.filter_switch_follow_response_s.value(),
             node_follow_response_time_s: shared_values.node_follow_response_time_s.value(),
             filter_allpass_q: shared_values.filter_allpass_q.value(),
@@ -1090,16 +1089,9 @@ impl AudioRuntime for CpalController {
     ) -> Result<()> {
         {
             let shared_values = self.fine_tuned_shared_values.write();
-            shared_values.siren_base_hz.set_value(payload.siren_base_hz);
-            shared_values
-                .siren_max_frequency_hz
-                .set_value(payload.siren_max_frequency_hz);
-            shared_values
-                .siren_excitement_pause_limit
-                .set_value(payload.siren_excitement_pause_limit);
-            shared_values
-                .siren_base_pause_duration
-                .set_value(payload.siren_base_pause_duration);
+            shared_values.siren_alpha.set_value(payload.siren_alpha);
+            shared_values.siren_beta.set_value(payload.siren_beta);
+            shared_values.siren_gamma.set_value(payload.siren_gamma);
             shared_values
                 .node_follow_response_time_s
                 .set_value(payload.node_follow_response_time_s);

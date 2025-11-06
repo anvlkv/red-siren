@@ -24,7 +24,7 @@ dioxusin
 **/xcuserdata/
 **/UserInterfaceState.xcuserstate
 
-*.snap.new
+*.snap.new*
 
 iOS/Pods/
 

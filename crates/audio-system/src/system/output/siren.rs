@@ -1,3 +1,5 @@
+use std::{f32, f64};
+
 #[cfg(feature = "hi_fi")]
 use fundsp::hacker::prelude::*;
 #[cfg(not(feature = "hi_fi"))]
@@ -17,6 +19,8 @@ const SIREN_ID: u64 = hash_str(concat!(module_path!(), "::Siren"));
 #[derive(Default, Clone)]
 pub struct Siren<F: Real> {
     phase: F,
+    initial_phase: Option<F>,
+    sign: F,
     sample_duration: F,
     hash: u64,
 }
@@ -24,74 +28,91 @@ pub struct Siren<F: Real> {
 impl<F: Real> Siren<F> {
     /// Create siren oscillator.
     pub fn new() -> Self {
-        let mut siren = Siren::default();
+        let mut siren = Self::default();
         siren.reset();
         siren.set_sample_rate(DEFAULT_SR);
         siren
     }
 
-    fn tick_internal(
-        &self,
-        excitement: S,
-        siren_base_hz: S,
-        max_frequency_hz: S,
-        excitement_pause_limit: S,
-        base_pause_duration: S,
-    ) -> (S, F) {
-        if excitement <= 0.0 {
-            return (S::zero(), F::zero());
-        }
-
-        let interpolated_frequency =
-            siren_base_hz + excitement * (max_frequency_hz - siren_base_hz);
-
-        #[cfg(feature = "hi_fi")]
-        let phase = self.phase.to_f64();
-
-        #[cfg(not(feature = "hi_fi"))]
-        let phase = self.phase.to_f32();
-
-        #[cfg(feature = "hi_fi")]
-        let sample_duration = self.sample_duration.to_f64();
-
-        #[cfg(not(feature = "hi_fi"))]
-        let sample_duration = self.sample_duration.to_f32();
-
-        let previous_sin_abs = sin(phase * S::TAU).abs();
-        let projected_sin_abs =
-            sin((phase + interpolated_frequency * sample_duration) * S::TAU).abs();
-
-        let gaining = previous_sin_abs < projected_sin_abs;
-
-        let phase_increment = if previous_sin_abs > excitement_pause_limit
-            || gaining
-            || excitement > excitement_pause_limit
-        {
-            interpolated_frequency * sample_duration
-        } else {
-            let slow = (base_pause_duration / sample_duration) * (1.0 - excitement);
-            (interpolated_frequency * sample_duration) / slow
+    #[allow(dead_code)]
+    pub fn new_phase(phase: F) -> Self {
+        let mut siren = Self {
+            initial_phase: Some(phase),
+            ..Self::default()
         };
+        siren.reset();
+        siren.set_sample_rate(DEFAULT_SR);
+        siren
+    }
 
-        let sample = sin(phase * S::TAU);
+    /// wave shape fn
+    ///
+    /// - time: current time
+    /// - alpha: full period
+    /// - beta: slow decay
+    /// - gamma: sharp onset
+    fn shape(time: F, alpha: F, beta: F, gamma: F) -> F {
+        #[cfg(feature = "hi_fi")]
+        let e: F = F::from_f64(f64::consts::E);
+        #[cfg(not(feature = "hi_fi"))]
+        let e: F = F::from_f32(f32::consts::E);
 
         #[cfg(feature = "hi_fi")]
-        let phase_increment = F::from_f64(phase_increment);
-
+        let pi: F = F::from_f64(f64::consts::PI);
         #[cfg(not(feature = "hi_fi"))]
-        let phase_increment = F::from_f32(phase_increment);
+        let pi: F = F::from_f32(f32::consts::PI);
 
-        (sample, phase_increment)
+        (e.pow(-time / (beta * alpha)) - e.pow(-time / (gamma * alpha)))
+            * cos((pi * time) / alpha).pow(convert(2.0))
+    }
+
+    /// returns `(sample, next_phase, next_sign)`
+    fn tick_internal(
+        excitement: F,
+        alpha: F,
+        sample_duration: F,
+        mut phase: F,
+        mut sign: F,
+        beta: F,
+        gamma: F,
+    ) -> (F, F, F) {
+        let wrap_phase: F = alpha;
+
+        let next_phase = phase + sample_duration;
+
+        if excitement == F::zero()
+            && (phase == F::zero() || next_phase == F::zero() || next_phase >= wrap_phase)
+        {
+            (convert(0.0), phase, sign)
+        } else {
+            phase = if next_phase >= wrap_phase {
+                sign = -sign;
+                next_phase - wrap_phase
+            } else {
+                next_phase
+            };
+
+            let d = F::one() - excitement;
+
+            let sample =
+                Self::shape(phase, alpha * d, beta * excitement, gamma * excitement) * sign;
+
+            (sample, phase, sign)
+        }
     }
 }
 
 impl<F: Real> AudioNode for Siren<F> {
     const ID: u64 = SIREN_ID;
-    type Inputs = typenum::U5;
+    type Inputs = typenum::U4;
     type Outputs = typenum::U1;
 
     fn reset(&mut self) {
-        self.phase = F::zero();
+        self.phase = match self.initial_phase {
+            Some(phase) => phase,
+            None => convert(rnd1(self.hash)),
+        };
+        self.sign = convert(1.0);
     }
 
     fn set_sample_rate(&mut self, sample_rate: f64) {
@@ -100,29 +121,61 @@ impl<F: Real> AudioNode for Siren<F> {
 
     #[inline]
     fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
-        let excitement = input[0] as S;
+        let excitement: F = convert(input[0] as S);
+        let alpha: F = convert(input[1] as S);
+        let beta: F = convert(input[2] as S);
+        let gamma: F = convert(input[3] as S);
 
-        // Get fine-tuned values from inputs
-        let siren_base_hz = input[1] as S;
-        let max_frequency_hz = input[2] as S;
-        let excitement_pause_limit = input[3] as S;
-        let base_pause_duration = input[4] as S;
-
-        let (sample, phase_increment) = self.tick_internal(
+        let (sample, next_phase, next_sign) = Self::tick_internal(
             excitement,
-            siren_base_hz,
-            max_frequency_hz,
-            excitement_pause_limit,
-            base_pause_duration,
+            alpha,
+            self.sample_duration,
+            self.phase,
+            self.sign,
+            beta,
+            gamma,
         );
+        self.phase = next_phase;
+        self.sign = next_sign;
 
-        self.phase += phase_increment;
-        self.phase -= self.phase.floor();
-
-        [sample as f32].into()
+        [sample.to_f32()].into()
     }
 
-    fn process(&mut self, size: usize, input: &BufferRef, output: &mut BufferMut) {}
+    fn process(&mut self, size: usize, input: &BufferRef, output: &mut BufferMut) {
+        let mut phase = self.phase;
+        let mut sign = self.sign;
+
+        for i in 0..full_simd_items(size) {
+            let element: [f32; SIMD_N] = core::array::from_fn(|j| {
+                let idx = (i << SIMD_S) + j;
+
+                let excitement = F::from_f32(input.at_f32(0, idx));
+                let alpha = F::from_f32(input.at_f32(1, idx));
+                let beta = F::from_f32(input.at_f32(2, idx));
+                let gamma = F::from_f32(input.at_f32(3, idx));
+
+                let (sample, next_phase, next_sign) = Self::tick_internal(
+                    excitement,
+                    alpha,
+                    self.sample_duration,
+                    phase,
+                    sign,
+                    beta,
+                    gamma,
+                );
+
+                phase = next_phase;
+                sign = next_sign;
+
+                sample.to_f32()
+            });
+            output.set(0, i, F32x::new(element));
+        }
+
+        self.phase = phase;
+        self.sign = sign;
+        self.process_remainder(size, input, output);
+    }
 
     fn set_hash(&mut self, hash: u64) {
         self.hash = hash;
@@ -138,105 +191,90 @@ where
     An(siren)
 }
 
+#[allow(dead_code)]
+pub fn siren_phase<F>(phase: F) -> An<Siren<F>>
+where
+    F: Real,
+{
+    let siren = Siren::new_phase(phase);
+    An(siren)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use insta_fun::prelude::*;
 
-    const MIN_FREQ: f32 = 0.5;
-    const MAX_FREQ: f32 = 775.0;
-    const PAUSE_LIMIT: f32 = 0.2;
-    const PAUSE_DURATION: f32 = 0.7;
+    const ALPHA: f32 = 0.001;
+    const BETA: f32 = 0.75;
+    const GAMMA: f32 = 0.3;
+    const SAMPLES: usize = 44100;
 
     #[test]
-    fn test_siren_behavior() {
-        // Test with zero input
-        let mut siren_node = siren::<f32>();
-        siren_node.reset();
+    fn test_siren_tick() {
+        let siren_node = siren_phase::<f32>(0.0);
+        let config = SnapshotConfigBuilder::default()
+            .num_samples(SAMPLES)
+            .build()
+            .unwrap();
 
-        let mut outputs = Vec::new();
+        let input = vec![0.0, ALPHA, BETA, GAMMA];
 
-        // Process 2 seconds worth of samples with zero input
-        for _ in 0..96000 {
-            let input: Frame<f32, typenum::U5> =
-                [0.0, MIN_FREQ, MAX_FREQ, PAUSE_LIMIT, PAUSE_DURATION].into();
-            let output = siren_node.tick(&input);
-            outputs.push(output[0]);
-        }
-
-        // All outputs should be zero
-        assert!(
-            outputs.iter().all(|&x| x == 0.0),
-            "Should be silent when input is 0"
+        assert_audio_unit_snapshot!(
+            "siren_0_0",
+            siren_node.clone(),
+            InputSource::Flat(input),
+            config.clone()
         );
 
-        // Test with positive input (should oscillate)
-        outputs.clear();
+        let input = vec![0.3, ALPHA, BETA, GAMMA];
 
-        for _ in 0..96000 {
-            let input: Frame<f32, typenum::U5> =
-                [0.3, MIN_FREQ, MAX_FREQ, PAUSE_LIMIT, PAUSE_DURATION].into();
-            let output = siren_node.tick(&input);
-            outputs.push(output[0]);
-        }
+        assert_audio_unit_snapshot!(
+            "siren_0_3",
+            siren_node.clone(),
+            InputSource::Flat(input),
+            config.clone()
+        );
 
-        let has_positive = outputs.iter().any(|&x| x > 0.01);
-        let has_negative = outputs.iter().any(|&x| x < -0.01);
+        let input = vec![0.7, ALPHA, BETA, GAMMA];
 
-        assert!(has_positive, "Should show positive values when input > 0");
+        assert_audio_unit_snapshot!(
+            "siren_0_7",
+            siren_node.clone(),
+            InputSource::Flat(input),
+            config.clone()
+        );
 
-        assert!(has_negative, "Should show negative values when input > 0");
+        let input = vec![0.1, ALPHA, BETA, GAMMA];
+
+        assert_audio_unit_snapshot!("siren_0_1", siren_node, InputSource::Flat(input), config);
     }
 
     #[test]
-    fn test_frequency_interpolation() {
-        let mut siren_node = siren::<f32>();
-        siren_node.reset();
+    fn test_siren_process() {
+        let siren_node = siren_phase::<f32>(0.0);
+        let config = SnapshotConfigBuilder::default()
+            .num_samples(SAMPLES)
+            .processing_mode(Processing::Batch(64))
+            .build()
+            .unwrap();
 
-        // Test that frequency is interpolated based on input amplitude
-        // Test with a=0.5, frequency should be in the middle
-        let mut sign_changes = 0;
-        let mut previous_output = 0.0;
+        let input = vec![0.7, ALPHA, BETA, GAMMA];
 
-        // Run for 2 seconds at 48kHz to account for initial low frequency
-        for _ in 0..96000 {
-            let input: Frame<f32, typenum::U5> =
-                [0.3, MIN_FREQ, MAX_FREQ, PAUSE_LIMIT, PAUSE_DURATION].into(); // Mid excitement level
-            let output = siren_node.tick(&input);
-
-            // Detect zero crossings (positive to negative)
-            if previous_output > 0.0 && output[0] <= 0.0 {
-                sign_changes += 1;
-            }
-            previous_output = output[0];
-        }
-
-        assert!(
-            (15..=45).contains(&sign_changes),
-            "With a=0.3 and pauses, expected 15-45 sign changes in 2 seconds, got {}",
-            sign_changes
+        assert_audio_unit_snapshot!(
+            "siren_process_0_7",
+            siren_node.clone(),
+            InputSource::Flat(input),
+            config.clone()
         );
 
-        // Test with different input levels
-        siren_node.reset();
-        sign_changes = 0;
-        previous_output = 0.0;
+        let input = vec![0.1, ALPHA, BETA, GAMMA];
 
-        // Test with very low excitement (a=0.1) for 2 seconds
-        for _ in 0..96000 {
-            let input: Frame<f32, typenum::U5> =
-                [0.1, MIN_FREQ, MAX_FREQ, PAUSE_LIMIT, PAUSE_DURATION].into();
-            let output = siren_node.tick(&input);
-
-            if previous_output > 0.0 && output[0] <= 0.0 {
-                sign_changes += 1;
-            }
-            previous_output = output[0];
-        }
-
-        assert!(
-            (8..=25).contains(&sign_changes),
-            "With a=0.1 and longer pauses, expected 8-25 sign changes in 2 seconds, got {}",
-            sign_changes
+        assert_audio_unit_snapshot!(
+            "siren_process_0_1",
+            siren_node,
+            InputSource::Flat(input),
+            config
         );
     }
 }

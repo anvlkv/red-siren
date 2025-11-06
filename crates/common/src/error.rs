@@ -186,8 +186,8 @@ pub enum InstrumentError {
     StatePoisoned,
     #[error("mic permission missing")]
     MicPermissionMissing,
-    #[error("unsupported activation source: {0}")]
-    UnsupportedActivationSource(u8),
+    #[error("unsupported excitement source: {0}")]
+    UnsupportedExcitementSource(u8),
     #[error("instrument pause failed")]
     PauseFailed { detail: Option<String> },
     #[error("instrument resume failed")]

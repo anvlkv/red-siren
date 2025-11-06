@@ -10,10 +10,9 @@ pub type FineTunedValue = Var;
 
 #[derive(Clone)]
 pub struct FineTunedValues {
-    pub siren_base_hz: An<FineTunedValue>,
-    pub siren_max_frequency_hz: An<FineTunedValue>,
-    pub siren_excitement_pause_limit: An<FineTunedValue>,
-    pub siren_base_pause_duration: An<FineTunedValue>,
+    pub siren_alpha: An<FineTunedValue>,
+    pub siren_beta: An<FineTunedValue>,
+    pub siren_gamma: An<FineTunedValue>,
     pub filter_switch_follow_response_s: An<FineTunedValue>,
     pub node_follow_response_time_s: An<FineTunedValue>,
     pub filter_allpass_q: An<FineTunedValue>,
@@ -35,10 +34,9 @@ pub struct FineTunedValues {
 
 #[cfg(feature = "editor")]
 pub struct FineTunedSharedValues {
-    pub siren_base_hz: Shared,
-    pub siren_max_frequency_hz: Shared,
-    pub siren_excitement_pause_limit: Shared,
-    pub siren_base_pause_duration: Shared,
+    pub siren_alpha: Shared,
+    pub siren_beta: Shared,
+    pub siren_gamma: Shared,
     pub filter_switch_follow_response_s: Shared,
     pub node_follow_response_time_s: Shared,
     pub filter_allpass_q: Shared,
@@ -58,10 +56,9 @@ pub struct FineTunedSharedValues {
     pub input_ny_wet_ratio: Shared,
 }
 
-const SIREN_BASE_HZ: f32 = 0.5;
-const SIREN_MAX_FREQUENCY_HZ: f32 = 4775.0;
-const SIREN_EXCITEMENT_PAUSE_LIMIT: f32 = 0.4;
-const SIREN_BASE_PAUSE_DURATION: f32 = 0.5;
+const SIREN_ALPHA: f32 = 0.001;
+const SIREN_BETA: f32 = 0.75;
+const SIREN_GAMMA: f32 = 0.3;
 const FILTER_SWITCH_FOLLOW_RESPONSE_S: f32 = 0.04;
 const FILTER_ALLPASS_Q: f32 = 0.19;
 const FILTER_ALLPASS_FREQ_RATIO: f32 = 1.7;
@@ -84,10 +81,9 @@ const INPUT_NY_WET_RATIO: f32 = 0.7;
 impl Default for FineTunedSharedValues {
     fn default() -> Self {
         Self {
-            siren_base_hz: shared(SIREN_BASE_HZ),
-            siren_max_frequency_hz: shared(SIREN_MAX_FREQUENCY_HZ),
-            siren_excitement_pause_limit: shared(SIREN_EXCITEMENT_PAUSE_LIMIT),
-            siren_base_pause_duration: shared(SIREN_BASE_PAUSE_DURATION),
+            siren_alpha: shared(SIREN_ALPHA),
+            siren_beta: shared(SIREN_BETA),
+            siren_gamma: shared(SIREN_GAMMA),
             filter_switch_follow_response_s: shared(FILTER_SWITCH_FOLLOW_RESPONSE_S),
             filter_allpass_q: shared(FILTER_ALLPASS_Q),
             filter_allpass_freq_ratio: shared(FILTER_ALLPASS_FREQ_RATIO),
@@ -114,10 +110,9 @@ impl FineTunedValues {
     #[cfg(feature = "editor")]
     pub fn new(shared_values: &FineTunedSharedValues) -> Self {
         Self {
-            siren_base_hz: var(&shared_values.siren_base_hz),
-            siren_max_frequency_hz: var(&shared_values.siren_max_frequency_hz),
-            siren_excitement_pause_limit: var(&shared_values.siren_excitement_pause_limit),
-            siren_base_pause_duration: var(&shared_values.siren_base_pause_duration),
+            siren_alpha: var(&shared_values.siren_alpha),
+            siren_beta: var(&shared_values.siren_beta),
+            siren_gamma: var(&shared_values.siren_gamma),
             filter_switch_follow_response_s: var(&shared_values.filter_switch_follow_response_s),
             filter_allpass_q: var(&shared_values.filter_allpass_q),
             filter_allpass_freq_ratio: var(&shared_values.filter_allpass_freq_ratio),
@@ -141,10 +136,9 @@ impl FineTunedValues {
     #[cfg(not(feature = "editor"))]
     pub fn new() -> Self {
         Self {
-            siren_base_hz: constant(SIREN_BASE_HZ),
-            siren_max_frequency_hz: constant(SIREN_MAX_FREQUENCY_HZ),
-            siren_excitement_pause_limit: constant(SIREN_EXCITEMENT_PAUSE_LIMIT),
-            siren_base_pause_duration: constant(SIREN_BASE_PAUSE_DURATION),
+            siren_alpha: constant(SIREN_ALPHA),
+            siren_beta: constant(SIREN_BETA),
+            siren_gamma: constant(SIREN_GAMMA),
             filter_switch_follow_response_s: constant(FILTER_SWITCH_FOLLOW_RESPONSE_S),
             filter_allpass_q: constant(FILTER_ALLPASS_Q),
             filter_allpass_freq_ratio: constant(FILTER_ALLPASS_FREQ_RATIO),
@@ -169,19 +163,9 @@ impl FineTunedValues {
 impl std::fmt::Debug for FineTunedValues {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FineTunedValues")
-            .field("siren_base_hz", &self.siren_base_hz.value())
-            .field(
-                "siren_max_frequency_hz",
-                &self.siren_max_frequency_hz.value(),
-            )
-            .field(
-                "siren_excitement_pause_limit",
-                &self.siren_excitement_pause_limit.value(),
-            )
-            .field(
-                "siren_base_pause_duration",
-                &self.siren_base_pause_duration.value(),
-            )
+            .field("siren_alpha", &self.siren_alpha.value())
+            .field("siren_beta", &self.siren_beta.value())
+            .field("siren_gamma", &self.siren_gamma.value())
             .field(
                 "filter_switch_follow_response_s",
                 &self.filter_switch_follow_response_s.value(),

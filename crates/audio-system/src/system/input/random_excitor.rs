@@ -12,8 +12,8 @@ use std::{collections::HashMap, ops::AddAssign};
 
 use crate::util::{hash_str, S};
 
-/// Random activator node ID for debugging
-const RANDOM_ACTIVATOR_ID: u64 = hash_str(concat!(module_path!(), "::RandomActivator"));
+/// Random excitor node ID for debugging
+const RANDOM_EXCITOR_ID: u64 = hash_str(concat!(module_path!(), "::RandomExcitor"));
 
 const MAX_DURATION_BASE_S: S = 75.0;
 
@@ -72,19 +72,19 @@ impl Div for Duration {
     }
 }
 
-/// Random activator that generates activation values directly
+/// Random excitor that generates excitement values directly
 #[derive(Clone)]
-pub struct RandomActivator {
-    /// Activation controls mapped by sensor key
-    activation_controls: HashMap<NodeKey, Shared>,
+pub struct RandomExcitor {
+    /// Excitement controls mapped by sensor key
+    excitement_controls: HashMap<NodeKey, Shared>,
 
     /// Random number generator
     rng: Arc<parking_lot::Mutex<Rng>>,
 
-    /// Current activation values (for smooth transitions)
+    /// Current excitement values (for smooth transitions)
     current: Arc<parking_lot::Mutex<HashMap<NodeKey, (S, Duration)>>>,
 
-    /// Target activation values
+    /// Target excitement values
     target: Arc<parking_lot::Mutex<HashMap<NodeKey, (S, Duration)>>>,
 
     /// Current sample rate
@@ -92,10 +92,10 @@ pub struct RandomActivator {
 }
 
 #[allow(clippy::unnecessary_cast)]
-impl RandomActivator {
-    /// Create a new random activator with the given activation controls
-    pub fn new(activation_controls: HashMap<NodeKey, Shared>) -> Self {
-        let keys: Vec<NodeKey> = activation_controls.keys().copied().collect();
+impl RandomExcitor {
+    /// Create a new random excitor with the given excitement controls
+    pub fn new(excitement_controls: HashMap<NodeKey, Shared>) -> Self {
+        let keys: Vec<NodeKey> = excitement_controls.keys().copied().collect();
 
         let mut current = HashMap::with_capacity(keys.len());
         let mut target = HashMap::with_capacity(keys.len());
@@ -106,17 +106,26 @@ impl RandomActivator {
         }
 
         log::info!(
-            "RandomActivator::new: created with {} activation controls",
-            activation_controls.len()
+            "RandomExcitor::new: created with {} excitement controls",
+            excitement_controls.len()
         );
 
         Self {
-            activation_controls,
+            excitement_controls,
             rng: Arc::new(parking_lot::Mutex::new(Rng::new())),
             current: Arc::new(parking_lot::Mutex::new(current)),
             target: Arc::new(parking_lot::Mutex::new(target)),
             sample_rate: 44100.0,
         }
+    }
+
+    /// Create a new RandomExcitor with a given seed
+    pub fn new_seeded(seed: u64, excitement_controls: HashMap<NodeKey, Shared>) -> Self {
+        let node = Self::new(excitement_controls);
+
+        node.rng.lock().seed(seed);
+
+        node
     }
 
     /// Compute duration for one frame with current sample rate
@@ -131,7 +140,7 @@ impl RandomActivator {
         delta / frame_duration
     }
 
-    /// Generate new random target activations
+    /// Generate new random target excitements
     fn generate_random_target(&self, key: NodeKey) -> (S, Duration) {
         let mut rng = self.rng.lock();
 
@@ -176,13 +185,13 @@ impl RandomActivator {
         (value, duration)
     }
 
-    /// Update activation controls with smoothed values
+    /// Update excitement controls with smoothed values
     fn advance_frame(&self) {
         let mut current = self.current.lock();
         let targets = self.target.lock();
         let frame_duration = self.frame_duration();
 
-        for (key, control) in &self.activation_controls {
+        for (key, control) in &self.excitement_controls {
             if let (Some((target, target_duration)), Some((curr, elapsed))) =
                 (targets.get(key), current.get_mut(key))
             {
@@ -216,7 +225,7 @@ impl RandomActivator {
     }
 }
 
-impl AudioUnit for RandomActivator {
+impl AudioUnit for RandomExcitor {
     fn inputs(&self) -> usize {
         1 // Takes input but doesn't use it
     }
@@ -240,7 +249,7 @@ impl AudioUnit for RandomActivator {
     }
 
     fn reset(&mut self) {
-        // Reset all activations to 0
+        // Reset all excitements to 0
         let mut current = self.current.lock();
         let mut targets = self.target.lock();
 
@@ -252,12 +261,12 @@ impl AudioUnit for RandomActivator {
         }
 
         // Update controls to 0
-        for control in self.activation_controls.values() {
+        for control in self.excitement_controls.values() {
             control.set_value(0.0);
         }
 
         // Reset counter
-        log::debug!("RandomActivator: reset all activations to 0");
+        log::debug!("RandomExcitor: reset all excitements to 0");
     }
 
     fn allocate(&mut self) {
@@ -270,7 +279,7 @@ impl AudioUnit for RandomActivator {
     }
 
     fn get_id(&self) -> u64 {
-        RANDOM_ACTIVATOR_ID
+        RANDOM_EXCITOR_ID
     }
 
     fn footprint(&self) -> usize {
@@ -283,19 +292,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_random_activator_creation() {
+    fn test_random_excitor_creation() {
         let mut controls = HashMap::new();
         let key = NodeKey::new(0, 0);
         let control = shared(0.0);
         controls.insert(key, control.clone());
 
-        let activator = RandomActivator::new(controls);
-        assert_eq!(activator.activation_controls.len(), 1);
+        let excitor = RandomExcitor::new_seeded(42, controls);
+        assert_eq!(excitor.excitement_controls.len(), 1);
         assert_eq!(control.value(), 0.0);
     }
 
     #[test]
-    fn test_random_activation_generation() {
+    fn test_random_excitement_generation() {
         let mut controls = HashMap::new();
         for i in 0..3 {
             let key = NodeKey::new(0, i);
@@ -303,18 +312,18 @@ mod tests {
             controls.insert(key, control);
         }
 
-        let activator = RandomActivator::new(controls.clone());
+        let excitor = RandomExcitor::new(controls.clone());
 
         // Generate random targets
         {
-            let mut targets = activator.target.lock();
+            let mut targets = excitor.target.lock();
             for key in controls.keys() {
-                targets.insert(*key, activator.generate_random_target(*key));
+                targets.insert(*key, excitor.generate_random_target(*key));
             }
         }
 
         // Check that targets were generated
-        let targets = activator.target.lock();
+        let targets = excitor.target.lock();
         assert_eq!(targets.len(), 3);
 
         for (_, &(value, _duration)) in targets.iter() {

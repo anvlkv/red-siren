@@ -4,7 +4,7 @@ use leptos_router::hooks::use_navigate;
 
 use crate::{
     components::{
-        ActivationSourceToggle, AppearanceToggle, CompactMenu, Instrument, MenuItem, UiPlacement,
+        AppearanceToggle, CompactMenu, ExcitementSourceToggle, Instrument, MenuItem, UiPlacement,
     },
     util::{
         layout_context::{expect_layout_contex, LayoutContextReturn},
@@ -120,7 +120,7 @@ pub fn Play() -> impl IntoView {
             <Instrument editor />
             <Show when=move || !is_secondary_window()>
                 <CompactMenu items=menu_items placement>
-                    <ActivationSourceToggle placement mic_permission />
+                    <ExcitementSourceToggle placement mic_permission />
                     <AppearanceToggle placement />
                 </CompactMenu>
             </Show>

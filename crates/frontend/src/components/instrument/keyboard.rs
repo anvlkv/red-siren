@@ -24,13 +24,13 @@ pub fn Keyboard() -> impl IntoView {
         ..
     } = expect_layout_contex();
 
-    // Activation snoop batch stream (pull model).
+    // Excitement snoop batch stream (pull model).
     let UseTauriWithReturn {
         trigger: fetch_batch,
         data: batch_data,
         error: batch_error,
         ..
-    } = use_command::<common::instrument::data::ActivationSnoopBatchPayload>(
+    } = use_command::<common::instrument::data::ExcitementSnoopBatchPayload>(
         common::instrument::data::GET_ALL_ACTIVATION_SNOOPS,
     );
 
@@ -175,7 +175,7 @@ pub fn Keyboard() -> impl IntoView {
 #[component]
 fn Group(
     g: usize,
-    #[prop(into)] batch_data: Signal<Option<common::instrument::data::ActivationSnoopBatchPayload>>,
+    #[prop(into)] batch_data: Signal<Option<common::instrument::data::ExcitementSnoopBatchPayload>>,
 ) -> impl IntoView {
     let LayoutContextReturn {
         orientation,
@@ -234,7 +234,7 @@ fn Group(
                                     k
                                     first_group_channel
                                     orientation
-                                    activation_samples=samples
+                                    excitement_samples=samples
                                 />
                             }
                         }

@@ -17,7 +17,7 @@ pub fn KeyboardElement(
     k: usize,
     first_group_channel: common::instrument::GroupChannel,
     orientation: common::orientation::LayoutOrientation,
-    #[prop(into)] activation_samples: Signal<Option<Vec<f32>>>,
+    #[prop(into)] excitement_samples: Signal<Option<Vec<f32>>>,
 ) -> impl IntoView {
     let ctx = expect_instrument_context();
     let LayoutContextReturn {
@@ -583,7 +583,7 @@ pub fn KeyboardElement(
                     format!("{pad}px")
                 }
                 style:transform=move || {
-                    let samples = activation_samples.get().unwrap_or_default();
+                    let samples = excitement_samples.get().unwrap_or_default();
                     let inc = samples.iter().map(|v| v.abs()).sum::<f32>();
                     format!("scale({s}, {s})", s = 0.75 + (inc / samples.len() as f32) * 0.275)
                 }

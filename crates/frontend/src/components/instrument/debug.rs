@@ -16,13 +16,13 @@ pub fn DebugOverlay() -> impl IntoView {
         ..
     } = expect_layout_contex();
 
-    // Pull activation batches
+    // Pull excitement batches
     let UseTauriWithReturn {
-        trigger: fetch_activation,
-        data: activation_batch,
-        error: activation_error,
+        trigger: fetch_excitement,
+        data: excitement_batch,
+        error: excitement_error,
         ..
-    } = use_command::<common::instrument::data::ActivationSnoopBatchPayload>(
+    } = use_command::<common::instrument::data::ExcitementSnoopBatchPayload>(
         common::instrument::data::GET_ALL_ACTIVATION_SNOOPS,
     );
 
@@ -38,7 +38,7 @@ pub fn DebugOverlay() -> impl IntoView {
 
     // Log errors (DRY: centralize logging here)
     Effect::new(move |_| {
-        if let Some(err) = activation_error() {
+        if let Some(err) = excitement_error() {
             log::error!(
                 "Error invoking {}: {err}",
                 common::instrument::data::GET_ALL_ACTIVATION_SNOOPS
@@ -55,7 +55,7 @@ pub fn DebugOverlay() -> impl IntoView {
     // Drive periodic fetch
     let _raf = crate::util::raf_fn_fps::use_raf_fn_with_fps(
         move |_| {
-            fetch_activation(Some(()));
+            fetch_excitement(Some(()));
             fetch_output(Some(()));
         },
         REFRESH_FPS,
@@ -77,7 +77,7 @@ pub fn DebugOverlay() -> impl IntoView {
     view! {
         <div class=overlay_class>
             <div class="rounded bg-red/70 dark:bg-black/60 border border-black/20 dark:border-red/20 p-1 shadow-sm">
-                <Fold title="Siren debug: Activation vs Output">
+                <Fold title="Siren debug: Excitement vs Output">
                     <div style=grid_style class="text-[10px] pointer-events-none select-none">
                         {move || {
                             let ng = num_groups();
@@ -88,7 +88,7 @@ pub fn DebugOverlay() -> impl IntoView {
                                         .map(move |k| {
                                             let act_samples = Signal::derive({
                                                 move || {
-                                                    activation_batch()
+                                                    excitement_batch()
                                                         .and_then(|b| {
                                                             b.snoops
                                                                 .iter()
@@ -108,7 +108,7 @@ pub fn DebugOverlay() -> impl IntoView {
                                                         })
                                                 }
                                             });
-                                            // Derive per-tile signals by pairing activation/output entries
+                                            // Derive per-tile signals by pairing excitement/output entries
 
                                             view! { <PairTile g k act_samples out_samples /> }
                                         })

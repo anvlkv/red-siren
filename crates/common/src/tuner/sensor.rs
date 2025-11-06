@@ -5,7 +5,7 @@
 //! - Has a spatial representation (center + half_extents) in layout space for UI.
 //! - Stores a pre–computed average calibration gain (`avg_gain_linear`) derived
 //!   from the static calibration points (see `tuner::config`).
-//! - Produces an activation ∈ [0.0, 1.0] from current FFT data.
+//! - Produces an excitement ∈ [0.0, 1.0] from current FFT data.
 //!
 //! Gain Application Strategy (Chosen Design - Option 3):
 //! ----------------------------------------------------
@@ -13,7 +13,7 @@
 //! update multiplies the unweighted average magnitude of the covered bins by
 //! this constant. If calibration points change, rebuild the sensors.
 //!
-//! Activation Mapping:
+//! Excitement Mapping:
 //! -------------------
 //! 1. Collect average (linear) magnitude across bins
 //! 2. Multiply by `avg_gain_linear`
@@ -58,8 +58,8 @@ pub struct Sensor {
     pub bin_end: usize,
     /// Baked average calibration gain (linear amplitude multiplier)
     pub avg_gain_linear: f32,
-    /// Current activation (0.0 ..= 1.0)
-    activation: f32,
+    /// Current excitement (0.0 ..= 1.0)
+    excitement: f32,
 }
 
 impl Sensor {
@@ -87,23 +87,23 @@ impl Sensor {
             } else {
                 1.0
             },
-            activation: 0.0,
+            excitement: 0.0,
         }
     }
 
-    /// Current activation value.
+    /// Current excitement value.
     #[inline]
-    pub fn activation(&self) -> f32 {
-        self.activation
+    pub fn excitement(&self) -> f32 {
+        self.excitement
     }
 
-    /// Update activation from provided FFT complex spectrum slice.
+    /// Update excitement from provided FFT complex spectrum slice.
     ///
     /// `fft_bins` must contain at least `bin_end` elements.
     pub fn update(&mut self, fft_bins: &[Complex32]) {
         if self.bin_end > fft_bins.len() || self.bin_start >= self.bin_end {
             // Invalid slice; set to silence
-            self.activation = 0.0;
+            self.excitement = 0.0;
             return;
         }
 
@@ -117,7 +117,7 @@ impl Sensor {
         }
 
         if count == 0 {
-            self.activation = 0.0;
+            self.excitement = 0.0;
             return;
         }
 
@@ -128,7 +128,7 @@ impl Sensor {
 
         // Normalize
         let norm = (mag_db - FLOOR_DB) / (CEIL_DB - FLOOR_DB); // denominator negative -> but CEIL_DB (0) - FLOOR_DB (-60) = 60 > 0
-        self.activation = norm.clamp(0.0, 1.0);
+        self.excitement = norm.clamp(0.0, 1.0);
     }
 }
 
@@ -141,7 +141,7 @@ mod tests {
     }
 
     #[test]
-    fn test_basic_activation() {
+    fn test_basic_excitement() {
         // Create a sensor over bins [2,5)
         let mut s = Sensor::new(
             0,
@@ -167,10 +167,10 @@ mod tests {
 
         s.update(&spectrum);
 
-        // Activation should be finite and > 0
-        assert!(s.activation().is_finite());
-        assert!(s.activation() > 0.0);
-        assert!(s.activation() <= 1.0);
+        // Excitement should be finite and > 0
+        assert!(s.excitement().is_finite());
+        assert!(s.excitement() > 0.0);
+        assert!(s.excitement() <= 1.0);
     }
 
     #[test]
@@ -203,6 +203,6 @@ mod tests {
         // Provide too short spectrum
         let spectrum = vec![synth_bin(0.5)]; // only 1 bin
         s.update(&spectrum);
-        assert_eq!(s.activation(), 0.0);
+        assert_eq!(s.excitement(), 0.0);
     }
 }

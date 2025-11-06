@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use audio_system::{input::analyzer::FFT_WINDOW_SIZE, rt::ActivationSource};
+use audio_system::{input::analyzer::FFT_WINDOW_SIZE, rt::ExcitementSource};
 use common::{
     error::{Result, TunerError},
     NodeKeyRegistry,
@@ -25,9 +25,9 @@ pub struct TunerState {
     tuner_config: Arc<RwLock<Config>>,
     current_layout: RwLock<Option<TunerLayout>>,
     max_hold_magnitudes: Arc<RwLock<Vec<f32>>>,
-    max_hold_activations: Arc<RwLock<Vec<f32>>>,
+    max_hold_excitements: Arc<RwLock<Vec<f32>>>,
     current_magnitudes: Arc<RwLock<Vec<f32>>>,
-    current_activations: Arc<RwLock<Vec<f32>>>,
+    current_excitements: Arc<RwLock<Vec<f32>>>,
     frequencies: Arc<RwLock<Vec<f32>>>,
     spectrum_polling_thread: RwLock<Option<thread::JoinHandle<()>>>,
     audio_probe: RwLock<bool>,
@@ -40,9 +40,9 @@ impl TunerState {
             tuner_config: Arc::new(RwLock::new(config)),
             current_layout: RwLock::new(None),
             max_hold_magnitudes: Arc::new(RwLock::new(Vec::new())),
-            max_hold_activations: Arc::new(RwLock::new(Vec::new())),
+            max_hold_excitements: Arc::new(RwLock::new(Vec::new())),
             current_magnitudes: Arc::new(RwLock::new(Vec::new())),
-            current_activations: Arc::new(RwLock::new(Vec::new())),
+            current_excitements: Arc::new(RwLock::new(Vec::new())),
             frequencies: Arc::new(RwLock::new(Vec::new())),
             spectrum_polling_thread: RwLock::new(None),
             audio_probe: RwLock::new(false),
@@ -64,8 +64,7 @@ impl TunerState {
         *self.tuner_config.write() = config.clone();
         *self.current_layout.write() = Some(*layout);
 
-        self.app
-            .emit(common::events::tuner::CONFIG, config)?;
+        self.app.emit(common::events::tuner::CONFIG, config)?;
 
         Ok(())
     }
@@ -142,7 +141,6 @@ impl TunerState {
                 }
             }
 
-
             let instrument = self.app.state::<InstrumentEngine>();
             instrument.update_tuner_config(&new_config)?;
 
@@ -198,8 +196,8 @@ impl TunerState {
 
         let instrument = self.app.state::<InstrumentEngine>();
 
-        if !matches!(instrument.activation_source(), ActivationSource::Mic) {
-            instrument.set_activation_source(ActivationSource::Mic)?;
+        if !matches!(instrument.excitement_source(), ExcitementSource::Mic) {
+            instrument.set_excitement_source(ExcitementSource::Mic)?;
         }
 
         if !instrument.playing() {
@@ -214,9 +212,9 @@ impl TunerState {
 
         let handle = self.app.clone();
         let max_hold_magnitudes = Arc::clone(&self.max_hold_magnitudes);
-        let max_hold_activations = Arc::clone(&self.max_hold_activations);
+        let max_hold_excitements = Arc::clone(&self.max_hold_excitements);
         let current_magnitudes = Arc::clone(&self.current_magnitudes);
-        let current_activations = Arc::clone(&self.current_activations);
+        let current_excitements = Arc::clone(&self.current_excitements);
         let frequencies = Arc::clone(&self.frequencies);
 
         *self.spectrum_polling_thread.write() = Some(thread::spawn(move || loop {
@@ -255,29 +253,29 @@ impl TunerState {
                 }
 
                 {
-                    let activations = instrument_state.poll_activations();
-                    let num_sensors = activations.len();
-                    let mut max_hold_activations = max_hold_activations.write();
-                    let mut current_activations = current_activations.write();
-                    if num_sensors != current_activations.len()
-                        || num_sensors != max_hold_activations.len()
+                    let excitements = instrument_state.poll_excitements();
+                    let num_sensors = excitements.len();
+                    let mut max_hold_excitements = max_hold_excitements.write();
+                    let mut current_excitements = current_excitements.write();
+                    if num_sensors != current_excitements.len()
+                        || num_sensors != max_hold_excitements.len()
                     {
                         // Resize vectors
-                        *current_activations = vec![0_f32; num_sensors];
-                        *max_hold_activations = vec![0_f32; num_sensors];
+                        *current_excitements = vec![0_f32; num_sensors];
+                        *max_hold_excitements = vec![0_f32; num_sensors];
                     }
 
-                    for (((_, activation), current), max_activation) in activations
+                    for (((_, excitement), current), max_excitement) in excitements
                         .iter()
-                        .zip(current_activations.iter_mut())
-                        .zip(max_hold_activations.iter_mut())
+                        .zip(current_excitements.iter_mut())
+                        .zip(max_hold_excitements.iter_mut())
                     {
-                        *current = *activation;
-                        *max_activation = f32::max(*activation, *max_activation * HOLD_DECAY);
+                        *current = *excitement;
+                        *max_excitement = f32::max(*excitement, *max_excitement * HOLD_DECAY);
                     }
                 }
 
-                log::trace!("Updated spectrum and activation data");
+                log::trace!("Updated spectrum and excitement data");
             }
 
             thread::sleep(dur);
@@ -308,17 +306,17 @@ impl TunerState {
         let state = handle.state::<Self>();
 
         let max_hold_magnitudes = state.max_hold_magnitudes.read();
-        let max_hold_activations = state.max_hold_activations.read();
+        let max_hold_excitements = state.max_hold_excitements.read();
         let current_magnitudes = state.current_magnitudes.read();
-        let current_activations = state.current_activations.read();
+        let current_excitements = state.current_excitements.read();
         let frequencies = state.frequencies.read();
         let sample_rate = state.tuner_config.read().sample_rate;
 
         SpectrumData {
             current_magnitudes: current_magnitudes.clone(),
             max_magnitudes: max_hold_magnitudes.clone(),
-            sensor_activations: current_activations.clone(),
-            max_activations: max_hold_activations.clone(),
+            sensor_excitements: current_excitements.clone(),
+            max_excitements: max_hold_excitements.clone(),
             frequencies: frequencies.clone(),
             fft_size: FFT_WINDOW_SIZE,
             sample_rate,

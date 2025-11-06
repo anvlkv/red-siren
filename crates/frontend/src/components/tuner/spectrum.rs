@@ -54,8 +54,8 @@ pub fn SpectrumVisualizer(
         })
     });
 
-    let activations = Signal::derive(move || spectrum().map(|data| data.sensor_activations));
-    let max_activations = Signal::derive(move || spectrum().map(|data| data.max_activations));
+    let excitements = Signal::derive(move || spectrum().map(|data| data.sensor_excitements));
+    let max_excitements = Signal::derive(move || spectrum().map(|data| data.max_excitements));
 
     view! {
         <svg class="absolute inset-0 w-full h-full">
@@ -70,17 +70,17 @@ pub fn SpectrumVisualizer(
                 />
             </Show>
 
-            // Max-hold sensor activation outline bars
+            // Max-hold sensor excitement outline bars
             <Show when=move || spectrum().is_some() && layout().is_some()>
                 <g class="fill-none stroke-gray/40 dark:stroke-cinnabar/40 stroke-[0.5] mix-blend-plus-darker dark:mix-blend-plus-lighter">
-                    <ActivationBars activations=max_activations layout=layout baseline=baseline />
+                    <ExcitementBars excitements=max_excitements layout=layout baseline=baseline />
                 </g>
             </Show>
 
-            // Sensor activation bars (highest opacity - 60%)
+            // Sensor excitement bars (highest opacity - 60%)
             <Show when=move || spectrum().is_some() && layout().is_some()>
                 <g class="fill-gray/20 dark:fill-cinnabar/20 mix-blend-plus-darker dark:mix-blend-plus-lighter">
-                    <ActivationBars activations=activations layout=layout baseline=baseline />
+                    <ExcitementBars excitements=excitements layout=layout baseline=baseline />
                 </g>
             </Show>
 
@@ -179,10 +179,10 @@ fn generate_spectrum_path(
     path
 }
 
-/// Generate sensor activation bars
+/// Generate sensor excitement bars
 #[component]
-fn ActivationBars(
-    #[prop(into)] activations: Signal<Option<Vec<f32>>>,
+fn ExcitementBars(
+    #[prop(into)] excitements: Signal<Option<Vec<f32>>>,
     #[prop(into)] layout: Signal<Option<TunerLayout>>,
     #[prop(into)] baseline: Signal<Option<common::Line>>,
 ) -> impl IntoView {
@@ -200,14 +200,14 @@ fn ActivationBars(
     };
     let bar_width = move || line_length() / (num_sensors() as f32);
     let bar_spacing = move || bar_width() * 0.1; // 10% spacing between bars
-                                                 // Calculate scaling factor to fit all activations within 0..1 range
+                                                 // Calculate scaling factor to fit all excitements within 0..1 range
     let scale_factor = move || {
-        activations()
+        excitements()
             .as_ref()
             .map(|acts| {
-                let max_activation = acts.iter().fold(0.0f32, |acc, &x| acc.max(x.abs()));
-                if max_activation > 1.0 {
-                    1.0 / max_activation
+                let max_excitement = acts.iter().fold(0.0f32, |acc, &x| acc.max(x.abs()));
+                if max_excitement > 1.0 {
+                    1.0 / max_excitement
                 } else {
                     1.0
                 }
@@ -219,12 +219,12 @@ fn ActivationBars(
     view! {
         <>
             {move || {
-                activations()
+                excitements()
                     .as_ref()
                     .unwrap()
                     .iter()
                     .enumerate()
-                    .map(|(i, &activation)| {
+                    .map(|(i, &excitement)| {
                         let layout = *layout().as_ref().unwrap();
                         let baseline = baseline().unwrap();
                         let bar_width = bar_width();
@@ -233,7 +233,7 @@ fn ActivationBars(
                             LayoutOrientation::Horizontal => {
                                 let x = baseline.0.x + (i as f32 * bar_width) + bar_spacing / 2.0;
                                 let avail_up = baseline.0.y;
-                                let bar_height = level(activation) * avail_up;
+                                let bar_height = level(excitement) * avail_up;
                                 let y = baseline.0.y - bar_height;
                                 let width = bar_width - bar_spacing;
                                 (x, y, width, bar_height)
@@ -241,13 +241,13 @@ fn ActivationBars(
                             LayoutOrientation::Vertical => {
                                 let y = baseline.0.y + (i as f32 * bar_width) + bar_spacing / 2.0;
                                 let avail_right = layout.space.x - baseline.0.x;
-                                let bar_width_actual = level(activation) * avail_right;
+                                let bar_width_actual = level(excitement) * avail_right;
                                 let x = baseline.0.x;
                                 let height = bar_width - bar_spacing;
                                 (x, y, bar_width_actual, height)
                             }
                         };
-                        // no sqrtN; activations are already 0..1
+                        // no sqrtN; excitements are already 0..1
 
                         view! {
                             <rect

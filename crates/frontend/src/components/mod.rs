@@ -1,12 +1,12 @@
 use std::str::FromStr;
 
-mod activation_source_toggle;
 mod appearance_toggle;
 mod button;
 mod card;
 mod content_page;
 mod editor_range_slider;
 mod error_template;
+mod excitement_source_toggle;
 mod fold;
 mod icon;
 mod instrument;
@@ -18,13 +18,13 @@ mod toaster;
 mod tooltip;
 mod tuner;
 
-pub use activation_source_toggle::*;
 pub use appearance_toggle::*;
 pub use button::*;
 pub use card::*;
 pub use content_page::*;
 pub use editor_range_slider::*;
 pub use error_template::*;
+pub use excitement_source_toggle::*;
 pub use fold::*;
 pub use icon::*;
 pub use instrument::*;

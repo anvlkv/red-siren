@@ -90,63 +90,43 @@ pub fn EditorOverlay() -> impl IntoView {
                         <legend>"Siren Parameters"</legend>
 
                         <EditorRangeSlider
-                            value=Signal::derive(move || { finetuned_values().siren_base_hz })
+                            label="Alpha"
+                            value=Signal::derive(move || { finetuned_values().siren_alpha })
                             on_input=Callback::new(move |val| {
                                 set_finetuned_values
                                     .update(|values| {
-                                        values.siren_base_hz = val;
+                                        values.siren_alpha = val;
                                     });
                             })
-                            min=0.1
-                            max=2.0
-                            step=0.01
-                            label="Base Hz"
+                            min=0.0
+                            max=200.0
+                            step=0.0001
                         />
 
                         <EditorRangeSlider
-                            label="Max Frequency Hz"
-                            value=Signal::derive(move || {
-                                finetuned_values().siren_max_frequency_hz
-                            })
-                            min=100.0
-                            max=15000.0
-                            step=1.0
+                            label="Beta"
+                            value=Signal::derive(move || { finetuned_values().siren_beta })
+                            min=0.0
+                            max=10.0
+                            step=0.001
                             on_input=Callback::new(move |val| {
                                 set_finetuned_values
                                     .update(|values| {
-                                        values.siren_max_frequency_hz = val;
-                                    });
-                            })
-                        />
-
-                        <EditorRangeSlider
-                            label="Excitement Pause Limit"
-                            value=Signal::derive(move || {
-                                finetuned_values().siren_excitement_pause_limit
-                            })
-                            min=0.1
-                            max=1.0
-                            step=0.01
-                            on_input=Callback::new(move |val| {
-                                set_finetuned_values
-                                    .update(|values| {
-                                        values.siren_excitement_pause_limit = val;
+                                        values.siren_beta = val;
                                     });
                             })
                         />
 
                         <EditorRangeSlider
-                            label="Base Pause Duration"
-                            value=Signal::derive(move || {
-                                finetuned_values().siren_base_pause_duration
-                            })
-                            min=TIME_MIN
-                            max=TIME_MAX
-                            step=TIME_STEP
+                            label="Gamma"
+                            value=Signal::derive(move || { finetuned_values().siren_gamma })
+                            min=0.0
+                            max=10.0
+                            step=0.0001
                             on_input=Callback::new(move |val| {
                                 set_finetuned_values
                                     .update(|values| {
-                                        values.siren_base_pause_duration = val;
+                                        values.siren_gamma = val;
                                     });
                             })
                         />

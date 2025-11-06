@@ -14,11 +14,11 @@ pub struct SpectrumData {
     /// Max hold spectrum values in dB (20*log10)
     pub max_magnitudes: Vec<f32>,
 
-    /// Sensor activation levels from FFT analyzer (0-1)
-    pub sensor_activations: Vec<f32>,
+    /// Sensor excitement levels from FFT analyzer (0-1)
+    pub sensor_excitements: Vec<f32>,
 
-    /// Max-hold sensor activation levels (0-1)
-    pub max_activations: Vec<f32>,
+    /// Max-hold sensor excitement levels (0-1)
+    pub max_excitements: Vec<f32>,
 
     /// Corresponding frequencies for each magnitude
     pub frequencies: Vec<f32>,

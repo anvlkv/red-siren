@@ -6,10 +6,9 @@ pub const GET_FINETUNED_VALUES: &str = "instrument_get_finetuned_values";
 #[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FineTunedValuesPayload {
-    pub siren_base_hz: f32,
-    pub siren_max_frequency_hz: f32,
-    pub siren_excitement_pause_limit: f32,
-    pub siren_base_pause_duration: f32,
+    pub siren_alpha: f32,
+    pub siren_beta: f32,
+    pub siren_gamma: f32,
     pub filter_switch_follow_response_s: f32,
     pub node_follow_response_time_s: f32,
     pub filter_allpass_q: f32,

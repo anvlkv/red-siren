@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod integration_tests {
-    use crate::rt::ActivationSource;
+    use crate::rt::ExcitementSource;
     use crate::system::{create_input_system, create_output_system};
     use common::instrument::{Config as InstrumentConfig, GroupConfig, NodeConfig};
     use common::tuner::{Config as TunerConfig, SensorData};
@@ -102,7 +102,7 @@ mod integration_tests {
     }
 
     #[test]
-    fn test_mic_activation_source() {
+    fn test_mic_excitement_source() {
         let instrument_config = create_test_instrument_config();
         let tuner_config = create_test_tuner_config();
 
@@ -122,10 +122,10 @@ mod integration_tests {
             &values,
         );
 
-        // Collect activation controls
-        let mut activations = HashMap::new();
+        // Collect excitement controls
+        let mut excitements = HashMap::new();
         for handle in node_handles {
-            activations.insert(handle.key, handle.siren_control);
+            excitements.insert(handle.key, handle.siren_control);
         }
 
         let spectrum_thb = Arc::new(ThingBuf::new(10));
@@ -134,8 +134,8 @@ mod integration_tests {
         let handles = create_input_system(
             &tuner_config,
             &mut net,
-            activations.clone(),
-            ActivationSource::Mic,
+            excitements.clone(),
+            ExcitementSource::Mic,
             &spectrum_thb,
             2,
             #[cfg(feature = "editor")]
@@ -154,16 +154,16 @@ mod integration_tests {
         let mut output = [0.0f32, 0.0f32];
         backend.tick(&input, &mut output);
 
-        // Activations should start at 0
-        for control in activations.values() {
-            assert_eq!(control.value(), 0.0, "Mic activation should start at 0");
+        // Excitements should start at 0
+        for control in excitements.values() {
+            assert_eq!(control.value(), 0.0, "Mic excitement should start at 0");
         }
 
         assert!(!handles.is_empty())
     }
 
     #[test]
-    fn test_entropy_activation_source() {
+    fn test_entropy_excitement_source() {
         let instrument_config = create_test_instrument_config();
         let tuner_config = create_test_tuner_config();
 
@@ -183,19 +183,19 @@ mod integration_tests {
             &values,
         );
 
-        // Collect activation controls
-        let mut activations = HashMap::new();
+        // Collect excitement controls
+        let mut excitements = HashMap::new();
         for handle in node_handles {
-            activations.insert(handle.key, handle.siren_control.clone());
+            excitements.insert(handle.key, handle.siren_control.clone());
         }
 
         let spectrum_thb = Arc::new(ThingBuf::new(10));
-        // Create input system with Entropy source (RandomActivator)
+        // Create input system with Entropy source (RandomExcitor)
         let handles = create_input_system(
             &tuner_config,
             &mut net,
-            activations.clone(),
-            ActivationSource::Entropy,
+            excitements.clone(),
+            ExcitementSource::Entropy,
             &spectrum_thb,
             2,
             #[cfg(feature = "editor")]
@@ -206,32 +206,32 @@ mod integration_tests {
         net.check();
         net.allocate();
 
-        // Verify the network contains RandomActivator
+        // Verify the network contains RandomExcitor
         let mut backend = net.backend();
 
-        // Process some samples - RandomActivator should start generating values
+        // Process some samples - RandomExcitor should start generating values
         let input = [0.0f32];
         let mut output = [0.0f32, 0.0f32];
 
-        // Process multiple samples to allow RandomActivator to update
+        // Process multiple samples to allow RandomExcitor to update
         for _ in 0..1000 {
             backend.tick(&input, &mut output);
         }
 
-        // At least one activation should have changed from 0
-        // (RandomActivator generates random values)
-        let any_activation = activations.values().any(|control| control.value() > 0.0);
+        // At least one excitement should have changed from 0
+        // (RandomExcitor generates random values)
+        let any_excitement = excitements.values().any(|control| control.value() > 0.0);
 
         assert!(handles.is_empty());
 
         assert!(
-            any_activation,
-            "At least one activation should be greater than 0 with Entropy source"
+            any_excitement,
+            "At least one excitement should be greater than 0 with Entropy source"
         );
     }
 
     #[test]
-    fn test_activation_source_switching() {
+    fn test_excitement_source_switching() {
         let instrument_config = create_test_instrument_config();
         let tuner_config = create_test_tuner_config();
 
@@ -252,17 +252,17 @@ mod integration_tests {
                 #[cfg(feature = "editor")]
                 &values,
             );
-            let mut activations = HashMap::new();
+            let mut excitements = HashMap::new();
             for handle in node_handles {
-                activations.insert(handle.key, handle.siren_control);
+                excitements.insert(handle.key, handle.siren_control);
             }
 
             let spectrum_thb = Arc::new(ThingBuf::new(10));
             let handles = create_input_system(
                 &tuner_config,
                 &mut net,
-                activations,
-                ActivationSource::Mic,
+                excitements,
+                ExcitementSource::Mic,
                 &spectrum_thb,
                 1,
                 #[cfg(feature = "editor")]
@@ -291,17 +291,17 @@ mod integration_tests {
                 #[cfg(feature = "editor")]
                 &values,
             );
-            let mut activations = HashMap::new();
+            let mut excitements = HashMap::new();
             for handle in node_handles {
-                activations.insert(handle.key, handle.siren_control);
+                excitements.insert(handle.key, handle.siren_control);
             }
 
             let spectrum_thb = Arc::new(ThingBuf::new(10));
             let handles = create_input_system(
                 &tuner_config,
                 &mut net,
-                activations,
-                ActivationSource::Entropy,
+                excitements,
+                ExcitementSource::Entropy,
                 &spectrum_thb,
                 5,
                 #[cfg(feature = "editor")]
@@ -315,10 +315,10 @@ mod integration_tests {
     }
 
     #[test]
-    fn test_random_activator_value_range() {
-        use crate::system::input::RandomActivator;
+    fn test_random_excitor_value_range() {
+        use crate::system::input::RandomExcitor;
 
-        // Create test activation controls
+        // Create test excitement controls
         let mut controls = HashMap::new();
         for i in 0..5 {
             let key = NodeKey::new(0, i);
@@ -326,16 +326,16 @@ mod integration_tests {
             controls.insert(key, control.clone());
         }
 
-        let mut activator = RandomActivator::new(controls.clone());
-        activator.set_sample_rate(44100.0);
-        activator.reset();
+        let mut excitor = RandomExcitor::new(controls.clone());
+        excitor.set_sample_rate(44100.0);
+        excitor.reset();
 
         // Process many samples
         let input = [0.0f32];
         let mut output = [];
 
         for _ in 0..10000 {
-            activator.tick(&input, &mut output);
+            excitor.tick(&input, &mut output);
         }
 
         // Check that all values are within [0, 1]
@@ -343,7 +343,7 @@ mod integration_tests {
             let value = control.value();
             assert!(
                 (0.0..=1.0).contains(&value),
-                "Activation value {} should be in range [0, 1]",
+                "Excitement value {} should be in range [0, 1]",
                 value
             );
         }

@@ -50,7 +50,7 @@ where
             let key = node.key;
             log::trace!("Creating node with key: {:?}", key);
 
-            let (activation_snoop_front, activation_snoop_backend) =
+            let (excitement_snoop_front, excitement_snoop_backend) =
                 snoop(super::node::ACTIVATION_SNOOP_CAPACITY);
             let (output_snoop_front, output_snoop_backend) =
                 snoop(super::node::OUTPUT_SNOOP_CAPACITY);
@@ -61,7 +61,7 @@ where
             group_handles.insert(
                 key,
                 InnerHandles {
-                    activation_snoop: activation_snoop_backend,
+                    excitement_snoop: excitement_snoop_backend,
                     output_snoop: output_snoop_backend,
                     siren_control: Var::new(&siren_control),
                     band_control: Var::new(&band_control),
@@ -75,7 +75,7 @@ where
 
             node_handles.push(NodeHandles {
                 key,
-                activation_snoop: activation_snoop_front,
+                excitement_snoop: excitement_snoop_front,
                 output_snoop: output_snoop_front,
                 siren_control,
                 band_control,

@@ -18,7 +18,7 @@ pub const FFT_WINDOW_SIZE: usize = 2048; // Power of 2 for FFT, good balance of 
 
 pub type SpectrumBuffer = Arc<ThingBuf<Arc<FrequencySpectrum>>>;
 
-/// Custom AudioUnit that performs FFT analysis and activates sirens
+/// Custom AudioUnit that performs FFT analysis and excites sirens
 pub struct FFTAnalyzer {
     inner_net: BigBlockAdapter,
     window_thb: ThingBuf<f32>,
@@ -26,7 +26,7 @@ pub struct FFTAnalyzer {
     // Configuration and controls
     sample_rate: f32,
     config: Config,
-    activation_controls: HashMap<NodeKey, Shared>,
+    excitement_controls: HashMap<NodeKey, Shared>,
 
     // Spectrum data storage
     spectrum_thb: SpectrumBuffer,
@@ -39,7 +39,7 @@ impl Clone for FFTAnalyzer {
             window_thb: ThingBuf::new(FFT_WINDOW_SIZE * 2),
             sample_rate: self.sample_rate,
             config: self.config.clone(),
-            activation_controls: self.activation_controls.clone(),
+            excitement_controls: self.excitement_controls.clone(),
             spectrum_thb: self.spectrum_thb.clone(),
         }
     }
@@ -49,7 +49,7 @@ impl FFTAnalyzer {
     pub fn new(
         inner_net: Box<dyn AudioUnit>,
         config: Config,
-        activation_controls: HashMap<NodeKey, Shared>,
+        excitement_controls: HashMap<NodeKey, Shared>,
         spectrum_thb: Arc<ThingBuf<Arc<FrequencySpectrum>>>,
     ) -> Self {
         let analyzer = Self {
@@ -57,7 +57,7 @@ impl FFTAnalyzer {
             window_thb: ThingBuf::new(FFT_WINDOW_SIZE * 2),
             sample_rate: config.sample_rate,
             config,
-            activation_controls,
+            excitement_controls,
             spectrum_thb,
         };
 
@@ -66,14 +66,14 @@ impl FFTAnalyzer {
         analyzer
     }
 
-    /// Validate that sensor data NodeKeys match available activation controls
+    /// Validate that sensor data NodeKeys match available excitement controls
     fn validate_sensor_controls(&self) {
         let missing_controls: Vec<NodeKey> = self
             .config
             .sensor_data
             .iter()
             .filter_map(|sensor| {
-                if !self.activation_controls.contains_key(&sensor.key) {
+                if !self.excitement_controls.contains_key(&sensor.key) {
                     Some(sensor.key)
                 } else {
                     None
@@ -83,7 +83,7 @@ impl FFTAnalyzer {
 
         if !missing_controls.is_empty() {
             log::warn!(
-                "FFT analyzer missing activation controls for sensor keys: {:?}",
+                "FFT analyzer missing excitement controls for sensor keys: {:?}",
                 missing_controls
             );
         }
@@ -92,7 +92,7 @@ impl FFTAnalyzer {
         let sensor_keys: std::collections::HashSet<NodeKey> =
             self.config.sensor_data.iter().map(|s| s.key).collect();
         let orphaned_controls: Vec<NodeKey> = self
-            .activation_controls
+            .excitement_controls
             .keys()
             .filter(|k| !sensor_keys.contains(k))
             .copied()
@@ -100,15 +100,15 @@ impl FFTAnalyzer {
 
         if !orphaned_controls.is_empty() {
             log::warn!(
-                "FFT analyzer has orphaned activation controls for keys: {:?}",
+                "FFT analyzer has orphaned excitement controls for keys: {:?}",
                 orphaned_controls
             );
         }
     }
 
-    /// Apply slow-growth activation function using x^3 curve
+    /// Apply slow-growth excitement function using x^3 curve
     /// This function grows very slowly from 0 to 1, making it less likely to hit 1.0
-    fn slow_growth_activation(x: f32) -> f32 {
+    fn slow_growth_excitement(x: f32) -> f32 {
         if x <= 0.0 {
             return 0.0;
         }
@@ -154,7 +154,7 @@ impl FFTAnalyzer {
             }
         };
 
-        // Process sensor activations
+        // Process sensor excitements
         for (i, sensor) in self.config.sensor_data.iter().enumerate() {
             // Get sensor parameters from input channels
             let (min_freq, max_freq, min_mag, max_mag) = {
@@ -181,7 +181,7 @@ impl FFTAnalyzer {
             // Test min, center, and max frequencies
             let test_freqs = [min_freq, center, max_freq];
 
-            let mut max_activation = 0.0f32;
+            let mut max_excitement = 0.0f32;
 
             for &test_freq in &test_freqs {
                 let (f, v) = spectrum.freq_val_closest(test_freq);
@@ -191,8 +191,8 @@ impl FFTAnalyzer {
                 // Check if the closest bin is within sensor band
                 let in_band = freq >= min_freq && freq <= max_freq;
 
-                // Calculate raw activation value
-                let raw_activation = if !in_band || peak_db <= min_mag {
+                // Calculate raw excitement value
+                let raw_excitement = if !in_band || peak_db <= min_mag {
                     0.0
                 } else {
                     // Linear interpolation based on min/max magnitude range
@@ -200,35 +200,35 @@ impl FFTAnalyzer {
                 };
 
                 // Apply slow-growth function
-                let activation = Self::slow_growth_activation(raw_activation);
-                max_activation = max_activation.max(activation);
+                let excitement = Self::slow_growth_excitement(raw_excitement);
+                max_excitement = max_excitement.max(excitement);
 
-                if log::log_enabled!(log::Level::Trace) && activation > 0.01 {
+                if log::log_enabled!(log::Level::Trace) && excitement > 0.01 {
                     log::trace!(
-                        "fft_analyzer: sensor key={:?} test_freq={:.1} Hz, closest={:.1} Hz, peak={:.1} dB, raw={:.3}, activation={:.3}",
+                        "fft_analyzer: sensor key={:?} test_freq={:.1} Hz, closest={:.1} Hz, peak={:.1} dB, raw={:.3}, excitement={:.3}",
                         sensor.key,
                         test_freq,
                         freq,
                         peak_db,
-                        raw_activation,
-                        activation
+                        raw_excitement,
+                        excitement
                     );
                 }
             }
 
-            if log::log_enabled!(log::Level::Trace) && max_activation > 0.01 {
+            if log::log_enabled!(log::Level::Trace) && max_excitement > 0.01 {
                 log::trace!(
-                    "fft_analyzer: sensor key={:?} range=[{:.1},{:.1}] final_activation={:.3}",
+                    "fft_analyzer: sensor key={:?} range=[{:.1},{:.1}] final_excitement={:.3}",
                     sensor.key,
                     min_freq,
                     max_freq,
-                    max_activation
+                    max_excitement
                 );
             }
 
-            // Update siren control with the maximum activation from all test points
-            if let Some(siren_control) = self.activation_controls.get(&sensor.key) {
-                siren_control.set_value(max_activation);
+            // Update siren control with the maximum excitement from all test points
+            if let Some(siren_control) = self.excitement_controls.get(&sensor.key) {
+                siren_control.set_value(max_excitement);
             } else {
                 log::warn!(
                     "fft_analyzer: no siren control found for sensor key={:?}",
@@ -335,7 +335,7 @@ impl AudioUnit for FFTAnalyzer {
         while self.window_thb.pop().is_some() {}
 
         // Reset all siren controls
-        for siren_control in self.activation_controls.values() {
+        for siren_control in self.excitement_controls.values() {
             siren_control.set_value(0.0);
         }
 
@@ -401,7 +401,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sensor_activation_threshold() {
+    fn test_sensor_excitement_threshold() {
         let inner_net = Box::new(pass());
 
         // Create test config
@@ -430,15 +430,15 @@ mod tests {
     }
 
     #[test]
-    fn test_slow_growth_activation() {
+    fn test_slow_growth_excitement() {
         // Test boundary conditions
-        assert_eq!(FFTAnalyzer::slow_growth_activation(0.0), 0.0);
-        assert_eq!(FFTAnalyzer::slow_growth_activation(1.0), 1.0);
-        assert_eq!(FFTAnalyzer::slow_growth_activation(-0.1), 0.0);
-        assert_eq!(FFTAnalyzer::slow_growth_activation(1.5), 1.0);
+        assert_eq!(FFTAnalyzer::slow_growth_excitement(0.0), 0.0);
+        assert_eq!(FFTAnalyzer::slow_growth_excitement(1.0), 1.0);
+        assert_eq!(FFTAnalyzer::slow_growth_excitement(-0.1), 0.0);
+        assert_eq!(FFTAnalyzer::slow_growth_excitement(1.5), 1.0);
 
         // Test very small values (linear approximation region)
-        let small_val = FFTAnalyzer::slow_growth_activation(0.005);
+        let small_val = FFTAnalyzer::slow_growth_excitement(0.005);
         assert!(small_val > 0.0 && small_val < 0.01);
 
         // Test slow growth property: function should grow slowly
@@ -446,42 +446,42 @@ mod tests {
         let mut prev = 0.0;
 
         for &x in &test_points {
-            let activation = FFTAnalyzer::slow_growth_activation(x);
+            let excitement = FFTAnalyzer::slow_growth_excitement(x);
 
             // Should be monotonically increasing
             assert!(
-                activation > prev,
-                "Activation should increase: {} > {}",
-                activation,
+                excitement > prev,
+                "Excitement should increase: {} > {}",
+                excitement,
                 prev
             );
 
             // Should be bounded [0, 1]
-            assert!((0.0..=1.0).contains(&activation));
+            assert!((0.0..=1.0).contains(&excitement));
 
             // Should be significantly less than linear (slower growth)
             assert!(
-                activation < x * 0.9,
-                "Activation {} should be much less than linear {}",
-                activation,
+                excitement < x * 0.9,
+                "Excitement {} should be much less than linear {}",
+                excitement,
                 x * 0.9
             );
 
-            prev = activation;
+            prev = excitement;
         }
 
         // Near x=1, should approach 1 but slowly
-        let near_one = FFTAnalyzer::slow_growth_activation(0.95);
+        let near_one = FFTAnalyzer::slow_growth_excitement(0.95);
         assert!(near_one > 0.8 && near_one < 1.0);
 
-        println!("Slow-growth activation test values:");
+        println!("Slow-growth excitement test values:");
         for x in [
             0.0, 0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 1.0,
         ] {
             println!(
                 "  f({:.2}) = {:.4}",
                 x,
-                FFTAnalyzer::slow_growth_activation(x)
+                FFTAnalyzer::slow_growth_excitement(x)
             );
         }
     }

@@ -16,15 +16,12 @@ use super::InnerHandles;
 use crate::system::values::{FineTunedValue, FineTunedValues};
 use crate::util::S;
 
-// Type alias for the siren activation with follow envelope
-type SirenActivation = Pipe<Pipe<Var, Follow<S>>, SnoopBackend>;
+// Type alias for the siren excitement with follow envelope
+type SirenExcitement = Pipe<Pipe<Var, Follow<S>>, SnoopBackend>;
 
 // Type alias for the siren with all 5 inputs stacked
 type SirenWithInputs = Pipe<
-    Stack<
-        Stack<Stack<Stack<SirenActivation, FineTunedValue>, FineTunedValue>, FineTunedValue>,
-        FineTunedValue,
-    >,
+    Stack<Stack<Stack<SirenExcitement, FineTunedValue>, FineTunedValue>, FineTunedValue>,
     super::siren::Siren<S>,
 >;
 
@@ -95,7 +92,7 @@ fn create_node(
     values: &FineTunedValues,
 ) -> An<NodeType> {
     let InnerHandles {
-        activation_snoop,
+        excitement_snoop,
         output_snoop,
         siren_control,
         band_control,
@@ -104,10 +101,9 @@ fn create_node(
 
     let FineTunedValues {
         node_follow_response_time_s,
-        siren_base_hz,
-        siren_max_frequency_hz,
-        siren_excitement_pause_limit,
-        siren_base_pause_duration,
+        siren_alpha,
+        siren_beta,
+        siren_gamma,
         formant_base_q,
         node_bell_q,
         node_bell_gain_db,
@@ -126,16 +122,12 @@ fn create_node(
     #[cfg(not(feature = "editor"))]
     let follow_time = node_follow_response_time_s.value()[0];
 
-    let siren_activation: An<SirenActivation> =
-        An(siren_control) >> follow::<S>(follow_time as S) >> activation_snoop;
+    let siren_excitement: An<SirenExcitement> =
+        An(siren_control) >> follow::<S>(follow_time as S) >> excitement_snoop;
 
     // Stack inputs for siren (5 inputs total: excitement + 4 fine-tuned values)
-    let siren_output: An<SirenWithInputs> = (siren_activation
-        | siren_base_hz
-        | siren_max_frequency_hz
-        | siren_excitement_pause_limit
-        | siren_base_pause_duration)
-        >> siren::<S>();
+    let siren_output: An<SirenWithInputs> =
+        (siren_excitement | siren_alpha | siren_beta | siren_gamma) >> siren::<S>();
 
     // Formants with base_q as input
     let formant1: An<FormantFilter<1>> = (pass() | formant_base_q.clone())

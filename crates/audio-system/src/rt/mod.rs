@@ -8,9 +8,9 @@ use common::NodeKey;
 use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout};
 use common::tuner::Config as TunerConfig;
 
-/// Source of activation energy driving instrument strings / nodes.
+/// Source of excitement energy driving instrument strings / nodes.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub enum ActivationSource {
+pub enum ExcitementSource {
     /// Pseudo-random / noise entropy (internal generator).
     #[default]
     Entropy,
@@ -18,7 +18,7 @@ pub enum ActivationSource {
     Mic,
 }
 
-impl From<u8> for ActivationSource {
+impl From<u8> for ExcitementSource {
     fn from(value: u8) -> Self {
         match value {
             0 => Self::Entropy,
@@ -27,11 +27,11 @@ impl From<u8> for ActivationSource {
     }
 }
 
-impl From<ActivationSource> for u8 {
-    fn from(v: ActivationSource) -> Self {
+impl From<ExcitementSource> for u8 {
+    fn from(v: ExcitementSource) -> Self {
         match v {
-            ActivationSource::Entropy => 0,
-            ActivationSource::Mic => 1,
+            ExcitementSource::Entropy => 0,
+            ExcitementSource::Mic => 1,
         }
     }
 }
@@ -41,7 +41,7 @@ impl From<ActivationSource> for u8 {
 /// Implementations manage:
 /// - Graph construction / re-construction on layout or config changes.
 /// - Audio I/O lifecycle (start/stop/pause/resume).
-/// - Activation source switching (mic vs entropy).
+/// - Excitement source switching (mic vs entropy).
 /// - Data snoops (per-string sample snapshots).
 pub trait AudioRuntime {
     // Lifecycle
@@ -49,7 +49,7 @@ pub trait AudioRuntime {
         &self,
         layout: &InstrumentLayout,
         config: &InstrumentConfig,
-        source: ActivationSource,
+        source: ExcitementSource,
         tuner_config: &TunerConfig,
     ) -> common::error::Result<()>;
     fn stop(&self) -> common::error::Result<()>;
@@ -57,7 +57,7 @@ pub trait AudioRuntime {
     fn resume(&self) -> common::error::Result<()>;
 
     // Reactivity
-    fn on_activation_source_changed(&self, source: ActivationSource) -> common::error::Result<()>;
+    fn on_excitement_source_changed(&self, source: ExcitementSource) -> common::error::Result<()>;
     fn on_layout_changed(
         &self,
         layout: &InstrumentLayout,
@@ -68,8 +68,8 @@ pub trait AudioRuntime {
     // Data taps
     fn snapshot_output_snoop(&self, key: NodeKey) -> Vec<f32>;
     fn snapshot_all_output_snoops(&self) -> Vec<(NodeKey, Vec<f32>)>;
-    fn snapshot_activation_snoop(&self, key: NodeKey) -> Vec<f32>;
-    fn snapshot_all_activation_snoops(&self) -> Vec<(NodeKey, Vec<f32>)>;
+    fn snapshot_excitement_snoop(&self, key: NodeKey) -> Vec<f32>;
+    fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<f32>)>;
 
     // Band control
     fn set_band_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()>;
@@ -97,7 +97,7 @@ pub trait AudioRuntime {
     fn start_tap_tuner_audio(&self) -> common::error::Result<()>;
     fn stop_tap_tuner_audio(&self) -> common::error::Result<()>;
     fn update_tuner_config(&self, tuner_config: &TunerConfig) -> common::error::Result<()>;
-    fn poll_tuner_activations(&self) -> Vec<(NodeKey, f32)>;
+    fn poll_tuner_excitements(&self) -> Vec<(NodeKey, f32)>;
     fn get_sample_rate(&self) -> f64;
 }
 
@@ -127,7 +127,7 @@ impl AudioRuntime for NullController {
 
     fn start(&self, _layout: &InstrumentLayout,
     _config: &InstrumentConfig,
-    _source: ActivationSource,
+    _source: ExcitementSource,
     _tuner_config: &TunerConfig,) -> common::error::Result<()> {
         Ok(())
     }
@@ -144,7 +144,7 @@ impl AudioRuntime for NullController {
         Ok(())
     }
 
-    fn on_activation_source_changed(&self, _source: ActivationSource) -> common::error::Result<()> {
+    fn on_excitement_source_changed(&self, _source: ExcitementSource) -> common::error::Result<()> {
         Ok(())
     }
 
@@ -165,11 +165,11 @@ impl AudioRuntime for NullController {
         Vec::new()
     }
 
-    fn snapshot_activation_snoop(&self, _key: NodeKey) -> Vec<f32> {
+    fn snapshot_excitement_snoop(&self, _key: NodeKey) -> Vec<f32> {
         Vec::new()
     }
 
-    fn snapshot_all_activation_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
+    fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
         Vec::new()
     }
 
@@ -209,7 +209,7 @@ impl AudioRuntime for NullController {
         None
     }
 
-    fn poll_tuner_activations(&self) -> Vec<(NodeKey, f32)> {
+    fn poll_tuner_excitements(&self) -> Vec<(NodeKey, f32)> {
         vec![]
     }
 

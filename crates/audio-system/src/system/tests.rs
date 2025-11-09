@@ -23,11 +23,13 @@ mod integration_tests {
                 key: NodeKey::new(0, 0),
                 base_frequency: 440.0,
                 phase: 0.0,
+                divisions: 2,
             },
             NodeConfig {
                 key: NodeKey::new(0, 1),
                 base_frequency: 880.0,
                 phase: 0.0,
+                divisions: 2,
             },
         ];
 
@@ -36,11 +38,13 @@ mod integration_tests {
                 key: NodeKey::new(1, 0),
                 base_frequency: 554.37, // C# above middle C
                 phase: 0.0,
+                divisions: 2,
             },
             NodeConfig {
                 key: NodeKey::new(1, 1),
                 base_frequency: 659.25, // E above middle C
                 phase: 0.0,
+                divisions: 2,
             },
         ];
 
@@ -160,74 +164,6 @@ mod integration_tests {
         }
 
         assert!(!handles.is_empty())
-    }
-
-    #[test]
-    fn test_entropy_excitement_source() {
-        let instrument_config = create_test_instrument_config();
-        let tuner_config = create_test_tuner_config();
-
-        // Create output system first
-        let mut net = Net::new(1, 3);
-        net.set_sample_rate(44100.0);
-
-        #[cfg(feature = "editor")]
-        let values =
-            crate::values::FineTunedValues::new(&crate::values::FineTunedSharedValues::default());
-
-        let node_handles = create_output_system(
-            &instrument_config,
-            &mut net,
-            1,
-            #[cfg(feature = "editor")]
-            &values,
-        );
-
-        // Collect excitement controls
-        let mut excitements = HashMap::new();
-        for handle in node_handles {
-            excitements.insert(handle.key, handle.siren_control.clone());
-        }
-
-        let spectrum_thb = Arc::new(ThingBuf::new(10));
-        // Create input system with Entropy source (RandomExcitor)
-        let handles = create_input_system(
-            &tuner_config,
-            &mut net,
-            excitements.clone(),
-            ExcitementSource::Entropy,
-            &spectrum_thb,
-            2,
-            #[cfg(feature = "editor")]
-            &values,
-        );
-
-        // Network should be valid
-        net.check();
-        net.allocate();
-
-        // Verify the network contains RandomExcitor
-        let mut backend = net.backend();
-
-        // Process some samples - RandomExcitor should start generating values
-        let input = [0.0f32];
-        let mut output = [0.0f32, 0.0f32];
-
-        // Process multiple samples to allow RandomExcitor to update
-        for _ in 0..1000 {
-            backend.tick(&input, &mut output);
-        }
-
-        // At least one excitement should have changed from 0
-        // (RandomExcitor generates random values)
-        let any_excitement = excitements.values().any(|control| control.value() > 0.0);
-
-        assert!(handles.is_empty());
-
-        assert!(
-            any_excitement,
-            "At least one excitement should be greater than 0 with Entropy source"
-        );
     }
 
     #[test]

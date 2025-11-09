@@ -106,3 +106,35 @@ impl AudioNode for EqualPowerCrossfade {
 pub fn equal_power_crossfade() -> An<EqualPowerCrossfade> {
     An(EqualPowerCrossfade::new())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use insta_fun::prelude::*;
+
+    #[test]
+    fn test_crossfade() {
+        let config = SnapshotConfigBuilder::default()
+            .num_samples(2000)
+            .with_inputs(true)
+            .build()
+            .unwrap();
+
+        let node = (sine_hz::<f32>(440.0) | saw_hz(440.0) | pass()) >> equal_power_crossfade();
+
+        assert_audio_unit_snapshot!(
+            "crossfade_process_0_1",
+            node,
+            InputSource::Generator(Box::new(|sample, _| match sample {
+                0..250 => 0.0,
+                250..500 => 0.1,
+                500..750 => 0.25,
+                750..1000 => 0.5,
+                1000..1250 => 0.75,
+                1250..1500 => 0.9,
+                _ => 1.0,
+            })),
+            config
+        );
+    }
+}

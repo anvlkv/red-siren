@@ -1,3 +1,5 @@
+use std::f32;
+
 #[cfg(feature = "hi_fi")]
 use fundsp::hacker::prelude::*;
 #[cfg(not(feature = "hi_fi"))]
@@ -8,12 +10,14 @@ use crate::util::hash_str;
 const NEW_YORK_ID: u64 = hash_str(concat!(module_path!(), "::NewYork"));
 
 /// New York (parallel) compressor with soft knee compression.
+///
 /// Mixes a heavily-compressed signal with the dry signal to preserve dynamics while lifting quiet parts.
+///
+/// Dynamically computes the compression ratio based on threshold and input level.
 ///
 /// - Input 0: audio signal
 /// - Input 1: threshold (0.0 to 1.0)
-/// - Input 2: ratio (1.0 to 10.0)
-/// - Input 3: wet mix (0.0 to 1.0)
+/// - Input 2: wet mix (0.0 to 1.0)
 /// - Output 0: compressed audio signal
 #[derive(Default, Clone)]
 pub struct NewYork<F: Real> {
@@ -29,36 +33,38 @@ impl<F: Real> NewYork<F> {
         compressor
     }
 
-    /// Apply soft knee compression curve
-    /// Small input levels are slightly boosted, large ones are reduced
+    /// Apply knee compression curve
+    /// Small input levels are boosted, large ones are reduced
     #[inline]
-    fn soft_compress(&self, x: F, threshold: F, ratio: F) -> F {
-        let abs_x = x.abs();
+    fn soft_compress(&self, x: F, t: F) -> F {
+        let a = x.abs();
 
-        let gain = if abs_x > threshold {
-            // Above threshold: attenuate
-            // Output = threshold + (input - threshold) / ratio
-            threshold + (abs_x - threshold) / ratio
-        } else {
-            // Below threshold: slightly boost
-            // Use a smooth transition with (2.0 - ratio/ratio_max) factor
-            // This gives a subtle boost that decreases as ratio increases
-            let boost_factor = F::from_f32(2.0) - ratio / F::from_f32(10.0);
-            abs_x * boost_factor
-        };
+        // Aggression knob (higher => stronger flattening and more lift)
+        let k_base = F::from_f32(40.0);
+        // More aggressive when threshold is low
+        let k = (F::one() - t) / t * k_base;
 
-        // Restore original sign
+        // Target pivot below threshold to reduce overall amplitude
+        // p_scale in (0,1). Try 0.75; lower for more reduction.
+        let p_scale = F::from_f32(0.75);
+        let p = t * p_scale;
+
+        // Rational compander with pivot at p (not t):
+        // y(a) = S * a / (1 + k a), with S chosen so y(t) = p
+        let s = p * (F::one() + k * t) / t;
+        let y = s * a / (F::one() + k * a);
+
         if x < F::zero() {
-            -gain
+            -y
         } else {
-            gain
+            y
         }
     }
 }
 
 impl<F: Real> AudioNode for NewYork<F> {
     const ID: u64 = NEW_YORK_ID;
-    type Inputs = typenum::U4;
+    type Inputs = typenum::U3;
     type Outputs = typenum::U1;
 
     fn reset(&mut self) {
@@ -70,12 +76,11 @@ impl<F: Real> AudioNode for NewYork<F> {
         let dry_signal = F::from_f32(input[0]);
 
         // Get control parameters from inputs
-        let threshold = F::from_f32(input[1].clamp(0.0, 1.0));
-        let ratio = F::from_f32(input[2].clamp(1.0, 10.0));
-        let wet_mix = F::from_f32(input[3].clamp(0.0, 1.0));
+        let threshold = F::from_f32(input[1].clamp(f32::EPSILON, 1.0));
+        let wet_mix = F::from_f32(input[2].clamp(0.0, 1.0));
 
         // Apply compression to create wet signal
-        let wet_signal = self.soft_compress(dry_signal, threshold, ratio);
+        let wet_signal = self.soft_compress(dry_signal, threshold);
 
         // Mix dry and wet signals
         // output = dry * (1 - mix) + wet * mix
@@ -87,9 +92,8 @@ impl<F: Real> AudioNode for NewYork<F> {
 
     fn process(&mut self, size: usize, input: &BufferRef, output: &mut BufferMut) {
         // Cache control parameters for this block
-        let threshold = F::from_f32(input.at_f32(1, 0).clamp(0.0, 1.0));
-        let ratio = F::from_f32(input.at_f32(2, 0).clamp(1.0, 10.0));
-        let wet_mix = F::from_f32(input.at_f32(3, 0).clamp(0.0, 1.0));
+        let threshold = F::from_f32(input.at_f32(1, 0).clamp(f32::EPSILON, 1.0));
+        let wet_mix = F::from_f32(input.at_f32(2, 0).clamp(0.0, 1.0));
 
         let dry_mix = F::one() - wet_mix;
 
@@ -98,7 +102,7 @@ impl<F: Real> AudioNode for NewYork<F> {
                 let dry_signal = F::from_f32(input.at_f32(0, (i << SIMD_S) + j));
 
                 // Apply compression
-                let wet_signal = self.soft_compress(dry_signal, threshold, ratio);
+                let wet_signal = self.soft_compress(dry_signal, threshold);
 
                 // Mix dry and wet
                 let output = dry_signal * dry_mix + wet_signal * wet_mix;
@@ -127,93 +131,38 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use insta_fun::prelude::*;
 
     #[test]
-    fn test_new_york_passthrough() {
-        let mut compressor = new_york::<f32>();
-        compressor.reset();
+    fn test_new_york_compressor() {
+        let node = (sine_hz::<f32>(440.0) * pass())
+            >> split::<U2>()
+            >> (pass() | constant(0.3) | constant(1.0) | pass())
+            >> (new_york::<f32>() | pass());
 
-        // With wet_mix = 0, should pass through dry signal
-        let input: Frame<f32, typenum::U4> = [0.5, 0.3, 4.0, 0.0].into();
-        let output = compressor.tick(&input);
+        let config = SnapshotConfigBuilder::default()
+            .num_samples(2000)
+            .with_inputs(true)
+            .show_grid(true)
+            .background_color("#f0f0f0")
+            .build()
+            .unwrap();
 
-        assert!(
-            (output[0] - 0.5).abs() < 0.001,
-            "With wet_mix=0, should pass through dry signal"
-        );
-    }
-
-    #[test]
-    fn test_new_york_compression() {
-        let mut compressor = new_york::<f32>();
-        compressor.reset();
-
-        // Test with full wet mix
-        let input: Frame<f32, typenum::U4> = [0.8, 0.3, 4.0, 1.0].into();
-        let output = compressor.tick(&input);
-
-        // Input above threshold (0.8 > 0.3) should be compressed
-        // Expected: 0.3 + (0.8 - 0.3) / 4.0 = 0.3 + 0.125 = 0.425
-        assert!(
-            output[0] < 0.8,
-            "Large signals should be compressed, got {}",
-            output[0]
-        );
-
-        // Test with small signal (boost)
-        let input: Frame<f32, typenum::U4> = [0.1, 0.3, 4.0, 1.0].into();
-        let output = compressor.tick(&input);
-
-        // Input below threshold should be slightly boosted
-        // Boost factor = 2.0 - 4.0/10.0 = 1.6
-        // Expected: 0.1 * 1.6 = 0.16
-        assert!(
-            output[0] > 0.1,
-            "Small signals should be boosted, got {}",
-            output[0]
-        );
-    }
-
-    #[test]
-    fn test_new_york_mixing() {
-        let mut compressor = new_york::<f32>();
-        compressor.reset();
-
-        // Test 50/50 mix
-        let input: Frame<f32, typenum::U4> = [1.0, 0.3, 4.0, 0.5].into();
-        let output = compressor.tick(&input);
-
-        // Dry = 1.0
-        // Wet (compressed) = 0.3 + (1.0 - 0.3) / 4.0 = 0.475
-        // Mixed = 1.0 * 0.5 + 0.475 * 0.5 = 0.7375
-        assert!(
-            (output[0] - 0.7375).abs() < 0.01,
-            "50/50 mix should blend dry and wet, got {}",
-            output[0]
-        );
-    }
-
-    #[test]
-    fn test_negative_signals() {
-        let mut compressor = new_york::<f32>();
-        compressor.reset();
-
-        // Test with negative input
-        let input: Frame<f32, typenum::U4> = [-0.8, 0.3, 4.0, 1.0].into();
-        let output = compressor.tick(&input);
-
-        // Should preserve sign
-        assert!(
-            output[0] < 0.0,
-            "Should preserve negative sign, got {}",
-            output[0]
-        );
-
-        // Magnitude should be compressed same as positive
-        assert!(
-            output[0].abs() < 0.8,
-            "Negative signals should be compressed by magnitude, got {}",
-            output[0]
+        assert_audio_unit_snapshot!(
+            "new_york",
+            node,
+            InputSource::Generator(Box::new(|sample, _| match sample {
+                ..50 => 0.0,
+                50..250 => 0.001,
+                250..500 => 0.01,
+                500..750 => 0.1,
+                750..1000 => 0.25,
+                1000..1250 => 0.3,
+                1250..1500 => 0.5,
+                1500..1750 => 0.75,
+                _ => 1.0,
+            })),
+            config
         );
     }
 }

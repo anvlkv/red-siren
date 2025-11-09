@@ -56,7 +56,7 @@ pub struct FineTunedSharedValues {
     pub input_ny_wet_ratio: Shared,
 }
 
-const SIREN_ALPHA: f32 = 0.001;
+const SIREN_ALPHA: f32 = 1.0 / 7500.0;
 const SIREN_BETA: f32 = 0.75;
 const SIREN_GAMMA: f32 = 0.3;
 const FILTER_SWITCH_FOLLOW_RESPONSE_S: f32 = 0.04;
@@ -74,8 +74,8 @@ const NODE_BELL_Q: f32 = 1.085;
 const NODE_BELL_GAIN_DB: f32 = 3.34;
 const FORMANT_BASE_Q: f32 = 0.8;
 const INPUT_NY_THRESHOLD: f32 = 0.3;
-const INPUT_NY_RATIO: f32 = 4.0;
-const INPUT_NY_WET_RATIO: f32 = 0.7;
+const INPUT_NY_RATIO: f32 = 1.0 / INPUT_NY_THRESHOLD;
+const INPUT_NY_WET_RATIO: f32 = 0.85;
 
 #[cfg(feature = "editor")]
 impl Default for FineTunedSharedValues {

@@ -89,12 +89,14 @@ pub struct GroupConfig {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NodeConfig {
+    /// Unique node identifier within the instrument
+    pub key: NodeKey,
     /// Base frequency of the node
     pub base_frequency: f64,
     /// Starting phase of the oscillator
     pub phase: f64,
-    /// Unique node identifier within the instrument
-    pub key: NodeKey,
+    /// Number of divisions
+    pub divisions: u32,
 }
 
 impl NodeConfig {
@@ -283,6 +285,7 @@ fn build_group_nodes(
             base_frequency: base_f,
             phase: 0.0,
             key: NodeKey::new(group as u8, i as u8),
+            divisions: equal_divisions,
         });
     }
 
@@ -399,12 +402,14 @@ mod tests {
             base_frequency: (super::SOFT_MIN_FREQ_HZ + super::SOFT_MAX_FREQ_HZ) / 2.0,
             phase: 0.0,
             key: NodeKey::new(0, 0),
+            divisions: 1,
         };
         assert!(valid_node.validate(0).is_ok());
         assert!(NodeConfig {
             base_frequency: super::MIN_FREQ_HZ - 1.0,
             phase: 0.0,
             key: NodeKey::new(0, 0),
+            divisions: 1,
         }
         .validate(0)
         .is_err());
@@ -416,6 +421,7 @@ mod tests {
             base_frequency: (super::SOFT_MIN_FREQ_HZ + super::SOFT_MAX_FREQ_HZ) / 2.0,
             phase: 0.0,
             key: NodeKey::new(0, 0),
+            divisions: 1,
         };
         let group = GroupConfig {
             channel: GroupChannel::Left,
@@ -489,6 +495,7 @@ mod tests {
             base_frequency: (SOFT_MIN_FREQ_HZ + SOFT_MAX_FREQ_HZ) / 2.0,
             phase: 0.0,
             key: NodeKey::new(0, 0),
+            divisions: 1,
         };
         let group = GroupConfig {
             channel: GroupChannel::Left,

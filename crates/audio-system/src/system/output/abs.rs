@@ -60,3 +60,16 @@ impl AudioNode for Abs {
 pub fn abs() -> An<Abs> {
     An(Abs::new())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use insta_fun::prelude::*;
+
+    #[test]
+    fn test_abs() {
+        let node = sine_hz::<f32>(440.0) >> abs();
+
+        assert_audio_unit_snapshot!(node);
+    }
+}

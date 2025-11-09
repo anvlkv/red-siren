@@ -42,11 +42,12 @@ type SourceOscillator = Pipe<
 >;
 
 // Type alias for a single formant filter with base_q input
-type FormantFilter<const N: u8> = Pipe<Stack<Pass, FineTunedValue>, super::formant::Formant<N>>;
+type FormantFilter<const N: u8> =
+    Pipe<Stack<Stack<Pass, Var>, FineTunedValue>, super::formant::Formant<N>>;
 
 // Type alias for all three formant filters stacked with gain scaling
-type FormantBank = Stack<
-    Stack<
+type FormantBank = Pipe<
+    Pipe<
         Unop<FormantFilter<1>, FrameMulScalar<UInt<UTerm, B1>>>,
         Unop<FormantFilter<2>, FrameMulScalar<UInt<UTerm, B1>>>,
     >,
@@ -65,16 +66,10 @@ pub type NodeType = Pipe<
         Pipe<
             Pipe<
                 Pipe<
-                    Pipe<
-                        Pipe<
-                            Pipe<SirenWithInputs, Split<UInt<UInt<UTerm, B1>, B0>>>,
-                            Binop<FrameMul<UInt<UTerm, B1>>, SourceOscillator, Pass>,
-                        >,
-                        Split<UInt<UInt<UTerm, B1>, B1>>,
-                    >,
-                    FormantBank,
+                    Pipe<SirenWithInputs, Split<UInt<UInt<UTerm, B1>, B0>>>,
+                    Binop<FrameMul<UInt<UTerm, B1>>, SourceOscillator, Pass>,
                 >,
-                Join<UInt<UInt<UTerm, B1>, B1>>,
+                FormantBank,
             >,
             super::chorus::Chorus,
         >,
@@ -130,14 +125,16 @@ fn create_node(
         (siren_excitement | siren_alpha | siren_beta | siren_gamma) >> siren::<S>();
 
     // Formants with base_q as input
-    let formant1: An<FormantFilter<1>> = (pass() | formant_base_q.clone())
-        >> formant::<1>(band_control.clone(), config.base_frequency as S);
-    let formant2: An<FormantFilter<2>> = (pass() | formant_base_q.clone())
-        >> formant::<2>(band_control.clone(), config.base_frequency as S);
-    let formant3: An<FormantFilter<3>> =
-        (pass() | formant_base_q) >> formant::<3>(band_control.clone(), config.base_frequency as S);
+    let formant1: An<FormantFilter<1>> =
+        (pass() | An(band_control.clone()) | formant_base_q.clone())
+            >> formant::<1>(config.base_frequency as S, config.divisions);
+    let formant2: An<FormantFilter<2>> =
+        (pass() | An(band_control.clone()) | formant_base_q.clone())
+            >> formant::<2>(config.base_frequency as S, config.divisions);
+    let formant3: An<FormantFilter<3>> = (pass() | An(band_control.clone()) | formant_base_q)
+        >> formant::<3>(config.base_frequency as S, config.divisions);
 
-    let formants: An<FormantBank> = (formant1 * 1.0) | (formant2 * 0.8) | (formant3 * 0.6);
+    let formants: An<FormantBank> = (formant1 * 1.0) >> (formant2 * 0.8) >> (formant3 * 0.6);
 
     let bell_filter: An<BellFilter> =
         (pass() | constant(config.base_frequency as f32) | node_bell_q | node_bell_gain_db)
@@ -146,9 +143,7 @@ fn create_node(
     siren_output
         >> split::<U2>()
         >> (source * pass())
-        >> split::<U3>()
         >> formants
-        >> join::<U3>()
         >> super::chorus::chorus(config.key.idx() as u64, 0.15, 0.75, 0.75)
         >> bell_filter
         >> output_snoop

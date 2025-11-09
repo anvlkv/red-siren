@@ -76,7 +76,13 @@ impl<F: Real> Siren<F> {
         beta: F,
         gamma: F,
     ) -> (F, F, F) {
-        let wrap_phase: F = alpha;
+        let non_zero_excitement = if excitement == F::zero() {
+            F::one()
+        } else {
+            excitement
+        };
+
+        let wrap_phase: F = (alpha + alpha * gamma + alpha * beta) / non_zero_excitement;
 
         let next_phase = phase + sample_duration;
 
@@ -92,10 +98,12 @@ impl<F: Real> Siren<F> {
                 next_phase
             };
 
-            let d = F::one() - excitement;
-
-            let sample =
-                Self::shape(phase, alpha * d, beta * excitement, gamma * excitement) * sign;
+            let sample = Self::shape(
+                phase,
+                alpha / non_zero_excitement,
+                beta * excitement,
+                gamma * excitement,
+            ) * sign;
 
             (sample, phase, sign)
         }
@@ -205,10 +213,25 @@ mod tests {
     use super::*;
     use insta_fun::prelude::*;
 
-    const ALPHA: f32 = 0.001;
+    const ALPHA: f32 = 1.0 / 7500.0;
     const BETA: f32 = 0.75;
     const GAMMA: f32 = 0.3;
-    const SAMPLES: usize = 44100;
+    const SAMPLES: usize = 2250;
+
+    const fn excitement(sample: usize) -> f32 {
+        match sample {
+            ..50 => 0.0,
+            50..250 => f32::EPSILON,
+            250..500 => 0.01,
+            500..750 => 0.1,
+            750..1000 => 0.25,
+            1000..1250 => 0.3,
+            1250..1500 => 0.5,
+            1500..1750 => 0.75,
+            1750..2000 => 0.99,
+            _ => 1.0,
+        }
+    }
 
     #[test]
     fn test_siren_tick() {
@@ -218,36 +241,65 @@ mod tests {
             .build()
             .unwrap();
 
-        let input = vec![0.0, ALPHA, BETA, GAMMA];
-
         assert_audio_unit_snapshot!(
-            "siren_0_0",
+            "siren_0001",
             siren_node.clone(),
-            InputSource::Flat(input),
+            InputSource::Generator(Box::new(|sample, ch| {
+                match ch {
+                    0 => excitement(sample),
+                    1 => ALPHA,
+                    2 => BETA,
+                    3 => GAMMA,
+                    _ => 0.0,
+                }
+            })),
             config.clone()
         );
 
-        let input = vec![0.3, ALPHA, BETA, GAMMA];
-
         assert_audio_unit_snapshot!(
-            "siren_0_3",
+            "siren_0010",
             siren_node.clone(),
-            InputSource::Flat(input),
+            InputSource::Generator(Box::new(|sample, ch| {
+                match ch {
+                    0 => excitement(sample),
+                    1 => ALPHA * 10.0,
+                    2 => BETA,
+                    3 => GAMMA,
+                    _ => 0.0,
+                }
+            })),
             config.clone()
         );
 
-        let input = vec![0.7, ALPHA, BETA, GAMMA];
-
         assert_audio_unit_snapshot!(
-            "siren_0_7",
+            "siren_0070",
             siren_node.clone(),
-            InputSource::Flat(input),
+            InputSource::Generator(Box::new(|sample, ch| {
+                match ch {
+                    0 => excitement(sample),
+                    1 => ALPHA * 70.0,
+                    2 => BETA,
+                    3 => GAMMA,
+                    _ => 0.0,
+                }
+            })),
             config.clone()
         );
 
-        let input = vec![0.1, ALPHA, BETA, GAMMA];
-
-        assert_audio_unit_snapshot!("siren_0_1", siren_node, InputSource::Flat(input), config);
+        assert_audio_unit_snapshot!(
+            "siren_3",
+            siren_node,
+            InputSource::Generator(Box::new(|sample, ch| {
+                match ch {
+                    0 => excitement(sample),
+                    1 => 3.0,
+                    2 => BETA,
+                    3 => GAMMA,
+                    _ => 0.0,
+                }
+            })),
+            config
+        );
     }
 
     #[test]

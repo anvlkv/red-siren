@@ -42,7 +42,7 @@ pub type PreampType = Pipe<
             >,
             Join<U5>,
         >,
-        Stack<Stack<Stack<Pass, FineTunedValue>, FineTunedValue>, FineTunedValue>,
+        Stack<Stack<Pass, FineTunedValue>, FineTunedValue>,
     >,
     super::new_york::NewYork<S>,
 >;
@@ -96,10 +96,7 @@ pub fn create_sensors_preamp(values: &FineTunedValues) -> An<PreampType> {
             | bell_hz(freq_10khz, q_10khz, gain_10khz_linear)
             | pass())
         >> join::<U5>()
-        >> (pass()
-            | values.input_ny_threshold.clone()
-            | values.input_ny_ratio.clone()
-            | values.input_ny_wet_ratio.clone())
+        >> (pass() | values.input_ny_threshold.clone() | values.input_ny_wet_ratio.clone())
         >> super::new_york::new_york::<S>()
 }
 

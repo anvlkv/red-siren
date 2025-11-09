@@ -2577,9 +2577,9 @@ dependencies = [
 
 [[package]]
 name = "insta-fun"
-version = "0.2.0"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2ca2d0c48fc00ffa61b20bc0856d8e7c87766bc81e5aaa65c378199a96a46e8"
+checksum = "bef0f8acf34a855c76d096305ba058c9c3e3e459e63cbd780d1c928078bc2f53"
 dependencies = [
  "derive_builder",
  "fundsp",

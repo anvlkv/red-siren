@@ -169,13 +169,13 @@ impl RandomExcitor {
         let d = rng.usize(1..idx);
 
         let mut value = if d.is_multiple_of(3) && d.is_multiple_of(5) {
-            r1.sqrt()
+            avg.sqrt()
         } else if d.is_multiple_of(5) {
             r2.powi(3)
         } else if d.is_multiple_of(3) {
             r3.powi(5)
         } else {
-            avg.powi(d.try_into().unwrap_or(1))
+            0.0
         };
 
         if !value.is_normal() && value != 0.0 {

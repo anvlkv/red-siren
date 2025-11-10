@@ -1,14 +1,17 @@
 use common::RouteId;
 use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
+use tauri_use::{use_command, UseTauriWithReturn};
 
 use crate::{
     components::{
-        AppearanceToggle, CompactMenu, ExcitementSourceToggle, Instrument, MenuItem, UiPlacement,
+        with_tooltip, AppearanceToggle, CompactMenu, ExcitementSourceToggle, Icon, Instrument,
+        MenuItem, UiPlacement, UiSize,
     },
     util::{
         layout_context::{expect_layout_contex, LayoutContextReturn},
         playback_service::{expect_playback_service, PlaybackService},
+        raf_fn_fps::use_raf_fn_with_fps,
         secondary_window::is_secondary_window,
         setup_context::{is_devtools_enabled, is_mic_premission_granted},
         tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
@@ -115,11 +118,62 @@ pub fn Play() -> impl IntoView {
 
     let editor = is_devtools_enabled();
 
+    let icon_ref = NodeRef::new();
+
+    let UseTauriWithReturn {
+        trigger: check_is_batch_processing,
+        data: is_batch_processing_data,
+        error: is_batch_processing_error,
+    } = use_command::<bool>(common::instrument::commands::IS_BATCH_PROCESSING);
+
+    let is_batch_processing_data = Memo::new(move |prev| {
+        is_batch_processing_data().unwrap_or_else(|| prev.copied().unwrap_or_default())
+    });
+
+    _ = use_raf_fn_with_fps(
+        move |_| {
+            check_is_batch_processing(Some(()));
+        },
+        20.0,
+    );
+
+    Effect::new(move |_| {
+        if let Some(err) = is_batch_processing_error() {
+            log::error!("Error checking batch processing status: {}", err);
+        }
+    });
+
+    with_tooltip(
+        icon_ref,
+        Signal::derive(move || {
+            if is_batch_processing_data() {
+                "Optimized".to_string()
+            } else {
+                "High Quality".to_string()
+            }
+        }),
+        Signal::derive(move || Some(placement().opposite())),
+    );
+
+    let process_icon = Signal::derive(move || {
+        if is_batch_processing_data() {
+            "batch"
+        } else {
+            "cube"
+        }
+    });
+
     view! {
         <div>
             <Instrument editor />
             <Show when=move || !is_secondary_window()>
                 <CompactMenu items=menu_items placement>
+                    <Icon
+                        name=process_icon
+                        size=UiSize::Sm
+                        class="text-gary dark:text-cinnabar"
+                        node_ref=icon_ref
+                    />
                     <ExcitementSourceToggle placement mic_permission />
                     <AppearanceToggle placement />
                 </CompactMenu>

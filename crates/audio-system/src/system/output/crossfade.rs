@@ -77,23 +77,6 @@ impl AudioNode for EqualPowerCrossfade {
         // Return output frame
         [output].into()
     }
-
-    // Optional: implement process for block processing efficiency
-    fn process(&mut self, size: usize, input: &BufferRef, output: &mut BufferMut) {
-        // For each sample in the block
-        for i in 0..size {
-            let signal1 = input.at(0, i);
-            let signal2 = input.at(1, i);
-            let fade = input.at(2, i);
-
-            let angle = fade * PI * 0.5;
-            let gain1 = angle.cos();
-            let gain2 = angle.sin();
-
-            let result = signal1 * gain1 + signal2 * gain2;
-            output.set(0, i, result);
-        }
-    }
 }
 
 // Convenience function to create the node
@@ -115,6 +98,33 @@ mod tests {
     #[test]
     fn test_crossfade() {
         let config = SnapshotConfigBuilder::default()
+            .num_samples(2000)
+            .with_inputs(true)
+            .build()
+            .unwrap();
+
+        let node = (sine_hz::<f32>(440.0) | saw_hz(440.0) | pass()) >> equal_power_crossfade();
+
+        assert_audio_unit_snapshot!(
+            "crossfade_0_1",
+            node,
+            InputSource::Generator(Box::new(|sample, _| match sample {
+                0..250 => 0.0,
+                250..500 => 0.1,
+                500..750 => 0.25,
+                750..1000 => 0.5,
+                1000..1250 => 0.75,
+                1250..1500 => 0.9,
+                _ => 1.0,
+            })),
+            config
+        );
+    }
+
+    #[test]
+    fn test_crossfade_process() {
+        let config = SnapshotConfigBuilder::default()
+            .processing_mode(Processing::Batch(24))
             .num_samples(2000)
             .with_inputs(true)
             .build()

@@ -232,8 +232,8 @@ impl InstrumentEngine {
             *layout = InstrumentLayout {
                 scale,
                 ..InstrumentLayout::from_screen_estate(Vector2 {
-                    x: width as f32,
-                    y: height as f32,
+                    x: width,
+                    y: height,
                 })
             };
             InstrumentConfig::try_from(*layout)?
@@ -256,10 +256,10 @@ impl InstrumentEngine {
 
     pub fn set_safe_area(
         &self,
-        top: f32,
-        right: f32,
-        bottom: f32,
-        left: f32,
+        top: f64,
+        right: f64,
+        bottom: f64,
+        left: f64,
     ) -> common::error::Result<()> {
         let tuner_state = self.app.state::<crate::tuner::TunerState>();
         let tuner_config = tuner_state.tuner_config();
@@ -365,8 +365,13 @@ impl InstrumentEngine {
     pub fn start_tap_tuner_audio(&self) -> Result<()> {
         self.inner.stream_controller.read().start_tap_tuner_audio()
     }
+
     pub fn stop_tap_tuner_audio(&self) -> Result<()> {
         self.inner.stream_controller.read().stop_tap_tuner_audio()
+    }
+
+    pub fn is_batch_processing(&self) -> bool {
+        self.inner.stream_controller.read().is_batch_processing()
     }
 
     #[cfg(feature = "devtools")]

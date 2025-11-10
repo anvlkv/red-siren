@@ -44,7 +44,7 @@ pub fn Instrument(#[prop(into, optional)] editor: Signal<bool>) -> impl IntoView
             }
         >
             <InstrumentStrings attr:class="absolute h-full w-auto right-0 bottom-0 fill-none stroke-gray/40 dark:stroke-cinnabar/40 stroke-[0.5px]" />
-            <Keyboard attr:class="absolute inset-0" />
+            <Keyboard attr:class="absolute inset-0 backdrop-blur-3xl" />
             <Show when=move || editor()>
                 <debug::DebugOverlay />
                 <editor::EditorOverlay />

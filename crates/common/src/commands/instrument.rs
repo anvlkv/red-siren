@@ -18,6 +18,8 @@ pub const GET_LAYOUT: &str = "instrument_layout";
 pub const UPDATE_BAND_CONTROL: &str = "instrument_update_band_control";
 /// Update key control state (pressed/released) for a key
 pub const UPDATE_KEY_CONTROL: &str = "instrument_update_key_control";
+/// Get batch processing bool
+pub const IS_BATCH_PROCESSING: &str = "instrument_is_batch_processing";
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

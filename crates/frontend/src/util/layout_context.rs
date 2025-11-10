@@ -17,21 +17,21 @@ pub fn provide_layout_context() {
 }
 
 pub struct LayoutContextReturn {
-    pub space: Memo<Vector2<f32>>,
+    pub space: Memo<Vector2<f64>>,
     pub orientation: Memo<LayoutOrientation>,
     pub left_string_position: Memo<Line>,
     pub right_string_position: Memo<Line>,
-    pub key_radius: Memo<f32>,
-    pub key_band_length: Memo<f32>,
-    pub key_band_breadth: Memo<f32>,
+    pub key_radius: Memo<f64>,
+    pub key_band_length: Memo<f64>,
+    pub key_band_breadth: Memo<f64>,
     pub safe_area_padding: Memo<SafeArea>,
-    pub key_bands_gap: Memo<f32>,
-    pub groups_gap: Memo<f32>,
+    pub key_bands_gap: Memo<f64>,
+    pub groups_gap: Memo<f64>,
     pub num_keys_per_group: Memo<u8>,
     pub num_groups: Memo<u8>,
     pub first_group_channel: Memo<GroupChannel>,
     pub complete_layout: Memo<common::instrument::Layout>,
-    pub key_pad_main: Memo<f32>,
+    pub key_pad_main: Memo<f64>,
 }
 
 pub fn expect_layout_contex() -> LayoutContextReturn {

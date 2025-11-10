@@ -29,9 +29,9 @@ pub fn waveform_path_x(
 /// Samples are displaced perpendicular to the line by `amp * -sample`.
 pub fn waveform_path_along_line(
     samples: &[f32],
-    start: mint::Point2<f32>,
-    end: mint::Point2<f32>,
-    amp: f32,
+    start: mint::Point2<f64>,
+    end: mint::Point2<f64>,
+    amp: f64,
 ) -> String {
     if samples.len() < 2 {
         return String::new();
@@ -40,7 +40,7 @@ pub fn waveform_path_along_line(
     let dx = end.x - start.x;
     let dy = end.y - start.y;
     let len = (dx * dx + dy * dy).sqrt();
-    if len <= f32::EPSILON {
+    if len <= f64::EPSILON {
         return String::new();
     }
 
@@ -52,12 +52,12 @@ pub fn waveform_path_along_line(
     let mut s = String::with_capacity(points * 16);
 
     for (i, &src) in samples.iter().enumerate() {
-        let t = i as f32 / (points - 1) as f32;
+        let t = i as f64 / (points - 1) as f64;
         let px = start.x + dx * t;
         let py = start.y + dy * t;
 
         // Match existing convention: invert sample for displacement direction.
-        let off = -src * amp;
+        let off = -src as f64 * amp;
         let x = px + off * nx;
         let y = py + off * ny;
 

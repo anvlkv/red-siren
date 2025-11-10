@@ -90,6 +90,7 @@ struct CpalController {
 
     // operation
     tuner_only_mode: RwLock<bool>,
+    is_batch_processing: Arc<RwLock<bool>>,
 }
 
 impl Default for CpalController {
@@ -120,6 +121,7 @@ impl Default for CpalController {
             output_device: RwLock::new(None),
             input_device: RwLock::new(None),
             tuner_only_mode: RwLock::new(false),
+            is_batch_processing: Arc::new(RwLock::new(false)),
         }
     }
 }
@@ -207,17 +209,11 @@ impl CpalController {
 
         let (input_sx, input_handle) =
             spawn_owned_input_stream(input_device, input_default_cfg, stream_cfg, move || {
-                Box::new(move |samples: &[S]| -> usize {
-                    let mut took = 0;
-                    for s in samples {
-                        if prod.push(*s).is_err() {
-                            log::warn!("input buffer full");
-                            break;
-                        }
-                        took += 1;
+                Box::new(move |sample: &S| {
+                    if prod.push(*sample).is_err() {
+                        _ = prod.pop();
+                        _ = prod.push(*sample);
                     }
-
-                    took
                 }) as Box<ProdType>
             })?;
 
@@ -233,7 +229,7 @@ impl CpalController {
     fn start_output_stream(
         &self,
         input_buffer: Option<Arc<ThingBuf<S>>>,
-        mut backend: NetBackend,
+        backend: NetBackend,
     ) -> Result<()> {
         let output_device = self
             .output_device()
@@ -247,6 +243,8 @@ impl CpalController {
 
         let output_channels = std::cmp::Ord::min(output_default_cfg.channels(), 2) as usize;
 
+        let is_batch_processing = self.is_batch_processing.clone();
+
         // Spawn output stream owner.
         let (tx, handle) = spawn_owned_output_stream(
             output_device,
@@ -255,15 +253,37 @@ impl CpalController {
             output_channels,
             move || {
                 // Excitement consumer captured inside closure.
-                let mut in_sample = [0_f32];
-                let mut out_sample = [0_f32; 2];
                 let input_buffer = input_buffer.clone();
-                let next_value = move || {
-                    if let Some(sample) = input_buffer.as_ref().and_then(|a| a.pop()) {
-                        in_sample[0] = sample as f32;
+                let mut backend = BigBlockAdapter::new(Box::new(backend));
+                let next_value = move |batch: Option<(&mut [&mut [f32]], usize)>| {
+                    if let Some((output, size)) = batch {
+                        let mut input = vec![0.0; size];
+                        let mut sample_i = 0;
+                        while let Some(sample) = input_buffer
+                            .as_ref()
+                            .take_if(|_| sample_i < size)
+                            .and_then(|a| a.pop())
+                        {
+                            input[sample_i] = sample as f32;
+                            sample_i += 1;
+                        }
+                        backend.process_big(size, &[&input], output);
+                        if !*is_batch_processing.read() {
+                            *is_batch_processing.write() = true;
+                        }
+                        None
+                    } else {
+                        if *is_batch_processing.read() {
+                            *is_batch_processing.write() = false;
+                        }
+                        let mut in_sample = [0_f32];
+                        let mut out_sample = [0_f32; 2];
+                        if let Some(sample) = input_buffer.as_ref().and_then(|a| a.pop()) {
+                            in_sample[0] = sample as f32;
+                        }
+                        backend.tick(&in_sample, &mut out_sample);
+                        Some((out_sample[0], out_sample[1]))
                     }
-                    backend.tick(&in_sample, &mut out_sample);
-                    (out_sample[0], out_sample[1])
                 };
                 let boxed: Box<GenType> = Box::new(next_value);
                 boxed
@@ -1054,6 +1074,10 @@ impl AudioRuntime for CpalController {
         self.sample_rate()
     }
 
+    fn is_batch_processing(&self) -> bool {
+        *self.is_batch_processing.read()
+    }
+
     #[cfg(feature = "editor")]
     fn get_finetuned_values(&self) -> Result<common::commands::edit::FineTunedValuesPayload> {
         let shared_values = self.fine_tuned_shared_values.read();
@@ -1061,6 +1085,8 @@ impl AudioRuntime for CpalController {
             siren_alpha: shared_values.siren_alpha.value(),
             siren_beta: shared_values.siren_beta.value(),
             siren_gamma: shared_values.siren_gamma.value(),
+            group_q: shared_values.group_q.value(),
+            group_ls_gain: shared_values.group_ls_gain.value(),
             filter_switch_follow_response_s: shared_values.filter_switch_follow_response_s.value(),
             node_follow_response_time_s: shared_values.node_follow_response_time_s.value(),
             filter_allpass_q: shared_values.filter_allpass_q.value(),
@@ -1076,7 +1102,6 @@ impl AudioRuntime for CpalController {
             node_bell_gain_db: shared_values.node_bell_gain_db.value(),
             formant_base_q: shared_values.formant_base_q.value(),
             input_ny_threshold: shared_values.input_ny_threshold.value(),
-            input_ny_ratio: shared_values.input_ny_ratio.value(),
             input_ny_wet_ratio: shared_values.input_ny_wet_ratio.value(),
         })
     }
@@ -1095,6 +1120,8 @@ impl AudioRuntime for CpalController {
             shared_values
                 .node_follow_response_time_s
                 .set_value(payload.node_follow_response_time_s);
+            shared_values.group_q.set_value(payload.group_q);
+            shared_values.group_ls_gain.set_value(payload.group_ls_gain);
             shared_values
                 .filter_switch_follow_response_s
                 .set_value(payload.filter_switch_follow_response_s);
@@ -1131,9 +1158,6 @@ impl AudioRuntime for CpalController {
             shared_values
                 .input_ny_threshold
                 .set_value(payload.input_ny_threshold);
-            shared_values
-                .input_ny_ratio
-                .set_value(payload.input_ny_ratio);
             shared_values
                 .input_ny_wet_ratio
                 .set_value(payload.input_ny_wet_ratio);

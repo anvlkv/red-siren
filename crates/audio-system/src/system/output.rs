@@ -17,6 +17,7 @@ use fundsp::hacker32::prelude::*;
 use super::NodeHandles;
 use crate::system::values::FineTunedValues;
 
+#[derive(Clone)]
 struct InnerHandles {
     excitement_snoop: An<SnoopBackend>,
     output_snoop: An<SnoopBackend>,

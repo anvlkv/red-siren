@@ -248,7 +248,8 @@ mod tests {
 
     #[test]
     fn test_chorus() {
-        let node = sine_hz::<f32>(440.0) >> split::<U2>() >> (chorus(1, 0.15, 0.5, 1.2) | pass());
+        let node =
+            sine_hz::<f32>(440.0) >> split::<U2>() >> (chorus(11, 0.003, 0.0015, 1.2) | pass());
 
         assert_audio_unit_snapshot!(node);
     }

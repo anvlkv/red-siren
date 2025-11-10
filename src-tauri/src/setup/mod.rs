@@ -75,12 +75,12 @@ pub fn app_setup(app: &mut App) -> Result<()> {
             top: safe_area_insets
                 .get_top_inset()
                 .map_err(|e| AppError::Tauri(e.to_string()))?
-                .inset as f32,
+                .inset,
             right: 0.0,
             bottom: safe_area_insets
                 .get_bottom_inset()
                 .map_err(|e| AppError::Tauri(e.to_string()))?
-                .inset as f32,
+                .inset,
             left: 0.0,
         },
     };

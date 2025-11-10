@@ -156,7 +156,10 @@ pub fn Keyboard() -> impl IntoView {
     });
 
     view! {
-        <div style=main_container_axis_style class="flex items-center justify-center">
+        <div
+            style=main_container_axis_style
+            class="flex items-center justify-center backdrop-blur-3xl"
+        >
             <div class="grid items-center justify-center grid-rows-(--keyboard-rows) grid-cols-(--keyboard-cols) gap-y-(--keyboard-row-gap) gap-x-(--keyboard-col-gap) p-t-(length:--keyboard-pad-top) p-b-(length:--keyboard-pad-bottom) p-l-(length:--keyboard-pad-left) p-r-(length:--keyboard-pad-right) w-full h-full">
                 {move || {
                     let num_groups = num_groups();

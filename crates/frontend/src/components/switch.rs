@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::components::{Tooltip, UiPlacement, UiSize, UiVariant};
+use crate::components::{with_tooltip, UiPlacement, UiSize, UiVariant};
 
 /// Multi-state segmented switch component for Red Siren (MAYA DRY KISS).
 ///
@@ -156,7 +156,7 @@ pub fn Switch(
         )
     };
 
-    let placement = Signal::derive(move || placement().unwrap_or_default().opposite());
+    let tooltip_placement = Signal::derive(move || placement().map(|p| p.opposite()));
 
     view! {
         <div
@@ -170,29 +170,27 @@ pub fn Switch(
                 .map(|(i, label)| {
                     let segment_index = i;
                     let is_selected = Signal::derive(move || current_state.get() == segment_index);
-                    let segment_view = view! {
+                    let button_ref = NodeRef::new();
+                    if let Some(tooltip_array) = &tooltips {
+                        let tooltip_text = tooltip_array[segment_index].clone();
+                        with_tooltip(
+                            button_ref,
+                            Signal::derive(move || tooltip_text.clone()),
+                            tooltip_placement,
+                        );
+                    }
+
+                    view! {
                         <button
                             type="button"
                             class=move || segment_class(segment_index, is_selected())
                             disabled=disabled
                             on:click=handle_segment_click(segment_index)
                             aria-pressed=is_selected
+                            node_ref=button_ref
                         >
                             {label}
                         </button>
-                    };
-                    match &tooltips {
-                        Some(tooltip_array) => {
-                            let tooltip_text = tooltip_array[segment_index].clone();
-
-                            view! {
-                                <Tooltip text=tooltip_text placement>
-                                    {segment_view}
-                                </Tooltip>
-                            }
-                                .into_any()
-                        }
-                        _ => segment_view.into_any(),
                     }
                 })
                 .collect_view()}

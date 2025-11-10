@@ -15,6 +15,8 @@ pub struct FineTunedValues {
     pub siren_gamma: An<FineTunedValue>,
     pub filter_switch_follow_response_s: An<FineTunedValue>,
     pub node_follow_response_time_s: An<FineTunedValue>,
+    pub group_q: An<FineTunedValue>,
+    pub group_ls_gain: An<FineTunedValue>,
     pub filter_allpass_q: An<FineTunedValue>,
     pub filter_allpass_freq_ratio: An<FineTunedValue>,
     pub filter_moog_freq_ratio: An<FineTunedValue>,
@@ -28,7 +30,6 @@ pub struct FineTunedValues {
     pub node_bell_gain_db: An<FineTunedValue>,
     pub formant_base_q: An<FineTunedValue>,
     pub input_ny_threshold: An<FineTunedValue>,
-    pub input_ny_ratio: An<FineTunedValue>,
     pub input_ny_wet_ratio: An<FineTunedValue>,
 }
 
@@ -39,6 +40,8 @@ pub struct FineTunedSharedValues {
     pub siren_gamma: Shared,
     pub filter_switch_follow_response_s: Shared,
     pub node_follow_response_time_s: Shared,
+    pub group_q: Shared,
+    pub group_ls_gain: Shared,
     pub filter_allpass_q: Shared,
     pub filter_allpass_freq_ratio: Shared,
     pub filter_moog_freq_ratio: Shared,
@@ -52,30 +55,30 @@ pub struct FineTunedSharedValues {
     pub node_bell_gain_db: Shared,
     pub formant_base_q: Shared,
     pub input_ny_threshold: Shared,
-    pub input_ny_ratio: Shared,
     pub input_ny_wet_ratio: Shared,
 }
 
-const SIREN_ALPHA: f32 = 1.0 / 7500.0;
-const SIREN_BETA: f32 = 0.75;
-const SIREN_GAMMA: f32 = 0.3;
+const SIREN_ALPHA: f32 = 1000.0 / 7.5;
+const SIREN_BETA: f32 = 0.5;
+const SIREN_GAMMA: f32 = 0.075;
+const NODE_BELL_Q: f32 = 0.85;
+const NODE_BELL_GAIN_DB: f32 = 1.8;
+const NODE_FOLLOW_RESPONSE_TIME_S: f32 = 0.34;
+const GROUP_Q: f32 = 0.085;
+const GROUP_LS_GAIN: f32 = 2.8;
+const FORMANT_BASE_Q: f32 = 0.8;
 const FILTER_SWITCH_FOLLOW_RESPONSE_S: f32 = 0.04;
 const FILTER_ALLPASS_Q: f32 = 0.19;
 const FILTER_ALLPASS_FREQ_RATIO: f32 = 1.7;
 const FILTER_MOOG_Q: f32 = 1.85;
 const FILTER_MOOG_FREQ_RATIO: f32 = 1.3;
 const FILTER_SHELF_FREQ_RATIO: f32 = 2.35;
-const FILTER_SHELF_Q: f32 = 1.0;
+const FILTER_SHELF_Q: f32 = 0.05;
 const FILTER_SHELF_GAIN: f32 = 1.0;
 const FILTER_PASS_FREQ_RATIO: f32 = 6.15;
-const FILTER_PASS_Q: f32 = 1.0;
-const NODE_FOLLOW_RESPONSE_TIME_S: f32 = 0.34;
-const NODE_BELL_Q: f32 = 1.085;
-const NODE_BELL_GAIN_DB: f32 = 3.34;
-const FORMANT_BASE_Q: f32 = 0.8;
-const INPUT_NY_THRESHOLD: f32 = 0.3;
-const INPUT_NY_RATIO: f32 = 1.0 / INPUT_NY_THRESHOLD;
-const INPUT_NY_WET_RATIO: f32 = 0.85;
+const FILTER_PASS_Q: f32 = 1.4;
+const INPUT_NY_THRESHOLD: f32 = 0.03;
+const INPUT_NY_WET_RATIO: f32 = 0.4;
 
 #[cfg(feature = "editor")]
 impl Default for FineTunedSharedValues {
@@ -84,6 +87,8 @@ impl Default for FineTunedSharedValues {
             siren_alpha: shared(SIREN_ALPHA),
             siren_beta: shared(SIREN_BETA),
             siren_gamma: shared(SIREN_GAMMA),
+            group_q: shared(GROUP_Q),
+            group_ls_gain: shared(GROUP_LS_GAIN),
             filter_switch_follow_response_s: shared(FILTER_SWITCH_FOLLOW_RESPONSE_S),
             filter_allpass_q: shared(FILTER_ALLPASS_Q),
             filter_allpass_freq_ratio: shared(FILTER_ALLPASS_FREQ_RATIO),
@@ -99,7 +104,6 @@ impl Default for FineTunedSharedValues {
             node_bell_gain_db: shared(NODE_BELL_GAIN_DB),
             formant_base_q: shared(FORMANT_BASE_Q),
             input_ny_threshold: shared(INPUT_NY_THRESHOLD),
-            input_ny_ratio: shared(INPUT_NY_RATIO),
             input_ny_wet_ratio: shared(INPUT_NY_WET_RATIO),
         }
     }
@@ -113,6 +117,8 @@ impl FineTunedValues {
             siren_alpha: var(&shared_values.siren_alpha),
             siren_beta: var(&shared_values.siren_beta),
             siren_gamma: var(&shared_values.siren_gamma),
+            group_q: var(&shared_values.group_q),
+            group_ls_gain: var(&shared_values.group_ls_gain),
             filter_switch_follow_response_s: var(&shared_values.filter_switch_follow_response_s),
             filter_allpass_q: var(&shared_values.filter_allpass_q),
             filter_allpass_freq_ratio: var(&shared_values.filter_allpass_freq_ratio),
@@ -128,7 +134,6 @@ impl FineTunedValues {
             node_bell_gain_db: var(&shared_values.node_bell_gain_db),
             formant_base_q: var(&shared_values.formant_base_q),
             input_ny_threshold: var(&shared_values.input_ny_threshold),
-            input_ny_ratio: var(&shared_values.input_ny_ratio),
             input_ny_wet_ratio: var(&shared_values.input_ny_wet_ratio),
         }
     }
@@ -139,6 +144,8 @@ impl FineTunedValues {
             siren_alpha: constant(SIREN_ALPHA),
             siren_beta: constant(SIREN_BETA),
             siren_gamma: constant(SIREN_GAMMA),
+            group_q: constant(GROUP_Q),
+            group_ls_gain: constant(GROUP_LS_GAIN),
             filter_switch_follow_response_s: constant(FILTER_SWITCH_FOLLOW_RESPONSE_S),
             filter_allpass_q: constant(FILTER_ALLPASS_Q),
             filter_allpass_freq_ratio: constant(FILTER_ALLPASS_FREQ_RATIO),
@@ -154,7 +161,6 @@ impl FineTunedValues {
             node_bell_gain_db: constant(NODE_BELL_GAIN_DB),
             formant_base_q: constant(FORMANT_BASE_Q),
             input_ny_threshold: constant(INPUT_NY_THRESHOLD),
-            input_ny_ratio: constant(INPUT_NY_RATIO),
             input_ny_wet_ratio: constant(INPUT_NY_WET_RATIO),
         }
     }
@@ -166,6 +172,8 @@ impl std::fmt::Debug for FineTunedValues {
             .field("siren_alpha", &self.siren_alpha.value())
             .field("siren_beta", &self.siren_beta.value())
             .field("siren_gamma", &self.siren_gamma.value())
+            .field("group_q", &self.group_q.value())
+            .field("group_ls_gain", &self.group_ls_gain.value())
             .field(
                 "filter_switch_follow_response_s",
                 &self.filter_switch_follow_response_s.value(),
@@ -199,7 +207,6 @@ impl std::fmt::Debug for FineTunedValues {
             .field("node_bell_gain_db", &self.node_bell_gain_db.value())
             .field("formant_base_q", &self.formant_base_q.value())
             .field("input_ny_threshold", &self.input_ny_threshold.value())
-            .field("input_ny_ratio", &self.input_ny_ratio.value())
             .field("input_ny_wet_ratio", &self.input_ny_wet_ratio.value())
             .finish()
     }

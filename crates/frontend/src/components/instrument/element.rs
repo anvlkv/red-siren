@@ -231,8 +231,8 @@ pub fn KeyboardElement(
     let calculated_drag_constraints = Memo::new(move |_| {
         let band_w = band_width.get();
         let band_h = band_height.get();
-        let key_dia = key_radius.get() as f64 * 2.0;
-        let key_margin = ((key_band_breadth.get() as f64 - key_dia) / 2.0).max(0.0);
+        let key_dia = key_radius.get() * 2.0;
+        let key_margin = ((key_band_breadth.get() - key_dia) / 2.0).max(0.0);
         let key_full_size = key_dia + key_margin * 2.0;
 
         if band_w <= 0.0 || band_h <= 0.0 || key_full_size <= 0.0 {
@@ -398,8 +398,8 @@ pub fn KeyboardElement(
         let sun_screen_y = sun_y * viewport_scale;
 
         // Align with sun position in screen space (center-to-center)
-        let k1_tx = sun_screen_x - (key_x() as f32 + key_width() as f32 / 2.0);
-        let k1_ty = sun_screen_y - (key_y() as f32 + key_height() as f32 / 2.0);
+        let k1_tx = sun_screen_x - (key_x() + key_width() / 2.0);
+        let k1_ty = sun_screen_y - (key_y() + key_height() / 2.0);
 
         // Breadth-first move: fix the axis orthogonal to main
         let (breadth_tx, breadth_ty) = match orientation {
@@ -445,7 +445,7 @@ pub fn KeyboardElement(
         }
     };
     let band_class = move || {
-        let base = "absolute rounded-full bg-red/70 dark:bg-black/70 backdrop-blur-xl border-(length:--keyboard-band-stroke-width) border-black dark:border-red";
+        let base = "absolute rounded-full bg-red/80 dark:bg-black/80 border-(length:--keyboard-band-stroke-width) border-black dark:border-red";
         if band_should_animate() {
             format!(
                 "{} {}",

@@ -233,10 +233,10 @@ pub fn instrument_layout(state: State<'_, InstrumentEngine>) -> Result<Layout> {
 #[tauri::command]
 /// payload: `SafeArea`
 pub fn ui_safe_area_insets_apply(
-    top: f32,
-    right: f32,
-    bottom: f32,
-    left: f32,
+    top: f64,
+    right: f64,
+    bottom: f64,
+    left: f64,
     state: State<'_, InstrumentEngine>,
     window_state: State<'_, crate::setup::WindowState>,
     app: AppHandle,
@@ -480,6 +480,11 @@ pub fn instrument_update_key_control(
     Ok(())
 }
 
+#[tauri::command]
+pub fn instrument_is_batch_processing(state: State<'_, InstrumentEngine>) -> bool {
+    state.is_batch_processing()
+}
+
 #[cfg(feature="devtools")]
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
@@ -487,6 +492,8 @@ pub async fn instrument_edit_finetuned_values(
     siren_alpha: f32,
     siren_beta: f32,
     siren_gamma: f32,
+    group_ls_gain: f32,
+    group_q: f32,
     node_follow_response_time_s: f32,
     filter_switch_follow_response_s: f32,
     filter_allpass_q: f32,
@@ -502,7 +509,6 @@ pub async fn instrument_edit_finetuned_values(
     node_bell_gain_db: f32,
     formant_base_q: f32,
     input_ny_threshold: f32,
-    input_ny_ratio: f32,
     input_ny_wet_ratio: f32,
     state: State<'_, InstrumentEngine>,
 ) -> Result<common::commands::edit::FineTunedValuesPayload> {
@@ -510,6 +516,8 @@ pub async fn instrument_edit_finetuned_values(
         siren_alpha,
         siren_beta,
         siren_gamma,
+        group_ls_gain,
+        group_q,
         filter_switch_follow_response_s,
         node_follow_response_time_s,
         filter_allpass_q,
@@ -525,7 +533,6 @@ pub async fn instrument_edit_finetuned_values(
         node_bell_gain_db,
         formant_base_q,
         input_ny_threshold,
-        input_ny_ratio,
         input_ny_wet_ratio,
     };
     // Update the fine-tuned values

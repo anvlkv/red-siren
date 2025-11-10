@@ -8,7 +8,7 @@ use crate::{orientation::LayoutOrientation, safe_area::SafeArea, Line};
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Layout {
     /// Total screen estate available to layout the tuner
-    pub space: Vector2<f32>,
+    pub space: Vector2<f64>,
     /// Whether `Horizontal` or `Vertical` layout is used,
     /// determines the main and auxilary axes of the tuner layout
     pub orientation: LayoutOrientation,
@@ -17,7 +17,7 @@ pub struct Layout {
     /// Start and end postions of the tuner's analysis line (derived from instrument left string)
     pub line_position: Line,
     /// Radius of each sensor (derived from instrument key radius)
-    pub sensor_radius: f32,
+    pub sensor_radius: f64,
     /// Number of sensors (equals number of instrument keys = groups * keys per group)
     pub num_sensors: NonZero<u32>,
 }

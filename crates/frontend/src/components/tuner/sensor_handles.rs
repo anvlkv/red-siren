@@ -10,7 +10,7 @@ use leptos_use::{
 };
 use mint::Point2;
 
-use crate::{components::Tooltip, util::setup_context::is_devtools_enabled};
+use crate::{components::with_tooltip, util::setup_context::is_devtools_enabled};
 
 /// Collection of sensor handles
 #[component]
@@ -64,14 +64,14 @@ fn Sensor(
     view! {
         <div>
             {move || {
-                let r = sensor_radius() as f64;
+                let r = sensor_radius();
                 let orientation = layout().orientation;
                 let on_move_min = Callback::new(move |Point2 { x, y }| {
                     let config = config();
                     let layout = layout();
                     let data = sensor_data();
                     let (min_frequency, min_magnitude) = config
-                        .space_to_frequency_magnitude(&layout, Point2 { x: x as f32, y: y as f32 });
+                        .space_to_frequency_magnitude(&layout, Point2 { x, y });
                     on_update
                         .run(UpdateSensorPayload {
                             key,
@@ -86,7 +86,7 @@ fn Sensor(
                     let layout = layout();
                     let data = sensor_data();
                     let (max_frequency, max_magnitude) = config
-                        .space_to_frequency_magnitude(&layout, Point2 { x: x as f32, y: y as f32 });
+                        .space_to_frequency_magnitude(&layout, Point2 { x, y });
                     on_update
                         .run(UpdateSensorPayload {
                             key,
@@ -100,31 +100,23 @@ fn Sensor(
                     let config = config();
                     let layout = layout();
                     let data = sensor_data();
-                    let pt_32 = config
+                    config
                         .frequency_magnitude_to_space(
                             &layout,
                             data.min_frequency,
                             data.min_magnitude,
-                        );
-                    Point2 {
-                        x: pt_32.x as f64,
-                        y: pt_32.y as f64,
-                    }
+                        )
                 });
                 let max_pt = Signal::derive(move || {
                     let config = config();
                     let layout = layout();
                     let data = sensor_data();
-                    let pt_32 = config
+                    config
                         .frequency_magnitude_to_space(
                             &layout,
                             data.max_frequency,
                             data.max_magnitude,
-                        );
-                    Point2 {
-                        x: pt_32.x as f64,
-                        y: pt_32.y as f64,
-                    }
+                        )
                 });
 
                 view! {
@@ -158,15 +150,7 @@ fn Sensor(
                 let Point2 { x: max_x, y: max_y } = config
                     .frequency_magnitude_to_space(&layout, data.max_frequency, data.max_magnitude);
 
-                view! {
-                    <Connector
-                        r=r as f64
-                        max_x=max_x as f64
-                        max_y=max_y as f64
-                        min_x=min_x as f64
-                        min_y=min_y as f64
-                    />
-                }
+                view! { <Connector r max_x max_y min_x min_y /> }
             }}
         </div>
     }
@@ -280,15 +264,21 @@ fn Arm(
             }),
     );
 
+    if with_devtools.get_untracked() {
+        with_tooltip(
+            handle_ref,
+            Signal::derive(move || format!("{key:?} - {direction:?}")),
+            Signal::derive(move || None),
+        );
+    }
+
     view! {
         <div
             class="relative cursor-move mix-blend-plus-darker dark:mix-blend-plus-lighter"
             node_ref=handle_ref
             style=style
         >
-            <Show when=move || with_devtools() fallback=arm_svg>
-                <Tooltip text=format!("{key:?} - {direction:?}")>{arm_svg}</Tooltip>
-            </Show>
+            {arm_svg}
         </div>
     }
 }

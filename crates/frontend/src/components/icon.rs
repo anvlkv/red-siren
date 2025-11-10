@@ -1,4 +1,4 @@
-use leptos::prelude::*;
+use leptos::{html, prelude::*};
 
 use crate::components::UiSize;
 
@@ -22,12 +22,15 @@ const CHEVRON_RIGHT_ICON: &str = include_str!("./icon/chevron-right.svg");
 const SKULL_ICON: &str = include_str!("./icon/skull.svg");
 const OK_ICON: &str = include_str!("./icon/ok.svg");
 const WARNING_ICON: &str = include_str!("./icon/warning.svg");
+const CUBE_ICON: &str = include_str!("./icon/cube.svg");
+const BATCH_ICON: &str = include_str!("./icon/batch.svg");
 
 #[component]
 pub fn Icon(
     #[prop(into)] name: Signal<String>,
     #[prop(optional, into)] size: Signal<UiSize>, // Defaults to UiSize::Lg via its Default impl
     #[prop(optional, into)] class: Signal<String>, // Allow caller to append classes
+    #[prop(optional, into)] node_ref: NodeRef<html::I>,
 ) -> impl IntoView {
     // Tailwind size class derived from UiSize
     let size_class = move || match size() {
@@ -60,6 +63,8 @@ pub fn Icon(
             "skull" => SKULL_ICON,
             "ok" => OK_ICON,
             "warning" => WARNING_ICON,
+            "batch" => BATCH_ICON,
+            "cube" => CUBE_ICON,
             i => panic!("No such icon: [{i}]"),
         };
         decorate_svg(raw, size(), name)
@@ -79,6 +84,7 @@ pub fn Icon(
             }
             style="line-height:1;"
             inner_html=decorated_svg
+            node_ref=node_ref
         />
     }
 }

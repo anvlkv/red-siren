@@ -48,17 +48,17 @@ impl Config {
         layout: &Layout,
         frequency: f32,
         magnitude: f32,
-    ) -> mint::Point2<f32> {
+    ) -> mint::Point2<f64> {
         // Normalize inputs (log-frequency mapping: 20Hz..Nyquist)
-        let nyquist = self.sample_rate / 2.0;
-        let f_min = 20.0_f32;
+        let nyquist = (self.sample_rate / 2.0) as f64;
+        let f_min = 20.0_f64;
         let log_min = f_min.ln();
         let log_max = nyquist.ln();
         let freq_ratio =
-            ((frequency.max(f_min).ln() - log_min) / (log_max - log_min)).clamp(0.0, 1.0);
-        let min_db = -120.0_f32;
-        let max_db = 0.0_f32;
-        let mag_norm = ((magnitude - min_db) / (max_db - min_db)).clamp(0.0, 1.0);
+            (((frequency as f64).max(f_min).ln() - log_min) / (log_max - log_min)).clamp(0.0, 1.0);
+        let min_db = -120.0_f64;
+        let max_db = 0.0_f64;
+        let mag_norm = (((magnitude as f64) - min_db) / (max_db - min_db)).clamp(0.0, 1.0);
 
         // Anchor to baseline with sensor-radius margins and full perpendicular range
         let (start, end) = layout.line_position;
@@ -94,9 +94,9 @@ impl Config {
     pub fn space_to_frequency_magnitude(
         &self,
         layout: &Layout,
-        point: mint::Point2<f32>,
+        point: mint::Point2<f64>,
     ) -> (f32, f32) {
-        let nyquist = self.sample_rate / 2.0;
+        let nyquist = (self.sample_rate / 2.0) as f64;
         let (start, end) = layout.line_position;
         let r = layout.sensor_radius;
         let inset = r + 0.5;
@@ -128,15 +128,15 @@ impl Config {
             }
         };
 
-        let f_min = 20.0_f32;
+        let f_min = 20.0_f64;
         let log_min = f_min.ln();
         let log_max = nyquist.ln();
         let frequency = (log_min + freq_ratio * (log_max - log_min)).exp();
-        let min_db = -120.0_f32;
-        let max_db = 0.0_f32;
+        let min_db = -120.0_f64;
+        let max_db = 0.0_f64;
         let magnitude = min_db + mag_norm * (max_db - min_db);
 
-        (frequency, magnitude)
+        (frequency as f32, magnitude as f32)
     }
 }
 

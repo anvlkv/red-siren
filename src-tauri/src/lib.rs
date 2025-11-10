@@ -62,9 +62,6 @@ pub fn run() {
         intro::intro_pause,
         intro::intro_resume,
         intro::intro_next_frame,
-        instrument::instrument_playback_start,
-        instrument::instrument_playback_stop,
-        instrument::instrument_playback_state,
         tuner::tuner_config,
         tuner::tuner_layout,
         tuner::tuner_spectrum_data,
@@ -73,6 +70,9 @@ pub fn run() {
         tuner::tuner_start_stream,
         tuner::tuner_stop_stream,
         tuner::tuner_toggle_probe,
+        instrument::instrument_playback_start,
+        instrument::instrument_playback_stop,
+        instrument::instrument_playback_state,
         instrument::instrument_playback_pause,
         instrument::instrument_playback_resume,
         instrument::instrument_excitement_source,
@@ -85,6 +85,7 @@ pub fn run() {
         instrument::instrument_all_excitement_snoops,
         instrument::instrument_update_band_control,
         instrument::instrument_update_key_control,
+        instrument::instrument_is_batch_processing,
         #[cfg(feature = "devtools")]
         instrument::instrument_edit_finetuned_values,
         #[cfg(feature = "devtools")]

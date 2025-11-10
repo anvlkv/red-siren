@@ -218,7 +218,7 @@ pub fn InstrumentStrings() -> impl IntoView {
 pub fn StringView(
     line: common::Line,
     #[prop(into)] samples: Signal<Option<Vec<f32>>>,
-    #[prop(into)] amplitude: Signal<f32>,
+    #[prop(into)] amplitude: Signal<f64>,
 ) -> impl IntoView {
     let path_def = Signal::derive(move || {
         let (start, end) = line;

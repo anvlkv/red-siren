@@ -3,7 +3,9 @@ use std::{sync::atomic::AtomicUsize, time::Duration};
 use leptos::prelude::*;
 use web_sys::MouseEvent;
 
-use crate::components::{Button, Card, Icon, Tooltip, UiPadding, UiPlacement, UiSize, UiVariant};
+use crate::components::{
+    with_tooltip, Button, Card, Icon, UiPadding, UiPlacement, UiSize, UiVariant,
+};
 
 static TOASTER_MESSAGE_ID: AtomicUsize = AtomicUsize::new(1);
 
@@ -131,46 +133,65 @@ pub fn Toaster(
                 {move || {
                     let current_message = current_message().unwrap();
                     let message_type = current_message.message_type;
+                    let placement = Signal::derive(move || Some(UiPlacement::Bottom));
+                    let prev_button_ref = NodeRef::new();
+                    let close_button_ref = NodeRef::new();
+                    let next_button_ref = NodeRef::new();
+                    with_tooltip(
+                        prev_button_ref,
+                        Signal::derive(move || "Previous".to_string()),
+                        placement,
+                    );
+                    with_tooltip(
+                        close_button_ref,
+                        Signal::derive(move || "Close".to_string()),
+                        placement,
+                    );
+                    with_tooltip(
+                        next_button_ref,
+                        Signal::derive(move || "Next".to_string()),
+                        placement,
+                    );
+
                     view! {
                         <div class="flex flex-col items-stretch gap-2 text-sm pr-3">
                             <div class="flex gap-1 justify-end">
-                                <Tooltip text="Previous" placement=UiPlacement::Bottom>
-                                    <Button
-                                        variant=UiVariant::Ghost
-                                        size=UiSize::Sm
-                                        on:click=move |_| {
-                                            if let Some(prev_id) = previous() {
-                                                set_current_message_id(Some(prev_id));
-                                            }
+                                <Button
+                                    variant=UiVariant::Ghost
+                                    size=UiSize::Sm
+                                    on:click=move |_| {
+                                        if let Some(prev_id) = previous() {
+                                            set_current_message_id(Some(prev_id));
                                         }
-                                        disabled=Signal::derive(move || previous().is_none())
-                                    >
-                                        <Icon size=UiSize::Sm name="chevron-left" />
-                                    </Button>
-                                </Tooltip>
-                                <Tooltip text="Close" placement=UiPlacement::Bottom>
-                                    <Button
-                                        variant=UiVariant::Ghost
-                                        size=UiSize::Sm
-                                        on:click=on_cancel
-                                    >
-                                        <Icon size=UiSize::Sm name="cancel" />
-                                    </Button>
-                                </Tooltip>
-                                <Tooltip text="Next" placement=UiPlacement::Bottom>
-                                    <Button
-                                        variant=UiVariant::Ghost
-                                        size=UiSize::Sm
-                                        on:click=move |_| {
-                                            if let Some(next_id) = next() {
-                                                set_current_message_id(Some(next_id));
-                                            }
+                                    }
+                                    disabled=Signal::derive(move || previous().is_none())
+                                    node_ref=prev_button_ref
+                                >
+                                    <Icon size=UiSize::Sm name="chevron-left" />
+                                </Button>
+
+                                <Button
+                                    variant=UiVariant::Ghost
+                                    size=UiSize::Sm
+                                    on:click=on_cancel
+                                    node_ref=close_button_ref
+                                >
+                                    <Icon size=UiSize::Sm name="cancel" />
+                                </Button>
+
+                                <Button
+                                    variant=UiVariant::Ghost
+                                    size=UiSize::Sm
+                                    on:click=move |_| {
+                                        if let Some(next_id) = next() {
+                                            set_current_message_id(Some(next_id));
                                         }
-                                        disabled=Signal::derive(move || next().is_none())
-                                    >
-                                        <Icon size=UiSize::Sm name="chevron-right" />
-                                    </Button>
-                                </Tooltip>
+                                    }
+                                    disabled=Signal::derive(move || next().is_none())
+                                    node_ref=next_button_ref
+                                >
+                                    <Icon size=UiSize::Sm name="chevron-right" />
+                                </Button>
                             </div>
                             <div class="flex items-start gap-4">
                                 <Show when=move || message_type.is_some()>

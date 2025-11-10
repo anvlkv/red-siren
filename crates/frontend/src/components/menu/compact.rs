@@ -37,8 +37,8 @@ pub fn CompactMenu(
 
     // Update safe area insets when menu size or placement changes
     Effect::new(move |prev_insets: Option<SafeArea>| {
-        let menu_height = menu_height() as f32;
-        let menu_width = menu_width() as f32;
+        let menu_height = menu_height();
+        let menu_width = menu_width();
         let placement = placement();
 
         let new_insets = match placement {

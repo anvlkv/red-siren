@@ -2,7 +2,7 @@ use common::RouteId;
 use leptos::prelude::*;
 use tauri_use::{use_invoke, UseTauriReturn};
 
-use crate::components::{Button, Icon, Tooltip, UiPlacement, UiSize};
+use crate::components::{with_tooltip, Button, Icon, UiPlacement, UiSize};
 
 #[derive(Clone, Debug, Copy)]
 pub enum MenuItem {
@@ -150,12 +150,23 @@ pub fn MenuItemView(
             {match item {
                 MenuItem::Navigate { route, .. } => {
                     if compact {
+                        let el_ref = NodeRef::new();
+                        with_tooltip(
+                            el_ref,
+                            Signal::derive(move || label.to_string()),
+                            tooltip_placement,
+                        );
+
                         view! {
-                            <Tooltip text=label placement=tooltip_placement>
-                                <Button href=route.as_ref() square=true size on:click=on_click>
-                                    <Icon name=icon size=size />
-                                </Button>
-                            </Tooltip>
+                            <Button
+                                href=route.as_ref()
+                                square=true
+                                size
+                                on:click=on_click
+                                node_ref=el_ref
+                            >
+                                <Icon name=icon size=size />
+                            </Button>
                         }
                             .into_any()
                     } else {
@@ -175,12 +186,17 @@ pub fn MenuItemView(
                 }
                 MenuItem::Action { .. } => {
                     if compact {
+                        let el_ref = NodeRef::new();
+                        with_tooltip(
+                            el_ref,
+                            Signal::derive(move || label.to_string()),
+                            tooltip_placement,
+                        );
+
                         view! {
-                            <Tooltip text=label placement=tooltip_placement>
-                                <Button on:click=on_click square=true size>
-                                    <Icon name=icon size=size />
-                                </Button>
-                            </Tooltip>
+                            <Button on:click=on_click square=true size node_ref=el_ref>
+                                <Icon name=icon size=size />
+                            </Button>
                         }
                             .into_any()
                     } else {

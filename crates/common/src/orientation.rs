@@ -10,7 +10,7 @@ pub enum LayoutOrientation {
 }
 
 impl LayoutOrientation {
-    pub fn from_space(space: Vector2<f32>) -> Self {
+    pub fn from_space(space: Vector2<f64>) -> Self {
         if space.x >= space.y {
             LayoutOrientation::Horizontal
         } else {
@@ -18,35 +18,35 @@ impl LayoutOrientation {
         }
     }
 
-    pub fn length(&self, space: Vector2<f32>) -> f32 {
+    pub fn length(&self, space: Vector2<f64>) -> f64 {
         match self {
             LayoutOrientation::Horizontal => space.x,
             LayoutOrientation::Vertical => space.y,
         }
     }
 
-    pub fn breadth(&self, space: Vector2<f32>) -> f32 {
+    pub fn breadth(&self, space: Vector2<f64>) -> f64 {
         match self {
             LayoutOrientation::Horizontal => space.y,
             LayoutOrientation::Vertical => space.x,
         }
     }
 
-    pub fn safe_length(&self, space: Vector2<f32>, safe_area: SafeArea) -> f32 {
+    pub fn safe_length(&self, space: Vector2<f64>, safe_area: SafeArea) -> f64 {
         match self {
             LayoutOrientation::Horizontal => space.x - safe_area.left - safe_area.right,
             LayoutOrientation::Vertical => space.y - safe_area.top - safe_area.bottom,
         }
     }
 
-    pub fn safe_breadth(&self, space: Vector2<f32>, safe_area: SafeArea) -> f32 {
+    pub fn safe_breadth(&self, space: Vector2<f64>, safe_area: SafeArea) -> f64 {
         match self {
             LayoutOrientation::Horizontal => space.y - safe_area.top - safe_area.bottom,
             LayoutOrientation::Vertical => space.x - safe_area.left - safe_area.right,
         }
     }
 
-    pub fn safe_length_start_point(&self, point: Point2<f32>, safe_area: SafeArea) -> Point2<f32> {
+    pub fn safe_length_start_point(&self, point: Point2<f64>, safe_area: SafeArea) -> Point2<f64> {
         match self {
             LayoutOrientation::Vertical => Point2 {
                 x: point.x,
@@ -59,7 +59,7 @@ impl LayoutOrientation {
         }
     }
 
-    pub fn safe_length_end_point(&self, point: Point2<f32>, safe_area: SafeArea) -> Point2<f32> {
+    pub fn safe_length_end_point(&self, point: Point2<f64>, safe_area: SafeArea) -> Point2<f64> {
         match self {
             LayoutOrientation::Vertical => Point2 {
                 x: point.x,
@@ -72,7 +72,7 @@ impl LayoutOrientation {
         }
     }
 
-    pub fn safe_breadth_start_point(&self, point: Point2<f32>, safe_area: SafeArea) -> Point2<f32> {
+    pub fn safe_breadth_start_point(&self, point: Point2<f64>, safe_area: SafeArea) -> Point2<f64> {
         match self {
             LayoutOrientation::Vertical => Point2 {
                 x: point.x + safe_area.left,
@@ -85,7 +85,7 @@ impl LayoutOrientation {
         }
     }
 
-    pub fn safe_breadth_end_point(&self, point: Point2<f32>, safe_area: SafeArea) -> Point2<f32> {
+    pub fn safe_breadth_end_point(&self, point: Point2<f64>, safe_area: SafeArea) -> Point2<f64> {
         match self {
             LayoutOrientation::Vertical => Point2 {
                 x: point.x - safe_area.bottom,
@@ -103,11 +103,11 @@ impl LayoutOrientation {
         (start, end): Line,
         at: usize,
         num_divisions: usize,
-    ) -> Point2<f32> {
+    ) -> Point2<f64> {
         if num_divisions == 0 {
             return start;
         }
-        let mut t = at as f32 / num_divisions as f32;
+        let mut t = at as f64 / num_divisions as f64;
         if t > 1.0 {
             t = 1.0;
         }

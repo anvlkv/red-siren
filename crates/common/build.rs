@@ -11,9 +11,9 @@ fn main() {
 
 fn generate_instrument_config_consts_file() -> Result<(), Box<dyn std::error::Error>> {
     // Frequency bounds
-    const MIN_FREQ_HZ: f64 = 20.0;
-    const SOFT_MIN_FREQ_HZ: f64 = 60.0;
-    const SOFT_MAX_FREQ_HZ: f64 = 14_000.0;
+    const MIN_FREQ_HZ: f64 = 80.0;
+    const SOFT_MIN_FREQ_HZ: f64 = 120.0;
+    const SOFT_MAX_FREQ_HZ: f64 = 16_000.0;
     const MAX_FREQ_HZ: f64 = 20_000.0;
 
     // Volume bounds

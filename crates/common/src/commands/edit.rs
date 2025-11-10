@@ -9,6 +9,8 @@ pub struct FineTunedValuesPayload {
     pub siren_alpha: f32,
     pub siren_beta: f32,
     pub siren_gamma: f32,
+    pub group_q: f32,
+    pub group_ls_gain: f32,
     pub filter_switch_follow_response_s: f32,
     pub node_follow_response_time_s: f32,
     pub filter_allpass_q: f32,
@@ -24,6 +26,5 @@ pub struct FineTunedValuesPayload {
     pub node_bell_gain_db: f32,
     pub formant_base_q: f32,
     pub input_ny_threshold: f32,
-    pub input_ny_ratio: f32,
     pub input_ny_wet_ratio: f32,
 }

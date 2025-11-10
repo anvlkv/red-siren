@@ -99,6 +99,8 @@ pub trait AudioRuntime {
     fn update_tuner_config(&self, tuner_config: &TunerConfig) -> common::error::Result<()>;
     fn poll_tuner_excitements(&self) -> Vec<(NodeKey, f32)>;
     fn get_sample_rate(&self) -> f64;
+
+    fn is_batch_processing(&self) -> bool;
 }
 
 /// Null / no-op runtime used when no concrete backend feature is enabled.
@@ -215,6 +217,10 @@ impl AudioRuntime for NullController {
 
     fn get_sample_rate(&self) -> f64 {
         44100.0
+    }
+
+    fn is_batch_processing(&self) -> bool {
+        false
     }
 }
 

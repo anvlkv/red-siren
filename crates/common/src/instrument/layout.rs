@@ -13,7 +13,7 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Layout {
     /// Total screen estate available to layout the instrument
-    pub space: Vector2<f32>,
+    pub space: Vector2<f64>,
     /// Whether `Horizontal` or `Vertical` layout is used
     pub orientation: LayoutOrientation,
     /// Start and end postions of **left** channel string
@@ -21,19 +21,19 @@ pub struct Layout {
     /// Start and end postions of **right** channel string
     pub right_string_position: Line,
     /// Distance between strings
-    pub instrument_breadth: f32,
+    pub instrument_breadth: f64,
     /// Radius of each key
-    pub key_radius: f32,
+    pub key_radius: f64,
     /// Length of the `track` of key's band
-    pub key_band_length: f32,
+    pub key_band_length: f64,
     /// Breadth of the `track` of key's band
-    pub key_band_breadth: f32,
+    pub key_band_breadth: f64,
     /// Minimum distance from edge of the screen to any interactive element
     pub safe_area_padding: SafeArea,
     /// Distance between `track`s (keys) inside a group (main axis)
-    pub key_bands_gap: f32,
+    pub key_bands_gap: f64,
     /// Distance between groups (main axis)
-    pub groups_gap: f32,
+    pub groups_gap: f64,
     /// Number of keys and bands in each group
     pub num_keys_per_group: NonZero<u8>,
     /// Number of groups
@@ -76,15 +76,15 @@ impl Eq for Layout {}
 
 /// Helper / utility methods shared by intro animation & instrument layout
 impl Layout {
-    /// Number of groups as f32
+    /// Number of groups as f64
     #[inline]
-    fn groups_f(&self) -> f32 {
-        self.num_groups.get() as f32
+    fn groups_f(&self) -> f64 {
+        self.num_groups.get() as f64
     }
 
     /// Main–axis (groups axis) padding used to center the grouped bands.
     #[inline]
-    pub fn key_pad_main(&self) -> f32 {
+    pub fn key_pad_main(&self) -> f64 {
         let safe_len = self
             .orientation
             .safe_length(self.space, self.safe_area_padding);
@@ -103,60 +103,60 @@ impl Layout {
 
 const LAYOUT_PRIMES: const_primes::Primes<20> = const_primes::Primes::new();
 
-const MIN_KEY_RADIUS: f32 = 16.0;
-const MIN_BAND_PADDING: f32 = 8.0;
-const MIN_GAP: f32 = 16.0;
-const MIN_KEY_GAP_TO_GROUP_GAP_RATIO: f32 = 1.15;
+const MIN_KEY_RADIUS: f64 = 16.0;
+const MIN_BAND_PADDING: f64 = 8.0;
+const MIN_GAP: f64 = 16.0;
+const MIN_KEY_GAP_TO_GROUP_GAP_RATIO: f64 = 1.15;
 
-const SOFT_RADIUS_RATIO: f32 = 0.40;
-const ABSOLUTE_RADIUS_RATIO_MAX: f32 = 0.55;
+const SOFT_RADIUS_RATIO: f64 = 0.40;
+const ABSOLUTE_RADIUS_RATIO_MAX: f64 = 0.55;
 
 // Gap model ratios (relative to diameter)
-const KEY_GAP_RATIO_BASE: f32 = 0.25;
-const KEY_GAP_MAX_RATIO: f32 = 0.90;
-const GROUP_GAP_RATIO_MULTI: f32 = 1.20;
-const GROUP_GAP_MAX_RATIO: f32 = 1.40;
-const STRING_TO_BAND_MIN_GAP_RATIO: f32 = 0.13;
+const KEY_GAP_RATIO_BASE: f64 = 0.25;
+const KEY_GAP_MAX_RATIO: f64 = 0.90;
+const GROUP_GAP_RATIO_MULTI: f64 = 1.20;
+const GROUP_GAP_MAX_RATIO: f64 = 1.40;
+const STRING_TO_BAND_MIN_GAP_RATIO: f64 = 0.13;
 
 // Packing target parameters
-const BASE_PACK_TARGET: f32 = 0.42;
-const PACK_SLOPE: f32 = 0.045;
-const MIN_PACK: f32 = 0.35;
-const MAX_PACK: f32 = 0.62;
+const BASE_PACK_TARGET: f64 = 0.42;
+const PACK_SLOPE: f64 = 0.045;
+const MIN_PACK: f64 = 0.35;
+const MAX_PACK: f64 = 0.62;
 
 // Leftover tolerance (fraction of safe length)
-const LEFTOVER_TOLERANCE_FRAC: f32 = 0.04;
+const LEFTOVER_TOLERANCE_FRAC: f64 = 0.04;
 
 // Scoring weights
-const W_R_SQRT: f32 = 0.60; // reduce radius dominance
-const W_PACK: f32 = 0.50; // slight reduction
-const W_STRUCT: f32 = 0.70; // boost structural richness (larger k)
-const W_BALANCE: f32 = 0.20;
-const W_LEFTOVER: f32 = 0.70;
-const W_GAP_TENSION: f32 = 0.25;
-const HIGH_K_BONUS: f32 = 0.08; // bonus for higher prime k
+const W_R_SQRT: f64 = 0.60; // reduce radius dominance
+const W_PACK: f64 = 0.50; // slight reduction
+const W_STRUCT: f64 = 0.70; // boost structural richness (larger k)
+const W_BALANCE: f64 = 0.20;
+const W_LEFTOVER: f64 = 0.70;
+const W_GAP_TENSION: f64 = 0.25;
+const HIGH_K_BONUS: f64 = 0.08; // bonus for higher prime k
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 struct Candidate {
     g: u32,
     k: u32,
-    r: f32,
-    key_gap: f32,
-    group_gap: f32,
-    band_breadth: f32,
-    packing_eff: f32,
-    leftover: f32,
-    score: f32,
+    r: f64,
+    key_gap: f64,
+    group_gap: f64,
+    band_breadth: f64,
+    packing_eff: f64,
+    leftover: f64,
+    score: f64,
     valid: bool,
     total_keys: u32,
-    gap_tension: f32,
+    gap_tension: f64,
 }
 
 impl Candidate {
     fn layout(
         &self,
-        space: Vector2<f32>,
+        space: Vector2<f64>,
         orientation: LayoutOrientation,
         safe_area_padding: SafeArea,
     ) -> Option<Layout> {
@@ -206,10 +206,10 @@ impl Candidate {
 
 fn string_positions(
     orientation: LayoutOrientation,
-    space: Vector2<f32>,
+    space: Vector2<f64>,
     safe_area: SafeArea,
     left: bool,
-    instrument_breadth: f32,
+    instrument_breadth: f64,
 ) -> Line {
     match orientation {
         LayoutOrientation::Vertical => {
@@ -253,7 +253,7 @@ fn string_positions(
     }
 }
 
-fn adaptive_min_key_radius(safe_length: f32, instrument_breadth: f32) -> f32 {
+fn adaptive_min_key_radius(safe_length: f64, instrument_breadth: f64) -> f64 {
     let scale_len = (safe_length / 600.0).clamp(0.85, 1.35);
     let scale_breadth = (instrument_breadth / 180.0).clamp(0.85, 1.30);
     let blended = 0.5 * (scale_len + scale_breadth);
@@ -261,7 +261,7 @@ fn adaptive_min_key_radius(safe_length: f32, instrument_breadth: f32) -> f32 {
 }
 
 fn enumerate(
-    space: Vector2<f32>,
+    space: Vector2<f64>,
     orientation: LayoutOrientation,
     safe_area_padding: SafeArea,
 ) -> Vec<Candidate> {
@@ -286,12 +286,12 @@ fn enumerate(
         for &k in prim_k.iter().filter(|k| **k != g) {
             let total_keys = g * k;
             // target packing increases slowly with total keys (diminishing returns)
-            let tk_log = (total_keys as f32).ln_1p();
+            let tk_log = (total_keys as f64).ln_1p();
             let mut target_packing =
                 (BASE_PACK_TARGET + PACK_SLOPE * tk_log).clamp(MIN_PACK, MAX_PACK);
 
             // initial radius guess
-            let mut r = (safe_length * target_packing) / (2.0 * total_keys as f32);
+            let mut r = (safe_length * target_packing) / (2.0 * total_keys as f64);
             // Enforce adaptive floor before applying cap to avoid tiny diameter that inverts later gap clamps
             r = r.max(adaptive_min);
             r = r.min(r_cap);
@@ -307,7 +307,7 @@ fn enumerate(
             let mut group_gap = if g_have_gaps { MIN_GAP } else { 0.0 };
             for _ in 0..4 {
                 let diameter = 2.0 * r;
-                let key_gap_ratio = KEY_GAP_RATIO_BASE + (k as f32) / 60.0;
+                let key_gap_ratio = KEY_GAP_RATIO_BASE + (k as f64) / 60.0;
                 key_gap = if g_have_key_gaps {
                     let desired = diameter * key_gap_ratio;
                     let upper = (diameter * KEY_GAP_MAX_RATIO).max(MIN_GAP);
@@ -341,13 +341,13 @@ fn enumerate(
                 {
                     group_gap = key_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO;
                 }
-                let intra_key_gap_count = g as f32 * (k.saturating_sub(1) as f32);
-                let group_gap_count = (g.saturating_sub(1)) as f32;
-                let used = diameter * total_keys as f32
+                let intra_key_gap_count = g as f64 * (k.saturating_sub(1) as f64);
+                let group_gap_count = (g.saturating_sub(1)) as f64;
+                let used = diameter * total_keys as f64
                     + intra_key_gap_count * key_gap
                     + group_gap_count * group_gap;
 
-                let packing_eff = (diameter * total_keys as f32) / safe_length;
+                let packing_eff = (diameter * total_keys as f64) / safe_length;
                 // adjust target_packing slightly upward if actual packing too low but leftover big
                 if packing_eff + 0.03 < target_packing {
                     target_packing = (target_packing * 0.98).max(MIN_PACK);
@@ -368,13 +368,13 @@ fn enumerate(
 
             // final geometry
             let diameter = 2.0 * r;
-            let intra_key_gap_count = g as f32 * (k.saturating_sub(1) as f32);
-            let group_gap_count = (g.saturating_sub(1)) as f32;
-            let used = diameter * total_keys as f32
+            let intra_key_gap_count = g as f64 * (k.saturating_sub(1) as f64);
+            let group_gap_count = (g.saturating_sub(1)) as f64;
+            let used = diameter * total_keys as f64
                 + intra_key_gap_count * key_gap
                 + group_gap_count * group_gap;
             let leftover = (safe_length - used).max(0.0);
-            let packing_eff = (diameter * total_keys as f32) / safe_length;
+            let packing_eff = (diameter * total_keys as f64) / safe_length;
 
             // validity
             let mut valid = true;
@@ -433,8 +433,8 @@ fn enumerate(
             };
             let r_term = r_norm.powf(0.6);
 
-            let struct_term = (total_keys as f32).ln_1p();
-            let balance_term = 1.0 / (1.0 + (g as f32 - k as f32).abs());
+            let struct_term = (total_keys as f64).ln_1p();
+            let balance_term = 1.0 / (1.0 + (g as f64 - k as f64).abs());
 
             let leftover_fraction = if safe_length > 0.0 {
                 leftover / safe_length
@@ -452,7 +452,7 @@ fn enumerate(
             let high_k_bonus = LAYOUT_PRIMES
                 .iter()
                 .position(|p| p == &k)
-                .map(|pos| ((pos as f32) / LAYOUT_PRIMES.len() as f32) * HIGH_K_BONUS)
+                .map(|pos| ((pos as f64) / LAYOUT_PRIMES.len() as f64) * HIGH_K_BONUS)
                 .unwrap_or(0.0);
 
             let score = W_R_SQRT * r_term
@@ -484,7 +484,7 @@ fn enumerate(
 }
 
 fn pick_best(
-    space: Vector2<f32>,
+    space: Vector2<f64>,
     orientation: LayoutOrientation,
     safe_area_padding: SafeArea,
 ) -> Option<Candidate> {
@@ -531,7 +531,7 @@ fn pick_best(
 }
 
 fn fallback(
-    space: Vector2<f32>,
+    space: Vector2<f64>,
     orientation: LayoutOrientation,
     safe_area_padding: SafeArea,
 ) -> Layout {
@@ -541,8 +541,8 @@ fn fallback(
     let r = {
         let raw = instrument_breadth * 0.25;
         // Avoid panics from reversed clamp bounds when raw < 6 or MIN_KEY_RADIUS < 6 (future tweaks)
-        let lower = 6.0_f32.min(MIN_KEY_RADIUS);
-        let upper = 6.0_f32.max(MIN_KEY_RADIUS);
+        let lower = 6.0_f64.min(MIN_KEY_RADIUS);
+        let upper = 6.0_f64.max(MIN_KEY_RADIUS);
         raw.max(lower).min(upper)
     };
     let key_gap = MIN_GAP;
@@ -585,7 +585,7 @@ fn fallback(
 }
 
 impl Layout {
-    pub fn from_screen_estate(space: Vector2<f32>) -> Self {
+    pub fn from_screen_estate(space: Vector2<f64>) -> Self {
         Self::compute(
             space,
             DEFAULT_SAFE_AREA,
@@ -606,10 +606,10 @@ impl Layout {
 
     pub fn with_safe_area(
         self,
-        top_safe_area: f32,
-        right_safe_area: f32,
-        bottom_safe_area: f32,
-        left_safe_area: f32,
+        top_safe_area: f64,
+        right_safe_area: f64,
+        bottom_safe_area: f64,
+        left_safe_area: f64,
     ) -> Self {
         Self::compute(
             self.space,
@@ -630,11 +630,11 @@ impl Layout {
     }
 
     pub fn from_screen_estate_with_safe_area(
-        space: Vector2<f32>,
-        top_safe_area: f32,
-        right_safe_area: f32,
-        bottom_safe_area: f32,
-        left_safe_area: f32,
+        space: Vector2<f64>,
+        top_safe_area: f64,
+        right_safe_area: f64,
+        bottom_safe_area: f64,
+        left_safe_area: f64,
     ) -> Self {
         Self::compute(
             space,
@@ -655,11 +655,11 @@ impl Layout {
     }
 
     fn compute(
-        space: Vector2<f32>,
-        top_safe_area: f32,
-        right_safe_area: f32,
-        bottom_safe_area: f32,
-        left_safe_area: f32,
+        space: Vector2<f64>,
+        top_safe_area: f64,
+        right_safe_area: f64,
+        bottom_safe_area: f64,
+        left_safe_area: f64,
     ) -> Option<Self> {
         let orientation = LayoutOrientation::from_space(space);
         let safe_area_padding = SafeArea {
@@ -674,11 +674,11 @@ impl Layout {
     }
 
     fn fallback(
-        space: Vector2<f32>,
-        top_safe_area: f32,
-        right_safe_area: f32,
-        bottom_safe_area: f32,
-        left_safe_area: f32,
+        space: Vector2<f64>,
+        top_safe_area: f64,
+        right_safe_area: f64,
+        bottom_safe_area: f64,
+        left_safe_area: f64,
     ) -> Self {
         let orientation = LayoutOrientation::from_space(space);
         let safe_area_padding = SafeArea {
@@ -695,8 +695,8 @@ impl Layout {
 pub fn layout_test_cases() -> impl Iterator<Item = Layout> {
     crate::test_util::test_cases().map(|(space, safe_area)| {
         let v = Vector2 {
-            x: space.0 as f32,
-            y: space.1 as f32,
+            x: space.0 as f64,
+            y: space.1 as f64,
         };
         Layout::from_screen_estate_with_safe_area(
             v,

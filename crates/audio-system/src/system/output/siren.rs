@@ -76,18 +76,12 @@ impl<F: Real> Siren<F> {
         beta: F,
         gamma: F,
     ) -> (F, F, F) {
-        let non_zero_excitement = if excitement == F::zero() {
-            F::one()
-        } else {
-            excitement
-        };
-
-        let wrap_phase: F = (alpha + alpha * gamma + alpha * beta) / non_zero_excitement;
+        let wrap_phase: F = alpha + alpha * gamma + alpha * beta;
 
         let next_phase = phase + sample_duration;
 
         if excitement == F::zero()
-            && (phase == F::zero() || next_phase == F::zero() || next_phase >= wrap_phase)
+            && (phase == F::zero() || phase == F::zero() || next_phase >= wrap_phase)
         {
             (convert(0.0), phase, sign)
         } else {
@@ -98,11 +92,13 @@ impl<F: Real> Siren<F> {
                 next_phase
             };
 
+            let non_zero_excitement = excitement.max(convert(S::EPSILON));
+
             let sample = Self::shape(
                 phase,
-                alpha / non_zero_excitement,
-                beta * excitement,
-                gamma * excitement,
+                alpha * non_zero_excitement,
+                beta / excitement,
+                gamma / excitement,
             ) * sign;
 
             (sample, phase, sign)

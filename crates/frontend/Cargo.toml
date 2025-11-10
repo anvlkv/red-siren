@@ -18,12 +18,13 @@ leptos-use = { version = "0.16.2", default-features = false, features = [
   "use_draggable",
   "use_element_bounding",
   "use_element_size",
+  "use_mouse_in_element",
   "use_preferred_dark",
   "use_prefers_reduced_motion",
   "use_raf_fn",
   "use_timeout_fn",
   "use_window",
-  "use_window_size",
+  "use_window_size"
 ] }
 log = { workspace = true }
 mint = { workspace = true, features = ["serde"] }

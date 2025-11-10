@@ -21,7 +21,7 @@ web-sys = { workspace = true, optional = true }
 
 [dev-dependencies]
 insta = "1.43.2"
-insta-fun = "0.2.2"
+insta-fun = "1"
 # insta-fun = { path = "../../../insta-fun" }
 
 [target.'cfg(target_os = "ios")'.dependencies]

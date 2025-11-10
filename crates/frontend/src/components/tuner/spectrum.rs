@@ -198,7 +198,7 @@ fn ExcitementBars(
             LayoutOrientation::Vertical => (baseline.1.y - baseline.0.y).abs(),
         }
     };
-    let bar_width = move || line_length() / (num_sensors() as f32);
+    let bar_width = move || line_length() / (num_sensors() as f64);
     let bar_spacing = move || bar_width() * 0.1; // 10% spacing between bars
                                                  // Calculate scaling factor to fit all excitements within 0..1 range
     let scale_factor = move || {
@@ -212,9 +212,9 @@ fn ExcitementBars(
                     1.0
                 }
             })
-            .unwrap_or(1.0)
+            .unwrap_or(1.0) as f64
     };
-    let level = move |v: f32| (v * scale_factor()).clamp(0.0, 1.0);
+    let level = move |v: f64| (v * scale_factor()).clamp(0.0, 1.0);
 
     view! {
         <>
@@ -231,17 +231,17 @@ fn ExcitementBars(
                         let bar_spacing = bar_spacing();
                         let (x, y, width, height) = match layout.orientation {
                             LayoutOrientation::Horizontal => {
-                                let x = baseline.0.x + (i as f32 * bar_width) + bar_spacing / 2.0;
+                                let x = baseline.0.x + (i as f64 * bar_width) + bar_spacing / 2.0;
                                 let avail_up = baseline.0.y;
-                                let bar_height = level(excitement) * avail_up;
+                                let bar_height = level(excitement as f64) * avail_up;
                                 let y = baseline.0.y - bar_height;
                                 let width = bar_width - bar_spacing;
                                 (x, y, width, bar_height)
                             }
                             LayoutOrientation::Vertical => {
-                                let y = baseline.0.y + (i as f32 * bar_width) + bar_spacing / 2.0;
+                                let y = baseline.0.y + (i as f64 * bar_width) + bar_spacing / 2.0;
                                 let avail_right = layout.space.x - baseline.0.x;
-                                let bar_width_actual = level(excitement) * avail_right;
+                                let bar_width_actual = level(excitement as f64) * avail_right;
                                 let x = baseline.0.x;
                                 let height = bar_width - bar_spacing;
                                 (x, y, bar_width_actual, height)

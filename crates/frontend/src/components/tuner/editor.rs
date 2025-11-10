@@ -90,20 +90,6 @@ pub fn EditorOverlay() -> impl IntoView {
                         />
 
                         <EditorRangeSlider
-                            label="Ratio"
-                            value=Signal::derive(move || { finetuned_values().input_ny_ratio })
-                            min=0.001
-                            max=10.0
-                            step=0.001
-                            on_input=Callback::new(move |val| {
-                                set_finetuned_values
-                                    .update(|values| {
-                                        values.input_ny_ratio = val;
-                                    });
-                            })
-                        />
-
-                        <EditorRangeSlider
                             label="Wet Ratio"
                             value=Signal::derive(move || { finetuned_values().input_ny_wet_ratio })
                             min=0.0

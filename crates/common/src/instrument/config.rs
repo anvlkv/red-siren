@@ -332,7 +332,7 @@ impl TryFrom<Layout> for Config {
         for (g_x, n) in (0..value.num_groups.get() as usize).map(|g_x| (g_x, 2 * g_x + 1)) {
             let g_channel = value.first_group_channel.nth_channel_from_first(g_x);
 
-            let (group_f_base, _group_n_base) = g_channel.compute_fundamentals(l, n);
+            let (group_f_base, _group_n_base) = g_channel.compute_fundamentals(l as f32, n);
 
             let f_base = group_f_base * 2usize.pow(g_x as u32) as f64;
 

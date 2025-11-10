@@ -19,14 +19,20 @@
     "env": {
       "RUST_BACKTRACE": "1"
     },
-    "reveal": "always",
-    "use_new_terminal": true
+    "reveal": "always"
   },
   {
     "label": "Build in release mode",
     "command": "cargo tauri build --bundles app",
-    "reveal": "never",
-    "use_new_terminal": true
+    "env": {
+      "RUST_BACKTRACE": "1"
+    },
+    "reveal": "never"
+  },
+  {
+    "label": "Clean",
+    "command": "cargo clean",
+    "reveal": "never"
   },
   {
     "label": "Run audio tests",
@@ -34,8 +40,7 @@
     "env": {
       "RUST_BACKTRACE": "1"
     },
-    "reveal": "always",
-    "use_new_terminal": true
+    "reveal": "always"
   },
   {
     "label": "Cargo docs",

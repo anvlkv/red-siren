@@ -182,3 +182,24 @@ fn generate_default_sensors(total_keys: usize, registry: &NodeKeyRegistry) -> Ve
 
     sensors
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::instrument::layout_test_cases;
+    use insta::assert_json_snapshot;
+
+    use super::*;
+
+    #[test]
+    fn tuner_config() {
+        for layout in layout_test_cases() {
+            let tuner_layout: Layout = layout.into();
+            let config = Config::new(tuner_layout, 44100.0, layout.registry());
+
+            assert_json_snapshot!(
+                format!("tuner_config_{}x{}", layout.space.x, layout.space.y),
+                config
+            )
+        }
+    }
+}

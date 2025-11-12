@@ -3,10 +3,6 @@ use tauri_use::{use_command, use_invoke, UseTauriReturn, UseTauriWithReturn};
 
 use crate::components::{Button, EditorRangeSlider, Fold};
 
-const FREQ_RATIO_MAX: f32 = 14.0;
-const FREQ_RATIO_MIN: f32 = 0.001;
-const FREQ_RATIO_STEP: f32 = 0.001;
-
 const Q_MAX: f32 = 10.0;
 const Q_MIN: f32 = 0.001;
 const Q_STEP: f32 = 0.001;
@@ -186,57 +182,9 @@ pub fn EditorOverlay() -> impl IntoView {
                                                 });
                                         })
                                     />
-
-                                    <EditorRangeSlider
-                                        label="Allpass freq ratio"
-                                        value=Signal::derive(move || {
-                                            finetuned_values().filter_allpass_freq_ratio
-                                        })
-                                        min=Q_MIN
-                                        max=Q_MAX
-                                        step=Q_STEP
-                                        on_input=Callback::new(move |val| {
-                                            set_finetuned_values
-                                                .update(|values| {
-                                                    values.filter_allpass_freq_ratio = val;
-                                                });
-                                        })
-                                    />
-
-                                    <EditorRangeSlider
-                                        label="Moog freq ratio"
-                                        value=Signal::derive(move || {
-                                            finetuned_values().filter_moog_freq_ratio
-                                        })
-                                        min=FREQ_RATIO_MIN
-                                        max=FREQ_RATIO_MAX
-                                        step=FREQ_RATIO_STEP
-                                        on_input=Callback::new(move |val| {
-                                            set_finetuned_values
-                                                .update(|values| {
-                                                    values.filter_moog_freq_ratio = val;
-                                                });
-                                        })
-                                    />
                                 </fieldset>
                                 <fieldset>
                                     <legend>"Plain key"</legend>
-                                    <EditorRangeSlider
-                                        label="Shelf freq ratio"
-                                        value=Signal::derive(move || {
-                                            finetuned_values().filter_shelf_freq_ratio
-                                        })
-                                        min=FREQ_RATIO_MIN
-                                        max=FREQ_RATIO_MAX
-                                        step=FREQ_RATIO_STEP
-                                        on_input=Callback::new(move |val| {
-                                            set_finetuned_values
-                                                .update(|values| {
-                                                    values.filter_shelf_freq_ratio = val;
-                                                });
-                                        })
-                                    />
-
                                     <EditorRangeSlider
                                         label="Shelf Q"
                                         value=Signal::derive(move || {
@@ -265,22 +213,6 @@ pub fn EditorOverlay() -> impl IntoView {
                                             set_finetuned_values
                                                 .update(|values| {
                                                     values.filter_shelf_gain = val;
-                                                });
-                                        })
-                                    />
-
-                                    <EditorRangeSlider
-                                        label="Pass freq ratio"
-                                        value=Signal::derive(move || {
-                                            finetuned_values().filter_pass_freq_ratio
-                                        })
-                                        min=FREQ_RATIO_MIN
-                                        max=FREQ_RATIO_MAX
-                                        step=FREQ_RATIO_STEP
-                                        on_input=Callback::new(move |val| {
-                                            set_finetuned_values
-                                                .update(|values| {
-                                                    values.filter_pass_freq_ratio = val;
                                                 });
                                         })
                                     />

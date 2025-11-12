@@ -1090,13 +1090,9 @@ impl AudioRuntime for CpalController {
             filter_switch_follow_response_s: shared_values.filter_switch_follow_response_s.value(),
             node_follow_response_time_s: shared_values.node_follow_response_time_s.value(),
             filter_allpass_q: shared_values.filter_allpass_q.value(),
-            filter_allpass_freq_ratio: shared_values.filter_allpass_freq_ratio.value(),
-            filter_moog_freq_ratio: shared_values.filter_moog_freq_ratio.value(),
             filter_moog_q: shared_values.filter_moog_q.value(),
-            filter_shelf_freq_ratio: shared_values.filter_shelf_freq_ratio.value(),
             filter_shelf_q: shared_values.filter_shelf_q.value(),
             filter_shelf_gain: shared_values.filter_shelf_gain.value(),
-            filter_pass_freq_ratio: shared_values.filter_pass_freq_ratio.value(),
             filter_pass_q: shared_values.filter_pass_q.value(),
             node_bell_q: shared_values.node_bell_q.value(),
             node_bell_gain_db: shared_values.node_bell_gain_db.value(),
@@ -1128,25 +1124,13 @@ impl AudioRuntime for CpalController {
             shared_values
                 .filter_allpass_q
                 .set_value(payload.filter_allpass_q);
-            shared_values
-                .filter_allpass_freq_ratio
-                .set_value(payload.filter_allpass_freq_ratio);
             shared_values.filter_moog_q.set_value(payload.filter_moog_q);
-            shared_values
-                .filter_moog_freq_ratio
-                .set_value(payload.filter_moog_freq_ratio);
-            shared_values
-                .filter_shelf_freq_ratio
-                .set_value(payload.filter_shelf_freq_ratio);
             shared_values
                 .filter_shelf_q
                 .set_value(payload.filter_shelf_q);
             shared_values
                 .filter_shelf_gain
                 .set_value(payload.filter_shelf_gain);
-            shared_values
-                .filter_pass_freq_ratio
-                .set_value(payload.filter_pass_freq_ratio);
             shared_values.filter_pass_q.set_value(payload.filter_pass_q);
             shared_values.node_bell_q.set_value(payload.node_bell_q);
             shared_values

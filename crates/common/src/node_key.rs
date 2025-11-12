@@ -1,10 +1,20 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(
-    Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
-)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct NodeKey(pub u8, pub u8);
+
+impl PartialOrd for NodeKey {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for NodeKey {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0).then(self.1.cmp(&other.1))
+    }
+}
 
 impl NodeKey {
     /// Create a new NodeKey with bounds validation

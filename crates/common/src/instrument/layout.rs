@@ -136,7 +136,7 @@ const W_LEFTOVER: f64 = 0.70;
 const W_GAP_TENSION: f64 = 0.25;
 const HIGH_K_BONUS: f64 = 0.08; // bonus for higher prime k
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(dead_code)]
 struct Candidate {
     g: u32,
@@ -693,68 +693,35 @@ impl Layout {
 
 #[cfg(any(test, feature = "test"))]
 pub fn layout_test_cases() -> impl Iterator<Item = Layout> {
-    crate::test_util::test_cases().map(|(space, safe_area)| {
-        let v = Vector2 {
-            x: space.0 as f64,
-            y: space.1 as f64,
-        };
-        Layout::from_screen_estate_with_safe_area(
-            v,
-            safe_area.0,
-            safe_area.1,
-            safe_area.2,
-            safe_area.3,
-        )
-    })
+    crate::test_util::test_cases()
+        .enumerate()
+        .map(|(i, (space, safe_area))| {
+            let v = Vector2 {
+                x: space.0 as f64,
+                y: space.1 as f64,
+            };
+            Layout {
+                scale: if i.is_multiple_of(2) {
+                    super::Scale::In
+                } else {
+                    super::Scale::Yo
+                },
+                ..Layout::from_screen_estate_with_safe_area(
+                    v,
+                    safe_area.0,
+                    safe_area.1,
+                    safe_area.2,
+                    safe_area.3,
+                )
+            }
+        })
 }
 
 #[cfg(test)]
 mod tests {
+    use insta::assert_json_snapshot;
+
     use super::*;
-
-    fn ascii_summary(layout: &Layout) -> String {
-        let g = layout.num_groups.get();
-        let k = layout.num_keys_per_group.get();
-        let shown = k.min(13);
-        let mut block = "o".repeat(shown as usize);
-        if k > shown {
-            block.push('+');
-        }
-        let mut groups = Vec::new();
-        for _ in 0..g {
-            groups.push(format!("[{}]", block));
-        }
-        let gap_units = if layout.key_bands_gap <= 0.0 {
-            1
-        } else {
-            ((layout.key_bands_gap / (layout.key_radius * 2.0))
-                .round()
-                .clamp(1.0, 8.0)) as usize
-        };
-        let gap = "-".repeat(gap_units);
-        format!(
-            "{}x{} {} r={:.1} bw={:.1} g_gap≈{:.1} k_gap≈{:.1} groups={} keys/g={} : {}",
-            layout.space.x as u32,
-            layout.space.y as u32,
-            match layout.orientation {
-                LayoutOrientation::Horizontal => 'H',
-                LayoutOrientation::Vertical => 'V',
-            },
-            layout.key_radius,
-            layout.key_band_breadth,
-            layout.groups_gap,
-            layout.key_bands_gap,
-            g,
-            k,
-            groups.join(&gap)
-        )
-    }
-
-    #[test]
-    fn print_primes() {
-        println!("Primes from array:");
-        println!("{LAYOUT_PRIMES:?}");
-    }
 
     #[test]
     fn scoring_diagnostics_large_desktop() {
@@ -766,73 +733,16 @@ mod tests {
         let sap = SafeArea::default();
         let cands = super::enumerate(space, ori, sap);
 
-        let mut valids: Vec<_> = cands.into_iter().filter(|c| c.valid).collect();
-        assert!(!valids.is_empty(), "Expected at least one valid candidate");
-        valids.sort_by(|a, b| {
-            b.score
-                .partial_cmp(&a.score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        let max_score = valids.first().unwrap().score;
-
-        // Print top 12 and also any with k in {7,11,13}
-        println!("--- TOP 12 ---");
-        for c in valids.iter().take(12) {
-            println!(
-                "g={} k={} r={:.1} key_gap={:.1} group_gap={:.1} total={} pack={:.3} left={:.1} score={:.3}",
-                c.g, c.k, c.r, c.key_gap, c.group_gap, c.total_keys, c.packing_eff, c.leftover, c.score
-            );
-        }
-        println!("--- LARGE k presence (7,11,13) ---");
-        let mut large_presence = false;
-        for c in valids.iter().filter(|c| [7, 11, 13].contains(&c.k)) {
-            println!(
-                "LARGE k candidate -> g={} k={} r={:.1} score={:.3} ({}% of max)",
-                c.g,
-                c.k,
-                c.r,
-                c.score,
-                (c.score / max_score * 100.0)
-            );
-            if c.score >= max_score * 0.60 {
-                large_presence = true;
-            }
-        }
-        assert!(
-            large_presence,
-            "Expected at least one k in {{7,11,13}} within 60% of top score"
-        );
+        assert_json_snapshot!(cands)
     }
 
     #[test]
     fn layouts_across_common_sets() {
-        let mut any_large_prime = false;
         for layout in layout_test_cases() {
-            println!("{}", ascii_summary(&layout));
-            if [7, 11, 13].contains(&layout.num_keys_per_group.get()) {
-                any_large_prime = true;
-            }
-            // Core validity invariants
-            assert!(layout.key_radius >= MIN_KEY_RADIUS * 0.85);
-            if layout.num_keys_per_group.get() > 1 {
-                assert!(layout.key_bands_gap >= MIN_GAP);
-            } else {
-                assert!(layout.key_bands_gap == 0.0);
-            }
-            if layout.num_groups.get() > 1 {
-                assert!(layout.groups_gap >= MIN_GAP);
-                if layout.num_keys_per_group.get() > 1 {
-                    assert!(
-                        layout.groups_gap >= layout.key_bands_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO
-                    );
-                }
-            } else {
-                assert!(layout.groups_gap == 0.0);
-            }
+            assert_json_snapshot!(
+                format!("instrument_layout_{}x{}", layout.space.x, layout.space.y),
+                layout
+            )
         }
-        assert!(
-            any_large_prime,
-            "Expected at least one layout selecting keys-per-group in {{7,11,13}}"
-        );
     }
 }

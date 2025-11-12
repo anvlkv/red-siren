@@ -1,0 +1,29 @@
+---
+source: crates/common/src/tuner/layout.rs
+expression: tuner_layout
+---
+{
+  "space": [
+    1440.0,
+    900.0
+  ],
+  "orientation": "Horizontal",
+  "safe_area_padding": {
+    "top": 18.0,
+    "right": 18.0,
+    "bottom": 18.0,
+    "left": 18.0
+  },
+  "line_position": [
+    [
+      0.0,
+      882.0
+    ],
+    [
+      1440.0,
+      882.0
+    ]
+  ],
+  "sensor_radius": 26.69356252542447,
+  "num_sensors": 10
+}

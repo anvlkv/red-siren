@@ -1,7 +1,11 @@
 use std::{
     collections::HashMap,
-    sync::Arc,
-    thread::{spawn, JoinHandle},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread::{sleep, spawn, JoinHandle},
+    time::Duration,
 };
 
 use common::{
@@ -26,9 +30,11 @@ pub const FFT_WINDOW_SIZE: usize = 2048; // Power of 2 for FFT, good balance of 
 pub type SpectrumBuffer = Arc<ThingBuf<Arc<FrequencySpectrum>>>;
 
 /// Custom AudioUnit that performs FFT analysis and excites sirens
+#[derive(Clone)]
 pub struct FFTAnalyzer {
     inner_net: BigBlockAdapter,
     window_thb: Arc<ThingBuf<f32>>,
+    spectrum_thb: Arc<ThingBuf<Arc<FrequencySpectrum>>>,
     sensor_values: Arc<Vec<Shared>>,
 
     // Configuration and controls
@@ -36,26 +42,9 @@ pub struct FFTAnalyzer {
     config: Config,
     excitement_controls: Arc<HashMap<NodeKey, Shared>>,
 
-    // Spectrum data storage
-    spectrum_thb: SpectrumBuffer,
-
     // processing thread
     processing_handle: Arc<JoinHandle<()>>,
-}
-
-impl Clone for FFTAnalyzer {
-    fn clone(&self) -> Self {
-        Self {
-            inner_net: self.inner_net.clone(),
-            window_thb: self.window_thb.clone(),
-            sample_rate: self.sample_rate,
-            sensor_values: self.sensor_values.clone(),
-            config: self.config.clone(),
-            excitement_controls: self.excitement_controls.clone(),
-            spectrum_thb: self.spectrum_thb.clone(),
-            processing_handle: self.processing_handle.clone(),
-        }
-    }
+    processing_running: Arc<AtomicBool>,
 }
 
 impl FFTAnalyzer {
@@ -66,19 +55,24 @@ impl FFTAnalyzer {
         spectrum_thb: Arc<ThingBuf<Arc<FrequencySpectrum>>>,
     ) -> Self {
         let window_thb = Arc::new(ThingBuf::new(FFT_WINDOW_SIZE * 2));
-        let sensor_values = Arc::new(Vec::from_iter(
-            (0..excitement_controls.len() * 4).map(|_| shared(0.0)),
-        ));
+        let sensor_values = Arc::new(Vec::from_iter(config.sensor_data.iter().flat_map(|s| {
+            [
+                shared(s.min_frequency),
+                shared(s.max_frequency),
+                shared(s.min_magnitude),
+                shared(s.max_magnitude),
+            ]
+        })));
         let excitement_controls = Arc::new(excitement_controls);
         let sensor_data = config.sensor_data.clone();
-        let processing_handle = Arc::new(Self::init_handle(
+        let (processing_handle, processing_running) = Self::init_handle(
             window_thb.clone(),
             excitement_controls.clone(),
             sensor_values.clone(),
             spectrum_thb.clone(),
             sensor_data,
             config.sample_rate.round() as u32,
-        ));
+        );
 
         let analyzer = Self {
             inner_net: BigBlockAdapter::new(inner_net),
@@ -86,9 +80,10 @@ impl FFTAnalyzer {
             sensor_values,
             sample_rate: config.sample_rate,
             config,
-            excitement_controls,
             spectrum_thb,
-            processing_handle,
+            excitement_controls,
+            processing_handle: Arc::new(processing_handle),
+            processing_running,
         };
 
         // Validate initial setup
@@ -293,29 +288,60 @@ impl FFTAnalyzer {
         spectrum_thb: SpectrumBuffer,
         sensor_data: Vec<SensorData>,
         sample_rate: u32,
-    ) -> JoinHandle<()> {
-        spawn(move || loop {
-            if window_thb.len() >= FFT_WINDOW_SIZE {
-                let window: [f32; FFT_WINDOW_SIZE] =
-                    core::array::from_fn(|_| window_thb.pop().unwrap_or_default());
-                let sensor_inputs = sensor_values.iter().map(|s| s.value()).collect::<Vec<_>>();
+    ) -> (JoinHandle<()>, Arc<AtomicBool>) {
+        let running = Arc::new(AtomicBool::new(false));
+        let running_clone = running.clone();
+        let join = spawn(move || {
+            running_clone.store(true, Ordering::Relaxed);
 
-                Self::perform_fft_analysis(
-                    &window,
-                    &sensor_inputs,
-                    sample_rate,
-                    &sensor_data,
-                    &excitement_controls,
-                    &spectrum_thb,
-                );
+            loop {
+                if !running_clone.load(Ordering::Relaxed) {
+                    break;
+                }
+                if let Some(remaining_len) = FFT_WINDOW_SIZE.checked_sub(window_thb.len()) {
+                    sleep(Duration::from_secs_f64(
+                        (remaining_len + 2) as f64 / sample_rate as f64,
+                    ));
+                } else {
+                    let window: [f32; FFT_WINDOW_SIZE] =
+                        core::array::from_fn(|_| window_thb.pop().unwrap_or_default());
+                    let sensor_inputs = sensor_values.iter().map(|s| s.value()).collect::<Vec<_>>();
+
+                    Self::perform_fft_analysis(
+                        &window,
+                        &sensor_inputs,
+                        sample_rate,
+                        &sensor_data,
+                        &excitement_controls,
+                        &spectrum_thb,
+                    );
+                }
             }
-        })
+        });
+
+        (join, running)
+    }
+
+    fn restart_processing(&mut self) {
+        self.processing_running.store(false, Ordering::Relaxed);
+        let sensor_data = self.config.sensor_data.clone();
+        let (processing_handle, processing_running) = Self::init_handle(
+            self.window_thb.clone(),
+            self.excitement_controls.clone(),
+            self.sensor_values.clone(),
+            self.spectrum_thb.clone(),
+            sensor_data,
+            self.config.sample_rate.round() as u32,
+        );
+
+        self.processing_handle = Arc::new(processing_handle);
+        self.processing_running = processing_running;
     }
 }
 
 impl AudioUnit for FFTAnalyzer {
     fn inputs(&self) -> usize {
-        self.inner_net.inputs()
+        self.inner_net.inputs() + self.config.sensor_data.len() * 4
     }
 
     fn outputs(&self) -> usize {
@@ -331,6 +357,10 @@ impl AudioUnit for FFTAnalyzer {
 
         for (s_val, ctrl) in sensor_inputs.iter().zip(self.sensor_values.iter()) {
             ctrl.set_value(*s_val);
+        }
+
+        if sensor_inputs.len() != self.sensor_values.len() {
+            log::warn!("Mismatched number of sensor inputs and controls");
         }
 
         if self.window_thb.push(output[0]).is_err() {
@@ -377,6 +407,7 @@ impl AudioUnit for FFTAnalyzer {
     fn set_sample_rate(&mut self, sample_rate: f64) {
         self.inner_net.set_sample_rate(sample_rate);
         self.sample_rate = sample_rate as f32;
+        self.restart_processing();
     }
 
     fn reset(&mut self) {
@@ -387,6 +418,8 @@ impl AudioUnit for FFTAnalyzer {
         for siren_control in self.excitement_controls.values() {
             siren_control.set_value(0.0);
         }
+
+        self.restart_processing();
 
         log::trace!("fft_analyzer: reset complete",);
     }
@@ -442,7 +475,7 @@ mod tests {
         let analyzer = FFTAnalyzer::new(inner_net, config, siren_controls, spectrum_thb);
 
         // Test basic properties
-        assert_eq!(analyzer.inputs(), 1);
+        assert_eq!(analyzer.inputs(), 5);
         assert_eq!(analyzer.outputs(), 1);
 
         // Test initial values

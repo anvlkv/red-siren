@@ -20,8 +20,10 @@ wasm-bindgen = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true }
 
 [dev-dependencies]
-insta = "1.43.2"
+common = { workspace = true, features = ["test"] }
+insta = { workspace = true }
 insta-fun = "1"
+test-log = "0.2"
 # insta-fun = { path = "../../../insta-fun" }
 
 [target.'cfg(target_os = "ios")'.dependencies]

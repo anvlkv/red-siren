@@ -19,33 +19,13 @@ mod integration_tests {
     fn create_test_instrument_config() -> InstrumentConfig {
         // Create test config with 2 groups, 2 nodes each (minimum required)
         let left_nodes = vec![
-            NodeConfig {
-                key: NodeKey::new(0, 0),
-                base_frequency: 440.0,
-                phase: 0.0,
-                divisions: 2,
-            },
-            NodeConfig {
-                key: NodeKey::new(0, 1),
-                base_frequency: 880.0,
-                phase: 0.0,
-                divisions: 2,
-            },
+            NodeConfig::new_test_node(440.0),
+            NodeConfig::new_test_node(880.0),
         ];
 
         let right_nodes = vec![
-            NodeConfig {
-                key: NodeKey::new(1, 0),
-                base_frequency: 554.37, // C# above middle C
-                phase: 0.0,
-                divisions: 2,
-            },
-            NodeConfig {
-                key: NodeKey::new(1, 1),
-                base_frequency: 659.25, // E above middle C
-                phase: 0.0,
-                divisions: 2,
-            },
+            NodeConfig::new_test_node(554.37),
+            NodeConfig::new_test_node(659.25),
         ];
 
         let config = InstrumentConfig(vec![
@@ -106,6 +86,7 @@ mod integration_tests {
     }
 
     #[test]
+    // #[ignore]
     fn test_mic_excitement_source() {
         let instrument_config = create_test_instrument_config();
         let tuner_config = create_test_tuner_config();
@@ -167,6 +148,7 @@ mod integration_tests {
     }
 
     #[test]
+    // #[ignore]
     fn test_excitement_source_switching() {
         let instrument_config = create_test_instrument_config();
         let tuner_config = create_test_tuner_config();
@@ -251,6 +233,7 @@ mod integration_tests {
     }
 
     #[test]
+    // #[ignore]
     fn test_random_excitor_value_range() {
         use crate::system::input::RandomExcitor;
 

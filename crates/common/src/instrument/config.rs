@@ -1,156 +1,24 @@
+mod channel;
+mod group;
+mod node;
+mod scale;
+
+use mint::Point2;
 use serde::{Deserialize, Serialize};
 
-use crate::error::InstrumentConfigError;
-
 use crate::NodeKey;
+use crate::{error::InstrumentConfigError, orientation::LayoutOrientation};
 
 use super::{consts::*, Layout};
+
+pub use channel::*;
+pub use group::*;
+pub use node::*;
+pub use scale::*;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 /// Instrument configuartion for audio generation
 pub struct Config(pub Vec<GroupConfig>);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-/// Output chanel of the group
-pub enum GroupChannel {
-    Left,
-    Right,
-}
-
-fn fundamental_frequency(n: usize, v: f64, l: f64) -> f64 {
-    (n as f64 * v) / (2.0 * l)
-}
-
-impl GroupChannel {
-    pub(crate) fn from_keys_groups(k: u32, g: u32) -> Self {
-        match (g.is_multiple_of(2), k.is_multiple_of(2)) {
-            (false, false) => Self::Left,
-            (false, true) => Self::Right,
-            (true, false) => Self::Right,
-            (true, true) => Self::Left,
-        }
-    }
-
-    pub fn nth_channel_from_first(&self, n: usize) -> Self {
-        if n.is_multiple_of(2) {
-            *self
-        } else {
-            match self {
-                Self::Left => Self::Right,
-                Self::Right => Self::Left,
-            }
-        }
-    }
-
-    fn compute_fundamentals(&self, l: f32, mut n_base: usize) -> (f64, usize) {
-        let v = match self {
-            Self::Left => CRIMSON_RED_WAVESPEED,
-            Self::Right => CINNABAR_RED_WAVESPEED,
-        };
-
-        let mut f: f64 = 0.0;
-
-        while f < SOFT_MIN_FREQ_HZ {
-            f = fundamental_frequency(n_base, v, l as f64);
-            if f < SOFT_MIN_FREQ_HZ {
-                n_base += 1;
-            }
-        }
-
-        (f, n_base)
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-/// Japanese Scale Interval Patterns
-pub enum Scale {
-    /// Yo Scale (bright pentatonic)
-    ///
-    /// Semitone sequence: 2 - 3 - 2 - 2 - 3
-    ///
-    /// Formula (counted from tonic, C): C, D (+2), F (+5), G (+7), A (+9)
-    #[default]
-    Yo,
-    /// In Scale (dark pentatonic)
-    ///
-    /// Semitone sequence: 1 - 4 - 1 - 4 - 2
-    ///
-    /// Formula: C, D♭ (+1), F (+5), G (+7), A♭ (+8)
-    In,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct GroupConfig {
-    /// Output channel
-    pub channel: GroupChannel,
-    /// Group nodes
-    pub nodes: Vec<NodeConfig>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct NodeConfig {
-    /// Unique node identifier within the instrument
-    pub key: NodeKey,
-    /// Base frequency of the node
-    pub base_frequency: f64,
-    /// Starting phase of the oscillator
-    pub phase: f64,
-    /// Number of divisions
-    pub divisions: u32,
-}
-
-impl NodeConfig {
-    /// Unified node validation.
-    /// Order:
-    /// 1. Structural (range shape)
-    /// 2. Recommended (soft) bounds (emit *recommended* errors)
-    /// 3. Safe (hard) bounds (emit *safe* errors)
-    fn validate(&self, idx: usize) -> Result<(), InstrumentConfigError> {
-        // 1. Structural
-        // 2. Recommended bounds (soft limits)
-        if self.base_frequency < SOFT_MIN_FREQ_HZ {
-            return Err(InstrumentConfigError::NodeFreqencyBelowRecomended {
-                node: idx,
-                freq: self.base_frequency as f32,
-            });
-        }
-        if self.base_frequency > SOFT_MAX_FREQ_HZ {
-            return Err(InstrumentConfigError::NodeFreqencyAboveRecomended {
-                node: idx,
-                freq: self.base_frequency as f32,
-            });
-        }
-
-        // 3. Safe bounds (hard limits) - only reached if recommended passed.
-        if self.base_frequency < MIN_FREQ_HZ {
-            return Err(InstrumentConfigError::NodeFreqencyBelowSafe {
-                node: idx,
-                freq: self.base_frequency as f32,
-            });
-        }
-        if self.base_frequency > MAX_FREQ_HZ {
-            return Err(InstrumentConfigError::NodeFreqencyAboveSafe {
-                node: idx,
-                freq: self.base_frequency as f32,
-            });
-        }
-
-        Ok(())
-    }
-}
-
-impl GroupConfig {
-    /// Unified group validation (safe constraints only).
-    fn validate(&self, _group_idx: usize) -> Result<(), InstrumentConfigError> {
-        if self.nodes.is_empty() {
-            return Err(InstrumentConfigError::EmptyGroup);
-        }
-        for (i, n) in self.nodes.iter().enumerate() {
-            n.validate(i)?;
-        }
-        Ok(())
-    }
-}
 
 impl Config {
     /// Simultaneous node "power" budget check.
@@ -242,109 +110,84 @@ impl Config {
     }
 }
 
-fn build_group_nodes(
-    group_f_base: f64,
-    group: usize,
-    scale: Scale,
-    equal_divisions: u32,
-) -> Vec<NodeConfig> {
-    // Use uniform equal divisions to guarantee exactly `equal_divisions` nodes per group
-    let divs: Vec<u32> = (0..equal_divisions).collect();
-    if divs.is_empty() {
-        return Vec::new();
-    }
-
-    // Boundaries
-    let mut boundaries: Vec<f64> = Vec::with_capacity(divs.len() + 1);
-    boundaries.push(0.0);
-    for w in divs.windows(2) {
-        // Bias lower boundary based on scale mood: Yo => brighter (shift up), In => darker (shift down)
-        let lower_boundary_bias: f64 = match scale {
-            Scale::Yo => 0.15,
-            Scale::In => -0.15,
-        };
-        boundaries.push(((w[0] as f64 + w[1] as f64) * 0.5) + lower_boundary_bias);
-    }
-    boundaries.push(equal_divisions as f64);
-
-    let mut nodes = Vec::with_capacity(divs.len());
-    for (i, &d) in divs.iter().enumerate() {
-        let biased_index = ((d as f64)
-            + match scale {
-                Scale::Yo => 0.15,
-                Scale::In => -0.15,
-            })
-        .clamp(0.0, equal_divisions as f64 - 1.0);
-        let center_ratio = 2f64.powf(biased_index / equal_divisions as f64);
-        let base_f = group_f_base * center_ratio;
-        if base_f > MAX_FREQ_HZ {
-            continue;
-        }
-
-        nodes.push(NodeConfig {
-            base_frequency: base_f,
-            phase: 0.0,
-            key: NodeKey::new(group as u8, i as u8),
-            divisions: equal_divisions,
-        });
-    }
-
-    nodes
-}
-
-/// Distribute node phases to avoid phase stacking and add stereo width.
-///
-/// Strategy:
-/// - Even spread 0..2π across nodes
-/// - Per-group offset so groups are decorrelated
-/// - Per-channel offset to widen stereo image
-fn assign_node_phases(nodes: &mut [NodeConfig], group_index: usize, channel: GroupChannel) {
-    if nodes.is_empty() {
-        return;
-    }
-    let group_offset = (group_index as f64) * std::f64::consts::PI / 3.0;
-    let channel_offset = match channel {
-        GroupChannel::Left => 0.0,
-        GroupChannel::Right => std::f64::consts::FRAC_PI_4,
-    };
-    let n = nodes.len() as f64;
-    for (k, node) in nodes.iter_mut().enumerate() {
-        let spread = 2.0 * std::f64::consts::PI * (k as f64) / n;
-        node.phase = group_offset + spread + channel_offset;
-        node.key = NodeKey::new(group_index as u8, k as u8);
-    }
-}
-
 impl TryFrom<Layout> for Config {
     type Error = InstrumentConfigError;
 
-    fn try_from(value: Layout) -> Result<Self, Self::Error> {
-        let a = value.left_string_position.0;
-        let b = value.left_string_position.1;
+    fn try_from(layout: Layout) -> Result<Self, Self::Error> {
+        // physical parameters
+        let a = layout.left_string_position.0;
+        let b = layout.left_string_position.1;
+        let l = (((b.x - a.x).powi(2) + (b.y - a.y).powi(2)).sqrt()) / 10.0;
 
-        let l = ((b.x - a.x).powi(2) + (b.y - a.y).powi(2)).sqrt();
+        // initial data
+        let num_groups = layout.num_groups.get() as usize;
+        let num_divisions_per_group = layout.num_keys_per_group.get() as usize;
+        let scale = layout.scale;
 
-        let equal_divisions = value.num_keys_per_group.get() as u32;
-        let scale = value.scale;
+        // computed properties
+        let total_steps = num_groups * num_divisions_per_group;
+        let phase_step = std::f64::consts::FRAC_2_PI / total_steps as f64;
+        let l_step_nodes = (layout.key_radius + layout.key_bands_gap) / 10.0;
+
+        // fundamental frequencies
+        let (a_group_f_base, n_base) = layout.first_group_channel.compute_fundamentals(l, 1);
+        let (b_group_f_base, _) = layout
+            .first_group_channel
+            .nth_channel_from_first(1)
+            .compute_fundamentals(l, n_base + 1);
+
+        // track values
+        let mut n = 0;
+        let mut l = {
+            let p = layout
+                .orientation
+                .safe_length_start_point(Point2 { x: 0.0, y: 0.0 }, layout.safe_area_padding);
+            (match layout.orientation {
+                LayoutOrientation::Horizontal => p.x,
+                LayoutOrientation::Vertical => p.y,
+            }) / 10.0
+        };
 
         let mut groups = Vec::new();
+        for g in 0..num_groups {
+            let channel = layout.first_group_channel.nth_channel_from_first(g);
 
-        for (g_x, n) in (0..value.num_groups.get() as usize).map(|g_x| (g_x, 2 * g_x + 1)) {
-            let g_channel = value.first_group_channel.nth_channel_from_first(g_x);
+            let octave_f_base = if channel == layout.first_group_channel {
+                a_group_f_base
+            } else {
+                b_group_f_base
+            } * 2_f64.powf((g as f64) / num_groups as f64);
 
-            let (group_f_base, _group_n_base) = g_channel.compute_fundamentals(l as f32, n);
+            let mut nodes = vec![];
 
-            let f_base = group_f_base * 2usize.pow(g_x as u32) as f64;
+            for k in 0..num_divisions_per_group {
+                let key = NodeKey::new(g.try_into().unwrap(), k.try_into().unwrap());
 
-            let mut nodes = build_group_nodes(f_base, g_x, scale, equal_divisions);
+                let frequency =
+                    scale.freq_n(k as f64, octave_f_base, num_divisions_per_group as f64);
 
-            // Phase spreading
-            assign_node_phases(&mut nodes, g_x, g_channel);
+                let divisions = num_divisions_per_group as u32;
+                let phase = phase_step * n as f64;
+                let cents = 1200.0 * (frequency / octave_f_base).log2();
 
-            groups.push(GroupConfig {
-                channel: g_channel,
-                nodes,
-            });
+                nodes.push(NodeConfig {
+                    key,
+                    frequency,
+                    l,
+                    phase,
+                    divisions,
+                    cents,
+                });
+
+                l += l_step_nodes;
+                n += 1;
+            }
+
+            l += layout.groups_gap;
+
+            nodes.sort();
+
+            groups.push(GroupConfig { channel, nodes });
         }
 
         let config = Config(groups);
@@ -353,25 +196,23 @@ impl TryFrom<Layout> for Config {
         // Caller can decide how to surface any error.
         config.validate()?;
 
-        // (previous panic on unsafe config removed in favor of Result error propagation)
-
         Ok(config)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::layout_test_cases;
     use super::*;
+    use crate::instrument::layout::layout_test_cases;
+    use insta::assert_json_snapshot;
 
     #[test]
     fn test_config_from_layout_validity() {
         for layout in layout_test_cases() {
             let config = Config::try_from(layout).expect("Config from layout should be valid");
-            // validate() already ran in try_from, but call again defensively
-            assert!(
-                config.validate().is_ok(),
-                "Config from layout should pass unified validation"
+            assert_json_snapshot!(
+                format!("config_{}x{}", layout.space.x, layout.space.y),
+                config
             );
         }
     }
@@ -398,31 +239,18 @@ mod tests {
 
     #[test]
     fn test_node_config_validity() {
-        let valid_node = NodeConfig {
-            base_frequency: (super::SOFT_MIN_FREQ_HZ + super::SOFT_MAX_FREQ_HZ) / 2.0,
-            phase: 0.0,
-            key: NodeKey::new(0, 0),
-            divisions: 1,
-        };
+        let valid_node =
+            NodeConfig::new_test_node((super::SOFT_MIN_FREQ_HZ + super::SOFT_MAX_FREQ_HZ) / 2.0);
         assert!(valid_node.validate(0).is_ok());
-        assert!(NodeConfig {
-            base_frequency: super::MIN_FREQ_HZ - 1.0,
-            phase: 0.0,
-            key: NodeKey::new(0, 0),
-            divisions: 1,
-        }
-        .validate(0)
-        .is_err());
+        assert!(NodeConfig::new_test_node(super::MIN_FREQ_HZ - 1.0)
+            .validate(0)
+            .is_err());
     }
 
     #[test]
     fn test_group_config_validity() {
-        let node = NodeConfig {
-            base_frequency: (super::SOFT_MIN_FREQ_HZ + super::SOFT_MAX_FREQ_HZ) / 2.0,
-            phase: 0.0,
-            key: NodeKey::new(0, 0),
-            divisions: 1,
-        };
+        let node =
+            NodeConfig::new_test_node((super::SOFT_MIN_FREQ_HZ + super::SOFT_MAX_FREQ_HZ) / 2.0);
         let group = GroupConfig {
             channel: GroupChannel::Left,
             nodes: vec![node],
@@ -431,75 +259,14 @@ mod tests {
     }
 
     #[test]
-    fn test_phase_spreading_uniform() {
-        // Use first layout to build a config
-        let layout = layout_test_cases().next().expect("at least one layout");
-        let config = Config::try_from(layout).expect("layout should yield a valid config");
-
-        // Pick the first group that has >= 3 nodes so differences are meaningful
-        let group = config
-            .0
-            .iter()
-            .find(|g| g.nodes.len() >= 3)
-            .expect("need a group with at least 3 nodes for phase test");
-
-        let phases: Vec<f64> = group.nodes.iter().map(|n| n.phase).collect();
-
-        // All phases must be unique
-        {
-            let mut sorted = phases.clone();
-            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            sorted.dedup();
-            assert_eq!(sorted.len(), phases.len(), "Phases should all be unique");
-        }
-
-        // Consecutive phase deltas should be (approximately) constant (2π / N)
-        let n = phases.len() as f64;
-        let expected_step = 2.0 * std::f64::consts::PI / n;
-
-        // Rebuild expected sequence modulo constant offset; we just check ratios of actual deltas.
-        let mut deltas = Vec::new();
-        for k in 0..phases.len() {
-            let a = phases[k];
-            let b = phases[(k + 1) % phases.len()]; // wrap to test final gap
-                                                    // Normalize difference to [0, 2π)
-            let mut d = b - a;
-            while d < 0.0 {
-                d += 2.0 * std::f64::consts::PI;
-            }
-            while d >= 2.0 * std::f64::consts::PI {
-                d -= 2.0 * std::f64::consts::PI;
-            }
-            deltas.push(d);
-        }
-        // Sort to reduce sensitivity to the wrap gap (there will be exactly one large gap if offset differs)
-        deltas.sort_by(|x, y| x.partial_cmp(y).unwrap());
-        // Ignore the largest (wrap) gap if present by comparing median
-        let median = deltas[deltas.len() / 2];
-        let tol = expected_step * 0.05; // 5% tolerance
-        assert!(
-            (median - expected_step).abs() <= tol,
-            "Median phase step {:?} deviates from expected {:?} (tol {:?})",
-            median,
-            expected_step,
-            tol
-        );
-    }
-
-    #[test]
     fn test_config_max_volume_check() {
         // Construct a config that should violate the max node budget:
         // MAX_DBS is treated as the hard cap on total simultaneous nodes.
         let excessive_nodes = MAX_DBS + 1;
-        let dummy_node = NodeConfig {
-            base_frequency: (SOFT_MIN_FREQ_HZ + SOFT_MAX_FREQ_HZ) / 2.0,
-            phase: 0.0,
-            key: NodeKey::new(0, 0),
-            divisions: 1,
-        };
+        let dummy_node = NodeConfig::new_test_node((SOFT_MIN_FREQ_HZ + SOFT_MAX_FREQ_HZ) / 2.0);
         let group = GroupConfig {
             channel: GroupChannel::Left,
-            nodes: vec![dummy_node.clone(); excessive_nodes],
+            nodes: vec![dummy_node; excessive_nodes],
         };
         let cfg_excess = Config(vec![group]);
         assert!(

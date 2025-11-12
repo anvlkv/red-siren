@@ -1,14 +1,22 @@
 use serde_json::Value;
-use tauri::{App, Emitter, Listener, Manager};
+use tauri::{App, AppHandle, Emitter, Listener, Manager};
 use tauri::async_runtime::spawn;
 use tauri_plugin_store::StoreExt;
-use common::error::{Result};
+use common::error::{AppError, Result};
 use common::tuner::{Config, Layout as TunerLayout};
 
 use super::TunerState;
 
 const TUNER_STORE_NAME: &str = "tuner.json";
 const TUNER_CONFIG_KEY: &str = "config";
+
+pub fn save_tuner_config(app: &AppHandle, config: Config) -> Result<()> {
+    let store = app.store(TUNER_STORE_NAME).map_err(|e| AppError::Tauri(format!("Plugin store error: [{e}]")))?;
+    let value = serde_json::to_value(config).map_err(|e| AppError::Internal { message: format!("Serialization error: [{e}]") })?;
+    store.set(TUNER_CONFIG_KEY, value);
+
+    Ok(())
+}
 
 /// Setup tuner: manage state, restore persisted config, wire event listeners, persist on change.
 pub fn setup(app: &mut App) -> Result<()> {

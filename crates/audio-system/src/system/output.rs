@@ -2,9 +2,11 @@ mod abs;
 mod channel;
 mod chorus;
 mod crossfade;
+mod div;
 mod filter;
 mod formant;
 mod node;
+mod pow;
 mod siren;
 
 use channel::one_channel_subsystem;

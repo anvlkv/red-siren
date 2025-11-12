@@ -92,7 +92,7 @@ impl<F: Real> Siren<F> {
                 next_phase
             };
 
-            let non_zero_excitement = excitement.max(convert(S::EPSILON));
+            let non_zero_excitement = excitement.max(convert(S::EPSILON.sqrt()));
 
             let sample = Self::shape(
                 phase,

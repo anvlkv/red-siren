@@ -64,7 +64,10 @@ impl TunerState {
         *self.tuner_config.write() = config.clone();
         *self.current_layout.write() = Some(*layout);
 
-        self.app.emit(common::events::tuner::CONFIG, config)?;
+        self.app
+            .emit(common::events::tuner::CONFIG, config.clone())?;
+
+        super::setup::save_tuner_config(&self.app, config.clone())?;
 
         Ok(())
     }
@@ -149,6 +152,8 @@ impl TunerState {
             self.app
                 .emit(common::events::tuner::CONFIG, new_config.clone())?;
 
+            super::setup::save_tuner_config(&self.app, new_config.clone())?;
+
             Ok(Some(new_config))
         } else {
             Ok(None)
@@ -181,6 +186,8 @@ impl TunerState {
 
         self.app
             .emit(common::events::tuner::CONFIG, config.clone())?;
+
+        super::setup::save_tuner_config(&self.app, config.clone())?;
 
         Ok(config.clone())
     }

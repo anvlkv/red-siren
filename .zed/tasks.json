@@ -35,8 +35,16 @@
     "reveal": "never"
   },
   {
-    "label": "Run audio tests",
+    "label": "Run crate audio-system tests",
     "command": "cargo insta test --unreferenced=delete -p audio-system",
+    "env": {
+      "RUST_BACKTRACE": "1"
+    },
+    "reveal": "always"
+  },
+  {
+    "label": "Run crate common tests",
+    "command": "cargo insta test --unreferenced=delete -p common",
     "env": {
       "RUST_BACKTRACE": "1"
     },

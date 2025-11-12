@@ -19,18 +19,22 @@ use crate::util::S;
 // Type alias for the siren excitement with follow envelope
 type SirenExcitement = Pipe<Pipe<Var, Follow<S>>, SnoopBackend>;
 
+// Type alias for the siren alpha modulated by band control
+type SirenAlpha = Binop<
+    FrameMul<UInt<UTerm, B1>>,
+    Pipe<
+        Stack<
+            Pipe<Stack<Pipe<Var, Shaper<ClipTo>>, FineTunedValue>, super::div::Div<S>>,
+            Unop<Var, FrameMulScalar<UInt<UTerm, B1>>>,
+        >,
+        super::pow::Pow<S>,
+    >,
+    Var,
+>;
+
 // Type alias for the siren with all 5 inputs stacked
 type SirenWithInputs = Pipe<
-    Stack<
-        Stack<
-            Stack<
-                SirenExcitement,
-                Binop<FrameMul<UInt<UTerm, B1>>, FineTunedValue, Pipe<Var, Shaper<ClipTo>>>,
-            >,
-            FineTunedValue,
-        >,
-        FineTunedValue,
-    >,
+    Stack<Stack<Stack<SirenExcitement, SirenAlpha>, FineTunedValue>, FineTunedValue>,
     super::siren::Siren<S>,
 >;
 
@@ -51,8 +55,7 @@ type SourceOscillator = Pipe<
 >;
 
 // Type alias for a single formant filter with base_q input
-type FormantFilter<const N: u8> =
-    Pipe<Stack<Stack<Pass, Var>, FineTunedValue>, super::formant::Formant<N>>;
+type FormantFilter = Pipe<Stack<Stack<Pass, Var>, FineTunedValue>, super::formant::Formant>;
 
 // Type alias for all three formant filters stacked with gain scaling
 type FormantBank = Pipe<
@@ -60,10 +63,10 @@ type FormantBank = Pipe<
         Split<U3>,
         Stack<
             Stack<
-                Unop<FormantFilter<1>, FrameMulScalar<UInt<UTerm, B1>>>,
-                Unop<FormantFilter<2>, FrameMulScalar<UInt<UTerm, B1>>>,
+                Unop<FormantFilter, FrameMulScalar<UInt<UTerm, B1>>>,
+                Unop<FormantFilter, FrameMulScalar<UInt<UTerm, B1>>>,
             >,
-            Unop<FormantFilter<3>, FrameMulScalar<UInt<UTerm, B1>>>,
+            Unop<FormantFilter, FrameMulScalar<UInt<UTerm, B1>>>,
         >,
     >,
     Join<U3>,
@@ -71,25 +74,28 @@ type FormantBank = Pipe<
 
 // Type alias for the bell filter with its 4 inputs
 type BellFilter = Pipe<
-    Stack<Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>, FineTunedValue>,
+    Stack<
+        Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>,
+        Binop<FrameAdd<U1>, FineTunedValue, Var>,
+    >,
     Svf<S, BellMode<S>>,
 >;
 
 // Complete node type composed from the smaller parts
 pub type NodeType = Pipe<
+    // Pipe<
+    // Pipe<
+    // Pipe<
     Pipe<
-        Pipe<
-            Pipe<
-                Pipe<
-                    Pipe<SirenWithInputs, Split<UInt<UInt<UTerm, B1>, B0>>>,
-                    Binop<FrameMul<UInt<UTerm, B1>>, SourceOscillator, Pass>,
-                >,
-                FormantBank,
-            >,
-            super::chorus::Chorus,
-        >,
-        BellFilter,
+        Pipe<SirenWithInputs, Split<UInt<UInt<UTerm, B1>, B0>>>,
+        Binop<FrameMul<UInt<UTerm, B1>>, SourceOscillator, Pass>,
     >,
+    // FormantBank,
+    // >,
+    // super::chorus::ChorusBank<4>,
+    // >,
+    // BellFilter,
+    // >,
     SnoopBackend,
 >;
 
@@ -120,8 +126,8 @@ fn create_node(
         ..
     } = values.clone();
 
-    let source: An<SourceOscillator> = ((super::abs::abs() >> clip_to(0.95, 1.0))
-        * constant(config.base_frequency as f32))
+    let source: An<SourceOscillator> = ((super::abs::abs() >> clip_to(0.935, 1.0))
+        * constant(config.frequency as f32))
         >> split::<U2>()
         >> (sine_phase::<S>(config.phase as f32) | saw() | An(band_control.clone()))
         >> super::crossfade::equal_power_crossfade();
@@ -135,36 +141,48 @@ fn create_node(
     let siren_excitement: An<SirenExcitement> =
         An(siren_control) >> follow::<S>(follow_time as S) >> excitement_snoop;
 
+    let modulated_alpha: An<SirenAlpha> =
+        (((((An(band_control.clone()) >> clip_to(f32::EPSILON.sqrt(), 1.0)) | siren_alpha)
+            >> super::div::div::<S>())
+            | (An(band_control.clone()) * -1.0))
+            >> super::pow::pow::<S>())
+            * An(band_control.clone());
+
     // Stack inputs for siren (5 inputs total: excitement + 4 fine-tuned values)
-    let siren_output: An<SirenWithInputs> = (siren_excitement
-        | (siren_alpha * (An(band_control.clone()) >> clip_to(f32::EPSILON.sqrt(), 1.0)))
-        | siren_beta
-        | siren_gamma)
-        >> siren::<S>();
+    let siren_output: An<SirenWithInputs> =
+        (siren_excitement | modulated_alpha | siren_beta | siren_gamma) >> siren::<S>();
 
     // Formants with base_q as input
-    let formant1: An<FormantFilter<1>> =
-        (pass() | An(band_control.clone()) | formant_base_q.clone())
-            >> formant::<1>(config.base_frequency as S, config.divisions);
-    let formant2: An<FormantFilter<2>> =
-        (pass() | An(band_control.clone()) | formant_base_q.clone())
-            >> formant::<2>(config.base_frequency as S, config.divisions);
-    let formant3: An<FormantFilter<3>> = (pass() | An(band_control.clone()) | formant_base_q)
-        >> formant::<3>(config.base_frequency as S, config.divisions);
+    let formant1: An<FormantFilter> = (pass() | An(band_control.clone()) | formant_base_q.clone())
+        >> formant(config.formant_hz(1) as S);
+    let formant2: An<FormantFilter> = (pass() | An(band_control.clone()) | formant_base_q.clone())
+        >> formant(config.formant_hz(2) as S);
+    let formant3: An<FormantFilter> =
+        (pass() | An(band_control.clone()) | formant_base_q) >> formant(config.formant_hz(3) as S);
 
     let formants: An<FormantBank> =
         split::<U3>() >> ((formant1 * 1.0) | (formant2 * 0.8) | (formant3 * 0.6)) >> join::<U3>();
 
-    let bell_filter: An<BellFilter> =
-        (pass() | constant(config.base_frequency as f32) | node_bell_q | node_bell_gain_db)
-            >> bell();
+    let bell_filter: An<BellFilter> = (pass()
+        | constant(config.frequency as f32)
+        | node_bell_q
+        | (node_bell_gain_db + An(band_control.clone())))
+        >> bell();
+
+    // let idx = config.key.idx() as u64;
+    // let chorus_bank: An<super::chorus::ChorusBank<4>> = super::chorus::chorus(
+    //     [idx, (idx % 3), (idx % 5), (idx % 2)],
+    //     [0.00015, 0.00055, 0.00035, 0.00075],
+    //     [0.0075, 0.005, 0.07, 0.09],
+    //     [1.75, 0.75, 7.5, 75.0],
+    // );
 
     siren_output
         >> split::<U2>()
         >> (source * pass())
-        >> formants
-        >> super::chorus::chorus(config.key.idx() as u64, 0.0015, 0.0075, 1.75)
-        >> bell_filter
+        // >> formants
+        // >> chorus_bank
+        // >> bell_filter
         >> output_snoop
 }
 
@@ -173,7 +191,8 @@ type ShelfType = Pipe<
     Svf<S, LowshelfMode<S>>,
 >;
 
-pub type GroupType<K> = Pipe<Pipe<MultiBus<K, NodeType>, ShelfType>, ButterLowpass<S, U1>>;
+// pub type GroupType<K> = Pipe<Pipe<MultiBus<K, NodeType>, ShelfType>, ButterLowpass<S, U1>>;
+pub type GroupType<K> = MultiBus<K, NodeType>; //, ShelfType>, ButterLowpass<S, U1>>;
 
 pub fn create_group_node<K>(
     config: &GroupConfig,
@@ -190,35 +209,38 @@ where
     let last_node = config.nodes.last().unwrap();
 
     let shelf: An<ShelfType> = (pass()
-        | constant(first_node.base_frequency as f32)
+        | constant(first_node.frequency as f32)
         | values.group_q.clone()
         | values.group_ls_gain.clone())
         >> lowshelf::<S>();
 
-    let butter = butterpass_hz(last_node.base_frequency as S * 1.75);
+    let butter = butterpass_hz(last_node.frequency as S * 1.75);
 
     busi::<K, _, _>(move |i| {
         let key = nodes[i as usize].key;
         let mut handles = handles_cell.borrow_mut();
-        let handle = handles.remove(&key).expect("missing handle for node key");
+        let handle = handles
+            .remove(&key)
+            .ok_or_else(|| format!("missing handle for node key: [{key:?}]"))
+            .unwrap();
+
+        println!("Creating node with key: {:?}", key);
         create_node(&nodes[i as usize], handle, &values_clone)
-    }) >> shelf
-        >> butter
+    }) //>> shelf
+       // >> butter
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use insta_fun::prelude::*;
+    use test_log::test;
 
     #[test]
     fn test_node() {
-        let config = NodeConfig {
-            key: NodeKey(0, 0),
-            base_frequency: 440.0,
-            phase: 0.0,
-            divisions: 3,
-        };
+        let config = NodeConfig::new_test_node(440.0);
+
+        let mut net = Net::new(0, 7);
 
         let mut chart_config = SnapshotConfigBuilder::default();
         chart_config.num_samples(4000);
@@ -232,14 +254,16 @@ mod tests {
         // silent
         let handles_1 = InnerHandles::default();
         let node_1 = create_node(&config, handles_1, &values);
-
+        let id = net.push(Box::new(node_1));
+        net.pipe_output(id);
         chart_config.output_title("silent");
 
         // siren control 0.1
         let handles_2 = InnerHandles::default();
         handles_2.siren_control.set_value(0.1);
         let node_2 = create_node(&config, handles_2, &values);
-
+        let id = net.push(Box::new(node_2));
+        net.pipe_output(id);
         chart_config.output_title("siren control 0.1");
 
         // siren control 0.1, band control 0.1
@@ -247,14 +271,16 @@ mod tests {
         handles_3.siren_control.set_value(0.1);
         handles_3.band_control.set_value(0.1);
         let node_3 = create_node(&config, handles_3, &values);
-
+        let id = net.push(Box::new(node_3));
+        net.pipe_output(id);
         chart_config.output_title("siren control 0.1, band control 0.1");
 
         // siren control 0.5
         let handles_4 = InnerHandles::default();
         handles_4.siren_control.set_value(0.5);
         let node_4 = create_node(&config, handles_4, &values);
-
+        let id = net.push(Box::new(node_4));
+        net.pipe_output(id);
         chart_config.output_title("siren control 0.5");
 
         // siren control 0.5, band control 0.5
@@ -262,14 +288,16 @@ mod tests {
         handles_5.siren_control.set_value(0.5);
         handles_5.band_control.set_value(0.5);
         let node_5 = create_node(&config, handles_5, &values);
-
+        let id = net.push(Box::new(node_5));
+        net.pipe_output(id);
         chart_config.output_title("siren control 0.5, band control 0.5");
 
         // siren control 1.0
         let handles_6 = InnerHandles::default();
         handles_6.siren_control.set_value(1.0);
         let node_6 = create_node(&config, handles_6, &values);
-
+        let id = net.push(Box::new(node_6));
+        net.pipe_output(id);
         chart_config.output_title("siren control 1.0");
 
         // siren control 1.0, band control 1.0
@@ -277,14 +305,13 @@ mod tests {
         handles_7.siren_control.set_value(1.0);
         handles_7.band_control.set_value(1.0);
         let node_7 = create_node(&config, handles_7, &values);
-
+        let id = net.push(Box::new(node_7));
+        net.pipe_output(id);
         chart_config.output_title("siren control 1.0, band control 1.0");
-
-        let test_stack = node_1 | node_2 | node_3 | node_4 | node_5 | node_6 | node_7;
 
         let chart_config = chart_config.build().unwrap();
 
-        assert_audio_unit_snapshot!(test_stack, chart_config);
+        assert_audio_unit_snapshot!(net, chart_config);
     }
 
     #[test]
@@ -298,33 +325,13 @@ mod tests {
             channel: common::instrument::GroupChannel::Left,
             nodes: vec![
                 // silent
-                NodeConfig {
-                    key: NodeKey(0, 0),
-                    base_frequency: 70.0,
-                    phase: 0.0,
-                    divisions: 4,
-                },
+                NodeConfig::new_test_node(70.0),
                 // 0.1
-                NodeConfig {
-                    key: NodeKey(0, 1),
-                    base_frequency: 140.0,
-                    phase: 0.1,
-                    divisions: 4,
-                },
+                NodeConfig::new_test_node(140.0),
                 // 0.5
-                NodeConfig {
-                    key: NodeKey(0, 2),
-                    base_frequency: 280.0,
-                    phase: 0.2,
-                    divisions: 4,
-                },
+                NodeConfig::new_test_node(280.0),
                 // 1.0
-                NodeConfig {
-                    key: NodeKey(0, 3),
-                    base_frequency: 560.0,
-                    phase: 0.3,
-                    divisions: 4,
-                },
+                NodeConfig::new_test_node(560.0),
             ],
         };
 
@@ -340,13 +347,25 @@ mod tests {
             (NodeKey(0, i), handles)
         }));
 
+        println!(
+            "Group Handles: {:?}",
+            group_handles.keys().collect::<Vec<_>>()
+        );
+        println!("Group Config: {:?}", config);
+
         let node = create_group_node::<U4>(&config, group_handles, &values);
 
+        let mut net = Net::new(0, 1);
+        let id = net.push(Box::new(node));
+        net.pipe_output(id);
+
         let config = SnapshotConfigBuilder::default()
-            .num_samples(4000)
+            .num_samples(500)
             .build()
             .unwrap();
 
-        assert_audio_unit_snapshot!(node, config);
+        println!("snapshotting!");
+
+        assert_audio_unit_snapshot!(net, config);
     }
 }

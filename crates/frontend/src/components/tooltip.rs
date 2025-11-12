@@ -28,7 +28,7 @@ fn Tooltip(
         };
 
         format!(
-            "pointer-events-none absolute {} rounded-lg bg-black text-red dark:bg-red dark:text-black px-2 py-1 md:text-base text-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150 whitespace-nowrap shadow-lg z-10",
+            "pointer-events-none absolute {} rounded-lg bg-black text-red dark:bg-red dark:text-black px-2 py-1 md:text-base text-sm whitespace-nowrap h-min w-min shadow-lg",
             places_class,
         )
     };

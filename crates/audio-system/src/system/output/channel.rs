@@ -69,8 +69,9 @@ where
             );
 
             filter_handles.push(FilterHandles {
-                control: Var::new(&key_control),
-                freq: node.base_frequency,
+                control_a_b: Var::new(&key_control),
+                control: Var::new(&siren_control),
+                config: *node,
             });
 
             node_handles.push(NodeHandles {

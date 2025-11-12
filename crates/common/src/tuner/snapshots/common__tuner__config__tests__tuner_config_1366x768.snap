@@ -1,0 +1,109 @@
+---
+source: crates/common/src/tuner/config.rs
+expression: config
+---
+{
+  "sensor_data": [
+    {
+      "key": [
+        0,
+        0
+      ],
+      "min_frequency": 20.0,
+      "max_frequency": 39.905243,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        0,
+        1
+      ],
+      "min_frequency": 39.905243,
+      "max_frequency": 79.621414,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        0,
+        2
+      ],
+      "min_frequency": 79.621414,
+      "max_frequency": 158.86566,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        0,
+        3
+      ],
+      "min_frequency": 158.86566,
+      "max_frequency": 316.97864,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        0,
+        4
+      ],
+      "min_frequency": 316.97864,
+      "max_frequency": 632.45544,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        1,
+        0
+      ],
+      "min_frequency": 632.45544,
+      "max_frequency": 1261.9149,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        1,
+        1
+      ],
+      "min_frequency": 1261.9149,
+      "max_frequency": 2517.851,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        1,
+        2
+      ],
+      "min_frequency": 2517.851,
+      "max_frequency": 5023.7725,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        1,
+        3
+      ],
+      "min_frequency": 5023.7725,
+      "max_frequency": 10023.737,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        1,
+        4
+      ],
+      "min_frequency": 10023.737,
+      "max_frequency": 19999.992,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    }
+  ],
+  "sample_rate": 44100.0
+}

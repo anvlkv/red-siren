@@ -79,15 +79,19 @@ impl From<crate::instrument::Layout> for Layout {
 #[cfg(test)]
 mod tests {
     use crate::instrument::layout_test_cases;
+    use insta::assert_json_snapshot;
 
     use super::*;
 
     #[test]
-    fn tuner_for_layout_test_cases() {
+    fn tuner_layout() {
         for layout in layout_test_cases() {
             let tuner_layout: Layout = layout.into();
 
-            println!("{tuner_layout:#?}");
+            assert_json_snapshot!(
+                format!("tuner_layout_{}x{}", layout.space.x, layout.space.y),
+                tuner_layout
+            )
         }
     }
 }

@@ -1,0 +1,149 @@
+---
+source: crates/common/src/tuner/config.rs
+expression: config
+---
+{
+  "sensor_data": [
+    {
+      "key": [
+        0,
+        0
+      ],
+      "min_frequency": 20.0,
+      "max_frequency": 32.757874,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        0,
+        1
+      ],
+      "min_frequency": 32.757874,
+      "max_frequency": 53.653915,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        0,
+        2
+      ],
+      "min_frequency": 53.653915,
+      "max_frequency": 87.87941,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        0,
+        3
+      ],
+      "min_frequency": 87.87941,
+      "max_frequency": 143.93712,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        0,
+        4
+      ],
+      "min_frequency": 143.93712,
+      "max_frequency": 235.75371,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        0,
+        5
+      ],
+      "min_frequency": 235.75371,
+      "max_frequency": 386.1395,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        0,
+        6
+      ],
+      "min_frequency": 386.1395,
+      "max_frequency": 632.45544,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        1,
+        0
+      ],
+      "min_frequency": 632.45544,
+      "max_frequency": 1035.8948,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        1,
+        1
+      ],
+      "min_frequency": 1035.8948,
+      "max_frequency": 1696.6854,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        1,
+        2
+      ],
+      "min_frequency": 1696.6854,
+      "max_frequency": 2778.9902,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        1,
+        3
+      ],
+      "min_frequency": 2778.9902,
+      "max_frequency": 4551.6904,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        1,
+        4
+      ],
+      "min_frequency": 4551.6904,
+      "max_frequency": 7455.185,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        1,
+        5
+      ],
+      "min_frequency": 7455.185,
+      "max_frequency": 12210.801,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    },
+    {
+      "key": [
+        1,
+        6
+      ],
+      "min_frequency": 12210.801,
+      "max_frequency": 19999.992,
+      "min_magnitude": -80.0,
+      "max_magnitude": -20.0
+    }
+  ],
+  "sample_rate": 44100.0
+}

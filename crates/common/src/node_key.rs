@@ -1,5 +1,8 @@
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
+
+pub use super::error::NodeKeyError;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct NodeKey(pub u8, pub u8);
@@ -135,14 +138,6 @@ impl NodeKeyRegistry {
     pub fn total_keys(&self) -> usize {
         (self.num_groups as usize) * (self.num_keys_per_group as usize)
     }
-}
-
-#[derive(Debug, Clone, thiserror::Error)]
-pub enum NodeKeyError {
-    #[error("Group index {group} out of bounds (max: {max})")]
-    GroupOutOfBounds { group: u8, max: u8 },
-    #[error("Key index {key} out of bounds (max: {max})")]
-    KeyOutOfBounds { key: u8, max: u8 },
 }
 
 #[cfg(test)]

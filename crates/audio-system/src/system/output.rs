@@ -1,6 +1,6 @@
 mod abs;
 mod channel;
-mod chorus;
+// mod chorus;
 mod crossfade;
 mod div;
 mod filter;

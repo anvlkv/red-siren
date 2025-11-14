@@ -50,7 +50,7 @@ pub fn InstrumentStrings() -> impl IntoView {
                 set_visualize_batch(batch.snoops);
             }
         },
-        20.0,
+        30.0,
     );
 
     // Root-level viewBox matches layout space; transforms use view-box coords via 'transform-box: view-box'

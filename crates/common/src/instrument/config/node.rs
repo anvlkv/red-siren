@@ -73,7 +73,7 @@ impl NodeConfig {
     }
 
     pub fn formant_hz(&self, formant: usize) -> f64 {
-        ((2.0 * formant as f64 - 1.0) * SPEED_OF_SOUND_M_S) / (4.0 * self.l)
+        ((2.0 * formant as f64 - 1.0) * SPEED_OF_SOUND_M_S) / (4.0 * (self.l / 1000.0))
     }
 
     #[cfg(any(test, feature = "test"))]
@@ -85,31 +85,38 @@ impl NodeConfig {
             key: NodeKey(0, key),
             frequency: f,
             l: 0.17,
-            phase: 0.0,
-            divisions: 1,
-            cents: 0.0,
+            phase: 0.1,
+            divisions: 7,
+            cents: f / 1200.0,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use insta::assert_compact_json_snapshot;
+    use crate::instrument::config::config_test_cases;
+
+    use insta::assert_json_snapshot;
 
     #[test]
     fn test_formants() {
-        let node = NodeConfig {
-            key: NodeKey(0, 0),
-            frequency: 440.0,
-            l: 0.17,
-            phase: 0.0,
-            divisions: 1,
-            cents: 1200.0,
-        };
+        let data = config_test_cases()
+            .map(|(config, layout)| {
+                let space = layout.space;
+                let data = config
+                    .0
+                    .into_iter()
+                    .flat_map(|g| g.nodes)
+                    .map(|node| {
+                        let formants = Vec::from_iter((1..=5).map(|f| (f, node.formant_hz(f))));
 
-        let formants = Vec::from_iter((1..=5).map(|f| (f, node.formant_hz(f))));
+                        (node.key, formants)
+                    })
+                    .collect::<Vec<_>>();
+                (space, data)
+            })
+            .collect::<Vec<_>>();
 
-        assert_compact_json_snapshot!(formants)
+        assert_json_snapshot!(data);
     }
 }

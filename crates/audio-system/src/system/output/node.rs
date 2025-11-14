@@ -19,17 +19,19 @@ use crate::util::S;
 // Type alias for the siren excitement with follow envelope
 type SirenExcitement = Pipe<Pipe<Var, Follow<S>>, SnoopBackend>;
 
+type NonZeroControl = Pipe<Var, Shaper<ClipTo>>;
+
 // Type alias for the siren alpha modulated by band control
 type SirenAlpha = Binop<
     FrameMul<UInt<UTerm, B1>>,
     Pipe<
         Stack<
-            Pipe<Stack<Pipe<Var, Shaper<ClipTo>>, FineTunedValue>, super::div::Div<S>>,
+            Pipe<Stack<NonZeroControl, FineTunedValue>, super::div::Div<S>>,
             Unop<Var, FrameMulScalar<UInt<UTerm, B1>>>,
         >,
         super::pow::Pow<S>,
     >,
-    Var,
+    NonZeroControl,
 >;
 
 // Type alias for the siren with all 5 inputs stacked
@@ -83,19 +85,16 @@ type BellFilter = Pipe<
 
 // Complete node type composed from the smaller parts
 pub type NodeType = Pipe<
-    // Pipe<
-    // Pipe<
-    // Pipe<
     Pipe<
-        Pipe<SirenWithInputs, Split<UInt<UInt<UTerm, B1>, B0>>>,
-        Binop<FrameMul<UInt<UTerm, B1>>, SourceOscillator, Pass>,
+        Pipe<
+            Pipe<
+                Pipe<SirenWithInputs, Split<UInt<UInt<UTerm, B1>, B0>>>,
+                Binop<FrameMul<UInt<UTerm, B1>>, SourceOscillator, Pass>,
+            >,
+            FormantBank,
+        >,
+        BellFilter,
     >,
-    // FormantBank,
-    // >,
-    // super::chorus::ChorusBank<4>,
-    // >,
-    // BellFilter,
-    // >,
     SnoopBackend,
 >;
 
@@ -141,12 +140,13 @@ fn create_node(
     let siren_excitement: An<SirenExcitement> =
         An(siren_control) >> follow::<S>(follow_time as S) >> excitement_snoop;
 
-    let modulated_alpha: An<SirenAlpha> =
-        (((((An(band_control.clone()) >> clip_to(f32::EPSILON.sqrt(), 1.0)) | siren_alpha)
-            >> super::div::div::<S>())
-            | (An(band_control.clone()) * -1.0))
-            >> super::pow::pow::<S>())
-            * An(band_control.clone());
+    let non_zero_control = An(band_control.clone()) >> clip_to(f32::EPSILON.sqrt(), 1.0);
+
+    let modulated_alpha: An<SirenAlpha> = ((((non_zero_control.clone() | siren_alpha)
+        >> super::div::div::<S>())
+        | (An(band_control.clone()) * -1.0))
+        >> super::pow::pow::<S>())
+        * non_zero_control;
 
     // Stack inputs for siren (5 inputs total: excitement + 4 fine-tuned values)
     let siren_output: An<SirenWithInputs> =
@@ -169,20 +169,12 @@ fn create_node(
         | (node_bell_gain_db + An(band_control.clone())))
         >> bell();
 
-    // let idx = config.key.idx() as u64;
-    // let chorus_bank: An<super::chorus::ChorusBank<4>> = super::chorus::chorus(
-    //     [idx, (idx % 3), (idx % 5), (idx % 2)],
-    //     [0.00015, 0.00055, 0.00035, 0.00075],
-    //     [0.0075, 0.005, 0.07, 0.09],
-    //     [1.75, 0.75, 7.5, 75.0],
-    // );
-
     siren_output
         >> split::<U2>()
         >> (source * pass())
-        // >> formants
+        >> formants
         // >> chorus_bank
-        // >> bell_filter
+        >> bell_filter
         >> output_snoop
 }
 
@@ -191,8 +183,9 @@ type ShelfType = Pipe<
     Svf<S, LowshelfMode<S>>,
 >;
 
-// pub type GroupType<K> = Pipe<Pipe<MultiBus<K, NodeType>, ShelfType>, ButterLowpass<S, U1>>;
-pub type GroupType<K> = MultiBus<K, NodeType>; //, ShelfType>, ButterLowpass<S, U1>>;
+pub type GroupType<K> = Pipe<Pipe<MultiBus<K, NodeType>, ShelfType>, ButterLowpass<S, U1>>;
+// pub type GroupType<K> = Pipe<MultiBus<K, NodeType>, ButterLowpass<S, U1>>;
+// pub type GroupType<K> = MultiBus<K, NodeType>;
 
 pub fn create_group_node<K>(
     config: &GroupConfig,
@@ -224,10 +217,9 @@ where
             .ok_or_else(|| format!("missing handle for node key: [{key:?}]"))
             .unwrap();
 
-        println!("Creating node with key: {:?}", key);
         create_node(&nodes[i as usize], handle, &values_clone)
-    }) //>> shelf
-       // >> butter
+    }) >> shelf
+        >> butter
 }
 
 #[cfg(test)]
@@ -245,6 +237,7 @@ mod tests {
         let mut chart_config = SnapshotConfigBuilder::default();
         chart_config.num_samples(4000);
         chart_config.show_grid(true);
+        chart_config.chart_layout(Layout::Combined);
 
         #[cfg(feature = "editor")]
         let values = FineTunedValues::new(&FineTunedSharedValues::default());
@@ -321,51 +314,45 @@ mod tests {
         #[cfg(not(feature = "editor"))]
         let values = FineTunedValues::new();
 
-        let config = GroupConfig {
-            channel: common::instrument::GroupChannel::Left,
-            nodes: vec![
-                // silent
-                NodeConfig::new_test_node(70.0),
-                // 0.1
-                NodeConfig::new_test_node(140.0),
-                // 0.5
-                NodeConfig::new_test_node(280.0),
-                // 1.0
-                NodeConfig::new_test_node(560.0),
-            ],
-        };
+        let nodes = vec![
+            // silent
+            NodeConfig::new_test_node(70.0),
+            // 0.1
+            NodeConfig::new_test_node(140.0),
+            // 0.5
+            NodeConfig::new_test_node(280.0),
+            // 0.75
+            NodeConfig::new_test_node(560.0),
+            // 1.0
+            NodeConfig::new_test_node(720.0),
+        ];
 
-        let group_handles = HashMap::from_iter((0..=3).map(|i| {
+        let group_handles = HashMap::from_iter(nodes.iter().enumerate().map(|(i, node)| {
             let handles = InnerHandles::default();
             match i {
                 0 => handles.siren_control.set_value(0.0),
                 1 => handles.siren_control.set_value(0.1),
                 2 => handles.siren_control.set_value(0.5),
-                3 => handles.siren_control.set_value(1.0),
+                3 => handles.siren_control.set_value(0.75),
+                4 => handles.siren_control.set_value(1.0),
                 _ => unreachable!(),
             }
-            (NodeKey(0, i), handles)
+            (node.key, handles)
         }));
 
-        println!(
-            "Group Handles: {:?}",
-            group_handles.keys().collect::<Vec<_>>()
-        );
-        println!("Group Config: {:?}", config);
+        let config = GroupConfig {
+            channel: common::instrument::GroupChannel::Left,
+            nodes,
+        };
 
-        let node = create_group_node::<U4>(&config, group_handles, &values);
-
-        let mut net = Net::new(0, 1);
-        let id = net.push(Box::new(node));
-        net.pipe_output(id);
+        let node = create_group_node::<U5>(&config, group_handles, &values);
 
         let config = SnapshotConfigBuilder::default()
-            .num_samples(500)
+            .warm_up(WarmUp::Seconds(1.0))
+            .num_samples(1500)
             .build()
             .unwrap();
 
-        println!("snapshotting!");
-
-        assert_audio_unit_snapshot!(net, config);
+        assert_audio_unit_snapshot!(node, config);
     }
 }

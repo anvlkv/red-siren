@@ -2,95 +2,32 @@
 use fundsp::hacker::prelude::*;
 #[cfg(not(feature = "hi_fi"))]
 use fundsp::hacker32::prelude::*;
+use fundsp::numeric_array::NumericArray;
 
 use crate::util::{hash_str, S};
 
 const CHORUS_ID: u64 = hash_str(concat!(module_path!(), "::Chorus"));
 
-/// Simple circular delay buffer for chorus effects
-#[derive(Clone, Copy)]
-struct DelayBuffer<const N: usize, F: Real> {
-    buffer: [F; N],
-    write_pos: usize,
-    limit: usize,
-}
 
-impl<const N: usize, F: Real> DelayBuffer<N, F> {
-    fn new() -> Self {
-        Self {
-            buffer: [F::zero(); N],
-            write_pos: 0,
-            limit: N,
-        }
-    }
+pub const BUFFER_SIZE: usize = 2048;
 
-    fn write(&mut self, sample: F) {
-        self.buffer[self.write_pos] = sample;
-        self.write_pos = (self.write_pos + 1) % self.limit;
-    }
-
-    fn read_at(&self, delay_samples: F) -> F {
-        if delay_samples <= F::zero() {
-            return F::zero();
-        }
-
-        let delay_samples = delay_samples.min(convert(self.limit as f32 - 1.0));
-        let delay_int = delay_samples.floor().to_f32() as usize;
-        let delay_frac = delay_samples - convert(delay_int as f32);
-
-        // Calculate read positions - read_pos is the most recent position we can read
-        // For a delay, we go back from the most recent written sample (write_pos - 1)
-        let most_recent = if self.write_pos == 0 {
-            self.limit - 1
-        } else {
-            self.write_pos - 1
-        };
-
-        let read_pos1 = (most_recent + self.limit - delay_int) % self.limit;
-        let read_pos2 = (most_recent + self.limit - delay_int - 1) % self.limit;
-
-        let sample1 = self.buffer[read_pos1];
-        let sample2 = self.buffer[read_pos2];
-
-        // Linear interpolation: when frac=0 we want sample1, when frac→1 we want to blend toward sample2
-        sample1 * (F::one() - delay_frac) + sample2 * delay_frac
-    }
-
-    fn clear(&mut self) {
-        self.buffer = [F::zero(); N];
-        self.write_pos = 0;
-    }
-
-    fn limit(&mut self, max: usize) {
-        if max > N {
-            log::error!("Buffer size mismatch. Min required buffer size: [{max}] samples");
-            self.limit = N;
-        } else {
-            self.limit = max;
-        }
-    }
-}
-
-pub const DEFAULT_BUFFER_SIZE: usize = 1024 * 4;
-
-/// Mono chorus with 5 voices * `N` stack.
+/// LPC chorus with `X` voices * `N` stack.
 ///
 /// Stacking reuses same delay buffer
 ///
-/// - `D` max delay buffer size
+/// - `X` number of voices
 /// - `N` number of stacked choruses
 #[derive(Clone)]
-pub struct Chorus<const D: usize, const N: usize, F: Real> {
+pub struct Chorus<const X: usize, const N: usize, F: Real> {
     seed: [u64; N],
     separation: [F; N],
     variation: [F; N],
     mod_frequency: [F; N],
 
-    // Delay buffers for 4 delayed voices (1 dry + 4 delayed = 5 voices total)
-    delay_buffers: [DelayBuffer<D, F>; 4],
+    // delay_buffers: [DelayBuffer<D, F>; 4],
 
     // LFO phase accumulators for each voice
-    lfo_phases: [[F; 4]; N],
+    lfo_phases: [[F; X]; N],
 
     // Sample rate info
     sample_duration: F,
@@ -112,12 +49,12 @@ impl<const D: usize, const N: usize, F: Real> Chorus<D, N, F> {
             separation: separation.map(convert),
             variation: variation.map(convert),
             mod_frequency: mod_frequency.map(convert),
-            delay_buffers: [
-                DelayBuffer::new(),
-                DelayBuffer::new(),
-                DelayBuffer::new(),
-                DelayBuffer::new(),
-            ],
+            // delay_buffers: [
+            //     DelayBuffer::new(),
+            //     DelayBuffer::new(),
+            //     DelayBuffer::new(),
+            //     DelayBuffer::new(),
+            // ],
             lfo_phases: [[F::zero(); 4]; N],
             sample_duration,
             sample_rate,

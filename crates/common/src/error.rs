@@ -8,6 +8,8 @@
 //! - Only the `From<tauri::Error>` impl is feature‑gated (`tauri` feature).
 //! - Domain -> AppError conversions are unconditional (cheap, harmless).
 
+use std::num::TryFromIntError;
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -293,6 +295,26 @@ pub enum InstrumentConfigError {
 
     #[error("empty group")]
     EmptyGroup,
+
+    #[error("node key error: {0}")]
+    NodeKey(#[from] NodeKeyError),
+
+    #[error("integer conversion error: {0}")]
+    IntError(String),
+}
+
+#[derive(Debug, Clone, thiserror::Error, Serialize, Deserialize)]
+pub enum NodeKeyError {
+    #[error("Group index {group} out of bounds (max: {max})")]
+    GroupOutOfBounds { group: u8, max: u8 },
+    #[error("Key index {key} out of bounds (max: {max})")]
+    KeyOutOfBounds { key: u8, max: u8 },
+}
+
+impl From<TryFromIntError> for InstrumentConfigError {
+    fn from(value: TryFromIntError) -> Self {
+        Self::IntError(value.to_string())
+    }
 }
 
 impl From<InstrumentConfigError> for AppError {

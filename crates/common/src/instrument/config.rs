@@ -6,7 +6,6 @@ mod scale;
 use mint::Point2;
 use serde::{Deserialize, Serialize};
 
-use crate::NodeKey;
 use crate::{error::InstrumentConfigError, orientation::LayoutOrientation};
 
 use super::{consts::*, Layout};
@@ -114,20 +113,23 @@ impl TryFrom<Layout> for Config {
     type Error = InstrumentConfigError;
 
     fn try_from(layout: Layout) -> Result<Self, Self::Error> {
+        let key_registry = layout.registry();
+
         // physical parameters
         let a = layout.left_string_position.0;
         let b = layout.left_string_position.1;
-        let l = (((b.x - a.x).powi(2) + (b.y - a.y).powi(2)).sqrt()) / 10.0;
+        let l = ((b.x - a.x).powi(2) + (b.y - a.y).powi(2)).sqrt();
 
         // initial data
-        let num_groups = layout.num_groups.get() as usize;
-        let num_divisions_per_group = layout.num_keys_per_group.get() as usize;
+
+        let num_groups = key_registry.num_groups() as usize;
+        let num_divisions_per_group = key_registry.num_keys_per_group() as usize;
         let scale = layout.scale;
 
         // computed properties
-        let total_steps = num_groups * num_divisions_per_group;
+        let total_steps = key_registry.total_keys();
         let phase_step = std::f64::consts::FRAC_2_PI / total_steps as f64;
-        let l_step_nodes = (layout.key_radius + layout.key_bands_gap) / 10.0;
+        let l_step_nodes = layout.key_radius + layout.key_bands_gap;
 
         // fundamental frequencies
         let (a_group_f_base, n_base) = layout.first_group_channel.compute_fundamentals(l, 1);
@@ -142,10 +144,10 @@ impl TryFrom<Layout> for Config {
             let p = layout
                 .orientation
                 .safe_length_start_point(Point2 { x: 0.0, y: 0.0 }, layout.safe_area_padding);
-            (match layout.orientation {
+            match layout.orientation {
                 LayoutOrientation::Horizontal => p.x,
                 LayoutOrientation::Vertical => p.y,
-            }) / 10.0
+            }
         };
 
         let mut groups = Vec::new();
@@ -156,12 +158,12 @@ impl TryFrom<Layout> for Config {
                 a_group_f_base
             } else {
                 b_group_f_base
-            } * 2_f64.powf((g as f64) / num_groups as f64);
+            } * 2_f64.powi(g as i32);
 
             let mut nodes = vec![];
 
             for k in 0..num_divisions_per_group {
-                let key = NodeKey::new(g.try_into().unwrap(), k.try_into().unwrap());
+                let key = key_registry.create_key(g.try_into()?, k.try_into()?)?;
 
                 let frequency =
                     scale.freq_n(k as f64, octave_f_base, num_divisions_per_group as f64);
@@ -198,6 +200,12 @@ impl TryFrom<Layout> for Config {
 
         Ok(config)
     }
+}
+
+#[cfg(any(test, feature = "test"))]
+pub fn config_test_cases() -> impl Iterator<Item = (Config, Layout)> {
+    crate::instrument::layout::layout_test_cases()
+        .filter_map(|l| Config::try_from(l).ok().map(|c| (c, l)))
 }
 
 #[cfg(test)]

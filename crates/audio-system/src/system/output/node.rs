@@ -125,7 +125,7 @@ fn create_node(
         ..
     } = values.clone();
 
-    let source: An<SourceOscillator> = ((super::abs::abs() >> clip_to(0.935, 1.0))
+    let source: An<SourceOscillator> = ((super::abs::abs() >> clip_to(0.85, 1.0))
         * constant(config.frequency as f32))
         >> split::<U2>()
         >> (sine_phase::<S>(config.phase as f32) | saw() | An(band_control.clone()))
@@ -207,7 +207,7 @@ where
         | values.group_ls_gain.clone())
         >> lowshelf::<S>();
 
-    let butter = butterpass_hz(last_node.frequency as S * 1.75);
+    let butter = butterpass_hz(last_node.frequency as S * S::SQRT_2);
 
     busi::<K, _, _>(move |i| {
         let key = nodes[i as usize].key;
@@ -305,6 +305,48 @@ mod tests {
         let chart_config = chart_config.build().unwrap();
 
         assert_audio_unit_snapshot!(net, chart_config);
+    }
+
+    #[test]
+    fn test_config_cases_nodes() {
+        use common::instrument::config_test_cases;
+
+        #[cfg(feature = "editor")]
+        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        #[cfg(not(feature = "editor"))]
+        let values = FineTunedValues::new();
+
+        let mut chart_config = SnapshotConfigBuilder::default();
+        chart_config.num_samples(4000);
+        chart_config.show_grid(true);
+        // chart_config.allow_abnormal_samples(true);
+        // chart_config.warm_up(WarmUp::Seconds(1.0));
+        chart_config.chart_layout(Layout::Combined);
+
+        for (config, layout) in config_test_cases() {
+            let mut net = Net::new(0, config.0.iter().map(|g| g.nodes.len()).sum());
+            let mut chart_config = chart_config.clone();
+
+            chart_config.chart_title(format!("{}x{}", layout.space.x, layout.space.y));
+
+            for group in config.0 {
+                for node in group.nodes {
+                    let handles = InnerHandles::default();
+                    handles.siren_control.set_value(0.25);
+                    handles.band_control.set_value(0.25);
+                    chart_config
+                        .output_title(format!("node: {:?}; {}Hz", node.key, node.frequency));
+
+                    let node = create_node(&node, handles, &values);
+                    let id = net.push(Box::new(node));
+                    net.pipe_output(id);
+                }
+            }
+
+            let config = chart_config.build().unwrap();
+
+            assert_audio_unit_snapshot!(net, config);
+        }
     }
 
     #[test]

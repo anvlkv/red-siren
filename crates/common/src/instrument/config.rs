@@ -118,10 +118,9 @@ impl TryFrom<Layout> for Config {
         // physical parameters
         let a = layout.left_string_position.0;
         let b = layout.left_string_position.1;
-        let l = ((b.x - a.x).powi(2) + (b.y - a.y).powi(2)).sqrt();
+        let string_len = ((b.x - a.x).powi(2) + (b.y - a.y).powi(2)).sqrt();
 
         // initial data
-
         let num_groups = key_registry.num_groups() as usize;
         let num_divisions_per_group = key_registry.num_keys_per_group() as usize;
         let scale = layout.scale;
@@ -131,34 +130,26 @@ impl TryFrom<Layout> for Config {
         let phase_step = std::f64::consts::FRAC_2_PI / total_steps as f64;
         let l_step_nodes = layout.key_radius + layout.key_bands_gap;
 
-        // fundamental frequencies
-        let (a_group_f_base, n_base) = layout.first_group_channel.compute_fundamentals(l, 1);
-        let (b_group_f_base, _) = layout
-            .first_group_channel
-            .nth_channel_from_first(1)
-            .compute_fundamentals(l, n_base + 1);
-
         // track values
         let mut n = 0;
+        let mut n_base = 1;
         let mut l = {
             let p = layout
                 .orientation
                 .safe_length_start_point(Point2 { x: 0.0, y: 0.0 }, layout.safe_area_padding);
-            match layout.orientation {
+            (match layout.orientation {
                 LayoutOrientation::Horizontal => p.x,
                 LayoutOrientation::Vertical => p.y,
-            }
+            }) + layout.key_pad_main()
         };
 
         let mut groups = Vec::new();
+        let mut target_f_min = None;
         for g in 0..num_groups {
             let channel = layout.first_group_channel.nth_channel_from_first(g);
 
-            let octave_f_base = if channel == layout.first_group_channel {
-                a_group_f_base
-            } else {
-                b_group_f_base
-            } * 2_f64.powi(g as i32);
+            let (octave_f_base, next_n_base) =
+                channel.compute_fundamentals(string_len, n_base, target_f_min);
 
             let mut nodes = vec![];
 
@@ -186,6 +177,8 @@ impl TryFrom<Layout> for Config {
             }
 
             l += layout.groups_gap;
+            target_f_min = Some(octave_f_base * 2.0);
+            n_base = (next_n_base + 1).max(g + 1);
 
             nodes.sort();
 
@@ -219,7 +212,10 @@ mod tests {
         for layout in layout_test_cases() {
             let config = Config::try_from(layout).expect("Config from layout should be valid");
             assert_json_snapshot!(
-                format!("config_{}x{}", layout.space.x, layout.space.y),
+                format!(
+                    "config_{}x{}_{:?}",
+                    layout.space.x, layout.space.y, layout.scale
+                ),
                 config
             );
         }

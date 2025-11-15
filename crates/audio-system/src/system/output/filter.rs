@@ -15,7 +15,13 @@ pub struct FilterHandles {
 
 type Control = Pipe<Var, Follow<S>>;
 
-type PowCents = Pipe<Stack<Constant<UInt<UTerm, B1>>, Control>, super::pow::Pow<S>>;
+type PowCents = Pipe<
+    Stack<
+        Constant<UInt<UTerm, B1>>, // base = 2.0
+        Binop<FrameMul<UInt<UTerm, B1>>, Constant<UInt<UTerm, B1>>, Control>, // exponent = (cents/1200)*control
+    >,
+    super::pow::Pow<S>,
+>;
 
 type AllPassChain = Pipe<
     Stack<
@@ -86,8 +92,9 @@ pub fn create_filter(handles: FilterHandles, finetuned_values: &FineTunedValues)
     let control_a_b: An<Control> = An(control_a_b) >> follow::<S>(follow_time as S);
     let control: An<Control> = An(control) >> follow::<S>(follow_time as S);
 
-    let pow_cents: An<PowCents> =
-        (constant(config.cents as f32) | control.clone()) >> super::pow::pow::<S>();
+    let pow_cents: An<PowCents> = (constant(2.0)
+        | (constant((config.cents as f32) / 1200.0) * control.clone()))
+        >> super::pow::pow::<S>();
 
     // B chains
     let filter_allpass_chain: An<AllPassChain> =
@@ -115,4 +122,137 @@ pub fn create_filter(handles: FilterHandles, finetuned_values: &FineTunedValues)
     split::<U2>()
         >> ((filter_shelf_chain >> filter_pass_chain) | (filter_allpass_chain >> filter_moog_chain))
         >> cross_fade_chain
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use insta_fun::prelude::*;
+
+    #[test]
+    fn a_b_chain() {
+        let node = common::instrument::config::NodeConfig::new_test_node(440.0);
+
+        #[cfg(feature = "editor")]
+        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        #[cfg(not(feature = "editor"))]
+        let values = FineTunedValues::new();
+
+        let control = shared(0.0);
+
+        let control_a_b = shared(0.0);
+
+        let handles = FilterHandles {
+            control_a_b: Var::new(&control_a_b),
+            control: Var::new(&control),
+            config: node,
+        };
+
+        let filter_a = create_filter(handles, &values);
+
+        let control_a_b = shared(1.0);
+
+        let handles = FilterHandles {
+            control_a_b: Var::new(&control_a_b),
+            control: Var::new(&control),
+            config: node,
+        };
+
+        let filter_b = create_filter(handles, &values);
+
+        let schema = sine_hz::<f32>(440.0) >> split::<U2>() >> (filter_a | filter_b);
+
+        let config = SnapshotConfigBuilder::default()
+            .chart_layout(Layout::Combined)
+            .output_title("A Chain")
+            .output_title("B Chain")
+            .build()
+            .unwrap();
+
+        assert_audio_unit_snapshot!(schema, config);
+    }
+
+    #[test]
+    fn control_values() {
+        let node = common::instrument::config::NodeConfig::new_test_node(440.0);
+
+        #[cfg(feature = "editor")]
+        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        #[cfg(not(feature = "editor"))]
+        let values = FineTunedValues::new();
+
+        let control_0 = shared(0.0);
+        let control_01 = shared(0.1);
+        let control_02 = shared(0.2);
+        let control_05 = shared(0.5);
+        let control_075 = shared(0.75);
+        let control_100 = shared(1.0);
+
+        let control_a_b = shared(0.0);
+
+        let handles = FilterHandles {
+            control_a_b: Var::new(&control_a_b),
+            control: Var::new(&control_0),
+            config: node,
+        };
+
+        let filter_0 = create_filter(handles, &values);
+
+        let handles = FilterHandles {
+            control_a_b: Var::new(&control_a_b),
+            control: Var::new(&control_01),
+            config: node,
+        };
+
+        let filter_01 = create_filter(handles, &values);
+
+        let handles = FilterHandles {
+            control_a_b: Var::new(&control_a_b),
+            control: Var::new(&control_02),
+            config: node,
+        };
+
+        let filter_02 = create_filter(handles, &values);
+
+        let handles = FilterHandles {
+            control_a_b: Var::new(&control_a_b),
+            control: Var::new(&control_05),
+            config: node,
+        };
+
+        let filter_05 = create_filter(handles, &values);
+
+        let handles = FilterHandles {
+            control_a_b: Var::new(&control_a_b),
+            control: Var::new(&control_075),
+            config: node,
+        };
+
+        let filter_075 = create_filter(handles, &values);
+
+        let handles = FilterHandles {
+            control_a_b: Var::new(&control_a_b),
+            control: Var::new(&control_100),
+            config: node,
+        };
+
+        let filter_100 = create_filter(handles, &values);
+
+        let schema = sine_hz::<f32>(440.0)
+            >> split::<U6>()
+            >> (filter_0 | filter_01 | filter_02 | filter_05 | filter_075 | filter_100);
+
+        let config = SnapshotConfigBuilder::default()
+            .chart_layout(Layout::Combined)
+            .output_title("control value: 0.0")
+            .output_title("control value: 0.1")
+            .output_title("control value: 0.2")
+            .output_title("control value: 0.5")
+            .output_title("control value: 0.75")
+            .output_title("control value: 1.0")
+            .build()
+            .unwrap();
+
+        assert_audio_unit_snapshot!(schema, config);
+    }
 }

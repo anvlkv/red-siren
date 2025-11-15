@@ -34,7 +34,12 @@ impl GroupChannel {
         }
     }
 
-    pub(crate) fn compute_fundamentals(&self, l: f64, mut n_base: usize) -> (f64, usize) {
+    pub(crate) fn compute_fundamentals(
+        &self,
+        l: f64,
+        mut n_base: usize,
+        min_freq: Option<f64>,
+    ) -> (f64, usize) {
         let v = match self {
             Self::Left => CRIMSON_RED_WAVESPEED,
             Self::Right => CINNABAR_RED_WAVESPEED,
@@ -42,9 +47,11 @@ impl GroupChannel {
 
         let mut f: f64 = 0.0;
 
-        while f < SOFT_MIN_FREQ_HZ {
+        let min_target = min_freq.unwrap_or(SOFT_MIN_FREQ_HZ);
+
+        while f < min_target {
             f = fundamental_frequency(n_base, v, l);
-            if f < SOFT_MIN_FREQ_HZ {
+            if f < min_target {
                 n_base += 1;
             }
         }

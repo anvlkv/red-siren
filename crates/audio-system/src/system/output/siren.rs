@@ -97,8 +97,8 @@ impl<F: Real> Siren<F> {
             let sample = Self::shape(
                 phase,
                 alpha * non_zero_excitement,
-                beta / excitement,
-                gamma / excitement,
+                beta / non_zero_excitement,
+                gamma / non_zero_excitement,
             ) * sign;
 
             (sample, phase, sign)

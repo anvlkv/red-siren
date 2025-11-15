@@ -9,7 +9,7 @@ pub struct NodeConfig {
     pub key: NodeKey,
     /// Harmonic frequency of the node
     pub frequency: f64,
-    /// vocal tract length to node
+    /// vocal tract length to node in mm
     pub l: f64,
     /// Starting phase of the oscillator
     pub phase: f64,
@@ -84,7 +84,7 @@ impl NodeConfig {
         Self {
             key: NodeKey(0, key),
             frequency: f,
-            l: 0.17,
+            l: 170.0,
             phase: 0.1,
             divisions: 7,
             cents: f / 1200.0,

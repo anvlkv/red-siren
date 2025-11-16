@@ -1095,7 +1095,7 @@ impl AudioRuntime for CpalController {
             filter_shelf_gain_lin: shared_values.filter_shelf_gain_lin.value(),
             filter_q_warm: shared_values.filter_q_warm.value(),
             node_bell_q: shared_values.node_bell_q.value(),
-            node_bell_gain_db: shared_values.node_bell_gain_db.value(),
+            node_bell_gain_lin: shared_values.node_bell_gain_lin.value(),
             formant_base_q: shared_values.formant_base_q.value(),
             input_ny_threshold: shared_values.input_ny_threshold.value(),
             input_ny_wet_ratio: shared_values.input_ny_wet_ratio.value(),
@@ -1136,8 +1136,8 @@ impl AudioRuntime for CpalController {
             shared_values.filter_q_warm.set_value(payload.filter_q_warm);
             shared_values.node_bell_q.set_value(payload.node_bell_q);
             shared_values
-                .node_bell_gain_db
-                .set_value(payload.node_bell_gain_db);
+                .node_bell_gain_lin
+                .set_value(payload.node_bell_gain_lin);
             shared_values
                 .formant_base_q
                 .set_value(payload.formant_base_q);

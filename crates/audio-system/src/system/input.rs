@@ -7,7 +7,7 @@ pub mod random_excitor;
 use std::collections::HashMap;
 
 use common::tuner::Config;
-use common::NodeKey;
+use common::{NodeKey, NodeKeyRegistry};
 #[cfg(feature = "hi_fi")]
 use fundsp::hacker::prelude::*;
 #[cfg(not(feature = "hi_fi"))]
@@ -85,27 +85,29 @@ pub fn sensors_system(
 
     let sensor_inputs = sensor_shared.len();
 
-    // Create FFT analyzer with siren excitement
-    let analyzer = u_num_it!(
+    let analyzer = FFTAnalyzer::new(
+        Box::new(preamp::create_sensors_preamp(values)),
+        config.clone(),
+        excitements,
+        spectrum_thb.clone(),
+    );
+
+    let analyzer_id = net.push(Box::new(analyzer));
+
+    let input_id = u_num_it!(
         [
-            0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84,
-            88, 92, 96, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 148, 152, 156,
-            160, 164, 168, 172, 176, 180, 184, 188, 192, 196, 200, 204, 208, 212, 216, 220, 224,
-            228, 232, 236, 240, 244, 248, 252, 256, 260, 264, 268, 272, 276, 280, 284
+            4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88,
+            92, 96, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 148, 152, 156, 160,
+            164, 168, 172, 176, 180, 184, 188, 192, 196, 200, 204, 208, 212, 216, 220, 224, 228,
+            232, 236, 240, 244, 248, 252, 256, 260, 264, 268, 272, 276, 280, 284
         ], // Multiples of 4 up to 284 (71 sensors * 4 params)
         match sensor_inputs {
             U => {
                 type SensorInputs = NumType;
 
-                let stacks = preamp::create_sensors_preamp(values)
-                    | stacki::<SensorInputs, _, _>(|i| var(sensor_shared[i as usize]));
+                let stacks = stacki::<SensorInputs, _, _>(|i| var(sensor_shared[i as usize]));
 
-                FFTAnalyzer::new(
-                    Box::new(stacks),
-                    config.clone(),
-                    excitements,
-                    spectrum_thb.clone(),
-                )
+                net.push(Box::new(pass() | stacks))
             }
             _ => {
                 panic!("unexpected number of sesnsors")
@@ -113,15 +115,12 @@ pub fn sensors_system(
         }
     );
 
-    // Add analyzer to the network
-    let id = net.push(Box::new(analyzer));
-    net.connect_input(0, id, 0);
-    net.connect_output(id, 0, tap_channel);
+    net.pipe_all(input_id, analyzer_id);
 
-    log::info!(
-        "Sensors system created successfully with analyzer node id: {:?}",
-        id
-    );
+    net.connect_input(0, input_id, 0);
+    net.connect_output(analyzer_id, 0, tap_channel);
+
+    log::info!("Sensors system created successfully with analyzer node id: {analyzer_id:?}, input node id: {input_id:?}",);
 
     sensor_handles
 }
@@ -151,8 +150,10 @@ pub fn randomized_system(_config: &Config, net: &mut Net, excitements: HashMap<N
         excitements.len()
     );
 
+    let seed = NodeKeyRegistry::seed_from_keys(excitements.keys());
+
     // Create RandomExcitor node
-    let random_excitor = RandomExcitor::new(excitements);
+    let random_excitor = RandomExcitor::new_seeded(seed, excitements);
 
     // Add to network
     let id = net.push(Box::new(random_excitor));

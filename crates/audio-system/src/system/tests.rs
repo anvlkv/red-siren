@@ -17,6 +17,7 @@ use std::sync::Arc;
 fn instrument_with_rand_src() {
     let config = SnapshotConfigBuilder::default()
         .num_samples(2000)
+        .warm_up(WarmUp::Samples(1000))
         .allow_abnormal_samples(true)
         .show_grid(true)
         .build()
@@ -70,6 +71,7 @@ fn instrument_with_rand_src() {
 fn instrument_with_mic_src() {
     let config = SnapshotConfigBuilder::default()
         .num_samples(2048)
+        .warm_up(WarmUp::Samples(1000))
         .allow_abnormal_samples(true)
         .show_grid(true)
         .with_inputs(true)

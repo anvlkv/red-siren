@@ -131,27 +131,6 @@ impl FFTAnalyzer {
         }
     }
 
-    /// Apply slow-growth excitement function using x^3 curve
-    /// This function grows very slowly from 0 to 1, making it less likely to hit 1.0
-    fn slow_growth_excitement(x: f32) -> f32 {
-        if x <= 0.0 {
-            return 0.0;
-        }
-        if x >= 1.0 {
-            return 1.0;
-        }
-
-        // Use x^3 for slow growth
-        // This gives:
-        // x=0.1 -> 0.001
-        // x=0.2 -> 0.008
-        // x=0.3 -> 0.027
-        // x=0.5 -> 0.125
-        // x=0.7 -> 0.343
-        // x=0.9 -> 0.729
-        x * x * x
-    }
-
     fn perform_fft_analysis(
         window: &[f32],
         sensor_inputs: &[f32],
@@ -232,7 +211,7 @@ impl FFTAnalyzer {
                 };
 
                 // Apply slow-growth function
-                let excitement = Self::slow_growth_excitement(raw_excitement);
+                let excitement = raw_excitement.powi(3);
                 max_excitement = max_excitement.max(excitement);
 
                 if log::log_enabled!(log::Level::Trace) && excitement > 0.01 {
@@ -260,6 +239,10 @@ impl FFTAnalyzer {
 
             // Update siren control with the maximum excitement from all test points
             if let Some(siren_control) = excitement_controls.get(&sensor.key) {
+                log::debug!(
+                    "set excitement value [{max_excitement}] for key [{:?}]",
+                    sensor.key
+                );
                 siren_control.set_value(max_excitement);
             } else {
                 log::warn!(
@@ -270,7 +253,7 @@ impl FFTAnalyzer {
         }
 
         if let Err(full) = spectrum_thb.push(Arc::new(spectrum)) {
-            log::debug!("fft_analyzer: failed to push spectrum data, cathing up");
+            log::debug!("fft_analyzer: failed to push spectrum data, catching up");
             _ = spectrum_thb.pop();
             match spectrum_thb.push(full.into_inner()) {
                 Ok(_) => {}
@@ -512,62 +495,5 @@ mod tests {
         // Reset should clear everything
         analyzer.reset();
         assert_eq!(control.value(), 0.0);
-    }
-
-    #[test]
-    fn test_slow_growth_excitement() {
-        // Test boundary conditions
-        assert_eq!(FFTAnalyzer::slow_growth_excitement(0.0), 0.0);
-        assert_eq!(FFTAnalyzer::slow_growth_excitement(1.0), 1.0);
-        assert_eq!(FFTAnalyzer::slow_growth_excitement(-0.1), 0.0);
-        assert_eq!(FFTAnalyzer::slow_growth_excitement(1.5), 1.0);
-
-        // Test very small values (linear approximation region)
-        let small_val = FFTAnalyzer::slow_growth_excitement(0.005);
-        assert!(small_val > 0.0 && small_val < 0.01);
-
-        // Test slow growth property: function should grow slowly
-        let test_points = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
-        let mut prev = 0.0;
-
-        for &x in &test_points {
-            let excitement = FFTAnalyzer::slow_growth_excitement(x);
-
-            // Should be monotonically increasing
-            assert!(
-                excitement > prev,
-                "Excitement should increase: {} > {}",
-                excitement,
-                prev
-            );
-
-            // Should be bounded [0, 1]
-            assert!((0.0..=1.0).contains(&excitement));
-
-            // Should be significantly less than linear (slower growth)
-            assert!(
-                excitement < x * 0.9,
-                "Excitement {} should be much less than linear {}",
-                excitement,
-                x * 0.9
-            );
-
-            prev = excitement;
-        }
-
-        // Near x=1, should approach 1 but slowly
-        let near_one = FFTAnalyzer::slow_growth_excitement(0.95);
-        assert!(near_one > 0.8 && near_one < 1.0);
-
-        println!("Slow-growth excitement test values:");
-        for x in [
-            0.0, 0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 1.0,
-        ] {
-            println!(
-                "  f({:.2}) = {:.4}",
-                x,
-                FFTAnalyzer::slow_growth_excitement(x)
-            );
-        }
     }
 }

@@ -138,6 +138,17 @@ impl NodeKeyRegistry {
     pub fn total_keys(&self) -> usize {
         (self.num_groups as usize) * (self.num_keys_per_group as usize)
     }
+
+    pub fn seed_from_keys<'k, I>(keys: I) -> u64
+    where
+        I: Iterator<Item = &'k NodeKey>,
+    {
+        let mut seed = 0;
+        for key in keys {
+            seed ^= key.idx() as u64;
+        }
+        seed
+    }
 }
 
 #[cfg(test)]

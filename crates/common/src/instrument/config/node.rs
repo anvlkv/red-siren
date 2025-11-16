@@ -108,9 +108,14 @@ mod tests {
                     .into_iter()
                     .flat_map(|g| g.nodes)
                     .map(|node| {
-                        let formants = Vec::from_iter((1..=5).map(|f| (f, node.formant_hz(f))));
+                        let formants =
+                            Vec::from_iter((1..=5).map(|f| (format!("F{f}"), node.formant_hz(f))));
 
-                        (node.key, formants)
+                        (
+                            format!("{:?}", node.key),
+                            format!("{}Hz", node.frequency),
+                            formants,
+                        )
                     })
                     .collect::<Vec<_>>();
                 (space, data)

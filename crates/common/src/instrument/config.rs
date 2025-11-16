@@ -6,7 +6,7 @@ mod scale;
 use mint::Point2;
 use serde::{Deserialize, Serialize};
 
-use crate::{error::InstrumentConfigError, orientation::LayoutOrientation};
+use crate::{error::InstrumentConfigError, orientation::LayoutOrientation, NodeKey};
 
 use super::{consts::*, Layout};
 
@@ -80,6 +80,13 @@ impl Config {
             .iter()
             .filter(|g| g.channel == channel)
             .nth(nth_in_channel)
+    }
+
+    pub fn channel_of_key(&self, key: &NodeKey) -> Option<GroupChannel> {
+        self.0
+            .iter()
+            .find(|g| g.nodes.iter().any(|n| &n.key == key))
+            .map(|g| g.channel)
     }
 
     pub fn num_groups_left(&self) -> usize {

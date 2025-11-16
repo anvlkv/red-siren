@@ -270,9 +270,9 @@ pub fn EditorOverlay() -> impl IntoView {
                             />
 
                             <EditorRangeSlider
-                                label="Bell Gain dB"
+                                label="Bell Gain"
                                 value=Signal::derive(move || {
-                                    finetuned_values().node_bell_gain_db
+                                    finetuned_values().node_bell_gain_lin
                                 })
                                 min=GAIN_MIN
                                 max=GAIN_MAX
@@ -280,7 +280,7 @@ pub fn EditorOverlay() -> impl IntoView {
                                 on_input=Callback::new(move |val| {
                                     set_finetuned_values
                                         .update(|values| {
-                                            values.node_bell_gain_db = val;
+                                            values.node_bell_gain_lin = val;
                                         });
                                 })
                             />

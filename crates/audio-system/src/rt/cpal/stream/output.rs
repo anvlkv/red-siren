@@ -193,7 +193,7 @@ fn is_running_late(
 ) -> bool {
     let buffer_s: f64 = frames as f64 / sample_rate as f64;
 
-    let threshold = Duration::from_secs_f64(buffer_s * 0.75);
+    let threshold = Duration::from_secs_f64(buffer_s * 1.75);
 
     let ts = info.timestamp().callback;
 

@@ -62,16 +62,19 @@ type FormantFilter = Pipe<Stack<Stack<Pass, Var>, FineTunedValue>, super::forman
 // Type alias for all three formant filters stacked with gain scaling
 type FormantBank = Pipe<
     Pipe<
-        Split<U3>,
+        Split<U2>,
         Stack<
-            Stack<
-                Unop<FormantFilter, FrameMulScalar<UInt<UTerm, B1>>>,
+            Pipe<
+                Pipe<
+                    Unop<FormantFilter, FrameMulScalar<UInt<UTerm, B1>>>,
+                    Unop<FormantFilter, FrameMulScalar<UInt<UTerm, B1>>>,
+                >,
                 Unop<FormantFilter, FrameMulScalar<UInt<UTerm, B1>>>,
             >,
-            Unop<FormantFilter, FrameMulScalar<UInt<UTerm, B1>>>,
+            Unop<Pass, FrameMulScalar<UInt<UTerm, B1>>>,
         >,
     >,
-    Join<U3>,
+    Join<U2>,
 >;
 
 // Type alias for the bell filter with its 4 inputs
@@ -121,7 +124,7 @@ fn create_node(
         siren_gamma,
         formant_base_q,
         node_bell_q,
-        node_bell_gain_db,
+        node_bell_gain_lin,
         ..
     } = values.clone();
 
@@ -154,28 +157,23 @@ fn create_node(
 
     // Formants with base_q as input
     let formant1: An<FormantFilter> = (pass() | An(band_control.clone()) | formant_base_q.clone())
-        >> formant(config.formant_hz(1) as S);
+        >> formant(config.formant_hz(1) as S, 1);
     let formant2: An<FormantFilter> = (pass() | An(band_control.clone()) | formant_base_q.clone())
-        >> formant(config.formant_hz(2) as S);
-    let formant3: An<FormantFilter> =
-        (pass() | An(band_control.clone()) | formant_base_q) >> formant(config.formant_hz(3) as S);
+        >> formant(config.formant_hz(2) as S, 2);
+    let formant3: An<FormantFilter> = (pass() | An(band_control.clone()) | formant_base_q)
+        >> formant(config.formant_hz(3) as S, 3);
 
-    let formants: An<FormantBank> =
-        split::<U3>() >> ((formant1 * 1.0) | (formant2 * 0.8) | (formant3 * 0.6)) >> join::<U3>();
+    let formants: An<FormantBank> = split::<U2>()
+        >> (((formant1 * 1.0) >> (formant2 * 0.8) >> (formant3 * 0.6)) | (pass() * 0.6))
+        >> join::<U2>();
 
     let bell_filter: An<BellFilter> = (pass()
         | constant(config.frequency as f32)
         | node_bell_q
-        | (node_bell_gain_db + An(band_control.clone())))
+        | (node_bell_gain_lin + An(band_control.clone())))
         >> bell();
 
-    siren_output
-        >> split::<U2>()
-        >> (source * pass())
-        >> formants
-        // >> chorus_bank
-        >> bell_filter
-        >> output_snoop
+    siren_output >> split::<U2>() >> (source * pass()) >> formants >> bell_filter >> output_snoop
 }
 
 type ShelfType = Pipe<
@@ -184,8 +182,6 @@ type ShelfType = Pipe<
 >;
 
 pub type GroupType<K> = Pipe<Pipe<MultiBus<K, NodeType>, ShelfType>, ButterLowpass<S, U1>>;
-// pub type GroupType<K> = Pipe<MultiBus<K, NodeType>, ButterLowpass<S, U1>>;
-// pub type GroupType<K> = MultiBus<K, NodeType>;
 
 pub fn create_group_node<K>(
     config: &GroupConfig,

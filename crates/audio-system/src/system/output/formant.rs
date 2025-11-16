@@ -10,13 +10,14 @@ const FORMANT_ID: u64 = hash_str(concat!(module_path!(), "::Formant"));
 #[derive(Clone)]
 pub struct Formant {
     base: S,
+    index: usize,
     resonator: Resonator<S, U3>,
 }
 
 impl Formant {
-    fn resonator_params(audio_sample: S, control: S, base_q: S, base_freq: S) -> [S; 3] {
+    fn resonator_params(audio_sample: S, control: S, base_q: S, base_freq: S, index: S) -> [S; 3] {
         let q = base_q + control * base_q * (1.0 / base_q);
-        let center = base_freq;
+        let center = base_freq + (base_freq * (control / index));
 
         [audio_sample, center, q]
     }
@@ -35,7 +36,13 @@ impl AudioNode for Formant {
 
     #[inline]
     fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
-        let params = Self::resonator_params(input[0] as S, input[1] as S, input[2] as S, self.base);
+        let params = Self::resonator_params(
+            input[0] as S,
+            input[1] as S,
+            input[2] as S,
+            self.base,
+            self.index as S,
+        );
         self.resonator
             .tick(&[convert(params[0]), convert(params[1]), convert(params[2])].into())
     }
@@ -53,8 +60,13 @@ impl AudioNode for Formant {
             let input_sample = input.at_f32(0, i);
             let control = input.at_f32(1, i);
             let base_q = input.at_f32(2, i);
-            let element =
-                Self::resonator_params(input_sample as S, control as S, base_q as S, self.base);
+            let element = Self::resonator_params(
+                input_sample as S,
+                control as S,
+                base_q as S,
+                self.base,
+                self.index as S,
+            );
 
             let tick = self.resonator.tick(
                 &[
@@ -71,9 +83,10 @@ impl AudioNode for Formant {
 }
 
 #[allow(clippy::unnecessary_cast)]
-pub fn formant(base: S) -> An<Formant> {
+pub fn formant(base: S, index: usize) -> An<Formant> {
     let formant = Formant {
         base,
+        index,
         resonator: Resonator::new(base, 1.0 as S),
     };
 
@@ -88,7 +101,7 @@ mod tests {
     #[test]
     fn test_formant() {
         let config = SnapshotConfig::default();
-        let node = (saw_hz(440.0) | pass() | pass()) >> formant(440.0);
+        let node = (saw_hz(440.0) | pass() | pass()) >> formant(440.0, 1);
 
         assert_audio_unit_snapshot!(
             "formant_1",
@@ -112,7 +125,7 @@ mod tests {
             .processing_mode(Processing::Batch(64))
             .build()
             .unwrap();
-        let node = (saw_hz(440.0) | pass() | pass()) >> formant(440.0);
+        let node = (saw_hz(440.0) | pass() | pass()) >> formant(440.0, 1);
 
         assert_audio_unit_snapshot!(
             "formant_1_process",
@@ -134,9 +147,9 @@ mod tests {
     fn test_formants_chain() {
         let config = SnapshotConfig::default();
         let node = (saw_hz(440.0) | pass() | pass() | pass() | pass() | pass() | pass())
-            >> (formant(440.0) | pass() | pass() | pass() | pass())
-            >> (formant(440.0) | pass() | pass())
-            >> formant(440.0);
+            >> (formant(440.0, 1) | pass() | pass() | pass() | pass())
+            >> (formant(440.0, 2) | pass() | pass())
+            >> formant(440.0, 3);
 
         assert_audio_unit_snapshot!(
             "formants_chain",
@@ -157,9 +170,9 @@ mod tests {
     #[test]
     fn test_formants_stack_join() {
         let config = SnapshotConfig::default();
-        let node = (((saw_hz(440.0) | pass() | pass()) >> formant(440.0))
-            | ((saw_hz(440.0) | pass() | pass()) >> formant(440.0))
-            | (saw_hz(440.0) | pass() | pass()) >> formant(440.0))
+        let node = (((saw_hz(440.0) | pass() | pass()) >> formant(440.0, 1))
+            | ((saw_hz(440.0) | pass() | pass()) >> formant(440.0, 2))
+            | (saw_hz(440.0) | pass() | pass()) >> formant(440.0, 3))
             >> join::<U3>();
 
         assert_audio_unit_snapshot!(

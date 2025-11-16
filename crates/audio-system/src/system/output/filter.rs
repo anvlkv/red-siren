@@ -15,6 +15,8 @@ pub struct FilterHandles {
 
 type Control = Pipe<Var, Follow<S>>;
 
+type ClampedControl = Pipe<Pipe<Var, Shaper<ClipTo>>, Follow<S>>;
+
 // Bandpass node with constant center frequency and finetuned Q.
 type BPChain =
     Pipe<Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>, Svf<S, BandpassMode<S>>>;
@@ -41,19 +43,71 @@ type ResonatorSerial = Pipe<BPChain, BPChain>;
 type ResonatorParallel = Pipe<Pipe<Split<U2>, Stack<BPChain, BPChain>>, Join<U2>>;
 
 // Equal-power crossfade: (x, y, control) -> mix
-type CrossFadeChain =
-    Pipe<Stack<Stack<Pass, Pass>, Control>, super::crossfade::EqualPowerCrossfade>;
+type CrossFadeChain<C> = Pipe<Stack<Stack<Pass, Pass>, C>, super::crossfade::EqualPowerCrossfade>;
 
 // A-branch structure: HS boost pre, then parallel BP (BP4 | BP5)
 type ABranchVariant = Pipe<HSChain, ResonatorParallel>;
-type ABranchType = Pipe<Pipe<Split<U2>, Stack<ABranchVariant, ABranchVariant>>, CrossFadeChain>;
+type ABranchType =
+    Pipe<Pipe<Split<U2>, Stack<ABranchVariant, ABranchVariant>>, CrossFadeChain<Control>>;
 
 // B-branch structure: ((BP4 >> BP5) >> HS cut) for both variants (earthly, alien)
 type BBranchVariant = Pipe<ResonatorSerial, HSChainCut>;
-type BBranchType = Pipe<Pipe<Split<U2>, Stack<BBranchVariant, BBranchVariant>>, CrossFadeChain>;
+type BBranchType =
+    Pipe<Pipe<Split<U2>, Stack<BBranchVariant, BBranchVariant>>, CrossFadeChain<Control>>;
+
+type PHigh =
+    Pipe<Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>, Svf<S, HighpassMode<S>>>;
+
+type PLow = Pipe<
+    Pipe<
+        Pipe<Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>, Svf<S, LowpassMode<S>>>,
+        Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>,
+    >,
+    Resonator<S, U3>,
+>;
+
+type PMid = Pipe<
+    Pipe<
+        Pipe<
+            Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>,
+            Svf<S, HighpassMode<S>>,
+        >,
+        Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>,
+    >,
+    Svf<S, LowpassMode<S>>,
+>;
+
+type PAll =
+    Pipe<Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>, Svf<S, AllpassMode<S>>>;
+
+type LowGain = Unop<
+    Binop<
+        FrameAdd<UInt<UTerm, B1>>,
+        Unop<ClampedControl, FrameMulScalar<UInt<UTerm, B1>>>,
+        Unop<
+            Unop<
+                Pipe<Stack<Control, Constant<UInt<UTerm, B1>>>, super::pow::Pow<S>>,
+                FrameNegAddScalar<UInt<UTerm, B1>>,
+            >,
+            FrameMulScalar<UInt<UTerm, B1>>,
+        >,
+    >,
+    FrameAddScalar<UInt<UTerm, B1>>,
+>;
+
+type ParallelLowFilter = Pipe<
+    Pipe<Pipe<Split<U3>, Stack<Stack<PHigh, PLow>, PMid>>, Join<U3>>,
+    Binop<FrameMul<UInt<UTerm, B1>>, PAll, LowGain>,
+>;
 
 // Overall: split -> (A_branch | B_branch) -> crossfade(control_a_b)
-pub type FilterType = Pipe<Pipe<Split<U2>, Stack<ABranchType, BBranchType>>, CrossFadeChain>;
+pub type FilterType = Pipe<
+    Pipe<
+        Pipe<Split<U3>, Stack<Stack<ABranchType, BBranchType>, Pass>>,
+        Stack<CrossFadeChain<ClampedControl>, ParallelLowFilter>,
+    >,
+    Join<U2>,
+>;
 
 pub fn create_filter(handles: FilterHandles, finetuned_values: &FineTunedValues) -> An<FilterType> {
     let FilterHandles {
@@ -77,7 +131,9 @@ pub fn create_filter(handles: FilterHandles, finetuned_values: &FineTunedValues)
     #[cfg(not(feature = "editor"))]
     let follow_time = filter_morph_follow_s.value()[0];
 
-    let control_a_b: An<Control> = An(control_a_b) >> follow::<S>(follow_time as S);
+    let control_a_b: An<ClampedControl> = An(control_a_b)
+        >> clip_to(S::EPSILON.sqrt() as f32, (1.0 - S::EPSILON.sqrt()) as f32)
+        >> follow::<S>(follow_time as S);
     let control: An<Control> = An(control) >> follow::<S>(follow_time as S);
 
     // Centers for adjacent (4th and 5th) formants (with branch-specific detune)
@@ -114,7 +170,7 @@ pub fn create_filter(handles: FilterHandles, finetuned_values: &FineTunedValues)
     let a_metal: An<ABranchVariant> =
         a_metal_hs >> (split::<U2>() >> (a_metal_bp4 | a_metal_bp5) >> join::<U2>());
 
-    let a_inner_xfade: An<CrossFadeChain> =
+    let a_inner_xfade: An<CrossFadeChain<Control>> =
         (pass() | pass() | control.clone()) >> super::crossfade::equal_power_crossfade();
     let a_branch: An<ABranchType> = split::<U2>() >> (a_crystal | a_metal) >> a_inner_xfade;
 
@@ -142,15 +198,42 @@ pub fn create_filter(handles: FilterHandles, finetuned_values: &FineTunedValues)
         >> highshelf::<S>();
     let b_alien: An<BBranchVariant> = (b_alien_bp4 >> b_alien_bp5) >> b_alien_hs;
 
-    let b_inner_xfade: An<CrossFadeChain> =
-        (pass() | pass() | control) >> super::crossfade::equal_power_crossfade();
+    let b_inner_xfade: An<CrossFadeChain<Control>> =
+        (pass() | pass() | control.clone()) >> super::crossfade::equal_power_crossfade();
     let b_branch: An<BBranchType> = split::<U2>() >> (b_earthly | b_alien) >> b_inner_xfade;
 
     // Outer A/B crossfade (driven by `control_a_b`)
-    let outer_xfade: An<CrossFadeChain> =
-        (pass() | pass() | control_a_b) >> super::crossfade::equal_power_crossfade();
+    let outer_xfade: An<CrossFadeChain<ClampedControl>> =
+        (pass() | pass() | control_a_b.clone()) >> super::crossfade::equal_power_crossfade();
 
-    split::<U2>() >> (a_branch | b_branch) >> outer_xfade
+    let lb_hp_cut = ((config.formant_hz(1) * 0.05) as f32).max(20.0);
+    let lb_lp_cut = ((config.formant_hz(2) * 0.15) as f32).min(180.0);
+    let lb_mid_hi = ((config.formant_hz(2) * 12.0) as f32).max(12_000.0);
+
+    // Post-branch low bed
+    let lb_hp: An<PHigh> = (pass() | constant(lb_hp_cut) | filter_q_warm.clone()) >> highpass();
+    // Resonant low emphasis from filters (organic “self-noise” feel)
+    let lb_lp: An<PLow> = (pass() | constant(lb_lp_cut) | filter_q_warm.clone())
+        >> lowpass()
+        >> (pass() | constant(lb_lp_cut) | filter_q_bright.clone())
+        >> resonator();
+    //  Global bandwidth framing (keeps lows audible)
+    let lb_mp: An<PMid> = (pass() | constant(lb_lp_cut) | filter_q_warm.clone())
+        >> highpass()
+        >> (pass() | constant(lb_mid_hi) | filter_q_warm.clone())
+        >> lowpass();
+    // Allpass diffusion (no new content, but more “swim”)
+    let lb_ap: An<PAll> = (pass() | constant(lb_lp_cut) | filter_q_warm.clone()) >> allpass();
+
+    let low_gain: An<LowGain> = (control_a_b * 0.25)
+        + ((1.0 - ((control | constant(1.6)) >> super::pow::pow())) * 0.18)
+        + 0.8;
+
+    // Tap the filter input (pre A/B), derive a parallel low band, and mix it back post A/B
+    let parallel_lb: An<ParallelLowFilter> =
+        split::<U3>() >> (lb_hp | lb_lp | lb_mp) >> join::<U3>() >> (lb_ap * low_gain);
+
+    split::<U3>() >> (a_branch | b_branch | pass()) >> (outer_xfade | parallel_lb) >> join::<U2>()
 }
 
 #[cfg(test)]

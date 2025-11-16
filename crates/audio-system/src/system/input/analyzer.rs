@@ -289,16 +289,19 @@ impl FFTAnalyzer {
         sensor_data: Vec<SensorData>,
         sample_rate: u32,
     ) -> (JoinHandle<()>, Arc<AtomicBool>) {
-        let running = Arc::new(AtomicBool::new(false));
-        let running_clone = running.clone();
+        let running = Arc::new(AtomicBool::new(true));
+        let running_thread = running.clone();
         let join = spawn(move || {
-            running_clone.store(true, Ordering::Relaxed);
-
+            log::info!("Analyzer thread started");
             loop {
-                if !running_clone.load(Ordering::Relaxed) {
+                if !running_thread.load(Ordering::Relaxed) {
+                    log::info!("Analyzer thread stopped");
                     break;
                 }
-                if let Some(remaining_len) = FFT_WINDOW_SIZE.checked_sub(window_thb.len()) {
+                if let Some(remaining_len) = FFT_WINDOW_SIZE
+                    .checked_sub(window_thb.len())
+                    .filter(|s| *s != 0)
+                {
                     sleep(Duration::from_secs_f64(
                         (remaining_len + 2) as f64 / sample_rate as f64,
                     ));

@@ -1087,13 +1087,13 @@ impl AudioRuntime for CpalController {
             siren_gamma: shared_values.siren_gamma.value(),
             group_q: shared_values.group_q.value(),
             group_ls_gain: shared_values.group_ls_gain.value(),
-            filter_switch_follow_response_s: shared_values.filter_switch_follow_response_s.value(),
+            filter_morph_follow_s: shared_values.filter_morph_follow_s.value(),
             node_follow_response_time_s: shared_values.node_follow_response_time_s.value(),
-            filter_allpass_q: shared_values.filter_allpass_q.value(),
-            filter_moog_q: shared_values.filter_moog_q.value(),
-            filter_shelf_q: shared_values.filter_shelf_q.value(),
-            filter_shelf_gain: shared_values.filter_shelf_gain.value(),
-            filter_pass_q: shared_values.filter_pass_q.value(),
+            filter_q_piercing: shared_values.filter_q_piercing.value(),
+            filter_q_bright: shared_values.filter_q_bright.value(),
+            filter_q_shelf: shared_values.filter_q_shelf.value(),
+            filter_shelf_gain_lin: shared_values.filter_shelf_gain_lin.value(),
+            filter_q_warm: shared_values.filter_q_warm.value(),
             node_bell_q: shared_values.node_bell_q.value(),
             node_bell_gain_db: shared_values.node_bell_gain_db.value(),
             formant_base_q: shared_values.formant_base_q.value(),
@@ -1119,19 +1119,21 @@ impl AudioRuntime for CpalController {
             shared_values.group_q.set_value(payload.group_q);
             shared_values.group_ls_gain.set_value(payload.group_ls_gain);
             shared_values
-                .filter_switch_follow_response_s
-                .set_value(payload.filter_switch_follow_response_s);
+                .filter_morph_follow_s
+                .set_value(payload.filter_morph_follow_s);
             shared_values
-                .filter_allpass_q
-                .set_value(payload.filter_allpass_q);
-            shared_values.filter_moog_q.set_value(payload.filter_moog_q);
+                .filter_q_piercing
+                .set_value(payload.filter_q_piercing);
             shared_values
-                .filter_shelf_q
-                .set_value(payload.filter_shelf_q);
+                .filter_q_bright
+                .set_value(payload.filter_q_bright);
             shared_values
-                .filter_shelf_gain
-                .set_value(payload.filter_shelf_gain);
-            shared_values.filter_pass_q.set_value(payload.filter_pass_q);
+                .filter_q_shelf
+                .set_value(payload.filter_q_shelf);
+            shared_values
+                .filter_shelf_gain_lin
+                .set_value(payload.filter_shelf_gain_lin);
+            shared_values.filter_q_warm.set_value(payload.filter_q_warm);
             shared_values.node_bell_q.set_value(payload.node_bell_q);
             shared_values
                 .node_bell_gain_db

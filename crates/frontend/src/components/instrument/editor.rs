@@ -133,9 +133,9 @@ pub fn EditorOverlay() -> impl IntoView {
                             <legend>"Filter Parameters"</legend>
 
                             <EditorRangeSlider
-                                label="Switch Follow Response"
+                                label="Morph Follow Time"
                                 value=Signal::derive(move || {
-                                    finetuned_values().filter_switch_follow_response_s
+                                    finetuned_values().filter_morph_follow_s
                                 })
                                 min=TIME_MIN
                                 max=TIME_MAX
@@ -143,7 +143,7 @@ pub fn EditorOverlay() -> impl IntoView {
                                 on_input=Callback::new(move |val| {
                                     set_finetuned_values
                                         .update(|values| {
-                                            values.filter_switch_follow_response_s = val;
+                                            values.filter_morph_follow_s = val;
                                         });
                                 })
                             />
@@ -152,9 +152,9 @@ pub fn EditorOverlay() -> impl IntoView {
                                 <fieldset class="flex flex-col gap-2">
                                     <legend>"Active key"</legend>
                                     <EditorRangeSlider
-                                        label="Allpass Q"
+                                        label="Piercing Q"
                                         value=Signal::derive(move || {
-                                            finetuned_values().filter_allpass_q
+                                            finetuned_values().filter_q_piercing
                                         })
                                         min=Q_MIN
                                         max=Q_MAX
@@ -162,15 +162,15 @@ pub fn EditorOverlay() -> impl IntoView {
                                         on_input=Callback::new(move |val| {
                                             set_finetuned_values
                                                 .update(|values| {
-                                                    values.filter_allpass_q = val;
+                                                    values.filter_q_piercing = val;
                                                 });
                                         })
                                     />
 
                                     <EditorRangeSlider
-                                        label="Moog Q"
+                                        label="Bright Q"
                                         value=Signal::derive(move || {
-                                            finetuned_values().filter_moog_q
+                                            finetuned_values().filter_q_bright
                                         })
                                         min=Q_MIN
                                         max=Q_MAX
@@ -178,7 +178,7 @@ pub fn EditorOverlay() -> impl IntoView {
                                         on_input=Callback::new(move |val| {
                                             set_finetuned_values
                                                 .update(|values| {
-                                                    values.filter_moog_q = val;
+                                                    values.filter_q_bright = val;
                                                 });
                                         })
                                     />
@@ -188,7 +188,7 @@ pub fn EditorOverlay() -> impl IntoView {
                                     <EditorRangeSlider
                                         label="Shelf Q"
                                         value=Signal::derive(move || {
-                                            finetuned_values().filter_shelf_q
+                                            finetuned_values().filter_q_shelf
                                         })
                                         min=Q_MIN
                                         max=Q_MAX
@@ -196,15 +196,15 @@ pub fn EditorOverlay() -> impl IntoView {
                                         on_input=Callback::new(move |val| {
                                             set_finetuned_values
                                                 .update(|values| {
-                                                    values.filter_shelf_q = val;
+                                                    values.filter_q_shelf = val;
                                                 });
                                         })
                                     />
 
                                     <EditorRangeSlider
-                                        label="Shelf Gain dB"
+                                        label="Shelf Gain Lin"
                                         value=Signal::derive(move || {
-                                            finetuned_values().filter_shelf_gain
+                                            finetuned_values().filter_shelf_gain_lin
                                         })
                                         min=GAIN_MIN
                                         max=GAIN_MAX
@@ -212,15 +212,15 @@ pub fn EditorOverlay() -> impl IntoView {
                                         on_input=Callback::new(move |val| {
                                             set_finetuned_values
                                                 .update(|values| {
-                                                    values.filter_shelf_gain = val;
+                                                    values.filter_shelf_gain_lin = val;
                                                 });
                                         })
                                     />
 
                                     <EditorRangeSlider
-                                        label="Pass Q"
+                                        label="Warm Q"
                                         value=Signal::derive(move || {
-                                            finetuned_values().filter_pass_q
+                                            finetuned_values().filter_q_warm
                                         })
                                         min=Q_MIN
                                         max=Q_MAX
@@ -228,7 +228,7 @@ pub fn EditorOverlay() -> impl IntoView {
                                         on_input=Callback::new(move |val| {
                                             set_finetuned_values
                                                 .update(|values| {
-                                                    values.filter_pass_q = val;
+                                                    values.filter_q_warm = val;
                                                 });
                                         })
                                     />

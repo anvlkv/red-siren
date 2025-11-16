@@ -34,7 +34,7 @@ pub fn run() {
             .level(if cfg!(debug_assertions) {
                 log::LevelFilter::Trace
             } else if cfg!(feature = "devtools") {
-                log::LevelFilter::Trace
+                log::LevelFilter::Debug
             } else {
                 log::LevelFilter::Error
             })

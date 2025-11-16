@@ -24,7 +24,7 @@ fn Tooltip(
             UiPlacement::Bottom => "left-1/2 top-full mt-3 -translate-x-1/2",
             UiPlacement::Left => "right-full top-1/2 -translate-y-1/2 mr-3",
             UiPlacement::Right => "left-full top-1/2 -translate-y-1/2 ml-3",
-            UiPlacement::Top => "left-1/2 bottom-full mb-3 -translate-x-1/2 translate-y-full",
+            UiPlacement::Top => "left-1/2 bottom-full mb-3 -translate-x-1/2 -translate-y-full",
         };
 
         format!(

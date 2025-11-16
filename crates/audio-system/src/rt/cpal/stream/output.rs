@@ -123,32 +123,6 @@ where
     }
 }
 
-#[derive(Clone, Copy)]
-struct ExpectedTimeline {
-    instant: StreamInstant,
-    accumulated: StreamInstant,
-}
-
-impl ExpectedTimeline {
-    fn add(self, ts: StreamInstant, duration: Duration) -> Option<Self> {
-        let next_instant = ts.add(duration);
-        let next_accumulated = self.accumulated.add(duration);
-        next_instant
-            .zip(next_accumulated)
-            .map(|(instant, accumulated)| Self {
-                instant,
-                accumulated,
-            })
-    }
-
-    fn new(ts: StreamInstant) -> Self {
-        Self {
-            instant: ts,
-            accumulated: ts,
-        }
-    }
-}
-
 /// Build output stream across supported sample formats, wiring a format-agnostic
 /// callback that pulls stereo samples from the generator and writes them into
 /// the interleaved device buffer.
@@ -163,7 +137,7 @@ fn run_output(
 
     let sample_rate = config.sample_rate.0;
     // (Instant delay, accumulated delay)
-    let mut last_ts: Option<ExpectedTimeline> = None;
+    let mut last_ts: Option<StreamInstant> = None;
 
     match default_cfg.sample_format() {
         SampleFormat::F32 => device.build_output_stream(
@@ -213,36 +187,24 @@ fn run_output(
 
 fn is_running_late(
     info: &cpal::OutputCallbackInfo,
-    last: &mut Option<ExpectedTimeline>,
+    last: &mut Option<StreamInstant>,
     frames: usize,
     sample_rate: u32,
 ) -> bool {
     let buffer_s: f64 = frames as f64 / sample_rate as f64;
-    let buffer_duration = Duration::from_secs_f64(buffer_s);
 
-    let instant_threshold = Duration::from_secs_f64((buffer_s * 0.75).max(0.1));
-    let acc_threshold = Duration::from_secs_f64((buffer_s * 4.0).max(0.25));
+    let threshold = Duration::from_secs_f64(buffer_s * 0.75);
 
     let ts = info.timestamp().callback;
 
-    let last_timeline = last.get_or_insert_with(|| ExpectedTimeline::new(ts));
+    let last_timeline = last.get_or_insert(ts);
 
-    let mut has_delay = ts
-        .duration_since(&last_timeline.instant)
-        .filter(|delay| delay > &instant_threshold)
-        .or_else(|| {
-            ts.duration_since(&last_timeline.accumulated)
-                .filter(|delay| delay > &acc_threshold)
-        })
+    let has_delay = ts
+        .duration_since(last_timeline)
+        .filter(|delay| delay > &threshold)
         .is_some();
 
-    *last_timeline = match last_timeline.add(ts, buffer_duration) {
-        Some(next) => next,
-        None => {
-            has_delay = true;
-            ExpectedTimeline::new(ts)
-        }
-    };
+    *last_timeline = ts;
 
     has_delay
 }

@@ -1,8 +1,10 @@
-use fundsp::fft::{inverse_fft, real_fft};
+use std::sync::Arc;
+
 #[cfg(feature = "hi_fi")]
 use fundsp::hacker::prelude::*;
 #[cfg(not(feature = "hi_fi"))]
 use fundsp::hacker32::prelude::*;
+use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 
 use crate::util::hash_str;
 
@@ -56,6 +58,11 @@ pub struct Lpc<const B: usize, const R: usize, const P: usize, const PR: usize, 
     // Sample rate info (kept for trait completeness)
     sample_duration: f32,
     sample_rate: f64,
+
+    //fft
+    _fft_planner: Arc<RealFftPlanner<f32>>,
+    real: Arc<dyn RealToComplex<f32>>,
+    inverse: Arc<dyn ComplexToReal<f32>>,
 }
 
 impl<const B: usize, const R: usize, const P: usize, const PR: usize, const N: usize>
@@ -69,6 +76,9 @@ impl<const B: usize, const R: usize, const P: usize, const PR: usize, const N: u
 
         let sample_rate = DEFAULT_SR;
         let sample_duration = convert(1.0 / sample_rate);
+        let mut fft_planner = RealFftPlanner::<f32>::new();
+        let real = fft_planner.plan_fft_forward(B);
+        let inverse = fft_planner.plan_fft_inverse(B);
 
         Self {
             buffer: [0.0; B],
@@ -84,47 +94,48 @@ impl<const B: usize, const R: usize, const P: usize, const PR: usize, const N: u
 
             sample_duration,
             sample_rate,
+
+            _fft_planner: Arc::new(fft_planner),
+            real,
+            inverse,
         }
     }
 
     // Compute first P+1 lags of circular autocorrelation using FFT.
     // Returns r[0..=P].
-    fn autocorrelation_first_p(signal: &[f32; B]) -> [f32; PR] {
-        // 1) Real FFT of length B -> R = B/2 + 1 complex bins.
-        let mut x_spec = [Complex32::default(); R];
-        real_fft(signal, &mut x_spec);
+    fn autocorrelation_first_p(&self, signal: &[f32; B]) -> [f32; PR] {
+        // 1) Real FFT of length B -> R = B/2 + 1 complex bins using realfft planner.
+        // Copy signal to a mutable local buffer for realfft.
+        let mut inbuf = [0.0f32; B];
+        inbuf.copy_from_slice(signal);
+        let mut spectrum = [Complex32::default(); R];
+        // Forward real-to-complex FFT
+        self.real
+            .process(&mut inbuf, &mut spectrum)
+            .expect("realfft forward");
 
-        // 2) Build full power spectrum |X[k]|^2 with Hermitian symmetry for IFFT of length B.
-        let mut power_spectrum = [Complex32::default(); B];
-        let n = B;
-        // DC and Nyquist
-        power_spectrum[0] = Complex32::new(x_spec[0].norm_sqr(), 0.0);
-        power_spectrum[n / 2] = Complex32::new(x_spec[n / 2].norm_sqr(), 0.0);
-        // Positive frequencies and mirrored negatives
-        for k in 1..(n / 2) {
-            let v = x_spec[k].norm_sqr();
-            let c = Complex32::new(v, 0.0);
-            power_spectrum[k] = c;
-            power_spectrum[n - k] = c;
+        // 2) Power spectrum: |X[k]|^2 in half-spectrum format expected by realfft inverse.
+        for bin in spectrum.iter_mut() {
+            let mag2 = bin.norm_sqr();
+            *bin = Complex32::new(mag2, 0.0);
         }
 
-        log::debug!("compute inverse fft of: {:?}", power_spectrum);
-        // 3) Inverse FFT to get circular autocorrelation in time domain.
-        let mut time = [Complex32::default(); B];
-        inverse_fft(&power_spectrum, &mut time);
+        // 3) Inverse FFT (complex-to-real) to get circular autocorrelation in time domain.
+        let mut time = [0.0f32; B];
+        self.inverse
+            .process(&mut spectrum, &mut time)
+            .expect("realfft inverse");
 
-        // 4) Normalize by B (inverse scaling depends on FFT impl; we take the safe route).
-        log::debug!("scaling...");
+        // 4) Normalize by B (FFT and iFFT are unnormalized in realfft).
         let scale = 1.0 / (B as f32);
         let mut r = [0.0f32; PR];
         for i in 0..=P {
-            r[i] = time[i].re * scale;
+            r[i] = time[i] * scale;
         }
         // Stabilize r[0] to avoid zero/negative energies.
         if r[0] < MIN_ENERGY {
             r[0] = MIN_ENERGY;
         }
-        log::debug!("done: {r:?}");
         r
     }
 
@@ -193,7 +204,7 @@ impl<const B: usize, const R: usize, const P: usize, const PR: usize, const N: u
         if self.frame_filled && self.hop_counter >= self.hop {
             self.hop_counter = 0;
 
-            let r = Self::autocorrelation_first_p(&self.buffer);
+            let r = self.autocorrelation_first_p(&self.buffer);
             let (a, e) = Self::levinson_durbin(&r);
 
             self.a = a;

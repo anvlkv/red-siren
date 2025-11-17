@@ -36,7 +36,7 @@ pub fn run() {
             } else if cfg!(feature = "devtools") {
                 log::LevelFilter::Debug
             } else {
-                log::LevelFilter::Debug
+                log::LevelFilter::Info
             })
             .target(tauri_plugin_log::Target::new(
                 tauri_plugin_log::TargetKind::Webview,

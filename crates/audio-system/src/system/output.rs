@@ -154,7 +154,9 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
 
     let system_filter = split::<U2>()
         >> ((pinkpass::<S>() >> lpc::<3>()) | pass())
-        >> (pan(0.15) | pan(0.85))
+        >> (pan(-0.15) | pan(0.85))
+        // tt^ | tm | um | ut^
+        // tt^ | um | tm | ut^
         >> (pass() | reverse::<U2>() | pass());
 
     let left_filter_id = net.push(Box::new(system_filter.clone()));
@@ -164,17 +166,33 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
     net.pipe_all(right_id, right_filter_id);
 
     let mapper = map(|frame: &Frame<f32, U4>| {
-        let treated = frame[0];
-        let untreated_mixin = frame[1];
-        let treated_mixin = frame[2];
-        let untreated = frame[3];
+        let treated = frame[0]; // tt^
+        let untreated_mixin = frame[1]; // um - from opposite channel
+        let treated_mixin = frame[2]; // tm - from opposite channel
+        let untreated = frame[3]; // ut^
 
-        (treated + untreated_mixin + treated_mixin + untreated) / 4.0
+        // Weighted own blend
+        let own = 0.65 * treated + 0.35 * untreated;
+
+        // Pan already attenuates um, tm. Mild additional reduction.
+        let raw_season = 0.15 * treated_mixin + 0.10 * untreated_mixin;
+        let season_factor = 1.0 / (1.0 + 2.0 * own.abs());
+        let season = raw_season * season_factor;
+
+        own + season
     });
 
     let system_join = multipass::<U8>()
-        >> (pass() | reverse::<U5>() | multipass::<U2>())
-        >> (multipass::<U4>() | reverse::<U3>() | pass())
+        // Initial: L_tt^ | L_um | L_tm | L_ut^ | R_tt^ | R_um | R_tm | R_ut^
+        // Step 1: reverse middle 6 -> L_tt^ | R_tm | R_um | R_tt^ | L_ut^ | L_tm | L_um | R_ut^
+        >> (pass() | reverse::<U6>() | pass())
+        // Step 2: reverse first 2 of that middle segment -> L_tt^ | R_um | R_tm | R_tt^ | L_ut^ | L_tm | L_um | R_ut^
+        >> (pass() | reverse::<U2>() | multipass::<U5>())
+        // Step 3: reverse (R_tt^, L_ut^) pair (positions 3–4) -> L_tt^ | R_um | R_tm | L_ut^ | R_tt^ | L_tm | L_um | R_ut^
+        >> (multipass::<U3>() | reverse::<U2>() | multipass::<U3>())
+        // Step 4: reverse (L_tm, L_um) (positions 5–6) -> L_tt^ | R_um | R_tm | L_ut^ | R_tt^ | L_um | L_tm | R_ut^
+        >> (multipass::<U5>() | reverse::<U2>() | pass())
+        // Final grouping: [Left mapper frame] | [Right mapper frame]
         >> (mapper.clone() | mapper.clone());
 
     let join_id = net.push(Box::new(system_join));
@@ -183,6 +201,7 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
     net.pipe_all(right_filter_id, join_id);
 
     net.pipe_output(join_id);
+    // net.pipe_output(right_id);
 
     node_handles
 }

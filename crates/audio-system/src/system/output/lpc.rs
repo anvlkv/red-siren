@@ -10,8 +10,10 @@ const LPC_ID: u64 = hash_str(concat!(module_path!(), "::Lpc"));
 
 pub const DEFAULT_BUFFER_SIZE: usize = 512;
 
+pub const DEFAULT_FFT_SIZE: usize = DEFAULT_BUFFER_SIZE / 2 + 1;
 // Sensible small LPC order for general audio. Can be tuned by creating another constructor.
 pub const DEFAULT_LPC_ORDER: usize = 16;
+pub const DEFAULT_LPC_ORDER_PLUS_ONE: usize = DEFAULT_LPC_ORDER + 1;
 
 // Internal constants
 const MIN_ENERGY: f32 = 1.0e-9;
@@ -27,10 +29,12 @@ const HOP_DIVISOR: usize = 2; // analyze every B / 2 samples
 ///
 /// Generics:
 /// - `B` = analysis frame size (power of 2)
+/// - `R` = must be B/2 + 1
 /// - `P` = LPC order (small, e.g., 8–24 for speech/music; must satisfy P + 1 <= B)
+/// - `PR` = must be P + 1
 /// - `N` = steps ahead to predict
 #[derive(Clone)]
-pub struct Lpc<const B: usize, const P: usize, const N: usize> {
+pub struct Lpc<const B: usize, const R: usize, const P: usize, const PR: usize, const N: usize> {
     // Analysis frame (circular). Rotation does not affect power spectrum magnitude,
     // so we can pass this directly to FFT without reordering.
     buffer: [f32; B],
@@ -54,10 +58,14 @@ pub struct Lpc<const B: usize, const P: usize, const N: usize> {
     sample_rate: f64,
 }
 
-impl<const B: usize, const P: usize, const N: usize> Lpc<B, P, N> {
+impl<const B: usize, const R: usize, const P: usize, const PR: usize, const N: usize>
+    Lpc<B, R, P, PR, N>
+{
     pub fn new() -> Self {
         debug_assert!(B.is_power_of_two(), "B must be a power of two");
         debug_assert!(P < B, "LPC order P must satisfy P < B");
+        debug_assert_eq!(R, B / 2 + 1, "R must be B/2 + 1");
+        debug_assert!(PR == P + 1, "PR must be P + 1");
 
         let sample_rate = DEFAULT_SR;
         let sample_duration = convert(1.0 / sample_rate);
@@ -81,13 +89,13 @@ impl<const B: usize, const P: usize, const N: usize> Lpc<B, P, N> {
 
     // Compute first P+1 lags of circular autocorrelation using FFT.
     // Returns r[0..=P].
-    fn autocorrelation_first_p(signal: &[f32; B]) -> Vec<f32> {
+    fn autocorrelation_first_p(signal: &[f32; B]) -> [f32; PR] {
         // 1) Real FFT of length B -> R = B/2 + 1 complex bins.
-        let mut x_spec = vec![Complex32::default(); B / 2 + 1];
+        let mut x_spec = [Complex32::default(); R];
         real_fft(signal, &mut x_spec);
 
         // 2) Build full power spectrum |X[k]|^2 with Hermitian symmetry for IFFT of length B.
-        let mut power_spectrum = vec![Complex32::default(); B];
+        let mut power_spectrum = [Complex32::default(); B];
         let n = B;
         // DC and Nyquist
         power_spectrum[0] = Complex32::new(x_spec[0].norm_sqr(), 0.0);
@@ -100,13 +108,15 @@ impl<const B: usize, const P: usize, const N: usize> Lpc<B, P, N> {
             power_spectrum[n - k] = c;
         }
 
+        log::debug!("compute inverse fft of: {:?}", power_spectrum);
         // 3) Inverse FFT to get circular autocorrelation in time domain.
-        let mut time = vec![Complex32::default(); B];
+        let mut time = [Complex32::default(); B];
         inverse_fft(&power_spectrum, &mut time);
 
         // 4) Normalize by B (inverse scaling depends on FFT impl; we take the safe route).
+        log::debug!("scaling...");
         let scale = 1.0 / (B as f32);
-        let mut r = vec![0.0f32; P + 1];
+        let mut r = [0.0f32; PR];
         for i in 0..=P {
             r[i] = time[i].re * scale;
         }
@@ -114,6 +124,7 @@ impl<const B: usize, const P: usize, const N: usize> Lpc<B, P, N> {
         if r[0] < MIN_ENERGY {
             r[0] = MIN_ENERGY;
         }
+        log::debug!("done: {r:?}");
         r
     }
 
@@ -211,9 +222,12 @@ impl<const B: usize, const P: usize, const N: usize> Lpc<B, P, N> {
     }
 }
 
-impl<const B: usize, const P: usize, const N: usize> AudioNode for Lpc<B, P, N> {
+impl<const B: usize, const R: usize, const P: usize, const PR: usize, const N: usize> AudioNode
+    for Lpc<B, R, P, PR, N>
+{
     // Mix in generics to the ID to avoid collisions.
-    const ID: u64 = LPC_ID + (B as u64) + ((P as u64) << 20) + ((N as u64) << 40);
+    const ID: u64 =
+        LPC_ID + (B as u64) + ((R as u64) << 10) + ((P as u64) << 20) + ((N as u64) << 40);
 
     type Inputs = U1;
     type Outputs = U1;
@@ -258,8 +272,16 @@ impl<const B: usize, const P: usize, const N: usize> AudioNode for Lpc<B, P, N> 
 
 /// Create LPC predictor node with default frame size and LPC order,
 /// returning N-step-ahead prediction.
-pub fn lpc<const N: usize>() -> An<Lpc<DEFAULT_BUFFER_SIZE, DEFAULT_LPC_ORDER, N>> {
-    An(Lpc::<DEFAULT_BUFFER_SIZE, DEFAULT_LPC_ORDER, N>::new())
+pub fn lpc<const N: usize>(
+) -> An<Lpc<DEFAULT_BUFFER_SIZE, DEFAULT_FFT_SIZE, DEFAULT_LPC_ORDER, DEFAULT_LPC_ORDER_PLUS_ONE, N>>
+{
+    An(Lpc::<
+        DEFAULT_BUFFER_SIZE,
+        DEFAULT_FFT_SIZE,
+        DEFAULT_LPC_ORDER,
+        DEFAULT_LPC_ORDER_PLUS_ONE,
+        N,
+    >::new())
 }
 
 #[cfg(test)]

@@ -145,18 +145,18 @@ pub fn MenuItemView(
         }
     });
 
+    let el_ref = NodeRef::new();
+    with_tooltip(
+        el_ref,
+        Signal::derive(move || label.to_string()),
+        tooltip_placement,
+    );
+
     view! {
         <div class=move || if compact { "rounded-full" } else { "rounded-lg" } role="menuitem">
             {match item {
                 MenuItem::Navigate { route, .. } => {
                     if compact {
-                        let el_ref = NodeRef::new();
-                        with_tooltip(
-                            el_ref,
-                            Signal::derive(move || label.to_string()),
-                            tooltip_placement,
-                        );
-
                         view! {
                             <Button
                                 href=route.as_ref()
@@ -186,13 +186,6 @@ pub fn MenuItemView(
                 }
                 MenuItem::Action { .. } => {
                     if compact {
-                        let el_ref = NodeRef::new();
-                        with_tooltip(
-                            el_ref,
-                            Signal::derive(move || label.to_string()),
-                            tooltip_placement,
-                        );
-
                         view! {
                             <Button on:click=on_click square=true size node_ref=el_ref>
                                 <Icon name=icon size=size />

@@ -54,16 +54,16 @@ const SIREN_ALPHA: f32 = 100.0 / 75.0;
 const SIREN_BETA: f32 = 0.5;
 const SIREN_GAMMA: f32 = 0.075;
 const NODE_BELL_Q: f32 = 1.85;
-const NODE_BELL_GAIN_LIN: f32 = 2.8;
+const NODE_BELL_GAIN_LIN: f32 = 1.8;
 const NODE_FOLLOW_RESPONSE_TIME_S: f32 = 0.04;
-const GROUP_Q: f32 = 0.085;
-const GROUP_LS_GAIN: f32 = 1.8;
-const FORMANT_BASE_Q: f32 = 0.8;
+const GROUP_Q: f32 = 0.85;
+const GROUP_LS_GAIN: f32 = 3.8;
+const FORMANT_BASE_Q: f32 = 1.2;
 const FILTER_MORPH_FOLLOW_S: f32 = 0.05;
-const FILTER_Q_PIERCING: f32 = 2.50;
-const FILTER_Q_BRIGHT: f32 = 1.20;
+const FILTER_Q_PIERCING: f32 = 3.50;
+const FILTER_Q_BRIGHT: f32 = 2.25;
 const FILTER_Q_SHELF: f32 = 0.60;
-const FILTER_SHELF_GAIN_LIN: f32 = 2.5;
+const FILTER_SHELF_GAIN_LIN: f32 = 4.5;
 const FILTER_Q_WARM: f32 = 0.60;
 const INPUT_NY_THRESHOLD: f32 = 0.12;
 const INPUT_NY_WET_RATIO: f32 = 0.3;
@@ -85,7 +85,7 @@ impl Default for FineTunedSharedValues {
             filter_q_warm: shared(FILTER_Q_WARM),
             node_follow_response_time_s: shared(NODE_FOLLOW_RESPONSE_TIME_S),
             node_bell_q: shared(NODE_BELL_Q),
-            node_bell_gain_lin: shared(node_bell_gain_lin),
+            node_bell_gain_lin: shared(NODE_BELL_GAIN_LIN),
             formant_base_q: shared(FORMANT_BASE_Q),
             input_ny_threshold: shared(INPUT_NY_THRESHOLD),
             input_ny_wet_ratio: shared(INPUT_NY_WET_RATIO),

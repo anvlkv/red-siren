@@ -1,3 +1,4 @@
+use core::f64;
 use std::{cell::RefCell, collections::HashMap, f32};
 
 use common::{
@@ -36,7 +37,10 @@ type SirenAlpha = Binop<
 
 // Type alias for the siren with all 5 inputs stacked
 type SirenWithInputs = Pipe<
-    Stack<Stack<Stack<SirenExcitement, SirenAlpha>, FineTunedValue>, FineTunedValue>,
+    Stack<
+        Stack<Stack<Stack<SirenExcitement, SirenAlpha>, FineTunedValue>, FineTunedValue>,
+        Constant<UInt<UTerm, B1>>,
+    >,
     super::siren::Siren<S>,
 >;
 
@@ -114,6 +118,7 @@ fn create_node(
         output_snoop,
         siren_control,
         band_control,
+        siren_signum,
         ..
     } = handles;
 
@@ -151,9 +156,10 @@ fn create_node(
         >> super::pow::pow::<S>())
         * non_zero_control;
 
-    // Stack inputs for siren (5 inputs total: excitement + 4 fine-tuned values)
+    // Stack inputs for siren
     let siren_output: An<SirenWithInputs> =
-        (siren_excitement | modulated_alpha | siren_beta | siren_gamma) >> siren::<S>();
+        (siren_excitement | modulated_alpha | siren_beta | siren_gamma | An(siren_signum))
+            >> siren::<S>();
 
     // Formants with base_q as input
     let formant1: An<FormantFilter> = (pass() | An(band_control.clone()) | formant_base_q.clone())
@@ -164,7 +170,7 @@ fn create_node(
         >> formant(config.formant_hz(3) as S, 3);
 
     let formants: An<FormantBank> = split::<U2>()
-        >> (((formant1 * 1.0) >> (formant2 * 0.8) >> (formant3 * 0.6)) | (pass() * 0.6))
+        >> (((formant1 * 2.2) >> (formant2 * 0.6) >> (formant3 * 0.8)) | (pass() * 0.6))
         >> join::<U2>();
 
     let bell_filter: An<BellFilter> = (pass()
@@ -194,16 +200,24 @@ where
     let nodes = config.nodes.clone();
     let handles_cell = RefCell::new(group_handles);
     let values_clone = values.clone();
-    let first_node = config.nodes.first().unwrap();
-    let last_node = config.nodes.last().unwrap();
+    let f_min = config
+        .nodes
+        .iter()
+        .map(|n| n.frequency)
+        .fold(f64::MAX, |acc, x| acc.min(x)) as S;
+    let f_max = config
+        .nodes
+        .iter()
+        .map(|n| n.frequency)
+        .fold(0_f64, |acc, x| acc.max(x)) as S;
 
     let shelf: An<ShelfType> = (pass()
-        | constant(first_node.frequency as f32)
+        | constant((f_min * 0.86) as f32)
         | values.group_q.clone()
         | values.group_ls_gain.clone())
         >> lowshelf::<S>();
 
-    let butter = butterpass_hz(last_node.frequency as S * S::SQRT_2);
+    let butter = butterpass_hz(f_max * 3.2);
 
     busi::<K, _, _>(move |i| {
         let key = nodes[i as usize].key;

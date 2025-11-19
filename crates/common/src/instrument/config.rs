@@ -17,7 +17,7 @@ pub use scale::*;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 /// Instrument configuartion for audio generation
-pub struct Config(pub Vec<GroupConfig>);
+pub struct Config(pub Vec<GroupConfig>, pub Scale);
 
 impl Config {
     /// Simultaneous node "power" budget check.
@@ -192,7 +192,7 @@ impl TryFrom<Layout> for Config {
             groups.push(GroupConfig { channel, nodes });
         }
 
-        let config = Config(groups);
+        let config = Config(groups, scale);
 
         // Single-pass validation (recommended + safe)
         // Caller can decide how to surface any error.
@@ -279,7 +279,7 @@ mod tests {
             channel: GroupChannel::Left,
             nodes: vec![dummy_node; excessive_nodes],
         };
-        let cfg_excess = Config(vec![group]);
+        let cfg_excess = Config(vec![group], Scale::Yo);
         assert!(
             !cfg_excess.max_event_volume_ok(),
             "Excessive node count should fail volume check"
@@ -295,7 +295,7 @@ mod tests {
             channel: GroupChannel::Left,
             nodes: vec![dummy_node; ok_nodes],
         };
-        let cfg_ok = Config(vec![group_ok]);
+        let cfg_ok = Config(vec![group_ok], Scale::In);
         assert!(
             cfg_ok.max_event_volume_ok(),
             "Node count at limit should pass"

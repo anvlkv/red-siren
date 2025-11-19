@@ -1,7 +1,6 @@
-use crate::rt::ExcitementSource;
-#[cfg(feature = "editor")]
-use crate::system::values::{FineTunedSharedValues, FineTunedValues};
-use crate::system::{create_input_system, create_output_system};
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use common::instrument::layout::layout_test_cases;
 #[cfg(feature = "hi_fi")]
 use fundsp::hacker::prelude::*;
@@ -10,11 +9,16 @@ use fundsp::hacker32::prelude::*;
 use fundsp::net::Net;
 use fundsp::thingbuf::ThingBuf;
 use insta_fun::prelude::*;
-use std::collections::HashMap;
-use std::sync::Arc;
+
+use crate::rt::ExcitementSource;
+#[cfg(feature = "editor")]
+use crate::system::values::{FineTunedSharedValues, FineTunedValues};
+use crate::system::{create_input_system, create_output_system};
 
 #[test]
 fn instrument_with_rand_src() {
+    fastrand::seed(42);
+
     let config = SnapshotConfigBuilder::default()
         .num_samples(2000)
         .warm_up(WarmUp::Samples(1000))
@@ -69,6 +73,8 @@ fn instrument_with_rand_src() {
 
 #[test]
 fn instrument_with_mic_src() {
+    fastrand::seed(42);
+
     let config = SnapshotConfigBuilder::default()
         .num_samples(2048)
         .warm_up(WarmUp::Samples(1000))

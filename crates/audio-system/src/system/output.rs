@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 use channel::one_channel_subsystem;
 use common::{
-    instrument::{Config, GroupChannel, GroupConfig},
+    instrument::{Config, GroupChannel, GroupConfig, Scale},
     NodeKey,
 };
 #[cfg(feature = "hi_fi")]
@@ -23,7 +23,10 @@ use fundsp::hacker32::prelude::*;
 
 use super::NodeHandles;
 use crate::{
-    output::{filter::FilterHandles, lpc::lpc},
+    output::{
+        filter::FilterHandles,
+        lpc::{lpc, lpc_bank},
+    },
     system::values::FineTunedValues,
     util::S,
 };
@@ -34,6 +37,7 @@ struct InnerHandles {
     output_snoop: An<SnoopBackend>,
     siren_control: Var,
     band_control: Var,
+    siren_signum: Constant<U1>,
 }
 
 impl Default for InnerHandles {
@@ -42,12 +46,14 @@ impl Default for InnerHandles {
         let (_, output_snoop) = snoop(node::OUTPUT_SNOOP_CAPACITY);
         let siren_control = shared(0.0);
         let band_control = shared(0.0);
+        let siren_signum = Constant::new([1.0].into());
 
         Self {
             excitement_snoop,
             output_snoop,
             siren_control: Var::new(&siren_control),
             band_control: Var::new(&band_control),
+            siren_signum,
         }
     }
 }
@@ -56,7 +62,7 @@ pub fn mono_system(config: &Config, net: &mut Net, values: &FineTunedValues) -> 
     let nodes_count_per_group = config.num_nodes_per_group();
     let groups = config.0.as_slice();
 
-    let (node_handles, group_handles, filter_handles) = prepare_handles(groups);
+    let (node_handles, group_handles, filter_handles) = prepare_handles(groups, config.1);
 
     let id = one_channel_subsystem(
         groups,
@@ -84,7 +90,7 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
         config.num_groups()
     );
 
-    let (node_handles, group_handles, filter_handles) = prepare_handles(&config.0);
+    let (node_handles, group_handles, filter_handles) = prepare_handles(&config.0, config.1);
 
     let nodes_count_per_group = config.num_nodes_per_group();
     let groups_count_left = config.num_groups_left();
@@ -153,7 +159,7 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
     );
 
     let system_filter = split::<U2>()
-        >> ((pinkpass::<S>() >> lpc::<3>()) | pass())
+        >> (((lpc_bank::<8, U4>() >> (mul(0.1) | mul(0.2) | mul(0.3) | mul(0.4))) >> join::<U4>()) | pass())
         >> (pan(-0.15) | pan(0.85))
         // tt^ | tm | um | ut^
         // tt^ | um | tm | ut^
@@ -183,15 +189,10 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
     });
 
     let system_join = multipass::<U8>()
-        // Initial: L_tt^ | L_um | L_tm | L_ut^ | R_tt^ | R_um | R_tm | R_ut^
-        // Step 1: reverse middle 6 -> L_tt^ | R_tm | R_um | R_tt^ | L_ut^ | L_tm | L_um | R_ut^
-        >> (pass() | reverse::<U6>() | pass())
-        // Step 2: reverse first 2 of that middle segment -> L_tt^ | R_um | R_tm | R_tt^ | L_ut^ | L_tm | L_um | R_ut^
-        >> (pass() | reverse::<U2>() | multipass::<U5>())
-        // Step 3: reverse (R_tt^, L_ut^) pair (positions 3–4) -> L_tt^ | R_um | R_tm | L_ut^ | R_tt^ | L_tm | L_um | R_ut^
-        >> (multipass::<U3>() | reverse::<U2>() | multipass::<U3>())
-        // Step 4: reverse (L_tm, L_um) (positions 5–6) -> L_tt^ | R_um | R_tm | L_ut^ | R_tt^ | L_um | L_tm | R_ut^
-        >> (multipass::<U5>() | reverse::<U2>() | pass())
+        // Initial: 0: L_tt^ | 1: L_um | 2: L_tm | 3: L_ut^ | 4: R_tt^ | 5: R_um | 6: R_tm | 7: R_ut^
+        >> An(Map::new(|frame: &Frame<f32, U8>| -> Frame<f32, U8> {
+            [frame[0], frame[5], frame[6], frame[3], frame[4], frame[1], frame[2], frame[7]].into()
+        }, Routing::Reverse))
         // Final grouping: [Left mapper frame] | [Right mapper frame]
         >> (mapper.clone() | mapper.clone());
 
@@ -201,6 +202,7 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
     net.pipe_all(right_filter_id, join_id);
 
     net.pipe_output(join_id);
+    // net.pipe_output(left_id);
     // net.pipe_output(right_id);
 
     node_handles
@@ -217,7 +219,7 @@ pub fn multi_channel_system(
         config.num_groups()
     );
 
-    let (node_handles, group_handles, filter_handles) = prepare_handles(&config.0);
+    let (node_handles, group_handles, filter_handles) = prepare_handles(&config.0, config.1);
 
     let nodes_count_per_group = config.num_nodes_per_group();
     let groups_count_left = config.num_groups_left();
@@ -284,11 +286,6 @@ pub fn multi_channel_system(
         net,
         values,
     );
-
-    // Creative multi-channel mapping:
-    // - Process each side through a widening/filter block (same as stereo),
-    // - Then fold 8 channels (4 per side) down to the requested number of outputs
-    //   using contiguous grouping with slightly weighted averages for a bit of color.
 
     // Side processing: widen into 4 channels per side with light coloration.
     let system_filter = split::<U2>()
@@ -379,10 +376,17 @@ type Handles = (
     Vec<FilterHandles>,
 );
 
-fn prepare_handles(groups: &[GroupConfig]) -> Handles {
+fn prepare_handles(groups: &[GroupConfig], scale: Scale) -> Handles {
     let mut node_handles = Vec::<NodeHandles>::new();
     let mut inner_handles = Vec::<HashMap<NodeKey, InnerHandles>>::new();
     let mut filter_handles = Vec::<FilterHandles>::new();
+    let siren_signum = Constant::new(
+        match scale {
+            Scale::Yo => [-1.0],
+            Scale::In => [1.0],
+        }
+        .into(),
+    );
 
     for (group_idx, group) in groups.iter().enumerate() {
         log::debug!(
@@ -410,6 +414,7 @@ fn prepare_handles(groups: &[GroupConfig]) -> Handles {
                     output_snoop: output_snoop_backend,
                     siren_control: Var::new(&siren_control),
                     band_control: Var::new(&band_control),
+                    siren_signum: siren_signum.clone(),
                 },
             );
 

@@ -15,7 +15,7 @@ use crate::util::{hash_str, S};
 /// Random excitor node ID for debugging
 const RANDOM_EXCITOR_ID: u64 = hash_str(concat!(module_path!(), "::RandomExcitor"));
 
-const MAX_DURATION_BASE_S: S = 75.0;
+const MAX_DURATION_BASE_S: S = 17.5;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 /// Duration in milliseconds stored as float
@@ -69,6 +69,14 @@ impl Div for Duration {
 
     fn div(self, rhs: Self) -> Self::Output {
         (self.0 / rhs.0).round() as isize
+    }
+}
+
+impl Div<S> for Duration {
+    type Output = Duration;
+
+    fn div(self, rhs: S) -> Self::Output {
+        Self(self.0 / rhs)
     }
 }
 
@@ -160,10 +168,9 @@ impl RandomExcitor {
         let r2 = r();
         let r3 = r();
 
-        // Average creates a more centered distribution
         let avg = (r1 + r2 + r3) / 3.0;
 
-        let duration = Duration::from_secs(avg * MAX_DURATION_BASE_S);
+        let duration = Duration::from_secs(avg.powi(3) * MAX_DURATION_BASE_S);
 
         let idx = key.idx();
         let d = rng.usize(1..idx);
@@ -220,6 +227,13 @@ impl RandomExcitor {
             {
                 *target = self.generate_random_target(*key);
                 curr.1 = Duration::ZERO;
+            }
+        }
+
+        // avoid long silence
+        if targets.values().all(|&(t, _)| t == 0.0) {
+            for target in targets.values_mut() {
+                target.1 = target.1 / 3.0;
             }
         }
     }

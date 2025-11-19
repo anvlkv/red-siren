@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    mem,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -82,7 +83,7 @@ impl FFTAnalyzer {
             config,
             spectrum_thb,
             excitement_controls,
-            processing_handle: Arc::new(processing_handle),
+            processing_handle,
             processing_running,
         };
 
@@ -253,7 +254,7 @@ impl FFTAnalyzer {
         }
 
         if let Err(full) = spectrum_thb.push(Arc::new(spectrum)) {
-            log::debug!("fft_analyzer: failed to push spectrum data, catching up");
+            log::trace!("fft_analyzer: failed to push spectrum data, catching up");
             _ = spectrum_thb.pop();
             match spectrum_thb.push(full.into_inner()) {
                 Ok(_) => {}
@@ -271,14 +272,14 @@ impl FFTAnalyzer {
         spectrum_thb: SpectrumBuffer,
         sensor_data: Vec<SensorData>,
         sample_rate: u32,
-    ) -> (JoinHandle<()>, Arc<AtomicBool>) {
+    ) -> (Arc<JoinHandle<()>>, Arc<AtomicBool>) {
         let running = Arc::new(AtomicBool::new(true));
         let running_thread = running.clone();
         let join = spawn(move || {
-            log::info!("Analyzer thread started");
+            log::info!("FFT analyzer thread started");
             loop {
                 if !running_thread.load(Ordering::Relaxed) {
-                    log::info!("Analyzer thread stopped");
+                    log::info!("FFT analyzer thread stopped");
                     break;
                 }
                 if let Some(remaining_len) = FFT_WINDOW_SIZE
@@ -305,7 +306,7 @@ impl FFTAnalyzer {
             }
         });
 
-        (join, running)
+        (Arc::new(join), running)
     }
 
     fn restart_processing(&mut self) {
@@ -320,7 +321,12 @@ impl FFTAnalyzer {
             self.config.sample_rate.round() as u32,
         );
 
-        self.processing_handle = Arc::new(processing_handle);
+        let old_handle = mem::replace(&mut self.processing_handle, processing_handle);
+        if let Some(handle) = Arc::into_inner(old_handle) {
+            handle.join().unwrap();
+            log::debug!("FFT analyzer thread stop completed (join)");
+        }
+
         self.processing_running = processing_running;
     }
 }
@@ -350,7 +356,7 @@ impl AudioUnit for FFTAnalyzer {
         }
 
         if self.window_thb.push(output[0]).is_err() {
-            log::warn!("failed to push one sample")
+            log::trace!("failed to push one sample")
         }
     }
 

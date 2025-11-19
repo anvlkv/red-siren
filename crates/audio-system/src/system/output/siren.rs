@@ -11,10 +11,10 @@ const SIREN_ID: u64 = hash_str(concat!(module_path!(), "::Siren"));
 
 /// Siren oscillator with excitement-controlled pauses and frequency.
 /// - Input 0: excitement level
-/// - Input 1: base_hz
-/// - Input 2: max_frequency_hz
-/// - Input 3: excitement_pause_limit
-/// - Input 4: base_pause_duration
+/// - Input 1: alpha
+/// - Input 2: beta
+/// - Input 3: gamma
+/// - Input 4: signum
 /// - Output 0: siren wave with pauses and frequency.
 #[derive(Default, Clone)]
 pub struct Siren<F: Real> {
@@ -51,7 +51,7 @@ impl<F: Real> Siren<F> {
     /// - alpha: full period
     /// - beta: slow decay
     /// - gamma: sharp onset
-    fn shape(time: F, alpha: F, beta: F, gamma: F) -> F {
+    fn shape(time: F, alpha: F, beta: F, gamma: F, signum: F) -> F {
         #[cfg(feature = "hi_fi")]
         let e: F = F::from_f64(f64::consts::E);
         #[cfg(not(feature = "hi_fi"))]
@@ -62,11 +62,18 @@ impl<F: Real> Siren<F> {
         #[cfg(not(feature = "hi_fi"))]
         let pi: F = F::from_f32(f32::consts::PI);
 
+        let time = if signum >= F::zero() {
+            time
+        } else {
+            alpha - time
+        };
+
         (e.pow(-time / (beta * alpha)) - e.pow(-time / (gamma * alpha)))
             * cos((pi * time) / alpha).pow(convert(2.0))
     }
 
     /// returns `(sample, next_phase, next_sign)`
+    #[allow(clippy::too_many_arguments)]
     fn tick_internal(
         excitement: F,
         alpha: F,
@@ -75,6 +82,7 @@ impl<F: Real> Siren<F> {
         mut sign: F,
         beta: F,
         gamma: F,
+        signum: F,
     ) -> (F, F, F) {
         let wrap_phase: F = alpha + alpha * gamma + alpha * beta;
 
@@ -99,6 +107,7 @@ impl<F: Real> Siren<F> {
                 alpha * non_zero_excitement,
                 beta / non_zero_excitement,
                 gamma / non_zero_excitement,
+                signum,
             ) * sign;
 
             (sample, phase, sign)
@@ -108,7 +117,7 @@ impl<F: Real> Siren<F> {
 
 impl<F: Real> AudioNode for Siren<F> {
     const ID: u64 = SIREN_ID;
-    type Inputs = typenum::U4;
+    type Inputs = typenum::U5;
     type Outputs = typenum::U1;
 
     fn reset(&mut self) {
@@ -129,6 +138,7 @@ impl<F: Real> AudioNode for Siren<F> {
         let alpha: F = convert(input[1] as S);
         let beta: F = convert(input[2] as S);
         let gamma: F = convert(input[3] as S);
+        let signum: F = convert(input[4].signum() as S);
 
         let (sample, next_phase, next_sign) = Self::tick_internal(
             excitement,
@@ -138,6 +148,7 @@ impl<F: Real> AudioNode for Siren<F> {
             self.sign,
             beta,
             gamma,
+            signum,
         );
         self.phase = next_phase;
         self.sign = next_sign;
@@ -157,6 +168,7 @@ impl<F: Real> AudioNode for Siren<F> {
                 let alpha = F::from_f32(input.at_f32(1, idx));
                 let beta = F::from_f32(input.at_f32(2, idx));
                 let gamma = F::from_f32(input.at_f32(3, idx));
+                let signum = F::from_f32(input.at_f32(4, idx));
 
                 let (sample, next_phase, next_sign) = Self::tick_internal(
                     excitement,
@@ -166,6 +178,7 @@ impl<F: Real> AudioNode for Siren<F> {
                     sign,
                     beta,
                     gamma,
+                    signum,
                 );
 
                 phase = next_phase;
@@ -246,7 +259,7 @@ mod tests {
                     1 => ALPHA,
                     2 => BETA,
                     3 => GAMMA,
-                    _ => 0.0,
+                    _ => -1.0,
                 }
             })),
             config.clone()
@@ -261,7 +274,7 @@ mod tests {
                     1 => ALPHA * 10.0,
                     2 => BETA,
                     3 => GAMMA,
-                    _ => 0.0,
+                    _ => 1.0,
                 }
             })),
             config.clone()
@@ -276,7 +289,7 @@ mod tests {
                     1 => ALPHA * 70.0,
                     2 => BETA,
                     3 => GAMMA,
-                    _ => 0.0,
+                    _ => -1.0,
                 }
             })),
             config.clone()
@@ -291,7 +304,7 @@ mod tests {
                     1 => 3.0,
                     2 => BETA,
                     3 => GAMMA,
-                    _ => 0.0,
+                    _ => 1.0,
                 }
             })),
             config
@@ -307,7 +320,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let input = vec![0.7, ALPHA, BETA, GAMMA];
+        let input = vec![0.7, ALPHA, BETA, GAMMA, 1.0];
 
         assert_audio_unit_snapshot!(
             "siren_process_0_7",
@@ -316,7 +329,7 @@ mod tests {
             config.clone()
         );
 
-        let input = vec![0.1, ALPHA, BETA, GAMMA];
+        let input = vec![0.1, ALPHA, BETA, GAMMA, -1.0];
 
         assert_audio_unit_snapshot!(
             "siren_process_0_1",

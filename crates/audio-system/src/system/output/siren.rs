@@ -51,7 +51,7 @@ impl<F: Real> Siren<F> {
     /// - alpha: full period
     /// - beta: slow decay
     /// - gamma: sharp onset
-    fn shape(time: F, alpha: F, beta: F, gamma: F, signum: F) -> F {
+    fn shape(time: F, alpha: F, beta: F, gamma: F) -> F {
         #[cfg(feature = "hi_fi")]
         let e: F = F::from_f64(f64::consts::E);
         #[cfg(not(feature = "hi_fi"))]
@@ -61,12 +61,6 @@ impl<F: Real> Siren<F> {
         let pi: F = F::from_f64(f64::consts::PI);
         #[cfg(not(feature = "hi_fi"))]
         let pi: F = F::from_f32(f32::consts::PI);
-
-        let time = if signum >= F::zero() {
-            time
-        } else {
-            alpha - time
-        };
 
         (e.pow(-time / (beta * alpha)) - e.pow(-time / (gamma * alpha)))
             * cos((pi * time) / alpha).pow(convert(2.0))
@@ -102,12 +96,17 @@ impl<F: Real> Siren<F> {
 
             let non_zero_excitement = excitement.max(convert(S::EPSILON.sqrt()));
 
+            let shape_phase = if signum >= F::zero() {
+                phase
+            } else {
+                wrap_phase - phase
+            };
+
             let sample = Self::shape(
-                phase,
+                shape_phase,
                 alpha * non_zero_excitement,
                 beta / non_zero_excitement,
                 gamma / non_zero_excitement,
-                signum,
             ) * sign;
 
             (sample, phase, sign)

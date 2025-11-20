@@ -16,10 +16,11 @@ pub struct FilterHandles {
 // Smoothed controls.
 type Control = Pipe<Var, Follow<S>>;
 type ClampedControl = Pipe<Pipe<Var, Shaper<ClipTo>>, Follow<S>>;
+type DbLin = Pipe<FineTunedValue, super::db_lin::DbLinConverter>;
 
 // Lowshelf node with constant cutoff, finetuned Q, and finetuned gain.
 type LSChain = Pipe<
-    Stack<Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>, FineTunedValue>,
+    Stack<Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>, DbLin>,
     Svf<S, LowshelfMode<S>>,
 >;
 
@@ -27,20 +28,20 @@ type LSChain = Pipe<
 type LSChainCut = Pipe<
     Stack<
         Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>,
-        Pipe<Stack<Constant<UInt<UTerm, B1>>, FineTunedValue>, super::div::Div<S>>,
+        Pipe<Stack<Constant<UInt<UTerm, B1>>, DbLin>, super::div::Div<S>>,
     >,
     Svf<S, LowshelfMode<S>>,
 >;
 
 // Highshelf (boost) and HighshelfCut (as you already have)
 type HSChain = Pipe<
-    Stack<Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>, FineTunedValue>,
+    Stack<Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>, DbLin>,
     Svf<S, HighshelfMode<S>>,
 >;
 type HSChainCut = Pipe<
     Stack<
         Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>,
-        Pipe<Stack<Constant<UInt<UTerm, B1>>, FineTunedValue>, super::div::Div<S>>,
+        Pipe<Stack<Constant<UInt<UTerm, B1>>, DbLin>, super::div::Div<S>>,
     >,
     Svf<S, HighshelfMode<S>>,
 >;
@@ -148,7 +149,7 @@ pub fn create_filter(handles: FilterHandles, finetuned_values: &FineTunedValues)
         filter_q_piercing,
         filter_q_bright,
         filter_q_shelf,
-        filter_shelf_gain_lin,
+        filter_shelf_gain_db,
         filter_q_warm,
         ..
     } = finetuned_values.clone();
@@ -157,6 +158,9 @@ pub fn create_filter(handles: FilterHandles, finetuned_values: &FineTunedValues)
     let follow_time = filter_morph_follow_s.value();
     #[cfg(not(feature = "editor"))]
     let follow_time = filter_morph_follow_s.value()[0];
+
+    let filter_shelf_gain_lin: An<DbLin> =
+        filter_shelf_gain_db >> super::db_lin::db_lin_converter();
 
     let control_a_b: An<ClampedControl> = An(control_a_b)
         >> clip_to(S::EPSILON.sqrt() as f32, (1.0 - S::EPSILON.sqrt()) as f32)

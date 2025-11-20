@@ -54,19 +54,19 @@ pub fn create_sensors_preamp(values: &FineTunedValues) -> An<PreampType> {
     // Frequency calibration points and their gains
     let freq_20hz = 20.0;
     let gain_20hz_db = -2.7;
-    let gain_20hz_linear = 10.0_f64.powf(gain_20hz_db / 20.0) as S;
+    let gain_20hz_linear = db_amp(gain_20hz_db);
 
     let freq_100hz = 100.0;
     let gain_100hz_db = 0.7;
-    let gain_100hz_linear = 10.0_f64.powf(gain_100hz_db / 20.0) as S;
+    let gain_100hz_linear = db_amp(gain_100hz_db);
 
     let freq_1khz = 1000.0;
     let gain_1khz_db = 0.5;
-    let gain_1khz_linear = 10.0_f64.powf(gain_1khz_db / 20.0) as S;
+    let gain_1khz_linear = db_amp(gain_1khz_db);
 
     let freq_10khz = 10000.0;
     let gain_10khz_db = 3.5;
-    let gain_10khz_linear = 10.0_f64.powf(gain_10khz_db / 20.0) as S;
+    let gain_10khz_linear = db_amp(gain_10khz_db);
 
     // Calculate Q factors for non-overlapping bands
     // Given frequency ratios: 100/20=5, 1000/100=10, 10000/1000=10

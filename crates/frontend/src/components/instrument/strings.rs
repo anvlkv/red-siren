@@ -224,7 +224,7 @@ pub fn StringView(
         let (start, end) = line;
         if let Some(samples) = samples.get() {
             if !samples.is_empty() {
-                return crate::util::wave::waveform_path_along_line(
+                return crate::util::wave::waveform_path_along_dbe(
                     &samples,
                     start,
                     end,

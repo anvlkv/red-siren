@@ -22,6 +22,8 @@ type SirenExcitement = Pipe<Pipe<Var, Follow<S>>, SnoopBackend>;
 
 type NonZeroControl = Pipe<Var, Shaper<ClipTo>>;
 
+type DbLin = Pipe<FineTunedValue, super::db_lin::DbLinConverter>;
+
 // Type alias for the siren alpha modulated by band control
 type SirenAlpha = Binop<
     FrameMul<UInt<UTerm, B1>>,
@@ -85,7 +87,7 @@ type FormantBank = Pipe<
 type BellFilter = Pipe<
     Stack<
         Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>,
-        Binop<FrameAdd<U1>, FineTunedValue, Var>,
+        Binop<FrameAdd<U1>, DbLin, Var>,
     >,
     Svf<S, BellMode<S>>,
 >;
@@ -129,7 +131,7 @@ fn create_node(
         siren_gamma,
         formant_base_q,
         node_bell_q,
-        node_bell_gain_lin,
+        node_bell_gain_db,
         ..
     } = values.clone();
 
@@ -176,14 +178,14 @@ fn create_node(
     let bell_filter: An<BellFilter> = (pass()
         | constant(config.frequency as f32)
         | node_bell_q
-        | (node_bell_gain_lin + An(band_control.clone())))
+        | ((node_bell_gain_db >> super::db_lin::db_lin_converter()) + An(band_control.clone())))
         >> bell();
 
     siren_output >> split::<U2>() >> (source * pass()) >> formants >> bell_filter >> output_snoop
 }
 
 type ShelfType = Pipe<
-    Stack<Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>, FineTunedValue>,
+    Stack<Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>, DbLin>,
     Svf<S, LowshelfMode<S>>,
 >;
 
@@ -214,7 +216,7 @@ where
     let shelf: An<ShelfType> = (pass()
         | constant((f_min * 0.86) as f32)
         | values.group_q.clone()
-        | values.group_ls_gain.clone())
+        | (values.group_ls_gain_db.clone() >> super::db_lin::db_lin_converter()))
         >> lowshelf::<S>();
 
     let butter = butterpass_hz(f_max * 3.2);
@@ -245,6 +247,7 @@ mod tests {
         let mut net = Net::new(0, 7);
 
         let mut chart_config = SnapshotConfigBuilder::default();
+        chart_config.warm_up(WarmUp::Samples(8000));
         chart_config.num_samples(4000);
         chart_config.show_grid(true);
         chart_config.chart_layout(Layout::Combined);
@@ -327,17 +330,19 @@ mod tests {
         let values = FineTunedValues::new();
 
         let mut chart_config = SnapshotConfigBuilder::default();
+        chart_config.warm_up(WarmUp::Samples(8000));
         chart_config.num_samples(4000);
         chart_config.show_grid(true);
-        // chart_config.allow_abnormal_samples(true);
-        // chart_config.warm_up(WarmUp::Seconds(1.0));
         chart_config.chart_layout(Layout::Combined);
 
         for (config, layout) in config_test_cases() {
             let mut net = Net::new(0, config.0.iter().map(|g| g.nodes.len()).sum());
             let mut chart_config = chart_config.clone();
 
-            chart_config.chart_title(format!("{}x{}", layout.space.x, layout.space.y));
+            chart_config.chart_title(format!(
+                "{}x{}_{:?}",
+                layout.space.x, layout.space.y, layout.scale
+            ));
 
             for group in config.0 {
                 for node in group.nodes {

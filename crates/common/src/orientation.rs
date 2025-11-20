@@ -98,7 +98,7 @@ impl LayoutOrientation {
         }
     }
 
-    pub fn n_nth_along_line(
+    pub fn n_nth_along_dbe(
         &self,
         (start, end): Line,
         at: usize,

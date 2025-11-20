@@ -3,20 +3,20 @@
 //! Each `Sensor`:
 //! - Covers a contiguous FFT bin range `[bin_start, bin_end)`.
 //! - Has a spatial representation (center + half_extents) in layout space for UI.
-//! - Stores a pre–computed average calibration gain (`avg_gain_linear`) derived
+//! - Stores a pre–computed average calibration gain (`avg_gain_dbear`) derived
 //!   from the static calibration points (see `tuner::config`).
 //! - Produces an excitement ∈ [0.0, 1.0] from current FFT data.
 //!
 //! Gain Application Strategy (Chosen Design - Option 3):
 //! ----------------------------------------------------
-//! Calibration is baked at construction time into `avg_gain_linear`. Runtime
+//! Calibration is baked at construction time into `avg_gain_dbear`. Runtime
 //! update multiplies the unweighted average magnitude of the covered bins by
 //! this constant. If calibration points change, rebuild the sensors.
 //!
 //! Excitement Mapping:
 //! -------------------
 //! 1. Collect average (linear) magnitude across bins
-//! 2. Multiply by `avg_gain_linear`
+//! 2. Multiply by `avg_gain_dbear`
 //! 3. Convert to dB: 20 * log10(mag + EPS)
 //! 4. Normalize from [FLOOR_DB, CEIL_DB] -> [0,1]
 //!
@@ -57,7 +57,7 @@ pub struct Sensor {
     /// Exclusive end FFT bin
     pub bin_end: usize,
     /// Baked average calibration gain (linear amplitude multiplier)
-    pub avg_gain_linear: f32,
+    pub avg_gain_dbear: f32,
     /// Current excitement (0.0 ..= 1.0)
     excitement: f32,
 }
@@ -73,7 +73,7 @@ impl Sensor {
         half_extents: Vector2<f32>,
         bin_start: usize,
         bin_end: usize,
-        avg_gain_linear: f32,
+        avg_gain_dbear: f32,
     ) -> Self {
         assert!(bin_end > bin_start, "Empty or reversed bin range");
         Self {
@@ -82,8 +82,8 @@ impl Sensor {
             half_extents,
             bin_start,
             bin_end,
-            avg_gain_linear: if avg_gain_linear.is_finite() && avg_gain_linear > 0.0 {
-                avg_gain_linear
+            avg_gain_dbear: if avg_gain_dbear.is_finite() && avg_gain_dbear > 0.0 {
+                avg_gain_dbear
             } else {
                 1.0
             },
@@ -121,7 +121,7 @@ impl Sensor {
             return;
         }
 
-        let avg_mag = (sum_mag / count as f32) * self.avg_gain_linear;
+        let avg_mag = (sum_mag / count as f32) * self.avg_gain_dbear;
 
         // Convert to dB
         let mag_db = 20.0 * (avg_mag + EPS).log10();
@@ -149,7 +149,7 @@ mod tests {
             Vector2 { x: 1.0, y: 1.0 },
             2,
             5,
-            2.0, // avg_gain_linear
+            2.0, // avg_gain_dbear
         );
 
         // Build spectrum (at least 5 bins)

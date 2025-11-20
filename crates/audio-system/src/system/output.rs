@@ -1,6 +1,7 @@
 mod abs;
 mod channel;
 mod crossfade;
+mod db_lin;
 mod div;
 mod filter;
 mod formant;
@@ -16,6 +17,7 @@ use common::{
     instrument::{Config, GroupChannel, GroupConfig, Scale},
     NodeKey,
 };
+use fundsp::funutd::prelude::hash_11;
 #[cfg(feature = "hi_fi")]
 use fundsp::hacker::prelude::*;
 #[cfg(not(feature = "hi_fi"))]
@@ -158,15 +160,26 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
         values,
     );
 
-    let system_filter = split::<U2>()
-        >> (((lpc_bank::<8, U4>() >> (mul(0.1) | mul(0.2) | mul(0.3) | mul(0.4))) >> join::<U4>()) | pass())
+    let system_filter = |seed: u64| {
+        split::<U3>()
+        >> ((((lpc_bank::<8, U4>() | pass()) >> (mul(0.1) | mul(0.2) | mul(0.3) | mul(0.4) | pass())) >> map(move |frame: &Frame<f32, U5>| {
+            let original = frame[4];
+            let h11 = hash_11(seed);
+
+            let w_1 = lerp11(original, frame[0], h11.x);
+            let w_2 = lerp11(original, frame[1], h11.y);
+            let w_3 = lerp11(original, frame[2], h11.z);
+            let w_4 = lerp11(original, frame[3], h11.element_product());
+            (w_1 + w_2 + w_3 + w_4) / 4.0
+        })) | pass())
         >> (pan(-0.15) | pan(0.85))
         // tt^ | tm | um | ut^
         // tt^ | um | tm | ut^
-        >> (pass() | reverse::<U2>() | pass());
+        >> (pass() | reverse::<U2>() | pass())
+    };
 
-    let left_filter_id = net.push(Box::new(system_filter.clone()));
-    let right_filter_id = net.push(Box::new(system_filter));
+    let left_filter_id = net.push(Box::new(system_filter(groups_count_left as u64)));
+    let right_filter_id = net.push(Box::new(system_filter(groups_count_right as u64)));
 
     net.pipe_all(left_id, left_filter_id);
     net.pipe_all(right_id, right_filter_id);

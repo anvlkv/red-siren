@@ -27,7 +27,7 @@ pub fn waveform_path_x(
 
 /// Renders a waveform along an arbitrary line segment from `start` to `end`.
 /// Samples are displaced perpendicular to the line by `amp * -sample`.
-pub fn waveform_path_along_line(
+pub fn waveform_path_along_dbe(
     samples: &[f32],
     start: mint::Point2<f64>,
     end: mint::Point2<f64>,

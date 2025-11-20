@@ -202,9 +202,9 @@ pub fn EditorOverlay() -> impl IntoView {
                                     />
 
                                     <EditorRangeSlider
-                                        label="Shelf Gain Lin"
+                                        label="Shelf Gain dB"
                                         value=Signal::derive(move || {
-                                            finetuned_values().filter_shelf_gain_lin
+                                            finetuned_values().filter_shelf_gain_db
                                         })
                                         min=GAIN_MIN
                                         max=GAIN_MAX
@@ -212,7 +212,7 @@ pub fn EditorOverlay() -> impl IntoView {
                                         on_input=Callback::new(move |val| {
                                             set_finetuned_values
                                                 .update(|values| {
-                                                    values.filter_shelf_gain_lin = val;
+                                                    values.filter_shelf_gain_db = val;
                                                 });
                                         })
                                     />
@@ -270,9 +270,9 @@ pub fn EditorOverlay() -> impl IntoView {
                             />
 
                             <EditorRangeSlider
-                                label="Bell Gain"
+                                label="Bell Gain dB"
                                 value=Signal::derive(move || {
-                                    finetuned_values().node_bell_gain_lin
+                                    finetuned_values().node_bell_gain_db
                                 })
                                 min=GAIN_MIN
                                 max=GAIN_MAX
@@ -280,7 +280,7 @@ pub fn EditorOverlay() -> impl IntoView {
                                 on_input=Callback::new(move |val| {
                                     set_finetuned_values
                                         .update(|values| {
-                                            values.node_bell_gain_lin = val;
+                                            values.node_bell_gain_db = val;
                                         });
                                 })
                             />
@@ -305,14 +305,16 @@ pub fn EditorOverlay() -> impl IntoView {
 
                             <EditorRangeSlider
                                 label="Group Low Shelf Gain dB"
-                                value=Signal::derive(move || { finetuned_values().group_ls_gain })
+                                value=Signal::derive(move || {
+                                    finetuned_values().group_ls_gain_db
+                                })
                                 min=GAIN_MIN
                                 max=GAIN_MAX
                                 step=GAIN_STEP
                                 on_input=Callback::new(move |val| {
                                     set_finetuned_values
                                         .update(|values| {
-                                            values.group_ls_gain = val;
+                                            values.group_ls_gain_db = val;
                                         });
                                 })
                             />

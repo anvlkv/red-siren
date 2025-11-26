@@ -50,6 +50,7 @@ const ALPHA_MAX: f32 = 1.0; // Cap for alpha
 /// - `P` = LPC order (small, e.g., 8–24 for speech/music; must satisfy P + 1 <= B)
 /// - `PR` = must be P + 1
 /// - `N` = steps ahead to predict
+#[derive(Clone)]
 pub struct Lpc<const B: usize, const R: usize, const P: usize, const PR: usize, const N: usize, O>
 where
     O: Size<f32>,
@@ -62,7 +63,7 @@ where
     // Convention: history[0] is x[n], history[1] is x[n-1], ...
     history: [f32; P],
 
-    // Sample rate info (kept for trait completeness)
+    // Sample rate info
     sample_rate: f64,
 
     //fft
@@ -72,42 +73,6 @@ where
     result_buffer: Arc<ThingBuf<LpcData<P>>>,
 
     _phantom: PhantomData<O>,
-}
-
-impl<const B: usize, const R: usize, const P: usize, const PR: usize, const N: usize, O> Clone
-    for Lpc<B, R, P, PR, N, O>
-where
-    O: Size<f32>,
-{
-    fn clone(&self) -> Self {
-        let (real, inverse) = {
-            let mut planer = self.fft_planner.lock();
-            (planer.plan_fft_forward(B), planer.plan_fft_inverse(B))
-        };
-
-        let buffer = Arc::new(ThingBuf::new(B));
-        let result_buffer = Arc::new(ThingBuf::new(2));
-
-        let (processing_handle, processing_running) = Self::start_processing(
-            self.sample_rate,
-            buffer.clone(),
-            real,
-            inverse,
-            result_buffer.clone(),
-        );
-
-        Self {
-            buffer,
-            latest_data: None,
-            history: [0.0; P],
-            sample_rate: self.sample_rate,
-            fft_planner: self.fft_planner.clone(),
-            processing_handle,
-            processing_running,
-            result_buffer,
-            _phantom: PhantomData,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -186,7 +151,7 @@ where
             log::info!("LPC thread started");
             let mut prev_window: VecDeque<f32> = VecDeque::with_capacity(B / 2);
             loop {
-                if !running_thread.load(Ordering::Relaxed) {
+                if !running_thread.load(Ordering::SeqCst) {
                     log::info!("LPC thread stopped");
                     break;
                 }
@@ -308,6 +273,8 @@ where
     }
 
     fn buffer_sample_for_analysis(&mut self, x_n: f32) -> bool {
+        let x_n = if x_n.is_normal() { x_n } else { 0.0 };
+
         // Write into circular frame buffer.
         let consumed = match self.buffer.push(x_n) {
             Ok(_) => true,
@@ -350,6 +317,8 @@ where
     }
 
     fn predict_next_frame(&mut self, x_n: f32) -> Frame<f32, O> {
+        let x_n = if x_n.is_normal() { x_n } else { 0.0 };
+
         // N-step-ahead prediction using current coefficients.
         // Seed with actual history (x[n], x[n-1], ..., x[n-P+1]).
         let mut predicted_frame = Frame::from_iter(self.history[..O::to_usize()].iter().copied());
@@ -393,7 +362,7 @@ where
     type Outputs = O;
 
     fn reset(&mut self) {
-        self.processing_running.store(false, Ordering::Relaxed);
+        self.processing_running.store(false, Ordering::SeqCst);
 
         while !self.buffer.is_empty() {
             _ = self.buffer.pop();
@@ -487,26 +456,29 @@ mod tests {
 
     #[test]
     fn test_lpc_1() {
-        let node = sine_hz::<f32>(440.0) >> split::<U2>() >> (lpc::<1>() | pass());
+        let node =
+            constant(440.0) >> sine_phase::<f32>(0.1) >> split::<U2>() >> (lpc::<1>() | pass());
 
         assert_audio_unit_snapshot!(node);
     }
     #[test]
     fn test_lpc_2() {
-        let node = sine_hz::<f32>(440.0) >> split::<U2>() >> (lpc::<2>() | pass());
+        let node =
+            constant(440.0) >> sine_phase::<f32>(0.1) >> split::<U2>() >> (lpc::<2>() | pass());
 
         assert_audio_unit_snapshot!(node);
     }
     #[test]
     fn test_lpc_7() {
-        let node = sine_hz::<f32>(440.0) >> split::<U2>() >> (lpc::<7>() | pass());
+        let node =
+            constant(440.0) >> sine_phase::<f32>(0.1) >> split::<U2>() >> (lpc::<7>() | pass());
 
         assert_audio_unit_snapshot!(node);
     }
 
     #[test]
     fn test_lpc_bank_9() {
-        let node = sine_hz::<f32>(440.0) >> (lpc_bank::<9, U3>());
+        let node = constant(440.0) >> sine_phase::<f32>(0.1) >> (lpc_bank::<9, U3>());
 
         assert_audio_unit_snapshot!(node);
     }

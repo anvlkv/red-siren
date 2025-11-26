@@ -278,7 +278,7 @@ impl FFTAnalyzer {
         let join = spawn(move || {
             log::info!("FFT analyzer thread started");
             loop {
-                if !running_thread.load(Ordering::Relaxed) {
+                if !running_thread.load(Ordering::SeqCst) {
                     log::info!("FFT analyzer thread stopped");
                     break;
                 }
@@ -310,7 +310,7 @@ impl FFTAnalyzer {
     }
 
     fn restart_processing(&mut self) {
-        self.processing_running.store(false, Ordering::Relaxed);
+        self.processing_running.store(false, Ordering::SeqCst);
         let sensor_data = self.config.sensor_data.clone();
         let (processing_handle, processing_running) = Self::init_handle(
             self.window_thb.clone(),

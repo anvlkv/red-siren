@@ -19,56 +19,66 @@ use crate::system::{create_input_system, create_output_system};
 fn instrument_with_rand_src() {
     fastrand::seed(42);
 
-    let config = SnapshotConfigBuilder::default()
-        .num_samples(2000)
-        .warm_up(WarmUp::Samples(1000))
-        .allow_abnormal_samples(true)
-        .show_grid(true)
-        .build()
-        .unwrap();
+    for layout in layout_test_cases() {
+        let instrument_config =
+            common::instrument::Config::try_from(layout).expect("valid instrument config");
+        let tuner_layout: common::tuner::layout::Layout = layout.into();
+        let tuner_config = common::tuner::Config::new(tuner_layout, 44_100.0, layout.registry());
 
-    let layout = layout_test_cases().next().unwrap();
+        // Create a simple stereo output system network (no inputs)
+        let mut net = Net::new(1, 2);
+        net.set_sample_rate(44_100.0);
 
-    let instrument_config =
-        common::instrument::Config::try_from(layout).expect("valid instrument config");
-    let tuner_layout: common::tuner::layout::Layout = layout.into();
-    let tuner_config = common::tuner::Config::new(tuner_layout, 44_100.0, layout.registry());
-
-    // Create a simple stereo output system network (no inputs)
-    let mut net = Net::new(1, 2);
-    net.set_sample_rate(44_100.0);
-
-    #[cfg(feature = "editor")]
-    let values = FineTunedValues::new(&FineTunedSharedValues::default());
-
-    let node_handles = create_output_system(
-        &instrument_config,
-        &mut net,
-        2, // stereo
         #[cfg(feature = "editor")]
-        &values,
-    );
+        let values = FineTunedValues::new(&FineTunedSharedValues::default());
 
-    // Collect siren excitement controls keyed by node
-    let mut excitements = HashMap::new();
-    for h in node_handles {
-        excitements.insert(h.key, h.siren_control);
+        let node_handles = create_output_system(
+            &instrument_config,
+            &mut net,
+            2, // stereo
+            #[cfg(feature = "editor")]
+            &values,
+        );
+
+        // Collect siren excitement controls keyed by node
+        let mut excitements = HashMap::new();
+        for h in node_handles {
+            excitements.insert(h.key, h.siren_control);
+        }
+
+        // Tuner default (Mic analyzer) hooked to a tap channel from the output
+        let spectrum_thb = Arc::new(ThingBuf::new(10));
+        let _sensor_handles = create_input_system(
+            &tuner_config,
+            &mut net,
+            excitements,
+            ExcitementSource::Entropy,
+            &spectrum_thb,
+            2, // tap channel
+            #[cfg(feature = "editor")]
+            &values,
+        );
+
+        let svg_config = SvgChartConfigBuilder::default()
+            .show_grid(true)
+            .chart_title(format!(
+                "{}x{}_{:?}",
+                layout.space.x, layout.space.y, layout.scale
+            ))
+            .preserve_aspect_ratio(SvgPreserveAspectRatio::scale_to_fit())
+            .build()
+            .unwrap();
+
+        let config = SnapshotConfigBuilder::default()
+            .num_samples(2000)
+            .warm_up(WarmUp::Seconds(1.0))
+            .allow_abnormal_samples(true)
+            .output_mode(svg_config)
+            .build()
+            .unwrap();
+
+        assert_audio_unit_snapshot!(net, config);
     }
-
-    // Tuner default (Mic analyzer) hooked to a tap channel from the output
-    let spectrum_thb = Arc::new(ThingBuf::new(10));
-    let _sensor_handles = create_input_system(
-        &tuner_config,
-        &mut net,
-        excitements,
-        ExcitementSource::Entropy,
-        &spectrum_thb,
-        2, // tap channel
-        #[cfg(feature = "editor")]
-        &values,
-    );
-
-    assert_audio_unit_snapshot!(net, config);
 }
 
 #[test]

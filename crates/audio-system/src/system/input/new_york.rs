@@ -38,22 +38,19 @@ impl<F: Real> NewYork<F> {
     #[inline]
     fn soft_compress(&self, x: F, t: F) -> F {
         let a = x.abs();
-
-        // Aggression knob (higher => stronger flattening and more lift)
-        let k_base = F::from_f32(40.0);
-        // More aggressive when threshold is low
-        let k = (F::one() - t) / t * k_base;
-
-        // Target pivot below threshold to reduce overall amplitude
-        // p_scale in (0,1). Try 0.75; lower for more reduction.
-        let p_scale = F::from_f32(0.75);
-        let p = t * p_scale;
-
-        // Rational compander with pivot at p (not t):
-        // y(a) = S * a / (1 + k a), with S chosen so y(t) = p
-        let s = p * (F::one() + k * t) / t;
-        let y = s * a / (F::one() + k * a);
-
+        if a == F::zero() {
+            return x;
+        }
+        // Normalized symmetric distance
+        let nd = (a - t).abs() / (a + t);
+        // Rational core
+        let y0 = a * (F::one() + nd * t) / (F::one() + nd * a);
+        // Unified correction term biases upward when below threshold and downward when above,
+        // using only relative differences:
+        // corr = (t - a) / (a + t) in (-1,1)
+        let corr = (t - a) / (a + t);
+        // Blend factor is nd^2 to fade in away from the knee.
+        let y = y0 + (t - y0) * corr * nd * nd;
         if x < F::zero() {
             -y
         } else {
@@ -137,7 +134,7 @@ mod tests {
     fn test_new_york_compressor() {
         let node = (sine_hz::<f32>(440.0) * pass())
             >> split::<U2>()
-            >> (pass() | constant(0.3) | constant(1.0) | pass())
+            >> (pass() | constant(0.3) | constant(0.5) | pass())
             >> (new_york::<f32>() | pass());
 
         let config = SnapshotConfigBuilder::default()

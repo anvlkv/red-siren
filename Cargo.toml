@@ -13,7 +13,7 @@ common = { path = "crates/common" }
 console_error_panic_hook = "0.1.7"
 fastrand = "2.3.0"
 fundsp = { version = "0.20", default-features = false, features = ["std"] }
-insta = "1.43.2"
+insta = "1.44.1"
 js-sys = "0.3"
 leptos_router = { version = "0.8", features = ["nightly"] }
 log = "0.4"

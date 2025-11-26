@@ -23,8 +23,7 @@ web-sys = { workspace = true, optional = true }
 [dev-dependencies]
 common = { workspace = true, features = ["test"] }
 insta = { workspace = true }
-insta-fun = { path = "../../../insta-fun" }
-# insta-fun = "1.1.2"
+insta-fun = "2.0.4"
 test-log = "0.2"
 
 [target.'cfg(target_os = "ios")'.dependencies]

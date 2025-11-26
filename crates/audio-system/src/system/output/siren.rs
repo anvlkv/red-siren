@@ -78,7 +78,8 @@ impl<F: Real> Siren<F> {
         gamma: F,
         signum: F,
     ) -> (F, F, F) {
-        let wrap_phase: F = alpha + alpha * gamma + alpha * beta;
+        let wrap_phase: F =
+            (alpha + alpha * gamma + alpha * beta).max(sample_duration * convert(2.0));
 
         let next_phase = phase + sample_duration;
 
@@ -89,7 +90,7 @@ impl<F: Real> Siren<F> {
         } else {
             phase = if next_phase >= wrap_phase {
                 sign = -sign;
-                next_phase - wrap_phase
+                F::zero()
             } else {
                 next_phase
             };
@@ -221,9 +222,9 @@ mod tests {
     use super::*;
     use insta_fun::prelude::*;
 
-    const ALPHA: f32 = 1.0 / 7500.0;
+    const ALPHA: f32 = 100.0 / 7.5;
     const BETA: f32 = 0.75;
-    const GAMMA: f32 = 0.3;
+    const GAMMA: f32 = 0.075;
     const SAMPLES: usize = 2250;
 
     const fn excitement(sample: usize) -> f32 {
@@ -255,7 +256,21 @@ mod tests {
             InputSource::Generator(Box::new(|sample, ch| {
                 match ch {
                     0 => excitement(sample),
-                    1 => ALPHA,
+                    1 => ALPHA / 100.0,
+                    2 => BETA,
+                    3 => GAMMA,
+                    _ => 1.0,
+                }
+            })),
+            config.clone()
+        );
+        assert_audio_unit_snapshot!(
+            "siren_0001_neg",
+            siren_node.clone(),
+            InputSource::Generator(Box::new(|sample, ch| {
+                match ch {
+                    0 => excitement(sample),
+                    1 => ALPHA / 100.0,
                     2 => BETA,
                     3 => GAMMA,
                     _ => -1.0,
@@ -270,10 +285,25 @@ mod tests {
             InputSource::Generator(Box::new(|sample, ch| {
                 match ch {
                     0 => excitement(sample),
-                    1 => ALPHA * 10.0,
+                    1 => ALPHA / 10.0,
                     2 => BETA,
                     3 => GAMMA,
                     _ => 1.0,
+                }
+            })),
+            config.clone()
+        );
+
+        assert_audio_unit_snapshot!(
+            "siren_0010_neg",
+            siren_node.clone(),
+            InputSource::Generator(Box::new(|sample, ch| {
+                match ch {
+                    0 => excitement(sample),
+                    1 => ALPHA / 10.0,
+                    2 => BETA,
+                    3 => GAMMA,
+                    _ => -1.0,
                 }
             })),
             config.clone()
@@ -285,7 +315,21 @@ mod tests {
             InputSource::Generator(Box::new(|sample, ch| {
                 match ch {
                     0 => excitement(sample),
-                    1 => ALPHA * 70.0,
+                    1 => ALPHA / 70.0,
+                    2 => BETA,
+                    3 => GAMMA,
+                    _ => 1.0,
+                }
+            })),
+            config.clone()
+        );
+        assert_audio_unit_snapshot!(
+            "siren_0070_neg",
+            siren_node.clone(),
+            InputSource::Generator(Box::new(|sample, ch| {
+                match ch {
+                    0 => excitement(sample),
+                    1 => ALPHA / 70.0,
                     2 => BETA,
                     3 => GAMMA,
                     _ => -1.0,
@@ -296,17 +340,31 @@ mod tests {
 
         assert_audio_unit_snapshot!(
             "siren_3",
-            siren_node,
+            siren_node.clone(),
             InputSource::Generator(Box::new(|sample, ch| {
                 match ch {
                     0 => excitement(sample),
-                    1 => 3.0,
+                    1 => ALPHA,
                     2 => BETA,
                     3 => GAMMA,
                     _ => 1.0,
                 }
             })),
-            config
+            config.clone()
+        );
+        assert_audio_unit_snapshot!(
+            "siren_3_neg",
+            siren_node.clone(),
+            InputSource::Generator(Box::new(|sample, ch| {
+                match ch {
+                    0 => excitement(sample),
+                    1 => ALPHA,
+                    2 => BETA,
+                    3 => GAMMA,
+                    _ => -1.0,
+                }
+            })),
+            config.clone()
         );
     }
 

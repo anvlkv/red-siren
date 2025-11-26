@@ -39,6 +39,9 @@ fn generate_instrument_config_consts_file() -> Result<(), Box<dyn std::error::Er
     /// Visible light spectrum max in nanometers
     const VISIBLE_LIGHT_MAX_NM: f64 = 750.0;
 
+    pub const MASS_BASE_KG: f32 = 70.0;
+    pub const HR_BASE: f32 = 70.0;
+
     // Representative sound wavelength to convert frequency -> wavespeed
     // (1 meter gives v = f_sound * 1.0 which keeps numbers in plausible range)
     const REPRESENTATIVE_SOUND_WAVELENGTH_M: f64 = 1.0;
@@ -83,6 +86,8 @@ fn generate_instrument_config_consts_file() -> Result<(), Box<dyn std::error::Er
 
     let crimson_ws = compute_wavespeed(CRIMSON_RED_WAVE_LENGTH_NM);
     let cinnabar_ws = compute_wavespeed(CINNABAR_RED_WAVE_LENGTH_NM);
+
+    let k_base = HR_BASE * MASS_BASE_KG.powf(-0.25);
 
     // Get the output directory
     let out_dir = env::var_os("OUT_DIR").ok_or("No OUT_DIR")?;
@@ -139,6 +144,18 @@ fn generate_instrument_config_consts_file() -> Result<(), Box<dyn std::error::Er
         f,
         "pub const CINNABAR_RED_WAVESPEED: f64 = {cinnabar_ws:?};",
     )?;
+
+    writeln!(
+        f,
+        "pub const MASS_BASE_KG: f32 = {mass_base:?};",
+        mass_base = MASS_BASE_KG
+    )?;
+    writeln!(
+        f,
+        "pub const HR_BASE: f32 = {hr_base:?};",
+        hr_base = HR_BASE
+    )?;
+    writeln!(f, "pub const K_BASE: f32 = {k_base:?};", k_base = k_base)?;
 
     Ok(())
 }

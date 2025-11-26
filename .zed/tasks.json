@@ -43,10 +43,11 @@
     "reveal": "always"
   },
   {
-    "label": "Run all tests",
+    "label": "Run all tests, update snapshots",
     "command": "cargo insta test --unreferenced=delete",
     "env": {
-      "RUST_BACKTRACE": "1"
+      "RUST_BACKTRACE": "1",
+      "INSTA_UPDATE": "always"
     },
     "reveal": "always"
   },

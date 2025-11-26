@@ -1117,7 +1117,9 @@ impl AudioRuntime for CpalController {
                 .node_follow_response_time_s
                 .set_value(payload.node_follow_response_time_s);
             shared_values.group_q.set_value(payload.group_q);
-            shared_values.group_ls_gain.set_value(payload.group_ls_gain);
+            shared_values
+                .group_ls_gain_db
+                .set_value(payload.group_ls_gain_db);
             shared_values
                 .filter_morph_follow_s
                 .set_value(payload.filter_morph_follow_s);

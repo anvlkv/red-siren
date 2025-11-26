@@ -1,6 +1,5 @@
 ---
 source: crates/audio-system/src/system/output/crossfade.rs
-expression: svg.as_bytes().to_vec()
 extension: svg
 snapshot_kind: binary
 ---

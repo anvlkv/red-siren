@@ -50,21 +50,21 @@ pub struct FineTunedSharedValues {
     pub input_ny_wet_ratio: Shared,
 }
 
-const SIREN_ALPHA: f32 = 100.0 / 75.0;
-const SIREN_BETA: f32 = 0.5;
+const SIREN_ALPHA: f32 = 100.0 / 7.5;
+const SIREN_BETA: f32 = 0.75;
 const SIREN_GAMMA: f32 = 0.075;
 const NODE_BELL_Q: f32 = 0.3;
 const NODE_BELL_GAIN_DB: f32 = 10.0;
-const NODE_FOLLOW_RESPONSE_TIME_S: f32 = 0.04;
+const NODE_FOLLOW_RESPONSE_TIME_S: f32 = 0.175;
 const GROUP_Q: f32 = 0.085;
 const GROUP_LS_GAIN_DB: f32 = 7.0;
-const FORMANT_BASE_Q: f32 = 12.0;
+const FORMANT_BASE_Q: f32 = 4.7;
 const FILTER_MORPH_FOLLOW_S: f32 = 0.05;
 const FILTER_Q_PIERCING: f32 = 3.2;
-const FILTER_Q_BRIGHT: f32 = 7.05;
-const FILTER_Q_SHELF: f32 = 0.65;
+const FILTER_Q_BRIGHT: f32 = 2.05;
+const FILTER_Q_SHELF: f32 = 1.65;
 const FILTER_SHELF_GAIN_DB: f32 = 7.0;
-const FILTER_Q_WARM: f32 = 0.55;
+const FILTER_Q_WARM: f32 = 1.55;
 const INPUT_NY_THRESHOLD: f32 = 0.12;
 const INPUT_NY_WET_RATIO: f32 = 0.3;
 

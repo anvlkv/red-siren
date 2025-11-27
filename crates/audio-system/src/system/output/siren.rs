@@ -372,7 +372,7 @@ mod tests {
     fn test_siren_process() {
         let siren_node = siren_phase::<f32>(0.0);
         let config = SnapshotConfigBuilder::default()
-            .num_samples(SAMPLES)
+            .num_samples(44100)
             .processing_mode(Processing::Batch(64))
             .build()
             .unwrap();
@@ -386,13 +386,31 @@ mod tests {
             config.clone()
         );
 
-        let input = vec![0.1, ALPHA, BETA, GAMMA, -1.0];
+        let input = vec![0.1, ALPHA, BETA, GAMMA, 1.0];
 
         assert_audio_unit_snapshot!(
             "siren_process_0_1",
+            siren_node.clone(),
+            InputSource::Flat(input),
+            config.clone()
+        );
+
+        let input = vec![0.7, ALPHA, BETA, GAMMA, -1.0];
+
+        assert_audio_unit_snapshot!(
+            "siren_process_0_7_neg",
+            siren_node.clone(),
+            InputSource::Flat(input),
+            config.clone()
+        );
+
+        let input = vec![0.1, ALPHA, BETA, GAMMA, -1.0];
+
+        assert_audio_unit_snapshot!(
+            "siren_process_0_1_neg",
             siren_node,
             InputSource::Flat(input),
-            config
+            config.clone()
         );
     }
 }

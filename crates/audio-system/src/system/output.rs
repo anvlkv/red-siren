@@ -34,7 +34,7 @@ use crate::{
 };
 
 #[derive(Clone)]
-struct InnerHandles {
+pub(super) struct InnerHandles {
     excitement_snoop: An<SnoopBackend>,
     output_snoop: An<SnoopBackend>,
     siren_control: Var,
@@ -95,53 +95,13 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
     let (node_handles, group_handles, filter_handles) = prepare_handles(&config.0, config.1);
 
     let nodes_count_per_group = config.num_nodes_per_group();
-    let groups_count_left = config.num_groups_left();
-    let groups_count_right = config.num_groups_right();
 
-    let left_groups = (0..groups_count_left)
-        .filter_map(|gi| config.group_nth_channel(GroupChannel::Left, gi))
-        .cloned()
-        .collect::<Vec<_>>();
-    let right_groups = (0..groups_count_right)
-        .filter_map(|gi| config.group_nth_channel(GroupChannel::Right, gi))
-        .cloned()
-        .collect::<Vec<_>>();
+    let (left_groups, right_groups) = split_groups_lr(config);
 
-    let (left_group_handles, right_group_handles) = group_handles.into_iter().fold(
-        (
-            Vec::<HashMap<NodeKey, InnerHandles>>::new(),
-            Vec::<HashMap<NodeKey, InnerHandles>>::new(),
-        ),
-        |(mut left, mut right), handles| {
-            if handles
-                .keys()
-                .any(|k| config.channel_of_key(k) == Some(GroupChannel::Left))
-            {
-                left.push(handles);
-            } else if handles
-                .keys()
-                .any(|k| config.channel_of_key(k) == Some(GroupChannel::Right))
-            {
-                right.push(handles);
-            } else {
-                log::error!("Invalid group channel");
-            }
-            (left, right)
-        },
-    );
+    let (left_group_handles, right_group_handles) = split_group_handles_lr(group_handles, config);
 
-    let (left_filter_handles, right_filter_handles) = filter_handles.into_iter().fold(
-        (Vec::<FilterHandles>::new(), Vec::<FilterHandles>::new()),
-        |(mut left, mut right), handle| {
-            match config.channel_of_key(&handle.config.key) {
-                Some(GroupChannel::Left) => left.push(handle),
-                Some(GroupChannel::Right) => right.push(handle),
-                _ => log::error!("Invalid group channel"),
-            }
-
-            (left, right)
-        },
-    );
+    let (left_filter_handles, right_filter_handles) =
+        split_filter_handles_lr(filter_handles, config);
 
     let left_id = one_channel_subsystem(
         left_groups.as_slice(),
@@ -178,6 +138,8 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
         >> (pass() | reverse::<U2>() | pass())
     };
 
+    let groups_count_left = config.num_groups_left();
+    let groups_count_right = config.num_groups_right();
     let left_filter_id = net.push(Box::new(system_filter(groups_count_left as u64)));
     let right_filter_id = net.push(Box::new(system_filter(groups_count_right as u64)));
 
@@ -235,53 +197,15 @@ pub fn multi_channel_system(
     let (node_handles, group_handles, filter_handles) = prepare_handles(&config.0, config.1);
 
     let nodes_count_per_group = config.num_nodes_per_group();
-    let groups_count_left = config.num_groups_left();
-    let groups_count_right = config.num_groups_right();
+    // let groups_count_left = config.num_groups_left();
+    // let groups_count_right = config.num_groups_right();
 
-    let left_groups = (0..groups_count_left)
-        .filter_map(|gi| config.group_nth_channel(GroupChannel::Left, gi))
-        .cloned()
-        .collect::<Vec<_>>();
-    let right_groups = (0..groups_count_right)
-        .filter_map(|gi| config.group_nth_channel(GroupChannel::Right, gi))
-        .cloned()
-        .collect::<Vec<_>>();
+    let (left_groups, right_groups) = split_groups_lr(config);
 
-    let (left_group_handles, right_group_handles) = group_handles.into_iter().fold(
-        (
-            Vec::<HashMap<NodeKey, InnerHandles>>::new(),
-            Vec::<HashMap<NodeKey, InnerHandles>>::new(),
-        ),
-        |(mut left, mut right), handles| {
-            if handles
-                .keys()
-                .any(|k| config.channel_of_key(k) == Some(GroupChannel::Left))
-            {
-                left.push(handles);
-            } else if handles
-                .keys()
-                .any(|k| config.channel_of_key(k) == Some(GroupChannel::Right))
-            {
-                right.push(handles);
-            } else {
-                log::error!("Invalid group channel");
-            }
-            (left, right)
-        },
-    );
+    let (left_group_handles, right_group_handles) = split_group_handles_lr(group_handles, config);
 
-    let (left_filter_handles, right_filter_handles) = filter_handles.into_iter().fold(
-        (Vec::<FilterHandles>::new(), Vec::<FilterHandles>::new()),
-        |(mut left, mut right), handle| {
-            match config.channel_of_key(&handle.config.key) {
-                Some(GroupChannel::Left) => left.push(handle),
-                Some(GroupChannel::Right) => right.push(handle),
-                _ => log::error!("Invalid group channel"),
-            }
-
-            (left, right)
-        },
-    );
+    let (left_filter_handles, right_filter_handles) =
+        split_filter_handles_lr(filter_handles, config);
 
     let left_id = one_channel_subsystem(
         left_groups.as_slice(),
@@ -383,13 +307,13 @@ pub fn multi_channel_system(
     node_handles
 }
 
-type Handles = (
+pub(super) type Handles = (
     Vec<NodeHandles>,
     Vec<HashMap<NodeKey, InnerHandles>>,
     Vec<FilterHandles>,
 );
 
-fn prepare_handles(groups: &[GroupConfig], scale: Scale) -> Handles {
+pub(super) fn prepare_handles(groups: &[GroupConfig], scale: Scale) -> Handles {
     let mut node_handles = Vec::<NodeHandles>::new();
     let mut inner_handles = Vec::<HashMap<NodeKey, InnerHandles>>::new();
     let mut filter_handles = Vec::<FilterHandles>::new();
@@ -456,4 +380,67 @@ fn prepare_handles(groups: &[GroupConfig], scale: Scale) -> Handles {
     }
 
     (node_handles, inner_handles, filter_handles)
+}
+
+pub(super) fn split_groups_lr(config: &Config) -> (Vec<GroupConfig>, Vec<GroupConfig>) {
+    fn select_groups(channel: GroupChannel, config: &Config) -> Vec<GroupConfig> {
+        let count = match channel {
+            GroupChannel::Left => config.num_groups_left(),
+            GroupChannel::Right => config.num_groups_right(),
+        };
+        (0..count)
+            .filter_map(|gi| config.group_nth_channel(channel, gi))
+            .cloned()
+            .collect::<Vec<_>>()
+    }
+
+    (
+        select_groups(GroupChannel::Left, config),
+        select_groups(GroupChannel::Right, config),
+    )
+}
+
+pub(super) type GroupKeyMap = HashMap<NodeKey, InnerHandles>;
+
+pub(super) fn split_group_handles_lr(
+    group_handles: impl IntoIterator<Item = GroupKeyMap>,
+    config: &Config,
+) -> (Vec<GroupKeyMap>, Vec<GroupKeyMap>) {
+    group_handles.into_iter().fold(
+        (Vec::<GroupKeyMap>::new(), Vec::<GroupKeyMap>::new()),
+        |(mut left, mut right), handles| {
+            if handles
+                .keys()
+                .any(|k| config.channel_of_key(k) == Some(GroupChannel::Left))
+            {
+                left.push(handles);
+            } else if handles
+                .keys()
+                .any(|k| config.channel_of_key(k) == Some(GroupChannel::Right))
+            {
+                right.push(handles);
+            } else {
+                log::error!("Invalid group channel");
+            }
+            (left, right)
+        },
+    )
+}
+
+pub(super) fn split_filter_handles_lr(
+    filter_handles: impl IntoIterator<Item = FilterHandles>,
+    config: &Config,
+) -> (Vec<FilterHandles>, Vec<FilterHandles>) {
+    filter_handles.into_iter().fold(
+        (Vec::<FilterHandles>::new(), Vec::<FilterHandles>::new()),
+        |(mut left, mut right), handle| {
+            match config.channel_of_key(&handle.config.key) {
+                Some(GroupChannel::Left) => left.push(handle),
+                Some(GroupChannel::Right) => right.push(handle),
+                _ => log::error!("Invalid group channel"),
+            }
+
+            (left, right)
+        },
+    )
 }

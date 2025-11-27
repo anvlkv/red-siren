@@ -13,7 +13,8 @@
         },
         "procMacro": {
           "ignored": {
-            "leptos": ["server"]
+            "leptos": ["server"],
+            "u_num_it": ["u_num_it"]
           }
         }
       }

@@ -8,8 +8,9 @@
         <link
             data-trunk
             rel="rust"
-            data-wasm-opt="z"
+            data-wasm-opt="s"
             href="crates/frontend/Cargo.toml"
+            data-wasm-opt-params="--enable-bulk-memory"
         />
         <link
             rel="preload"

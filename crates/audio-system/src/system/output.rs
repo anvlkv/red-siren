@@ -1,14 +1,16 @@
 mod abs;
 mod channel;
 mod crossfade;
-mod db_lin;
+pub(crate) mod db_lin;
 mod div;
 mod filter;
 mod formant;
+mod group;
 mod lpc;
 mod node;
 mod pow;
 mod siren;
+mod throw_catch;
 
 use std::collections::HashMap;
 
@@ -121,7 +123,11 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
     );
 
     let system_filter = |seed: u64| {
-        split::<U3>()
+        pinkpass::<S>()
+        >> map(|frame: &Frame<f32, U1>| {
+           tanh(frame[0] * 7.5)
+        })
+        >> split::<U3>()
         >> ((((lpc_bank::<8, U4>() | pass()) >> (mul(0.1) | mul(0.2) | mul(0.3) | mul(0.4) | pass())) >> map(move |frame: &Frame<f32, U5>| {
             let original = frame[4];
             let h11 = hash_11(seed);

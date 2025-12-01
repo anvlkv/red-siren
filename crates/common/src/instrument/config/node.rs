@@ -114,6 +114,7 @@ mod tests {
                         (
                             format!("{:?}", node.key),
                             format!("{}Hz", node.frequency),
+                            format!("{} cents", node.cents),
                             formants,
                         )
                     })

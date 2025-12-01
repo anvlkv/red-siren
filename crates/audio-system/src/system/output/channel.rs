@@ -100,7 +100,7 @@ where
         let values = values.clone();
         move |i| {
             let group_handles = mem::take(&mut group_handles_cell.borrow_mut()[i as usize]);
-            super::node::create_group_node::<K>(&groups[i as usize], group_handles, &values)
+            super::group::create_group_node::<K>(&groups[i as usize], group_handles, &values)
         }
     });
     net.push(Box::new(node))

@@ -23,4 +23,22 @@ impl GroupConfig {
         }
         Ok(())
     }
+
+    /// Calculate the average distance in cents between the adjacent frequency nodes in the group.
+    pub fn distance_cents(&self) -> f64 {
+        self.nodes
+            .chunks(2)
+            .rev()
+            .map(|d| {
+                if d.len() == 2 {
+                    let c1 = d[0].cents;
+                    let c2 = d[1].cents;
+                    c2 - c1
+                } else {
+                    0.0
+                }
+            })
+            .sum::<f64>()
+            / (self.nodes.len() - 1) as f64
+    }
 }

@@ -13,9 +13,8 @@ common = { path = "crates/common" }
 console_error_panic_hook = "0.1.7"
 fastrand = "2.3.0"
 fundsp = { version = "0.20", default-features = false, features = ["std"] }
-insta = "1.44.1"
+insta = "1.44.3"
 js-sys = "0.3"
-leptos_router = { version = "0.8", features = ["nightly"] }
 log = "0.4"
 mint = { version = "0.5.9", features = ["serde"] }
 ringbuf = "0.4.8"
@@ -24,6 +23,6 @@ serde_json = "1"
 strum = { version = "0.27.2", features = ["derive"] }
 tauri = { version = "2", features = ["rustls-tls"] }
 thiserror = "2.0.17"
-wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
-web-sys = "*"
+wasm-bindgen = "0.2.105"
+wasm-bindgen-futures = "0.4.50"
+web-sys = "0.3"

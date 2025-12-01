@@ -6,7 +6,11 @@ use fundsp::{
     typenum::{UInt, UTerm, B0, B1},
 };
 
-use crate::{system::values::FineTunedValue, util::S, values::FineTunedValues};
+use crate::{
+    system::values::FineTunedValue,
+    util::{DbLin, S},
+    values::FineTunedValues,
+};
 
 #[derive(Clone)]
 pub struct FilterHandles {
@@ -37,8 +41,6 @@ type QControl = Pipe<
     Binop<FrameMul<UInt<UTerm, B1>>, Pass, FineTunedValue>,
 >;
 
-type DbLin = Pipe<FineTunedValue, super::db_lin::DbLinConverter>;
-
 type HpBranch = Pipe<
     Pipe<
         Stack<
@@ -56,10 +58,7 @@ type BpBranch = Pipe<
             Stack<Pass, Binop<FrameMul<UInt<UTerm, B1>>, Constant<U1>, InvertedControl>>,
             QControl,
         >,
-        Stack<
-            Stack<Stack<Svf<S, BandpassMode<S>>, Constant<U1>>, QControl>,
-            Pipe<FineTunedValue, super::db_lin::DbLinConverter>,
-        >,
+        Stack<Stack<Stack<Svf<S, BandpassMode<S>>, Constant<U1>>, QControl>, DbLin>,
     >,
     Svf<S, HighshelfMode<S>>,
 >;
@@ -67,10 +66,7 @@ type BpBranch = Pipe<
 type LpBranch = Pipe<
     Pipe<
         Stack<Pass, Binop<FrameMul<UInt<UTerm, B1>>, Constant<U1>, InvertedControl>>,
-        Stack<
-            Stack<Stack<Lowpole<S, UInt<UInt<UTerm, B1>, B0>>, Constant<U1>>, QControl>,
-            Pipe<FineTunedValue, super::db_lin::DbLinConverter>,
-        >,
+        Stack<Stack<Stack<Lowpole<S, UInt<UInt<UTerm, B1>, B0>>, Constant<U1>>, QControl>, DbLin>,
     >,
     Svf<S, LowshelfMode<S>>,
 >;
@@ -85,7 +81,7 @@ type PannerBranches = Stack<Stack<PannerControlled, PannerControlled>, PannerCon
 
 type HpBranchA = Pipe<
     Pipe<BranchInput, Stack<Stack<Stack<Pass, Pass>, Pass>, DbLin>>,
-    DirtyBiquad<S, BellBiquad<S>, SoftCrush>,
+    DirtyBiquad<S, BellBiquad<S>, Softsign>,
 >;
 type BpBranchA = Pipe<
     Pipe<BranchInput, Stack<Stack<Stack<Pass, Pass>, Pass>, DbLin>>,
@@ -93,12 +89,12 @@ type BpBranchA = Pipe<
 >;
 type LpBranchA = Pipe<
     Pipe<BranchInput, Stack<Stack<Stack<Pass, Pass>, Pass>, DbLin>>,
-    DirtyBiquad<S, BellBiquad<S>, Crush>,
+    DirtyBiquad<S, BellBiquad<S>, Softsign>,
 >;
 
-type HpBranchB = Pipe<BranchInput, DirtyBiquad<S, ResonatorBiquad<S>, Tanh>>;
-type BpBranchB = Pipe<BranchInput, FbBiquad<S, ResonatorBiquad<S>, Crush>>;
-type LpBranchB = Pipe<BranchInput, Rez<S, U3>>;
+type HpBranchB = Pipe<BranchInput, DirtyBiquad<S, ResonatorBiquad<S>, Crush>>;
+type BpBranchB = Pipe<BranchInput, FbBiquad<S, ResonatorBiquad<S>, SoftCrush>>;
+type LpBranchB = Pipe<BranchInput, DirtyBiquad<S, ResonatorBiquad<S>, SoftCrush>>;
 
 type AbTreatment = Stack<
     Stack<Stack<Stack<Stack<HpBranchA, HpBranchB>, BpBranchA>, BpBranchB>, LpBranchA>,
@@ -127,6 +123,7 @@ pub type FilterType = Pipe<
     Join<U2>,
 >;
 
+#[allow(clippy::unnecessary_cast)]
 pub fn create_filter(handles: FilterHandles, finetuned_values: &FineTunedValues) -> An<FilterType> {
     let FilterHandles {
         control_a_b,
@@ -206,25 +203,25 @@ pub fn create_filter(handles: FilterHandles, finetuned_values: &FineTunedValues)
         pass() | constant(config.frequency as f32) | q_piercing_controlled.clone();
     let a_hp_branch: An<HpBranchA> = hp_input.clone()
         >> (pass() | pass() | pass() | filter_shelf_gain_lin.clone())
-        >> dbell(SoftCrush(shape));
-    let b_hp_branch: An<HpBranchB> = hp_input >> dresonator(Tanh(shape));
+        >> dbell(Softsign(shape));
+    let b_hp_branch: An<HpBranchB> = hp_input >> dresonator(Crush(shape));
 
     let mid_f = (config.formant_hz(3) + config.formant_hz(4)) / 2.0;
     let bp_input: An<BranchInput> = pass() | constant(mid_f as f32) | q_bright_controlled.clone();
     let a_bp_branch: An<BpBranchA> = bp_input.clone()
         >> (pass() | pass() | pass() | filter_shelf_gain_lin.clone())
         >> dbell(Softsign(shape));
-    let b_bp_branch: An<BpBranchB> = bp_input >> fresonator(Crush(shape));
+    let b_bp_branch: An<BpBranchB> = bp_input >> fresonator(SoftCrush(shape));
 
-    let mass = config.cents.powf(1.05) as S;
+    let mass = config.cents.clamp(f64::EPSILON.sqrt(), 1200.0).powf(1.05) as S;
     let hr_bpm = (K_BASE as S) * mass.powf(-0.25);
     let hr_hz = hr_bpm / 60.0;
 
     let lp_input: An<BranchInput> = pass() | constant(hr_hz as f32) | q_warm_controlled.clone();
     let a_lp_branch: An<LpBranchA> = lp_input.clone()
         >> (pass() | pass() | pass() | filter_shelf_gain_lin.clone())
-        >> dbell(Crush(shape));
-    let b_lp_branch: An<LpBranchB> = lp_input >> lowrez();
+        >> dbell(Softsign(shape));
+    let b_lp_branch: An<LpBranchB> = lp_input >> dresonator(SoftCrush(shape));
 
     let freq_branches: An<FreqBranches> = hp_branch | bp_branch | lp_branch;
 
@@ -250,6 +247,8 @@ pub fn create_filter(handles: FilterHandles, finetuned_values: &FineTunedValues)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::system::output::prepare_handles;
+    use common::instrument::config_test_cases;
     use insta_fun::prelude::*;
 
     #[test]
@@ -461,5 +460,61 @@ mod tests {
             .unwrap();
 
         assert_audio_unit_snapshot!(schema, config);
+    }
+
+    #[test]
+    fn config_test_cases_one_by_one() {
+        let mut svg_config_bldr = SvgChartConfigBuilder::default();
+        svg_config_bldr.show_grid(true);
+        svg_config_bldr.preserve_aspect_ratio(SvgPreserveAspectRatio::scale_to_fit());
+
+        let mut snapshot_config_bldr = SnapshotConfigBuilder::default();
+        snapshot_config_bldr.num_samples(2000);
+        snapshot_config_bldr.warm_up(WarmUp::Seconds(0.5));
+        snapshot_config_bldr.allow_abnormal_samples(true);
+
+        #[cfg(feature = "editor")]
+        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        #[cfg(not(feature = "editor"))]
+        let values = FineTunedValues::new();
+
+        for (config, layout) in config_test_cases() {
+            let mut svg_config_bldr = svg_config_bldr.clone();
+
+            let (node_handles, _, filter_handles) = prepare_handles(&config.0, config.1);
+            let mut net = Net::new(0, filter_handles.len());
+
+            for handle in filter_handles {
+                let f = handle.config.frequency;
+                let key = handle.config.key;
+
+                svg_config_bldr.output_title(format!("{f:.0}Hz_g{}_k{}", key.0, key.1));
+
+                let filter = create_filter(handle, &values);
+                let node = saw_hz(f as f32) >> filter;
+
+                let id = net.push(Box::new(node));
+
+                net.pipe_output(id);
+            }
+
+            node_handles.iter().for_each(|n| {
+                n.siren_control.set_value(0.25);
+                n.band_control.set_value(0.25);
+            });
+
+            let snapshot_config = snapshot_config_bldr
+                .clone()
+                .chart_title(format!(
+                    "filter_one_by_one_{}x{}_{:?}",
+                    layout.space.x, layout.space.y, layout.scale
+                ))
+                .try_output_mode(svg_config_bldr)
+                .unwrap()
+                .build()
+                .unwrap();
+
+            assert_audio_unit_snapshot!(net, snapshot_config)
+        }
     }
 }

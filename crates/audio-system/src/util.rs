@@ -11,8 +11,13 @@ pub const fn hash_str(s: &str) -> u64 {
     hash
 }
 
-#[cfg(not(feature="hi_fi"))]
+#[cfg(not(feature = "hi_fi"))]
 pub type S = f32;
 
-#[cfg(feature="hi_fi")]
+#[cfg(feature = "hi_fi")]
 pub type S = f64;
+
+pub type DbLin = fundsp::hacker::Pipe<
+    crate::values::FineTunedValue,
+    super::system::output::db_lin::DbLinConverter,
+>;

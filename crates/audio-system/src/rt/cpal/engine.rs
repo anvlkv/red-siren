@@ -251,6 +251,7 @@ impl CpalController {
             output_default_cfg,
             stream_cfg,
             output_channels,
+            #[allow(clippy::unnecessary_cast)]
             move || {
                 // Excitement consumer captured inside closure.
                 let input_buffer = input_buffer.clone();
@@ -551,7 +552,7 @@ impl CpalController {
             return;
         };
 
-        net.crossfade(primary_id, Fade::Smooth, 0.3, Box::new(new_node));
+        net.crossfade(primary_id, Fade::Power, 0.7, Box::new(new_node));
         net.check();
         net.commit();
         log::info!("Primary DSP node updated successfully");

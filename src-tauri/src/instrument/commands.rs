@@ -490,8 +490,6 @@ pub fn instrument_is_batch_processing(state: State<'_, InstrumentEngine>) -> boo
 #[tauri::command]
 pub async fn instrument_edit_finetuned_values(
     siren_alpha: f32,
-    siren_beta: f32,
-    siren_gamma: f32,
     group_ls_gain_db: f32,
     group_q: f32,
     node_follow_response_time_s: f32,
@@ -510,8 +508,6 @@ pub async fn instrument_edit_finetuned_values(
 ) -> Result<common::commands::edit::FineTunedValuesPayload> {
     let values = common::commands::edit::FineTunedValuesPayload{
         siren_alpha,
-        siren_beta,
-        siren_gamma,
         group_ls_gain_db,
         group_q,
         filter_morph_follow_s,

@@ -123,11 +123,7 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
     );
 
     let system_filter = |seed: u64| {
-        pinkpass::<S>()
-        >> map(|frame: &Frame<f32, U1>| {
-           tanh(frame[0] * 7.5)
-        })
-        >> split::<U3>()
+        split::<U3>()
         >> ((((lpc_bank::<8, U4>() | pass()) >> (mul(0.1) | mul(0.2) | mul(0.3) | mul(0.4) | pass())) >> map(move |frame: &Frame<f32, U5>| {
             let original = frame[4];
             let h11 = hash_11(seed);

@@ -34,7 +34,6 @@ impl<F: Real> Siren<F> {
         siren
     }
 
-    #[allow(dead_code)]
     pub fn new_phase(phase: F) -> Self {
         let mut siren = Self {
             initial_phase: Some(phase),
@@ -200,6 +199,7 @@ impl<F: Real> AudioNode for Siren<F> {
     }
 }
 
+#[allow(dead_code)]
 pub fn siren<F>() -> An<Siren<F>>
 where
     F: Real,
@@ -208,7 +208,6 @@ where
     An(siren)
 }
 
-#[allow(dead_code)]
 pub fn siren_phase<F>(phase: F) -> An<Siren<F>>
 where
     F: Real,

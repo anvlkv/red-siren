@@ -59,12 +59,11 @@ fn instrument_with_rand_src() {
             &values,
         );
 
+        let case_title = format!("{}x{}_{:?}", layout.space.x, layout.space.y, layout.scale);
+
         let svg_config = SvgChartConfigBuilder::default()
             .show_grid(true)
-            .chart_title(format!(
-                "{}x{}_{:?}",
-                layout.space.x, layout.space.y, layout.scale
-            ))
+            .chart_title(&case_title)
             .preserve_aspect_ratio(SvgPreserveAspectRatio::scale_to_fit())
             .build()
             .unwrap();
@@ -77,7 +76,16 @@ fn instrument_with_rand_src() {
             .build()
             .unwrap();
 
-        assert_audio_unit_snapshot!(net, config);
+        assert_audio_unit_snapshot!(net.clone(), config);
+
+        let config = SnapshotConfigBuilder::default()
+            .num_samples(44100)
+            .warm_up(WarmUp::Samples(8000))
+            .output_mode(WavOutput::Wav32)
+            .build()
+            .unwrap();
+
+        assert_audio_unit_snapshot!(case_title, net.clone(), InputSource::None, config);
     }
 }
 

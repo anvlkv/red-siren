@@ -49,8 +49,6 @@ pub(super) fn create_node(
     let FineTunedValues {
         node_follow_response_time_s,
         siren_alpha,
-        siren_beta,
-        siren_gamma,
         formant_base_q,
         node_bell_q,
         node_bell_gain_db,
@@ -72,9 +70,10 @@ pub(super) fn create_node(
     let siren_output: An<SirenWithInputs> = siren_with_inputs(
         siren_excitement,
         modulated_alpha,
-        siren_beta,
-        siren_gamma,
         An(siren_signum),
+        config.divisions,
+        config.cents,
+        config.phase as S,
     );
 
     let formants: An<FormantBank> = formant_bank(config, &band_control, &formant_base_q);
@@ -143,23 +142,33 @@ where
 // Type alias for the siren with all 5 inputs stacked
 type SirenWithInputs<V = Var> = Pipe<
     Stack<
-        Stack<Stack<Stack<SirenExcitement, SirenAlpha<V>>, FineTunedValue>, FineTunedValue>,
+        Stack<Stack<Stack<SirenExcitement, SirenAlpha<V>>, Constant<U1>>, Constant<U1>>,
         Constant<U1>,
     >,
     super::siren::Siren<S>,
 >;
 
+#[allow(clippy::unnecessary_cast)]
 fn siren_with_inputs<V>(
     siren_excitement: An<SirenExcitement>,
     modulated_alpha: An<SirenAlpha<V>>,
-    siren_beta: An<FineTunedValue>,
-    siren_gamma: An<FineTunedValue>,
     siren_signum: An<Constant<U1>>,
+    num_divisions: u32,
+    cents: f64,
+    phase: S,
 ) -> An<SirenWithInputs<V>>
 where
     V: AudioNode<Outputs = U1, Inputs = U0>,
 {
-    (siren_excitement | modulated_alpha | siren_beta | siren_gamma | siren_signum) >> siren::<S>()
+    let gamma: S = (1.0 - (1.0 / 1200.0) * (cents as S + S::EPSILON.sqrt())).abs();
+    let beta: S = 1.0 / (num_divisions as S + gamma.sqrt());
+
+    (siren_excitement
+        | modulated_alpha
+        | constant(beta as f32)
+        | constant(gamma as f32)
+        | siren_signum)
+        >> siren_phase::<S>(phase)
 }
 
 // Type alias for a single formant filter with base_q input
@@ -230,7 +239,14 @@ fn bell_filter(
 // Type alias for the source oscillator (abs >> clip >> sine/saw/control crossfade)
 type SourceOscillator = Pipe<
     Pipe<
-        Pipe<Binop<FrameMul<U1>, Pipe<super::abs::Abs, Shaper<ClipTo>>, Constant<U1>>, Split<U2>>,
+        Pipe<
+            Binop<
+                FrameMul<U1>,
+                Pipe<Binop<FrameSub<U1>, Constant<U1>, super::abs::Abs>, Shaper<ClipTo>>,
+                Constant<U1>,
+            >,
+            Split<U2>,
+        >,
         Stack<Stack<Sine<S>, WaveSynth<U1>>, Var>,
     >,
     super::crossfade::EqualPowerCrossfade,
@@ -238,7 +254,9 @@ type SourceOscillator = Pipe<
 
 #[allow(clippy::unnecessary_cast)]
 fn source_oscillator(frequency: S, phase: S, band_control: &Var) -> An<SourceOscillator> {
-    ((super::abs::abs() >> clip_to(0.85, 1.0)) * constant(frequency as f32))
+    let input = constant(1.0) - super::abs::abs();
+
+    ((input >> clip_to(0.6, 1.0)) * constant(frequency as f32))
         >> split::<U2>()
         >> (sine_phase::<S>(phase as f32) | soft_saw() | An(band_control.clone()))
         >> super::crossfade::equal_power_crossfade()
@@ -266,8 +284,9 @@ mod tests {
         let snapshot_config = SnapshotConfigBuilder::default()
             .num_samples(1000)
             .allow_abnormal_samples(true)
-            .with_inputs(true)
             .chart_layout(Layout::Combined)
+            .output_title("Control")
+            .output_title("Alpha")
             .build()
             .unwrap();
 
@@ -278,6 +297,196 @@ mod tests {
 
         assert_audio_unit_snapshot!(
             "modulated_alpha",
+            node,
+            InputSource::Unit(Box::new(ramp_hz::<f32>(100.0))),
+            snapshot_config
+        );
+    }
+
+    #[test]
+    fn test_siren_excitement() {
+        #[cfg(feature = "editor")]
+        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        #[cfg(not(feature = "editor"))]
+        let values = FineTunedValues::new();
+
+        let src_control = shared(0.0);
+        let var = Var::new(&src_control);
+
+        let handles = InnerHandles::default();
+        let excitement: An<SirenExcitement> = siren_excitement(
+            &var,
+            &values.node_follow_response_time_s,
+            handles.excitement_snoop,
+        );
+
+        let snapshot_config = SnapshotConfigBuilder::default()
+            .num_samples(1000)
+            .allow_abnormal_samples(true)
+            .chart_layout(Layout::Combined)
+            .output_title("Control")
+            .output_title("Excitement")
+            .build()
+            .unwrap();
+
+        let node = map(move |frame: &Frame<f32, U1>| {
+            src_control.set_value(frame[0]);
+            frame[0]
+        }) | excitement;
+
+        assert_audio_unit_snapshot!(
+            "siren_excitement",
+            node,
+            InputSource::Unit(Box::new(ramp_hz::<f32>(100.0))),
+            snapshot_config
+        );
+    }
+
+    #[test]
+    fn test_siren_with_inputs() {
+        #[cfg(feature = "editor")]
+        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        #[cfg(not(feature = "editor"))]
+        let values = FineTunedValues::new();
+
+        let src_control = shared(0.0);
+        let var = Var::new(&src_control);
+
+        let handles = InnerHandles::default();
+
+        let excitement: An<SirenExcitement> = siren_excitement(
+            &var,
+            &values.node_follow_response_time_s,
+            handles.excitement_snoop,
+        );
+        let modulated_alpha: An<SirenAlpha> = siren_modulated_alpha(&values.siren_alpha, &var);
+        let siren: An<SirenWithInputs> = siren_with_inputs(
+            excitement,
+            modulated_alpha,
+            An(handles.siren_signum),
+            4,
+            50.0,
+            0.0,
+        );
+
+        let snapshot_config = SnapshotConfigBuilder::default()
+            .num_samples(1000)
+            .allow_abnormal_samples(true)
+            .chart_layout(Layout::Combined)
+            .output_title("Control")
+            .output_title("Siren output")
+            .build()
+            .unwrap();
+
+        let node = map(move |frame: &Frame<f32, U1>| {
+            src_control.set_value(frame[0]);
+            frame[0]
+        }) | siren;
+
+        assert_audio_unit_snapshot!(
+            "siren_with_inputs",
+            node,
+            InputSource::Unit(Box::new(ramp_hz::<f32>(100.0))),
+            snapshot_config
+        );
+    }
+
+    #[test]
+    fn test_formant_bank() {
+        #[cfg(feature = "editor")]
+        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        #[cfg(not(feature = "editor"))]
+        let values = FineTunedValues::new();
+
+        let src_control = shared(0.0);
+        let var = Var::new(&src_control);
+
+        let config = NodeConfig::new_test_node(440.0);
+
+        let bank: An<FormantBank> = formant_bank(&config, &var, &values.formant_base_q);
+
+        let snapshot_config = SnapshotConfigBuilder::default()
+            .num_samples(1000)
+            .allow_abnormal_samples(true)
+            .chart_layout(Layout::Combined)
+            .output_title("Control")
+            .output_title("Output")
+            .build()
+            .unwrap();
+
+        let node = map(move |frame: &Frame<f32, U1>| {
+            src_control.set_value(frame[0]);
+            frame[0]
+        }) >> bank;
+
+        assert_audio_unit_snapshot!(
+            "formant_bank",
+            node,
+            InputSource::Unit(Box::new(ramp_hz::<f32>(100.0))),
+            snapshot_config
+        );
+    }
+
+    #[test]
+    fn test_bell_filter() {
+        #[cfg(feature = "editor")]
+        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        #[cfg(not(feature = "editor"))]
+        let values = FineTunedValues::new();
+
+        let src_control = shared(0.0);
+        let var = Var::new(&src_control);
+
+        let filter: An<BellFilter> = bell_filter(
+            440.0 as S,
+            &values.node_bell_q,
+            &values.node_bell_gain_db,
+            &var,
+        );
+
+        let snapshot_config = SnapshotConfigBuilder::default()
+            .num_samples(1000)
+            .allow_abnormal_samples(true)
+            .with_inputs(true)
+            .chart_layout(Layout::Combined)
+            .build()
+            .unwrap();
+
+        let node = map(move |frame: &Frame<f32, U1>| {
+            src_control.set_value(frame[0]);
+            frame[0]
+        }) >> filter;
+
+        assert_audio_unit_snapshot!(
+            "bell_filter",
+            node,
+            InputSource::Unit(Box::new(ramp_hz::<f32>(100.0))),
+            snapshot_config
+        );
+    }
+
+    #[test]
+    fn test_source_oscillator() {
+        let src_control = shared(0.0);
+        let var = Var::new(&src_control);
+
+        let osc: An<SourceOscillator> = source_oscillator(440.0 as S, 0.0 as S, &var);
+
+        let snapshot_config = SnapshotConfigBuilder::default()
+            .num_samples(1000)
+            .allow_abnormal_samples(true)
+            .with_inputs(true)
+            .chart_layout(Layout::Combined)
+            .build()
+            .unwrap();
+
+        let node = map(move |frame: &Frame<f32, U1>| {
+            src_control.set_value(frame[0]);
+            frame[0]
+        }) | osc;
+
+        assert_audio_unit_snapshot!(
+            "source_oscillator",
             node,
             InputSource::Unit(Box::new(ramp_hz::<f32>(100.0))),
             snapshot_config
@@ -371,9 +580,9 @@ mod tests {
         #[cfg(not(feature = "editor"))]
         let values = FineTunedValues::new();
 
-        let mut chart_config = SnapshotConfigBuilder::default();
-        chart_config.warm_up(WarmUp::Samples(8000));
-        chart_config.num_samples(4000);
+        let mut snapshot_config = SnapshotConfigBuilder::default();
+        snapshot_config.warm_up(WarmUp::Samples(8000));
+        snapshot_config.num_samples(4000);
         let mut svg_config = SvgChartConfigBuilder::default();
         svg_config.show_grid(true);
         svg_config.chart_layout(Layout::Combined);
@@ -381,28 +590,45 @@ mod tests {
 
         for (config, layout) in config_test_cases() {
             let mut net = Net::new(0, config.0.iter().map(|g| g.nodes.len()).sum());
-            let mut chart_config = chart_config.clone();
+            let mut snapshot_config = snapshot_config.clone();
             let mut svg_config = svg_config.clone();
 
-            svg_config.chart_title(format!(
+            let case_title = format!(
                 "config_test_case_node_{}x{}_{:?}",
                 layout.space.x, layout.space.y, layout.scale
-            ));
+            );
+            svg_config.chart_title(&case_title);
 
             for group in config.0 {
                 for node in group.nodes {
                     let handles = InnerHandles::default();
                     handles.siren_control.set_value(0.25);
                     handles.band_control.set_value(0.25);
-                    svg_config.output_title(format!("node: {:?}; {}Hz", node.key, node.frequency));
+                    let title = format!("node: {:?}; {}Hz", node.key, node.frequency);
+                    svg_config.output_title(&title);
 
                     let node = create_node(&node, handles, &values);
+
+                    let audio_snapshot_config = snapshot_config
+                        .clone()
+                        .output_mode(WavOutput::Wav32)
+                        .num_samples(44100)
+                        .build()
+                        .unwrap();
+
+                    assert_audio_unit_snapshot!(
+                        format!("{case_title}-{title}"),
+                        node.clone(),
+                        InputSource::None,
+                        audio_snapshot_config
+                    );
+
                     let id = net.push(Box::new(node));
                     net.pipe_output(id);
                 }
             }
 
-            let config = chart_config
+            let config = snapshot_config
                 .try_output_mode(svg_config)
                 .unwrap()
                 .build()

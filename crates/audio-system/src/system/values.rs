@@ -11,8 +11,6 @@ pub type FineTunedValue = Var;
 #[derive(Clone)]
 pub struct FineTunedValues {
     pub siren_alpha: An<FineTunedValue>,
-    pub siren_beta: An<FineTunedValue>,
-    pub siren_gamma: An<FineTunedValue>,
     pub filter_morph_follow_s: An<FineTunedValue>,
     pub node_follow_response_time_s: An<FineTunedValue>,
     pub group_q: An<FineTunedValue>,
@@ -32,8 +30,6 @@ pub struct FineTunedValues {
 #[cfg(feature = "editor")]
 pub struct FineTunedSharedValues {
     pub siren_alpha: Shared,
-    pub siren_beta: Shared,
-    pub siren_gamma: Shared,
     pub filter_morph_follow_s: Shared,
     pub node_follow_response_time_s: Shared,
     pub group_q: Shared,
@@ -51,8 +47,6 @@ pub struct FineTunedSharedValues {
 }
 
 const SIREN_ALPHA: f32 = 100.0 / 7.5;
-const SIREN_BETA: f32 = 0.75;
-const SIREN_GAMMA: f32 = 0.075;
 const NODE_BELL_Q: f32 = 0.3;
 const NODE_BELL_GAIN_DB: f32 = 10.0;
 const NODE_FOLLOW_RESPONSE_TIME_S: f32 = 0.175;
@@ -73,8 +67,6 @@ impl Default for FineTunedSharedValues {
     fn default() -> Self {
         Self {
             siren_alpha: shared(SIREN_ALPHA),
-            siren_beta: shared(SIREN_BETA),
-            siren_gamma: shared(SIREN_GAMMA),
             group_q: shared(GROUP_Q),
             group_ls_gain_db: shared(GROUP_LS_GAIN_DB),
             filter_morph_follow_s: shared(FILTER_MORPH_FOLLOW_S),
@@ -99,8 +91,6 @@ impl FineTunedValues {
     pub fn new(shared_values: &FineTunedSharedValues) -> Self {
         Self {
             siren_alpha: var(&shared_values.siren_alpha),
-            siren_beta: var(&shared_values.siren_beta),
-            siren_gamma: var(&shared_values.siren_gamma),
             group_q: var(&shared_values.group_q),
             group_ls_gain_db: var(&shared_values.group_ls_gain_db),
             filter_morph_follow_s: var(&shared_values.filter_morph_follow_s),
@@ -122,8 +112,6 @@ impl FineTunedValues {
     pub fn new() -> Self {
         Self {
             siren_alpha: constant(SIREN_ALPHA),
-            siren_beta: constant(SIREN_BETA),
-            siren_gamma: constant(SIREN_GAMMA),
             group_q: constant(GROUP_Q),
             group_ls_gain_db: constant(GROUP_LS_GAIN_DB),
             filter_morph_follow_s: constant(FILTER_MORPH_FOLLOW_S),
@@ -146,8 +134,6 @@ impl std::fmt::Debug for FineTunedValues {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FineTunedValues")
             .field("siren_alpha", &self.siren_alpha.value())
-            .field("siren_beta", &self.siren_beta.value())
-            .field("siren_gamma", &self.siren_gamma.value())
             .field("group_q", &self.group_q.value())
             .field("group_ls_gain_db", &self.group_ls_gain_db.value())
             .field("filter_morph_follow_s", &self.filter_morph_follow_s.value())

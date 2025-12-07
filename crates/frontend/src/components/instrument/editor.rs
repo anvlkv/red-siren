@@ -100,33 +100,6 @@ pub fn EditorOverlay() -> impl IntoView {
                                 step=1.0
                             />
 
-                            <EditorRangeSlider
-                                label="Beta"
-                                value=Signal::derive(move || { finetuned_values().siren_beta })
-                                min=0.0
-                                max=10.0
-                                step=0.001
-                                on_input=Callback::new(move |val| {
-                                    set_finetuned_values
-                                        .update(|values| {
-                                            values.siren_beta = val;
-                                        });
-                                })
-                            />
-
-                            <EditorRangeSlider
-                                label="Gamma"
-                                value=Signal::derive(move || { finetuned_values().siren_gamma })
-                                min=0.0
-                                max=10.0
-                                step=0.0001
-                                on_input=Callback::new(move |val| {
-                                    set_finetuned_values
-                                        .update(|values| {
-                                            values.siren_gamma = val;
-                                        });
-                                })
-                            />
                         </fieldset>
 
                         <fieldset class="flex flex-col gap-2">

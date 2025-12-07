@@ -106,6 +106,7 @@ where
     net.push(Box::new(node))
 }
 
+#[allow(clippy::unnecessary_cast)]
 fn create_channel_filter<F>(
     filter_handles: Vec<FilterHandles>,
     src_id: NodeId,
@@ -120,12 +121,19 @@ where
         filter_handles.len(),
     );
 
-    let node = pass()
+    let gain: S = ((1.0 / F::USIZE as S).sqrt() + 1.0).powi(F::I32);
+
+    let filters = pass()
         >> pipei::<F, _, _>({
             let values = values.clone();
-            move |i| super::filter::create_filter(filter_handles[i as usize].clone(), &values)
+            move |i| {
+                super::filter::create_filter(filter_handles[i as usize].clone(), &values)
+                    >> mul(gain as f32)
+            }
         });
-    let filter_id = net.push(Box::new(node >> dcblock::<S>() >> declick::<S>()));
+    let filter_id = net.push(Box::new(
+        pinkpass::<S>() >> filters >> mul(1.0 / F::USIZE as f32),
+    ));
     net.pipe_all(src_id, filter_id);
 
     filter_id

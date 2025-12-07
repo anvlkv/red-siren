@@ -81,15 +81,15 @@ type PannerBranches = Stack<Stack<PannerControlled, PannerControlled>, PannerCon
 
 type HpBranchA = Pipe<
     Pipe<BranchInput, Stack<Stack<Stack<Pass, Pass>, Pass>, DbLin>>,
-    DirtyBiquad<S, BellBiquad<S>, Softsign>,
+    DirtyBiquad<S, BellBiquad<S>, Tanh>,
 >;
 type BpBranchA = Pipe<
     Pipe<BranchInput, Stack<Stack<Stack<Pass, Pass>, Pass>, DbLin>>,
-    DirtyBiquad<S, BellBiquad<S>, Softsign>,
+    DirtyBiquad<S, BellBiquad<S>, Tanh>,
 >;
 type LpBranchA = Pipe<
     Pipe<BranchInput, Stack<Stack<Stack<Pass, Pass>, Pass>, DbLin>>,
-    DirtyBiquad<S, BellBiquad<S>, Softsign>,
+    DirtyBiquad<S, BellBiquad<S>, Tanh>,
 >;
 
 type HpBranchB = Pipe<BranchInput, DirtyBiquad<S, ResonatorBiquad<S>, Crush>>;
@@ -203,14 +203,14 @@ pub fn create_filter(handles: FilterHandles, finetuned_values: &FineTunedValues)
         pass() | constant(config.frequency as f32) | q_piercing_controlled.clone();
     let a_hp_branch: An<HpBranchA> = hp_input.clone()
         >> (pass() | pass() | pass() | filter_shelf_gain_lin.clone())
-        >> dbell(Softsign(shape));
+        >> dbell(Tanh(shape));
     let b_hp_branch: An<HpBranchB> = hp_input >> dresonator(Crush(shape));
 
     let mid_f = (config.formant_hz(3) + config.formant_hz(4)) / 2.0;
     let bp_input: An<BranchInput> = pass() | constant(mid_f as f32) | q_bright_controlled.clone();
     let a_bp_branch: An<BpBranchA> = bp_input.clone()
         >> (pass() | pass() | pass() | filter_shelf_gain_lin.clone())
-        >> dbell(Softsign(shape));
+        >> dbell(Tanh(shape));
     let b_bp_branch: An<BpBranchB> = bp_input >> fresonator(SoftCrush(shape));
 
     let mass = config.cents.clamp(f64::EPSILON.sqrt(), 1200.0).powf(1.05) as S;
@@ -220,7 +220,7 @@ pub fn create_filter(handles: FilterHandles, finetuned_values: &FineTunedValues)
     let lp_input: An<BranchInput> = pass() | constant(hr_hz as f32) | q_warm_controlled.clone();
     let a_lp_branch: An<LpBranchA> = lp_input.clone()
         >> (pass() | pass() | pass() | filter_shelf_gain_lin.clone())
-        >> dbell(Softsign(shape));
+        >> dbell(Tanh(shape));
     let b_lp_branch: An<LpBranchB> = lp_input >> dresonator(SoftCrush(shape));
 
     let freq_branches: An<FreqBranches> = hp_branch | bp_branch | lp_branch;

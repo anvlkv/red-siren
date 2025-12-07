@@ -7,8 +7,6 @@ pub const GET_FINETUNED_VALUES: &str = "instrument_get_finetuned_values";
 #[serde(rename_all = "camelCase")]
 pub struct FineTunedValuesPayload {
     pub siren_alpha: f32,
-    pub siren_beta: f32,
-    pub siren_gamma: f32,
     pub group_q: f32,
     pub group_ls_gain_db: f32,
     pub filter_morph_follow_s: f32,

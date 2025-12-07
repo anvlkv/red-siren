@@ -33,7 +33,7 @@ use cpal::{
 use super::{Control, ControlInvocationResult, STREAM_TIMEOUT_S};
 
 /// Stereo (L,R) sample generator invoked per audio frame or with batch.
-pub type GenType = dyn FnMut(Option<(&mut [&mut [f32]], usize)>) -> Option<(f32, f32)> + Send;
+pub type GenType = dyn FnMut(StreamInstant, &mut [&mut [f32]]) + Send + Sync;
 
 /// Spawn an owner thread that creates and owns a CPAL output stream.
 ///
@@ -131,21 +131,25 @@ fn run_output(
     config: &StreamConfig,
     default_cfg: &SupportedStreamConfig,
     channels: usize,
-    mut next_sample: Box<GenType>,
+    mut next_tick: Box<GenType>,
 ) -> common::error::Result<Stream> {
     let err_cb = |err| log::error!("instrument playback stream error: {err}");
 
-    let sample_rate = config.sample_rate.0;
-    // (Instant delay, accumulated delay)
-    let mut last_ts: Option<StreamInstant> = None;
+    let mut scratch_left: Vec<f32> = Vec::new();
+    let mut scratch_right: Vec<f32> = Vec::new();
 
     match default_cfg.sample_format() {
         SampleFormat::F32 => device.build_output_stream(
             config,
             move |data: &mut [f32], info: &cpal::OutputCallbackInfo| {
-                let is_late =
-                    is_running_late(info, &mut last_ts, data.len() / channels, sample_rate);
-                write_data(data, channels, &mut next_sample, is_late)
+                write_data(
+                    data,
+                    channels,
+                    info.timestamp().callback,
+                    &mut next_tick,
+                    &mut scratch_left,
+                    &mut scratch_right,
+                )
             },
             err_cb,
             Some(Duration::from_secs(STREAM_TIMEOUT_S)),
@@ -153,9 +157,14 @@ fn run_output(
         SampleFormat::I16 => device.build_output_stream(
             config,
             move |data: &mut [i16], info: &cpal::OutputCallbackInfo| {
-                let is_late =
-                    is_running_late(info, &mut last_ts, data.len() / channels, sample_rate);
-                write_data(data, channels, &mut next_sample, is_late)
+                write_data(
+                    data,
+                    channels,
+                    info.timestamp().callback,
+                    &mut next_tick,
+                    &mut scratch_left,
+                    &mut scratch_right,
+                )
             },
             err_cb,
             Some(Duration::from_secs(STREAM_TIMEOUT_S)),
@@ -163,9 +172,14 @@ fn run_output(
         SampleFormat::U16 => device.build_output_stream(
             config,
             move |data: &mut [u16], info: &cpal::OutputCallbackInfo| {
-                let is_late =
-                    is_running_late(info, &mut last_ts, data.len() / channels, sample_rate);
-                write_data(data, channels, &mut next_sample, is_late)
+                write_data(
+                    data,
+                    channels,
+                    info.timestamp().callback,
+                    &mut next_tick,
+                    &mut scratch_left,
+                    &mut scratch_right,
+                )
             },
             err_cb,
             Some(Duration::from_secs(STREAM_TIMEOUT_S)),
@@ -185,74 +199,45 @@ fn run_output(
     })
 }
 
-fn is_running_late(
-    info: &cpal::OutputCallbackInfo,
-    last: &mut Option<StreamInstant>,
-    frames: usize,
-    sample_rate: u32,
-) -> bool {
-    let buffer_s: f64 = frames as f64 / sample_rate as f64;
-
-    let threshold = Duration::from_secs_f64(buffer_s * 1.75);
-
-    let ts = info.timestamp().callback;
-
-    let last_timeline = last.get_or_insert(ts);
-
-    let has_delay = ts
-        .duration_since(last_timeline)
-        .filter(|delay| delay > &threshold)
-        .is_some();
-
-    *last_timeline = ts;
-
-    has_delay
-}
-
 /// Interleave generated stereo frames across the output slice.
 ///
 /// If `channels` > 2, the pattern (L,R, 0,0,...) is repeated (simple spread).
-fn write_data<T>(output: &mut [T], channels: usize, next_sample: &mut GenType, prefer_batch: bool)
-where
+fn write_data<T>(
+    output: &mut [T],
+    channels: usize,
+    instant: StreamInstant,
+    next_tick: &mut GenType,
+    scratch_left: &mut Vec<f32>,
+    scratch_right: &mut Vec<f32>,
+) where
     T: cpal::SizedSample + cpal::FromSample<f32>,
 {
     if channels == 0 || output.is_empty() {
         return;
     }
 
-    if !prefer_batch {
-        write_interleaved(output.chunks_mut(channels).map(|f| {
-            let d = next_sample(None).unwrap();
-            (f, d)
-        }));
-    } else {
-        const MAX_BATCH_FRAMES: usize = 1024;
-        let mut scratch_left = [0_f32; MAX_BATCH_FRAMES];
-        let mut scratch_right = [0_f32; MAX_BATCH_FRAMES];
+    let len = output.len() / channels;
 
-        for chunk in output.chunks_mut(MAX_BATCH_FRAMES * channels) {
-            let frames_in_chunk = chunk.len() / channels; // actual frame count for this chunk (<= 1024)
-
-            // Slice scratch to the exact number of frames we will generate/write.
-            let mut frames_per_channel = [
-                &mut scratch_left[..frames_in_chunk],
-                &mut scratch_right[..frames_in_chunk],
-            ];
-
-            // Ask generator for exactly frames_in_chunk frames.
-            _ = next_sample(Some((frames_per_channel.as_mut_slice(), frames_in_chunk)));
-
-            // Interleave only the produced frames.
-            write_interleaved(
-                chunk.chunks_mut(channels).zip(
-                    scratch_left[..frames_in_chunk]
-                        .iter()
-                        .copied()
-                        .zip(scratch_right[..frames_in_chunk].iter().copied()),
-                ),
-            );
-        }
+    if scratch_left.len() != len {
+        scratch_left.resize(len, 0.0);
     }
+    if scratch_right.len() != len {
+        scratch_right.resize(len, 0.0);
+    }
+
+    let mut frames_per_channel = [scratch_left.as_mut_slice(), scratch_right.as_mut_slice()];
+
+    next_tick(instant, frames_per_channel.as_mut_slice());
+
+    // Interleave the produced frames.
+    write_interleaved(
+        output.chunks_mut(channels).zip(
+            scratch_left
+                .iter()
+                .copied()
+                .zip(scratch_right.iter().copied()),
+        ),
+    );
 }
 
 fn write_interleaved<'a, I, T>(data: I)

@@ -102,7 +102,7 @@ where
     let butter = butterpass_hz(f_max * 1.5);
 
     let one = 1.0 - S::EPSILON.sqrt();
-    let coef = (one / K::USIZE as S).sqrt();
+    let coef = one.powi(K::I32);
     let excitment_sum = constant(one as f32)
         >> pipei::<K, _, _>(move |_| {
             let mut excitements = excitements_cell.borrow_mut();
@@ -160,10 +160,10 @@ mod tests {
         #[cfg(not(feature = "editor"))]
         let values = FineTunedValues::new();
 
-        let mut chart_config = SnapshotConfigBuilder::default();
-        chart_config.allow_abnormal_samples(true);
-        chart_config.warm_up(WarmUp::Samples(8000));
-        chart_config.num_samples(4000);
+        let mut snapshot_config = SnapshotConfigBuilder::default();
+        snapshot_config.allow_abnormal_samples(true);
+        snapshot_config.warm_up(WarmUp::Samples(8000));
+        snapshot_config.num_samples(4000);
         let mut svg_config = SvgChartConfigBuilder::default();
         svg_config.show_grid(true);
         svg_config.chart_layout(Layout::Combined);
@@ -175,19 +175,10 @@ mod tests {
             for group in config.0 {
                 let g_key = group.nodes.first().unwrap().key.group();
 
-                let svg_config = svg_config
-                    .clone()
-                    .chart_title(format!(
-                        "config_test_case_group_{g_key}_{}x{}_{:?}",
-                        layout.space.x, layout.space.y, layout.scale
-                    ))
-                    .build()
-                    .unwrap();
-                let config = chart_config
-                    .clone()
-                    .output_mode(svg_config)
-                    .build()
-                    .unwrap();
+                let case_title = format!(
+                    "config_test_case_group_{g_key}_{}x{}_{:?}",
+                    layout.space.x, layout.space.y, layout.scale
+                );
 
                 let i_max = group.nodes.len();
                 let group_handles =
@@ -214,6 +205,27 @@ mod tests {
                 );
 
                 net.pipe_output(node_id);
+
+                let audio_snapshot_config = snapshot_config
+                    .clone()
+                    .output_mode(WavOutput::Wav32)
+                    .num_samples(44100)
+                    .build()
+                    .unwrap();
+
+                assert_audio_unit_snapshot!(
+                    &case_title,
+                    net.clone(),
+                    InputSource::None,
+                    audio_snapshot_config
+                );
+
+                let svg_config = svg_config.clone().chart_title(&case_title).build().unwrap();
+                let config = snapshot_config
+                    .clone()
+                    .output_mode(svg_config)
+                    .build()
+                    .unwrap();
 
                 assert_audio_unit_snapshot!(net, config);
             }

@@ -28,15 +28,16 @@ use parking_lot::RwLock;
 #[cfg(feature = "editor")]
 use crate::system::values::{FineTunedSharedValues, FineTunedValues};
 use crate::{
-    rt::{cpal::stream::spawn_owned_input_stream, AudioRuntime, ExcitementSource},
+    rt::{
+        cpal::stream::{spawn_owned_input_stream, spawn_playback_stream},
+        AudioRuntime, ExcitementSource,
+    },
     util::S,
     SensorHandles,
 };
 
 use super::audio_session;
-use super::stream::{
-    spawn_owned_output_stream, Control, ControlInvocationResult, GenType, ProdType,
-};
+use super::stream::{spawn_owned_output_stream, Control, ControlInvocationResult, ProdType};
 
 const CONTROL_INVOKE_TIMEOUT_MS: u64 = 500;
 const FADE_DURATION_MS: u64 = 120;
@@ -58,6 +59,10 @@ struct CpalController {
     // Fine-tuned values for editor mode
     #[cfg(feature = "editor")]
     fine_tuned_shared_values: RwLock<FineTunedSharedValues>,
+
+    // Playback control
+    playback_tx: RwLock<Option<Sender<Control>>>,
+    playback_thread: RwLock<Option<thread::JoinHandle<()>>>,
 
     // Stream control
     control_tx: RwLock<Option<Sender<Control>>>,
@@ -103,6 +108,8 @@ impl Default for CpalController {
             tuner_tap_gain_param: RwLock::new(None),
             #[cfg(feature = "editor")]
             fine_tuned_shared_values: RwLock::new(FineTunedSharedValues::default()),
+            playback_tx: RwLock::new(None),
+            playback_thread: RwLock::new(None),
             control_tx: RwLock::new(None),
             output_thread: RwLock::new(None),
             input_sender: RwLock::new(None),
@@ -245,50 +252,26 @@ impl CpalController {
 
         let is_batch_processing = self.is_batch_processing.clone();
 
+        let (next_value, playback_tx, playback_handle) = spawn_playback_stream(
+            backend,
+            input_buffer,
+            is_batch_processing,
+            self.sample_rate.read().map(|sr| sr as u32).unwrap_or(44100),
+        );
+
+        // Persist playback thread / control handles.
+        {
+            *self.playback_tx.write() = Some(playback_tx);
+            *self.playback_thread.write() = Some(playback_handle);
+        }
+
         // Spawn output stream owner.
         let (tx, handle) = spawn_owned_output_stream(
             output_device,
             output_default_cfg,
             stream_cfg,
             output_channels,
-            #[allow(clippy::unnecessary_cast)]
-            move || {
-                // Excitement consumer captured inside closure.
-                let input_buffer = input_buffer.clone();
-                let mut backend = BigBlockAdapter::new(Box::new(backend));
-                let next_value = move |batch: Option<(&mut [&mut [f32]], usize)>| {
-                    if let Some((output, size)) = batch {
-                        let mut input = vec![0.0; size];
-                        let mut sample_i = 0;
-                        while let Some(sample) = input_buffer
-                            .as_ref()
-                            .take_if(|_| sample_i < size)
-                            .and_then(|a| a.pop())
-                        {
-                            input[sample_i] = sample as f32;
-                            sample_i += 1;
-                        }
-                        backend.process_big(size, &[&input], output);
-                        if !*is_batch_processing.read() {
-                            *is_batch_processing.write() = true;
-                        }
-                        None
-                    } else {
-                        if *is_batch_processing.read() {
-                            *is_batch_processing.write() = false;
-                        }
-                        let mut in_sample = [0_f32];
-                        let mut out_sample = [0_f32; 2];
-                        if let Some(sample) = input_buffer.as_ref().and_then(|a| a.pop()) {
-                            in_sample[0] = sample as f32;
-                        }
-                        backend.tick(&in_sample, &mut out_sample);
-                        Some((out_sample[0], out_sample[1]))
-                    }
-                };
-                let boxed: Box<GenType> = Box::new(next_value);
-                boxed
-            },
+            move || next_value,
         )?;
 
         // Persist output thread / control handles.
@@ -301,6 +284,8 @@ impl CpalController {
     }
 
     fn create_main_network(&self, output_channels: usize, subnet: Net) -> Net {
+        denormal::prevent_denormals();
+
         let mut net = Net::new(1, output_channels);
 
         let main_node_id = net.push(Box::new(subnet));
@@ -573,6 +558,27 @@ impl CpalController {
     }
 
     fn shutdown_streams(&self) -> Result<()> {
+        // Playback stream shutdown
+        if let Some(tx) = self.playback_tx.write().take() {
+            let (ack_tx, ack_rx) = mpsc::channel();
+            tx.send(Control::Shutdown(ack_tx))
+                .map_err(|_| ControlError::ChannelSend {
+                    op: "shutdown".into(),
+                })?;
+            match ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS)) {
+                Ok(ControlInvocationResult::Ok(_)) => {}
+                Ok(ControlInvocationResult::Err(e)) => {
+                    return Err(InstrumentError::BuildStream { detail: e }.into())
+                }
+                Err(_) => {
+                    return Err(InstrumentError::AckTimeout {
+                        op: "shutdown".into(),
+                    }
+                    .into())
+                }
+            }
+        }
+
         // Output stream shutdown
         if let Some(tx) = self.control_tx.write().take() {
             let (ack_tx, ack_rx) = mpsc::channel();
@@ -605,6 +611,7 @@ impl CpalController {
         // Release thread handles
         *self.output_thread.write() = None;
         *self.input_thread.write() = None;
+        *self.playback_thread.write() = None;
 
         // Clear DSP & handles
         self.dsp_net_frontend.write().take();
@@ -766,13 +773,31 @@ impl AudioRuntime for CpalController {
         let (ack_tx, ack_rx) = mpsc::channel();
         tx.send(Control::Pause(ack_tx))
             .map_err(|_| ControlError::ChannelSend { op: "pause".into() })?;
-        match ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS)) {
+        let result_1 = match ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS)) {
             Ok(ControlInvocationResult::Ok(_)) => Ok(()),
             Ok(ControlInvocationResult::Err(e)) => {
                 Err(ControlError::BuildStream { detail: e }.into())
             }
             Err(_) => Err(ControlError::AckTimeout { op: "pause".into() }.into()),
-        }
+        };
+
+        let Some(p_tx) = self.playback_tx.read().as_ref().cloned() else {
+            return Err(ControlError::BackendMissing { op: "pause".into() }.into());
+        };
+
+        let (p_ack_tx, p_ack_rx) = mpsc::channel();
+        p_tx.send(Control::Pause(p_ack_tx))
+            .map_err(|_| ControlError::ChannelSend { op: "pause".into() })?;
+        let result_2 = match p_ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS))
+        {
+            Ok(ControlInvocationResult::Ok(_)) => Ok(()),
+            Ok(ControlInvocationResult::Err(e)) => {
+                Err(ControlError::BuildStream { detail: e }.into())
+            }
+            Err(_) => Err(ControlError::AckTimeout { op: "pause".into() }.into()),
+        };
+
+        result_1.and(result_2)
     }
 
     fn resume(&self) -> Result<()> {
@@ -788,7 +813,7 @@ impl AudioRuntime for CpalController {
             .map_err(|_| ControlError::ChannelSend {
                 op: "resume".into(),
             })?;
-        match ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS)) {
+        let result_1 = match ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS)) {
             Ok(ControlInvocationResult::Ok(_)) => {
                 self.fade_in();
                 Ok(())
@@ -800,7 +825,33 @@ impl AudioRuntime for CpalController {
                 op: "resume".into(),
             }
             .into()),
-        }
+        };
+
+        let Some(p_tx) = self.playback_tx.read().as_ref().cloned() else {
+            return Err(ControlError::BackendMissing {
+                op: "resume".into(),
+            }
+            .into());
+        };
+
+        let (p_ack_tx, p_ack_rx) = mpsc::channel();
+        p_tx.send(Control::Resume(p_ack_tx))
+            .map_err(|_| ControlError::ChannelSend {
+                op: "resume".into(),
+            })?;
+        let result_2 = match p_ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS))
+        {
+            Ok(ControlInvocationResult::Ok(_)) => Ok(()),
+            Ok(ControlInvocationResult::Err(e)) => {
+                Err(ControlError::BuildStream { detail: e }.into())
+            }
+            Err(_) => Err(ControlError::AckTimeout {
+                op: "resume".into(),
+            }
+            .into()),
+        };
+
+        result_1.and(result_2)
     }
 
     fn on_excitement_source_changed(&self, source: ExcitementSource) -> Result<()> {
@@ -1084,8 +1135,6 @@ impl AudioRuntime for CpalController {
         let shared_values = self.fine_tuned_shared_values.read();
         Ok(common::commands::edit::FineTunedValuesPayload {
             siren_alpha: shared_values.siren_alpha.value(),
-            siren_beta: shared_values.siren_beta.value(),
-            siren_gamma: shared_values.siren_gamma.value(),
             group_q: shared_values.group_q.value(),
             group_ls_gain_db: shared_values.group_ls_gain_db.value(),
             filter_morph_follow_s: shared_values.filter_morph_follow_s.value(),
@@ -1112,8 +1161,6 @@ impl AudioRuntime for CpalController {
         {
             let shared_values = self.fine_tuned_shared_values.write();
             shared_values.siren_alpha.set_value(payload.siren_alpha);
-            shared_values.siren_beta.set_value(payload.siren_beta);
-            shared_values.siren_gamma.set_value(payload.siren_gamma);
             shared_values
                 .node_follow_response_time_s
                 .set_value(payload.node_follow_response_time_s);

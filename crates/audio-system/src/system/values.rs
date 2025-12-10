@@ -54,11 +54,11 @@ const GROUP_Q: f32 = 0.085;
 const GROUP_LS_GAIN_DB: f32 = 3.0;
 const FORMANT_BASE_Q: f32 = 1.7;
 const FILTER_MORPH_FOLLOW_S: f32 = 0.05;
-const FILTER_Q_PIERCING: f32 = 3.2;
-const FILTER_Q_BRIGHT: f32 = 2.05;
-const FILTER_Q_SHELF: f32 = 1.65;
+const FILTER_Q_PIERCING: f32 = 1.2;
+const FILTER_Q_BRIGHT: f32 = 1.05;
+const FILTER_Q_SHELF: f32 = 0.85;
 const FILTER_SHELF_GAIN_DB: f32 = 2.0;
-const FILTER_Q_WARM: f32 = 1.55;
+const FILTER_Q_WARM: f32 = 0.95;
 const INPUT_NY_THRESHOLD: f32 = 0.12;
 const INPUT_NY_WET_RATIO: f32 = 0.3;
 

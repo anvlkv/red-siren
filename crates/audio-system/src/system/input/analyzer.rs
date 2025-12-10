@@ -282,13 +282,11 @@ impl FFTAnalyzer {
                     log::info!("FFT analyzer thread stopped");
                     break;
                 }
-                if let Some(remaining_len) = FFT_WINDOW_SIZE
+                if FFT_WINDOW_SIZE
                     .checked_sub(window_thb.len())
-                    .filter(|s| *s != 0)
+                    .is_some_and(|s| s != 0)
                 {
-                    sleep(Duration::from_secs_f64(
-                        (remaining_len + 2) as f64 / sample_rate as f64,
-                    ));
+                    sleep(Duration::from_micros(500));
                 } else {
                     let window: [f32; FFT_WINDOW_SIZE] =
                         core::array::from_fn(|_| window_thb.pop().unwrap_or_default());

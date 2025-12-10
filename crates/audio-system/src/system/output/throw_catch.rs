@@ -43,6 +43,7 @@ where
     O: typenum::Unsigned + Size<f32>,
 {
     rx: Arc<ThingBuf<f32>>,
+    prev: Vec<f32>,
     _o: std::marker::PhantomData<O>,
 }
 
@@ -52,6 +53,7 @@ where
 {
     An(ThrowCatchCatch {
         rx: buffer,
+        prev: vec![0.0; O::USIZE],
         _o: std::marker::PhantomData,
     })
 }
@@ -70,7 +72,14 @@ where
         let mut frame = Frame::splat(0.0);
         for f in frame.iter_mut() {
             if let Some(sample) = self.rx.pop() {
-                *f = sample;
+                // Append the new sample at the tail, then output the head.
+                self.prev.rotate_left(1);
+                self.prev[O::USIZE - 1] = sample;
+                *f = self.prev[0];
+            } else {
+                // No new sample; continue advancing through the queue.
+                *f = self.prev[0];
+                self.prev.rotate_left(1);
             }
         }
         frame

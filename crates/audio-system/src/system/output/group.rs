@@ -26,11 +26,28 @@ type ShelfType = Pipe<
     Svf<S, HighshelfMode<S>>,
 >;
 
-type ExcitementSum<K> = Pipe<
-    Constant<U1>,
-    Chain<
-        K,
-        Binop<FrameAdd<U1>, Pass, Pipe<Var, Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>>>,
+type ResamplerSpeed<K> = Pipe<
+    Pipe<
+        Constant<U1>,
+        Chain<
+            K,
+            Binop<FrameAdd<U1>, Pass, Pipe<Var, Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>>>,
+        >,
+    >,
+    Binop<
+        FrameSub<U1>,
+        Pass,
+        Pipe<
+            Constant<U1>,
+            Chain<
+                K,
+                Binop<
+                    FrameAdd<U1>,
+                    Pass,
+                    Pipe<Var, Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>>,
+                >,
+            >,
+        >,
     >,
 >;
 
@@ -46,7 +63,7 @@ type OutputChain = Pipe<Stack<Pass, Delay>, Join<U2>>;
 
 pub type GroupType<K> = Pipe<
     Pipe<
-        Pipe<Pipe<ExcitementSum<K>, Split<U2>>, Stack<ProductionChain<K>, Pass>>,
+        Pipe<Pipe<ResamplerSpeed<K>, Split<U2>>, Stack<ProductionChain<K>, Pass>>,
         Stack<OutputChain, Pass>,
     >,
     Allpole<S, U2>,
@@ -78,6 +95,12 @@ where
             .map(|h| h.siren_control.clone())
             .collect::<Vec<_>>(),
     );
+    let bands_cell = RefCell::new(
+        group_handles
+            .values()
+            .map(|h| h.band_control.clone())
+            .collect::<Vec<_>>(),
+    );
     let handles_cell = RefCell::new(group_handles);
     let values_clone = values.clone();
     let f_min = config
@@ -101,13 +124,19 @@ where
 
     let butter = butterpass_hz(f_max * 1.5);
 
-    let one = 1.0 - S::EPSILON.sqrt();
-    let coef = one.powi(K::I32);
-    let excitment_sum = constant(one as f32)
+    let coef = (1.0 / K::USIZE as S).powi(K::I32);
+
+    let bands_sum = constant(0.0)
+        >> pipei::<K, _, _>(move |_| {
+            let mut bands = bands_cell.borrow_mut();
+            pass() + (An(bands.pop().unwrap()) >> mul(coef as f32))
+        });
+    let resampler_speed: An<ResamplerSpeed<K>> = constant(1.0)
         >> pipei::<K, _, _>(move |_| {
             let mut excitements = excitements_cell.borrow_mut();
             pass() + (An(excitements.pop().unwrap()) >> mul(coef as f32))
-        });
+        })
+        >> (pass() - bands_sum);
 
     let (throw, catch) = super::throw_catch::throw_catch::<K>();
 
@@ -139,7 +168,7 @@ where
 
     let output_chain: An<OutputChain> = (pass() | delay(group_delay)) >> join::<U2>();
 
-    excitment_sum
+    resampler_speed
         >> split::<U2>()
         >> (production_chain | pass())
         >> (output_chain | pass())

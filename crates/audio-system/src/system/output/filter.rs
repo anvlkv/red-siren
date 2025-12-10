@@ -7,6 +7,7 @@ use fundsp::{
 };
 
 use crate::{
+    output::throw_catch::{ThrowCatchCatch, ThrowCatchThrow},
     system::values::FineTunedValue,
     util::{DbLin, S},
     values::FineTunedValues,
@@ -41,6 +42,9 @@ type QControl = Pipe<
     Binop<FrameMul<UInt<UTerm, B1>>, Pass, FineTunedValue>,
 >;
 
+// Frequency branches
+//
+// High frequency branch
 type HpBranch = Pipe<
     Pipe<
         Stack<
@@ -51,7 +55,7 @@ type HpBranch = Pipe<
     >,
     Svf<S, AllpassMode<S>>,
 >;
-
+// Band frequency branch
 type BpBranch = Pipe<
     Pipe<
         Stack<
@@ -62,7 +66,7 @@ type BpBranch = Pipe<
     >,
     Svf<S, HighshelfMode<S>>,
 >;
-
+// Low frequency branch
 type LpBranch = Pipe<
     Pipe<
         Stack<Pass, Binop<FrameMul<UInt<UTerm, B1>>, Constant<U1>, InvertedControl>>,
@@ -71,44 +75,92 @@ type LpBranch = Pipe<
     Svf<S, LowshelfMode<S>>,
 >;
 
+// Controlled split between A/B treatment branches
+type PannerControlled = Pipe<Pipe<Stack<Pass, ClampedControl>, Panner<U2>>, Reverse<U2>>;
+type PannerBranches = Stack<Stack<PannerControlled, PannerControlled>, PannerControlled>;
+// Frequency branches
+type FreqBranches = Pipe<
+    Pipe<Stack<Stack<HpBranch, BpBranch>, LpBranch>, MultiSplit<U3, U2>>,
+    Stack<
+        Stack<Stack<Stack<Stack<Pass, ThrowCatchThrow>, Pass>, ThrowCatchThrow>, Pass>,
+        ThrowCatchThrow,
+    >,
+>;
+type FreqCatch = Pipe<
+    Binop<
+        FrameAdd<U1>,
+        Binop<FrameAdd<U1>, ThrowCatchCatch<U1>, ThrowCatchCatch<U1>>,
+        ThrowCatchCatch<U1>,
+    >,
+    Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>,
+>;
+
+// Parameter input to A/B branches
 type BranchInput = Stack<Stack<Pass, Constant<U1>>, QControl>;
 
-type PannerControlled = Pipe<Stack<Pass, ClampedControl>, Panner<U2>>;
-
-type FreqBranches = Stack<Stack<HpBranch, BpBranch>, LpBranch>;
-
-type PannerBranches = Stack<Stack<PannerControlled, PannerControlled>, PannerControlled>;
-
+// A branches
+//
+// High frequency branch A
 type HpBranchA = Pipe<
     Pipe<BranchInput, Stack<Stack<Stack<Pass, Pass>, Pass>, DbLin>>,
-    DirtyBiquad<S, BellBiquad<S>, Tanh>,
+    DirtyBiquad<S, BellBiquad<S>, Adaptive<Softsign>>,
 >;
+// Band frequency branch A
 type BpBranchA = Pipe<
     Pipe<BranchInput, Stack<Stack<Stack<Pass, Pass>, Pass>, DbLin>>,
-    DirtyBiquad<S, BellBiquad<S>, Tanh>,
+    DirtyBiquad<S, BellBiquad<S>, Adaptive<Softsign>>,
 >;
+// Low frequency branch A
 type LpBranchA = Pipe<
     Pipe<BranchInput, Stack<Stack<Stack<Pass, Pass>, Pass>, DbLin>>,
-    DirtyBiquad<S, BellBiquad<S>, Tanh>,
+    DirtyBiquad<S, BellBiquad<S>, Adaptive<Softsign>>,
 >;
 
-type HpBranchB = Pipe<BranchInput, DirtyBiquad<S, ResonatorBiquad<S>, Crush>>;
-type BpBranchB = Pipe<BranchInput, FbBiquad<S, ResonatorBiquad<S>, SoftCrush>>;
-type LpBranchB = Pipe<BranchInput, DirtyBiquad<S, ResonatorBiquad<S>, SoftCrush>>;
+// B branches
+//
+// High frequency branch B
+type BHpGain = Pipe<
+    Stack<InvertedControl, Constant<U1>>,
+    Binop<FrameAdd<U1>, Binop<FrameMul<U1>, super::div::Div<S>, Constant<U1>>, Constant<U1>>,
+>;
+type HpBranchB = Pipe<
+    Pipe<BranchInput, DirtyBiquad<S, ResonatorBiquad<S>, Crush>>,
+    Binop<FrameMul<U1>, Pass, BHpGain>,
+>;
+// Band frequency branch B
+type BBpDenominator =
+    Pipe<Pipe<Binop<FrameSub<U1>, Constant<U1>, InvertedControl>, super::abs::Abs>, Shaper<ClipTo>>;
+type BBpGain = Pipe<
+    Stack<BBpDenominator, Constant<U1>>,
+    Binop<FrameAdd<U1>, Binop<FrameMul<U1>, super::div::Div<S>, Constant<U1>>, Constant<U1>>,
+>;
+type BpBranchB = Pipe<
+    Pipe<BranchInput, FbBiquad<S, ResonatorBiquad<S>, SoftCrush>>,
+    Binop<FrameMul<U1>, Pass, BBpGain>,
+>;
+// Low frequency branch B
+type BLpGain = Pipe<
+    Stack<Binop<FrameSub<U1>, Constant<U1>, InvertedControl>, Constant<U1>>,
+    Binop<FrameAdd<U1>, Binop<FrameMul<U1>, super::div::Div<S>, Constant<U1>>, Constant<U1>>,
+>;
+type LpBranchB = Pipe<
+    Pipe<BranchInput, DirtyBiquad<S, ResonatorBiquad<S>, SoftCrush>>,
+    Binop<FrameMul<U1>, Pass, BLpGain>,
+>;
 
+// A/B treatment
 type AbTreatment = Stack<
     Stack<Stack<Stack<Stack<HpBranchA, HpBranchB>, BpBranchA>, BpBranchB>, LpBranchA>,
     LpBranchB,
 >;
 
+// Treated signal
 type WetChain = Pipe<
-    Pipe<
-        Pipe<Pipe<Pipe<Pipe<Pinkpass<S>, Split<U3>>, FreqBranches>, PannerBranches>, AbTreatment>,
-        Stack<Stack<Join<U2>, Join<U2>>, Join<U2>>,
-    >,
-    Join<U3>,
+    Pipe<Pipe<Pipe<Split<U3>, FreqBranches>, PannerBranches>, AbTreatment>,
+    Binop<FrameAdd<U1>, Binop<FrameAdd<U1>, Join<U2>, Join<U2>>, Join<U2>>,
 >;
 
+// Mix of wet and dry signals
 pub type FilterType = Pipe<
     Pipe<
         Pipe<
@@ -118,13 +170,17 @@ pub type FilterType = Pipe<
                 Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>,
             >,
         >,
-        Stack<WetChain, Pass>,
+        Stack<Stack<WetChain, Pass>, FreqCatch>,
     >,
-    Join<U2>,
+    Join<U3>,
 >;
 
 #[allow(clippy::unnecessary_cast)]
-pub fn create_filter(handles: FilterHandles, finetuned_values: &FineTunedValues) -> An<FilterType> {
+pub fn create_filter(
+    handles: FilterHandles,
+    finetuned_values: &FineTunedValues,
+    gain: S,
+) -> An<FilterType> {
     let FilterHandles {
         control_a_b,
         control,
@@ -157,11 +213,13 @@ pub fn create_filter(handles: FilterHandles, finetuned_values: &FineTunedValues)
 
     let control: An<Control> = An(control) >> follow::<S>(follow_time as S);
 
+    let safe_clip = clip_to(0.001, 0.999);
+
     let make_q_controlled = |q_value: An<FineTunedValue>| -> An<QControl> {
         control.clone()
             >> (control_a_b.clone() - pass())
             >> super::abs::abs()
-            >> clip_to(S::EPSILON.sqrt() as f32, (1.0 - S::EPSILON.sqrt()) as f32)
+            >> safe_clip.clone()
             >> (pass() * q_value)
     };
 
@@ -170,8 +228,8 @@ pub fn create_filter(handles: FilterHandles, finetuned_values: &FineTunedValues)
     let q_shelf_controlled: An<QControl> = make_q_controlled(filter_q_shelf);
     let q_warm_controlled: An<QControl> = make_q_controlled(filter_q_warm);
 
-    let inverted_control: An<InvertedControl> = (constant(1.0) - control.clone())
-        >> clip_to(S::EPSILON.sqrt() as f32, (1.0 - S::EPSILON.sqrt()) as f32);
+    let inverted_control: An<InvertedControl> =
+        (constant(1.0) - control.clone()) >> safe_clip.clone();
 
     let hp_branch: An<HpBranch> = (pass()
         | (constant(config.formant_hz(4) as f32) * inverted_control.clone())
@@ -196,36 +254,55 @@ pub fn create_filter(handles: FilterHandles, finetuned_values: &FineTunedValues)
             | filter_shelf_gain_lin.clone())
         >> lowshelf();
 
-    let shape = (1.0 / (config.cents + f64::EPSILON.sqrt()) as f32)
-        .clamp(f32::EPSILON.sqrt(), 1.0 - f32::EPSILON.sqrt());
+    let shape: f32 = (1.0 / (config.cents as S + S::EPSILON.sqrt()))
+        .clamp(S::EPSILON.sqrt(), 1.0 - S::EPSILON.sqrt()) as f32;
 
     let hp_input: An<BranchInput> =
         pass() | constant(config.frequency as f32) | q_piercing_controlled.clone();
+    let b_hp_gain: An<BHpGain> = ((inverted_control.clone()) | constant(1.0))
+        >> ((super::div::div::<S>() * constant(gain as f32)) + constant(gain as f32 - 1.0));
     let a_hp_branch: An<HpBranchA> = hp_input.clone()
         >> (pass() | pass() | pass() | filter_shelf_gain_lin.clone())
-        >> dbell(Tanh(shape));
-    let b_hp_branch: An<HpBranchB> = hp_input >> dresonator(Crush(shape));
+        >> dbell(Adaptive::new(follow_time as f32, Softsign(shape)));
+    let b_hp_branch: An<HpBranchB> = hp_input >> dresonator(Crush(shape)) >> (pass() * b_hp_gain);
 
     let mid_f = (config.formant_hz(3) + config.formant_hz(4)) / 2.0;
     let bp_input: An<BranchInput> = pass() | constant(mid_f as f32) | q_bright_controlled.clone();
+    let bp_denom: An<BBpDenominator> =
+        ((constant(0.5) - inverted_control.clone()) >> super::abs::abs()) >> safe_clip.clone();
+    let b_bp_gain: An<BBpGain> = (bp_denom | constant(0.5))
+        >> ((super::div::div::<S>() * constant(gain as f32)) + constant(gain as f32 - 1.0));
     let a_bp_branch: An<BpBranchA> = bp_input.clone()
         >> (pass() | pass() | pass() | filter_shelf_gain_lin.clone())
-        >> dbell(Tanh(shape));
-    let b_bp_branch: An<BpBranchB> = bp_input >> fresonator(SoftCrush(shape));
+        >> dbell(Adaptive::new(follow_time as f32, Softsign(shape)));
+    let b_bp_branch: An<BpBranchB> =
+        bp_input >> fresonator(SoftCrush(shape)) >> (pass() * b_bp_gain);
 
     let mass = config.cents.clamp(f64::EPSILON.sqrt(), 1200.0).powf(1.05) as S;
     let hr_bpm = (K_BASE as S) * mass.powf(-0.25);
     let hr_hz = hr_bpm / 60.0;
-
     let lp_input: An<BranchInput> = pass() | constant(hr_hz as f32) | q_warm_controlled.clone();
+    let b_lp_gain: An<BLpGain> = ((constant(1.0) - inverted_control.clone()) | constant(1.0))
+        >> ((super::div::div::<S>() * constant(gain as f32)) + constant(gain as f32 - 1.0));
     let a_lp_branch: An<LpBranchA> = lp_input.clone()
         >> (pass() | pass() | pass() | filter_shelf_gain_lin.clone())
-        >> dbell(Tanh(shape));
-    let b_lp_branch: An<LpBranchB> = lp_input >> dresonator(SoftCrush(shape));
+        >> dbell(Adaptive::new(follow_time as f32, Softsign(shape)));
+    let b_lp_branch: An<LpBranchB> =
+        lp_input >> dresonator(SoftCrush(shape)) >> (pass() * b_lp_gain);
 
-    let freq_branches: An<FreqBranches> = hp_branch | bp_branch | lp_branch;
+    let (hp_throw, hp_catch) = super::throw_catch::throw_catch::<U1>();
+    let (bp_throw, bp_catch) = super::throw_catch::throw_catch::<U1>();
+    let (lp_throw, lp_catch) = super::throw_catch::throw_catch::<U1>();
 
-    let panner_branch: An<PannerControlled> = (pass() | control_a_b.clone()) >> panner();
+    let freq_branches: An<FreqBranches> = (hp_branch | bp_branch | lp_branch)
+        >> multisplit::<U3, U2>()
+        >> (pass() | hp_throw | pass() | bp_throw | pass() | lp_throw);
+
+    // bypass ab_treatment
+    let freq_catch: An<FreqCatch> = (hp_catch + bp_catch + lp_catch) >> mul(gain as f32 * 0.25);
+
+    let panner_branch: An<PannerControlled> =
+        (pass() | control_a_b.clone()) >> panner() >> reverse::<U2>();
 
     let panner_branches: An<PannerBranches> =
         panner_branch.clone() | panner_branch.clone() | panner_branch;
@@ -233,15 +310,16 @@ pub fn create_filter(handles: FilterHandles, finetuned_values: &FineTunedValues)
     let ab_treatment: An<AbTreatment> =
         a_hp_branch | b_hp_branch | a_bp_branch | b_bp_branch | a_lp_branch | b_lp_branch;
 
-    let wet_chain: An<WetChain> = pinkpass::<S>()
-        >> split::<U3>()
+    let wet_chain: An<WetChain> = split::<U3>()
         >> freq_branches
         >> panner_branches
         >> ab_treatment
-        >> (join::<U2>() | join::<U2>() | join::<U2>())
-        >> join::<U3>();
+        >> (join::<U2>() + join::<U2>() + join::<U2>());
 
-    split::<U2>() >> (mul(1.7) | mul(1.3)) >> (wet_chain | pass()) >> join::<U2>()
+    split::<U2>()
+        >> (mul(gain as f32 * 1.75) | mul(gain as f32 * 1.25))
+        >> (wet_chain | pass() | freq_catch)
+        >> join::<U3>()
 }
 
 #[cfg(test)]
@@ -270,7 +348,7 @@ mod tests {
             config: node,
         };
 
-        let filter_a = create_filter(handles, &values);
+        let filter_a = create_filter(handles, &values, 1.7);
 
         let control_a_b = shared(1.0);
 
@@ -280,7 +358,7 @@ mod tests {
             config: node,
         };
 
-        let filter_b = create_filter(handles, &values);
+        let filter_b = create_filter(handles, &values, 1.7);
 
         let schema = sine_hz::<f32>(440.0) >> split::<U2>() >> (filter_a | filter_b);
 
@@ -318,7 +396,7 @@ mod tests {
             config: node,
         };
 
-        let filter_0 = create_filter(handles, &values);
+        let filter_0 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
             control_a_b: Var::new(&control_a),
@@ -326,7 +404,7 @@ mod tests {
             config: node,
         };
 
-        let filter_01 = create_filter(handles, &values);
+        let filter_01 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
             control_a_b: Var::new(&control_a),
@@ -334,7 +412,7 @@ mod tests {
             config: node,
         };
 
-        let filter_02 = create_filter(handles, &values);
+        let filter_02 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
             control_a_b: Var::new(&control_a),
@@ -342,7 +420,7 @@ mod tests {
             config: node,
         };
 
-        let filter_05 = create_filter(handles, &values);
+        let filter_05 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
             control_a_b: Var::new(&control_a),
@@ -350,7 +428,7 @@ mod tests {
             config: node,
         };
 
-        let filter_075 = create_filter(handles, &values);
+        let filter_075 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
             control_a_b: Var::new(&control_a),
@@ -358,7 +436,7 @@ mod tests {
             config: node,
         };
 
-        let filter_100 = create_filter(handles, &values);
+        let filter_100 = create_filter(handles, &values, 1.7);
 
         let schema = sine_hz::<f32>(440.0)
             >> split::<U6>()
@@ -402,7 +480,7 @@ mod tests {
             config: node,
         };
 
-        let filter_0 = create_filter(handles, &values);
+        let filter_0 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
             control_a_b: Var::new(&control_b),
@@ -410,7 +488,7 @@ mod tests {
             config: node,
         };
 
-        let filter_01 = create_filter(handles, &values);
+        let filter_01 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
             control_a_b: Var::new(&control_b),
@@ -418,7 +496,7 @@ mod tests {
             config: node,
         };
 
-        let filter_02 = create_filter(handles, &values);
+        let filter_02 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
             control_a_b: Var::new(&control_b),
@@ -426,7 +504,7 @@ mod tests {
             config: node,
         };
 
-        let filter_05 = create_filter(handles, &values);
+        let filter_05 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
             control_a_b: Var::new(&control_b),
@@ -434,7 +512,7 @@ mod tests {
             config: node,
         };
 
-        let filter_075 = create_filter(handles, &values);
+        let filter_075 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
             control_a_b: Var::new(&control_b),
@@ -442,7 +520,7 @@ mod tests {
             config: node,
         };
 
-        let filter_100 = create_filter(handles, &values);
+        let filter_100 = create_filter(handles, &values, 1.7);
 
         let schema = sine_hz::<f32>(440.0)
             >> split::<U6>()
@@ -490,7 +568,7 @@ mod tests {
 
                 svg_config_bldr.output_title(format!("{f:.0}Hz_g{}_k{}", key.0, key.1));
 
-                let filter = create_filter(handle, &values);
+                let filter = create_filter(handle, &values, 1.7);
                 let node = saw_hz(f as f32) >> filter;
 
                 let id = net.push(Box::new(node));

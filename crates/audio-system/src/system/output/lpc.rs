@@ -114,13 +114,8 @@ where
         let buffer = Arc::new(ThingBuf::new(B + B / 2));
         let result_buffer = Arc::new(ThingBuf::new(2));
 
-        let (processing_handle, processing_running) = Self::start_processing(
-            sample_rate,
-            buffer.clone(),
-            real,
-            inverse,
-            result_buffer.clone(),
-        );
+        let (processing_handle, processing_running) =
+            Self::start_processing(buffer.clone(), real, inverse, result_buffer.clone());
 
         Self {
             buffer,
@@ -139,7 +134,6 @@ where
     }
 
     fn start_processing(
-        sample_rate: f64,
         buffer: Arc<ThingBuf<f32>>,
         real: Arc<dyn RealToComplex<f32>>,
         inverse: Arc<dyn ComplexToReal<f32>>,
@@ -156,11 +150,10 @@ where
                     break;
                 }
                 // analyze every B / 2 samples
-                if let Some(remaining_len) = B
-                    .checked_sub(buffer.len() + prev_window.len())
-                    .filter(|s| *s != 0)
+                if B.checked_sub(buffer.len() + prev_window.len())
+                    .is_some_and(|s| s != 0)
                 {
-                    sleep(Duration::from_secs_f64(remaining_len as f64 / sample_rate));
+                    sleep(Duration::from_micros(500));
                 } else {
                     let window: [f32; B] = core::array::from_fn(|_| {
                         prev_window
@@ -380,7 +373,6 @@ where
         };
 
         let (processing_handle, processing_running) = Self::start_processing(
-            self.sample_rate,
             self.buffer.clone(),
             real,
             inverse,

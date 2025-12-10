@@ -27,13 +27,13 @@ use std::{
 use common::error::InstrumentError;
 use cpal::{
     traits::{DeviceTrait, StreamTrait},
-    SampleFormat, Stream, StreamConfig, StreamInstant, SupportedStreamConfig,
+    OutputStreamTimestamp, SampleFormat, Stream, StreamConfig, SupportedStreamConfig,
 };
 
 use super::{Control, ControlInvocationResult, STREAM_TIMEOUT_S};
 
 /// Stereo (L,R) sample generator invoked per audio frame or with batch.
-pub type GenType = dyn FnMut(StreamInstant, &mut [&mut [f32]]) + Send + Sync;
+pub type GenType = dyn FnMut(OutputStreamTimestamp, &mut [&mut [f32]]) + Send + Sync;
 
 /// Spawn an owner thread that creates and owns a CPAL output stream.
 ///
@@ -145,7 +145,7 @@ fn run_output(
                 write_data(
                     data,
                     channels,
-                    info.timestamp().callback,
+                    info.timestamp(),
                     &mut next_tick,
                     &mut scratch_left,
                     &mut scratch_right,
@@ -160,7 +160,7 @@ fn run_output(
                 write_data(
                     data,
                     channels,
-                    info.timestamp().callback,
+                    info.timestamp(),
                     &mut next_tick,
                     &mut scratch_left,
                     &mut scratch_right,
@@ -175,7 +175,7 @@ fn run_output(
                 write_data(
                     data,
                     channels,
-                    info.timestamp().callback,
+                    info.timestamp(),
                     &mut next_tick,
                     &mut scratch_left,
                     &mut scratch_right,
@@ -205,7 +205,7 @@ fn run_output(
 fn write_data<T>(
     output: &mut [T],
     channels: usize,
-    instant: StreamInstant,
+    timestamp: OutputStreamTimestamp,
     next_tick: &mut GenType,
     scratch_left: &mut Vec<f32>,
     scratch_right: &mut Vec<f32>,
@@ -227,7 +227,7 @@ fn write_data<T>(
 
     let mut frames_per_channel = [scratch_left.as_mut_slice(), scratch_right.as_mut_slice()];
 
-    next_tick(instant, frames_per_channel.as_mut_slice());
+    next_tick(timestamp, frames_per_channel.as_mut_slice());
 
     // Interleave the produced frames.
     write_interleaved(

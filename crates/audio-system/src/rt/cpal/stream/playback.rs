@@ -1,27 +1,18 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-use std::sync::{mpsc, Arc};
-use std::thread::{sleep, spawn};
+use std::collections::VecDeque;
+use std::sync::Arc;
 use std::time::Duration;
 
-use cpal::StreamInstant;
+use cpal::OutputStreamTimestamp;
 use fundsp::hacker::{AudioUnit, BigBlockAdapter, NetBackend};
 use fundsp::thingbuf::ThingBuf;
 use parking_lot::RwLock;
 
-use super::Control;
 use crate::util::S;
 
 const OPTIMAL_BUFFER_MILLIS: f64 = 80.0;
 const MAX_BUFFER_MILLIS: f64 = 320.0;
 const HIGH_WATER_RATIO: f32 = 0.9;
 const LOW_WATER_RATIO: f32 = 0.2;
-
-// Hysteresis tuning:
-// - Require this many consecutive "healthy" intervals to relax mode (downshift)
-// - Immediately upshift on underrun; otherwise upshift on latency breach for a few consecutive intervals
-const HEALTHY_STREAK_DOWN_SHIFT: usize = 7;
-const UNHEALTHY_STREAK_UP_SHIFT: usize = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Processing speed / quality optimization
@@ -36,16 +27,20 @@ enum ProcessingMode {
     Bulk,
 }
 
-pub fn spawn_playback_stream(
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ProductionDelta {
+    fill_size: usize,
+    frames_per_buffer_size: usize,
+    duration: Duration,
+    mode: ProcessingMode,
+}
+
+pub fn playback_callback(
     net: NetBackend,
     input_buffer: Option<Arc<ThingBuf<S>>>,
     is_batch_processing: Arc<RwLock<bool>>,
     sample_rate: u32,
-) -> (
-    Box<super::GenType>,
-    Sender<Control>,
-    std::thread::JoinHandle<()>,
-) {
+) -> Box<super::GenType> {
     let mut backend = BigBlockAdapter::new(Box::new(net));
     // Causal latency in (fractional) samples. After a reset, we can discard this many samples from the output to avoid incurring a pre-delay. The latency may depend on the sample rate.
     let net_latency = backend.latency();
@@ -63,224 +58,65 @@ pub fn spawn_playback_stream(
 
     log::info!("Starting playback with: buffer_capacity=[{buffer_capacity}], optimal_duration=[{optimal_duration:?}], sub_optimal_duration=[{sub_optimal_duration:?}], critical_duration=[{critical_duration:?}], sample_duration=[{sample_duration:?}], optimal_cap=[{optimal_cap}], low_water=[{low_water}], high_water=[{high_water}], net_latency=[{net_latency:?}]");
 
-    let time_stamps_and_underrun = Arc::new(ThingBuf::<Option<(StreamInstant, i32)>>::new(
-        buffer_capacity,
-    ));
-    let buffer = Arc::new(ThingBuf::<(f32, f32)>::new(buffer_capacity));
-    let frames_per_output_buffer = Arc::new(AtomicUsize::new(64));
+    let mut output_buffer = VecDeque::<(f32, f32)>::with_capacity(buffer_capacity);
+    let mut frames_per_output_buffer = 64_usize;
+    let mut production_delta = Option::<ProductionDelta>::None;
+    let mut lr_frame_scratch = [0.0; 2];
+    let mut scratch_left = vec![0_f32; buffer_capacity];
+    let mut scratch_right = vec![0_f32; buffer_capacity];
+    let mut scratch_input = vec![0_f32; buffer_capacity];
 
-    let buffer_producer = buffer.clone();
-    let time_stamps_producer = time_stamps_and_underrun.clone();
-    let frames_per_output_buffer_producer = frames_per_output_buffer.clone();
+    // warm up backend and discard initial samples according to latency
+    if let Some(lat) = net_latency {
+        let fill_size = lat.ceil() as usize;
 
-    let (tx, rx): (Sender<Control>, Receiver<Control>) = mpsc::channel();
+        batch_fill_size(
+            &mut scratch_left,
+            &mut scratch_right,
+            &mut scratch_input,
+            fill_size,
+            frames_per_output_buffer,
+            &mut backend,
+            &input_buffer,
+            &mut output_buffer,
+        );
 
-    let producer_handle = spawn(move || {
-        let mut last_ts: Option<(StreamInstant, isize)> = None;
-        let mut lr_frame_scratch = [0.0; 2];
-        let mut scratch_left = vec![0_f32; buffer_capacity];
-        let mut scratch_right = vec![0_f32; buffer_capacity];
-        let mut scratch_input = vec![0_f32; buffer_capacity];
+        output_buffer.clear();
+    }
 
-        // warm up backend and discard initial samples according to latency
-        if let Some(lat) = net_latency {
-            let fill_size = lat.ceil() as usize;
+    Box::new(
+        move |timestamp: OutputStreamTimestamp, frames: &mut [&mut [f32]]| {
+            let start_time = std::time::Instant::now();
+            let available_time = timestamp.playback.duration_since(&timestamp.callback);
+            let (l_frames, r_frames) = frames.split_at_mut(1);
+            let num_frames = l_frames[0].len();
+            if num_frames != frames_per_output_buffer {
+                log::info!(
+                    "Output buffer size changed from [{frames_per_output_buffer}] to [{num_frames}] frames."
+                );
+                frames_per_output_buffer = num_frames;
+            }
 
-            batch_fill_size(
-                &mut scratch_left,
-                &mut scratch_right,
-                &mut scratch_input,
-                fill_size,
-                frames_per_output_buffer_producer.load(Ordering::Relaxed),
-                &mut backend,
-                &input_buffer,
-                &buffer_producer,
+            let (mode, fill_size) = determine_mode_and_fill_in_size(
+                available_time,
+                &production_delta,
+                frames_per_output_buffer,
+                output_buffer.len(),
+                low_water,
+                optimal_cap,
+                high_water,
             );
 
-            while buffer_producer.pop_ref().is_some() {
-                // pop warm up samples
-            }
-        }
-
-        // Hysteresis controller state
-        let mut current_mode = ProcessingMode::BatchOptimized; // conservative default until timestamps
-        let mut healthy_streak = 0usize;
-        let mut unhealthy_streak = 0usize;
-
-        let mut next_tick = {
-            let buffer_producer = buffer_producer.clone();
-            let frames_per_output_buffer_producer = frames_per_output_buffer_producer.clone();
-            move || -> Option<(ProcessingMode, i32)> {
-                // handle playback control commands
-                match rx.try_recv() {
-                    Err(TryRecvError::Empty) => {}
-                    Err(TryRecvError::Disconnected) => {
-                        log::error!("Playback control channel disconnected.");
-                        return None;
-                    }
-                    Ok(Control::Shutdown(resp_x)) => {
-                        _ = resp_x.send(Ok(()));
-                        return None;
-                    }
-                    Ok(Control::Pause(resp_x)) => {
-                        _ = resp_x.send(Ok(()));
-                        if let Some(Control::Resume(resume_x)) =
-                            rx.iter().find(|c| matches!(c, Control::Resume(_)))
-                        {
-                            _ = resume_x.send(Ok(()));
-                        } else {
-                            log::warn!("Paused playback was never resumed");
-                            return None;
-                        }
-                    }
-                    Ok(Control::Resume(resp_x)) => {
-                        _ = resp_x.send(Ok(()));
-                        log::warn!("Received unexpected Resume command while not paused");
-                    }
-                }
-
-                // determine latency for next tick and underrun delta
-                let prev_ts = last_ts.take();
-                while let Some(&Some((ts, underrun))) = time_stamps_producer.pop_ref().as_deref() {
-                    let (last_ts_ref, last_underrun_count) = last_ts.get_or_insert((ts, 0));
-                    *last_ts_ref = ts;
-                    *last_underrun_count += underrun as isize;
-                }
-                let delta_ts = prev_ts
-                    .and_then(|(prev, _)| last_ts.and_then(|(last, _)| last.duration_since(&prev)));
-
-                let delta_underrun = prev_ts.and_then(|(_, prev_underrun)| {
-                    last_ts.map(|(_, last_underrun)| last_underrun - prev_underrun)
-                });
-
-                // Update hysteresis counters and decide tentative mode signal
-                let mode_signal = compute_processing_signal(
-                    delta_ts,
-                    optimal_duration,
-                    sub_optimal_duration,
-                    critical_duration,
-                    delta_underrun.map(|d| d as i32),
-                );
-
-                // Hysteresis: adjust healthy/unhealthy streaks.
-                // Any positive underrun is "unhealthy" and triggers immediate upshift.
-                let had_underrun = delta_underrun.map(|d| d > 0).unwrap_or(false);
-
-                if had_underrun {
-                    unhealthy_streak = UNHEALTHY_STREAK_UP_SHIFT; // force immediate upshift
-                    healthy_streak = 0;
-                } else {
-                    // Healthy if timestamps within current mode's bounds
-                    if is_healthy_for_mode(
-                        delta_ts,
-                        current_mode,
-                        optimal_duration,
-                        sub_optimal_duration,
-                        critical_duration,
-                    ) {
-                        healthy_streak = healthy_streak.saturating_add(1);
-                        unhealthy_streak = 0;
-                    } else {
-                        unhealthy_streak = unhealthy_streak.saturating_add(1);
-                        healthy_streak = 0;
-                    }
-                }
-
-                // Apply hysteresis rules:
-                // - Upshift if unhealthy streak exceeds threshold OR any underrun occurred
-                // - Downshift only after enough consecutive healthy intervals
-                current_mode = match (current_mode, mode_signal) {
-                    // Upshift path: go to the stronger of current vs signal when unhealthy
-                    (mode, signal)
-                        if had_underrun || unhealthy_streak >= UNHEALTHY_STREAK_UP_SHIFT =>
-                    {
-                        unhealthy_streak = 0; // consume
-                        stronger_mode(mode, signal)
-                    }
-                    // Downshift path: only relax after sustained health
-                    (mode, signal) if healthy_streak >= HEALTHY_STREAK_DOWN_SHIFT => {
-                        healthy_streak = 0; // consume
-                        weaker_mode(mode, signal)
-                    }
-                    // Otherwise, keep current mode (prevent hysterical switching)
-                    (mode, _) => mode,
-                };
-
-                if let Some(mut is_batch_processing) = is_batch_processing.try_write() {
-                    *is_batch_processing = is_batch_for_mode(current_mode);
-                }
-
-                let frames_per_buffer = frames_per_output_buffer_producer.load(Ordering::Relaxed);
-
-                let optimal_cap = optimal_cap - (optimal_cap % frames_per_buffer);
-                let high_cap = high_water - (high_water % frames_per_buffer);
-
-                // determine fill size for next tick
-                let buffer_len = buffer_producer.len();
-                match (buffer_len, current_mode) {
-                    // urgent refill
-                    (buffer_len, _) if buffer_len <= low_water => Some((
-                        ProcessingMode::Bulk,
-                        (optimal_cap.saturating_sub(buffer_len) as i32)
-                            .max(frames_per_buffer as i32),
-                    )),
-                    // single-buffer processing
-                    (buffer_len, ProcessingMode::Easy) if buffer_len < optimal_cap => {
-                        Some((current_mode, frames_per_buffer as i32))
-                    }
-                    // fill to optimal using single-buffer processing or batch processing
-                    (buffer_len, ProcessingMode::Optimal)
-                    | (buffer_len, ProcessingMode::BatchOptimized)
-                        if buffer_len < optimal_cap =>
-                    {
-                        Some((
-                            current_mode,
-                            (optimal_cap.saturating_sub(buffer_len) as i32)
-                                .max(frames_per_buffer as i32),
-                        ))
-                    }
-                    // bulk processing
-                    (buffer_len, ProcessingMode::Bulk) if buffer_len < high_cap => Some((
-                        current_mode,
-                        (high_cap.saturating_sub(buffer_len) as i32).max(frames_per_buffer as i32),
-                    )),
-                    // overrun in any other case
-                    _ => Some((
-                        current_mode,
-                        match current_mode {
-                            ProcessingMode::Easy => {
-                                -(buffer_len.saturating_sub(frames_per_buffer) as i32)
-                            }
-                            ProcessingMode::Optimal | ProcessingMode::BatchOptimized => {
-                                -(buffer_len.saturating_sub(optimal_cap) as i32)
-                            }
-                            ProcessingMode::Bulk => -(buffer_len.saturating_sub(high_cap) as i32),
-                        },
-                    )),
-                }
-            }
-        };
-
-        'main: while let Some((mode, fill_size)) = next_tick() {
-            if fill_size <= 0 {
-                log::info!("Playback thread overrun in mode {:?}", mode);
-                sleep(sample_duration * (-fill_size / 3) as u32);
-                continue 'main;
-            }
             match mode {
                 ProcessingMode::Easy | ProcessingMode::Optimal => {
-                    'inner: for _ in 0..fill_size {
+                    for _ in 0..fill_size {
                         #[allow(clippy::unnecessary_cast)]
                         let input = input_buffer
                             .as_ref()
                             .and_then(|ib| ib.pop())
                             .unwrap_or_default() as f32;
                         backend.tick(&[input], &mut lr_frame_scratch);
-                        if let Ok(mut place) = buffer_producer.push_ref() {
-                            *place = (lr_frame_scratch[0], lr_frame_scratch[1]);
-                        } else {
-                            break 'inner;
-                        }
+                        output_buffer.push_back((lr_frame_scratch[0], lr_frame_scratch[1]));
                     }
                 }
                 ProcessingMode::BatchOptimized | ProcessingMode::Bulk => {
@@ -288,35 +124,22 @@ pub fn spawn_playback_stream(
                         &mut scratch_left,
                         &mut scratch_right,
                         &mut scratch_input,
-                        fill_size as usize,
-                        frames_per_output_buffer_producer.load(Ordering::Relaxed),
+                        fill_size,
+                        frames_per_output_buffer,
                         &mut backend,
                         &input_buffer,
-                        &buffer_producer,
+                        &mut output_buffer,
                     );
                 }
             }
-        }
 
-        log::info!("Playback thread exiting.");
-    });
+            for (i, (l, r)) in l_frames[0]
+                .iter_mut()
+                .zip(r_frames[0].iter_mut())
+                .enumerate()
+            {
+                let frame = output_buffer.pop_front().unwrap();
 
-    let producer_fn = Box::new(move |instant: StreamInstant, frames: &mut [&mut [f32]]| {
-        let (l_frames, r_frames) = frames.split_at_mut(1);
-        let num_frames = l_frames[0].len();
-        frames_per_output_buffer.store(num_frames, Ordering::Relaxed);
-
-        // Count exactly how many frames we were able to fill this callback.
-        let mut frames_filled = 0usize;
-
-        let mut last_frame = None;
-
-        for (i, (l, r)) in l_frames[0]
-            .iter_mut()
-            .zip(r_frames[0].iter_mut())
-            .enumerate()
-        {
-            if let Some(frame) = buffer.pop_ref().as_deref().copied() {
                 if frame.0.is_nan() || frame.1.is_nan() {
                     log::warn!("NaN sample detected in playback buffer at frame {i}");
                 } else if frame.0.is_infinite() || frame.1.is_infinite() {
@@ -324,105 +147,120 @@ pub fn spawn_playback_stream(
                 } else {
                     *l = frame.0;
                     *r = frame.1;
-                    last_frame = Some(frame);
                 }
-                frames_filled = i + 1;
-            } else if let Some((last_l, last_r)) = last_frame.map(|f| {
-                let spread = (num_frames - (num_frames - i + 1)) as f32;
-                (f.0 / spread, f.1 / spread)
-            }) {
-                *l = last_l;
-                *r = last_r;
+            }
+
+            *is_batch_processing.write() = is_batch_for_mode(mode);
+            production_delta = Some(ProductionDelta {
+                fill_size,
+                frames_per_buffer_size: frames_per_output_buffer,
+                duration: start_time.elapsed(),
+                mode,
+            });
+        },
+    ) as Box<super::GenType>
+}
+
+fn determine_mode_and_fill_in_size(
+    available_time: Option<Duration>,
+    production_delta: &Option<ProductionDelta>,
+    frames_per_output_buffer: usize,
+    current_buffer_len: usize,
+    low_cap: usize,
+    optimal_cap: usize,
+    high_cap: usize,
+) -> (ProcessingMode, usize) {
+    // Use last known production duration. If unknown, default to a conservative stance.
+    let last_duration = production_delta.map(|d| d.duration);
+    let last_mode = production_delta.map(|d| d.mode);
+
+    // If we don't know the available callback-to-playback slack, default to BatchOptimized.
+    // This favors deeper buffering over real-time minimalism.
+    let base_mode = match (available_time, last_duration) {
+        (None, _) => ProcessingMode::BatchOptimized,
+        (Some(avail), Some(last)) => {
+            // Compare how expensive the last production was versus the time we have now.
+            // Heuristic thresholds:
+            // - last <= 0.5 * avail => Easy (plenty of slack, produce minimally)
+            // - last <= 1.0 * avail => Optimal (comfortable)
+            // - last <= 2.0 * avail => BatchOptimized (borderline, deepen buffer)
+            // - last > 2.0 * avail  => Bulk (we were too slow; catch up aggressively)
+            let last_ns = last.as_nanos();
+            let avail_ns = avail.as_nanos();
+            if last_ns <= avail_ns / 2 {
+                ProcessingMode::Easy
+            } else if last_ns <= avail_ns {
+                ProcessingMode::Optimal
+            } else if last_ns <= avail_ns * 2 {
+                ProcessingMode::BatchOptimized
             } else {
-                break;
+                ProcessingMode::Bulk
             }
         }
-
-        // Underrun is exactly the number of frames not produced this callback.
-        let underrun: i32 = (num_frames - frames_filled) as i32;
-
-        if underrun > 0 {
-            log::warn!(
-                "Playback underrun: requested [{num_frames}] frames, filled [{frames_filled}] frames. Underrun=[{underrun}]"
-            );
-        }
-
-        if let Ok(mut place) = time_stamps_and_underrun.push_ref().or_else(|_| {
-            _ = time_stamps_and_underrun.pop_ref();
-            time_stamps_and_underrun.push_ref()
-        }) {
-            *place = Some((instant, underrun));
-        }
-    }) as Box<super::GenType>;
-
-    (producer_fn, tx, producer_handle)
-}
-
-/// Convert instantaneous signal into a target processing mode (without hysteresis).
-/// - If `delta_underrun > 0` escalate immediately to `Bulk`
-/// - Otherwise, base on timestamp delta thresholds.
-fn compute_processing_signal(
-    delta: Option<Duration>,
-    optimal_duration: Duration,
-    sub_optimal_duration: Duration,
-    critical_duration: Duration,
-    delta_underrun: Option<i32>,
-) -> ProcessingMode {
-    // If there were underruns in the last interval, escalate aggressively.
-    if delta_underrun.is_some_and(|d| d > 0) {
-        return ProcessingMode::Bulk;
-    }
-
-    match delta {
-        Some(d) if d <= optimal_duration => ProcessingMode::Easy,
-        Some(d) if d <= sub_optimal_duration => ProcessingMode::Optimal,
-        Some(d) if d <= critical_duration => ProcessingMode::BatchOptimized,
-        Some(_) => ProcessingMode::Bulk,
-        None => {
-            // No timestamps observed yet; conservatively batch to quickly establish buffer health.
+        (Some(_), None) => {
+            // No prior measurement: pick BatchOptimized to stabilize quickly.
             ProcessingMode::BatchOptimized
         }
-    }
-}
+    };
 
-/// Determine whether current timestamp delta is "healthy" for the given mode.
-/// Health means: the observed callback spacing is within or better than mode's expected range.
-fn is_healthy_for_mode(
-    delta: Option<Duration>,
-    mode: ProcessingMode,
-    optimal_duration: Duration,
-    sub_optimal_duration: Duration,
-    critical_duration: Duration,
-) -> bool {
-    match (delta, mode) {
-        (None, _) => false,
-        (Some(d), ProcessingMode::Easy) => d <= optimal_duration,
-        (Some(d), ProcessingMode::Optimal) => d <= sub_optimal_duration,
-        (Some(d), ProcessingMode::BatchOptimized) => d <= critical_duration,
-        (Some(_), ProcessingMode::Bulk) => true, // Bulk is the most conservative; any delta is acceptable
-    }
-}
+    // Adjust mode based on buffer health and prior stress signal.
+    let mut mode = base_mode;
 
-/// Pick the stronger of two modes (stronger means more aggressive in buffering/throughput).
-fn stronger_mode(a: ProcessingMode, b: ProcessingMode) -> ProcessingMode {
-    use ProcessingMode::*;
-    match (a, b) {
-        (Bulk, _) | (_, Bulk) => Bulk,
-        (BatchOptimized, _) | (_, BatchOptimized) => BatchOptimized,
-        (Optimal, _) | (_, Optimal) => Optimal,
-        _ => Easy,
+    // If buffer is below low water, strengthen mode to increase fill (avoid underruns).
+    if current_buffer_len < low_cap {
+        mode = match mode {
+            ProcessingMode::Easy | ProcessingMode::Optimal => ProcessingMode::BatchOptimized,
+            ProcessingMode::BatchOptimized | ProcessingMode::Bulk => ProcessingMode::Bulk,
+        };
     }
-}
 
-/// Pick the weaker of two modes (weaker means more real-time, less buffering).
-fn weaker_mode(a: ProcessingMode, b: ProcessingMode) -> ProcessingMode {
-    use ProcessingMode::*;
-    match (a, b) {
-        (Easy, _) | (_, Easy) => Easy,
-        (Optimal, _) | (_, Optimal) => Optimal,
-        (BatchOptimized, _) | (_, BatchOptimized) => BatchOptimized,
-        _ => Bulk,
+    // If previous mode was already Bulk and we’re not yet at optimal, stay aggressive.
+    if matches!(last_mode, Some(ProcessingMode::Bulk)) && current_buffer_len < optimal_cap {
+        mode = ProcessingMode::Bulk;
     }
+
+    // Compute target buffer level based on mode.
+    // We aim toward:
+    // - Easy: maintain around frames_per_output_buffer (minimal latency)
+    // - Optimal: around optimal_cap
+    // - BatchOptimized: above optimal_cap but below high_cap
+    // - Bulk: push toward high_cap
+    let target_cap = match mode {
+        ProcessingMode::Easy => frames_per_output_buffer.max(low_cap),
+        ProcessingMode::Optimal => optimal_cap,
+        ProcessingMode::BatchOptimized => ((optimal_cap + high_cap) / 2).max(optimal_cap),
+        ProcessingMode::Bulk => high_cap,
+    };
+
+    // Determine how much to fill to move current_buffer_len toward target_cap.
+    let deficit = target_cap.saturating_sub(current_buffer_len);
+
+    // Always fill in multiples of frames_per_output_buffer to match generator granularity.
+    // Also enforce a minimum of one buffer when we decide to fill.
+    let mut fill_buffers = match mode {
+        ProcessingMode::Easy => 1,
+        ProcessingMode::Optimal => (deficit / frames_per_output_buffer).max(1),
+        ProcessingMode::BatchOptimized => (deficit / frames_per_output_buffer).max(2),
+        ProcessingMode::Bulk => (deficit / frames_per_output_buffer).max(4),
+    };
+
+    // If available_time is present and last production exceeded it, be more aggressive by one buffer.
+    if available_time
+        .and_then(|avail| last_duration.filter(|&last| last > avail))
+        .is_some()
+    {
+        fill_buffers += 1;
+    }
+
+    // Prevent overfilling beyond high_cap.
+    if current_buffer_len + fill_buffers * frames_per_output_buffer > high_cap {
+        let max_buffers = (high_cap.saturating_sub(current_buffer_len)) / frames_per_output_buffer;
+        fill_buffers = fill_buffers.min(max_buffers.max(1));
+    }
+
+    let fill_size = fill_buffers * frames_per_output_buffer;
+
+    (mode, fill_size)
 }
 
 fn is_batch_for_mode(mode: ProcessingMode) -> bool {
@@ -438,7 +276,7 @@ fn batch_fill_size(
     chunk_size: usize,
     backend: &mut BigBlockAdapter,
     input_buffer: &Option<Arc<ThingBuf<S>>>,
-    buffer_producer: &Arc<ThingBuf<(f32, f32)>>,
+    output_buffer: &mut VecDeque<(f32, f32)>,
 ) {
     if fill_size == 0 {
         return;
@@ -456,7 +294,7 @@ fn batch_fill_size(
             chunk_size,
             backend,
             input_buffer,
-            buffer_producer,
+            output_buffer,
         );
     }
 
@@ -469,7 +307,7 @@ fn batch_fill_size(
             rem,
             backend,
             input_buffer,
-            buffer_producer,
+            output_buffer,
         );
     }
 
@@ -481,7 +319,7 @@ fn batch_fill_size(
         fill_size: usize,
         backend: &mut BigBlockAdapter,
         input_buffer: &Option<Arc<ThingBuf<S>>>,
-        buffer_producer: &Arc<ThingBuf<(f32, f32)>>,
+        output_buffer: &mut VecDeque<(f32, f32)>,
     ) {
         let mut frames_per_channel = [
             &mut scratch_left[..fill_size],
@@ -504,62 +342,7 @@ fn batch_fill_size(
             .iter()
             .zip(scratch_right[..fill_size].iter())
         {
-            if let Ok(mut place) = buffer_producer.push_ref() {
-                *place = (l, r);
-            } else {
-                break;
-            }
+            output_buffer.push_back((l, r));
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn d(ms: u64) -> std::time::Duration {
-        std::time::Duration::from_millis(ms)
-    }
-
-    #[test]
-    fn signal_easy_when_delta_under_optimal_and_no_underrun() {
-        let mode = compute_processing_signal(Some(d(30)), d(60), d(125), d(250), Some(0));
-        assert_eq!(mode, ProcessingMode::Easy);
-        assert!(!is_batch_for_mode(mode));
-    }
-
-    #[test]
-    fn signal_bulk_on_underrun_even_if_delta_is_good() {
-        let mode = compute_processing_signal(Some(d(30)), d(60), d(125), d(250), Some(1));
-        assert_eq!(mode, ProcessingMode::Bulk);
-        assert!(is_batch_for_mode(mode));
-    }
-
-    #[test]
-    fn signal_optimal_when_delta_under_sub_optimal() {
-        let mode = compute_processing_signal(Some(d(80)), d(60), d(125), d(250), Some(0));
-        assert_eq!(mode, ProcessingMode::Optimal);
-        assert!(!is_batch_for_mode(mode));
-    }
-
-    #[test]
-    fn signal_batch_optimized_when_delta_under_critical() {
-        let mode = compute_processing_signal(Some(d(180)), d(60), d(125), d(250), Some(0));
-        assert_eq!(mode, ProcessingMode::BatchOptimized);
-        assert!(is_batch_for_mode(mode));
-    }
-
-    #[test]
-    fn signal_bulk_when_delta_over_critical() {
-        let mode = compute_processing_signal(Some(d(400)), d(60), d(125), d(250), Some(0));
-        assert_eq!(mode, ProcessingMode::Bulk);
-        assert!(is_batch_for_mode(mode));
-    }
-
-    #[test]
-    fn signal_none_defaults_to_batch_optimized() {
-        let mode = compute_processing_signal(None, d(60), d(125), d(250), Some(0));
-        assert_eq!(mode, ProcessingMode::BatchOptimized);
-        assert!(is_batch_for_mode(mode));
     }
 }

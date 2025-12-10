@@ -29,7 +29,7 @@ use parking_lot::RwLock;
 use crate::system::values::{FineTunedSharedValues, FineTunedValues};
 use crate::{
     rt::{
-        cpal::stream::{spawn_owned_input_stream, spawn_playback_stream},
+        cpal::stream::{playback_callback, spawn_owned_input_stream},
         AudioRuntime, ExcitementSource,
     },
     util::S,
@@ -59,10 +59,6 @@ struct CpalController {
     // Fine-tuned values for editor mode
     #[cfg(feature = "editor")]
     fine_tuned_shared_values: RwLock<FineTunedSharedValues>,
-
-    // Playback control
-    playback_tx: RwLock<Option<Sender<Control>>>,
-    playback_thread: RwLock<Option<thread::JoinHandle<()>>>,
 
     // Stream control
     control_tx: RwLock<Option<Sender<Control>>>,
@@ -108,8 +104,6 @@ impl Default for CpalController {
             tuner_tap_gain_param: RwLock::new(None),
             #[cfg(feature = "editor")]
             fine_tuned_shared_values: RwLock::new(FineTunedSharedValues::default()),
-            playback_tx: RwLock::new(None),
-            playback_thread: RwLock::new(None),
             control_tx: RwLock::new(None),
             output_thread: RwLock::new(None),
             input_sender: RwLock::new(None),
@@ -251,19 +245,7 @@ impl CpalController {
         let output_channels = std::cmp::Ord::min(output_default_cfg.channels(), 2) as usize;
 
         let is_batch_processing = self.is_batch_processing.clone();
-
-        let (next_value, playback_tx, playback_handle) = spawn_playback_stream(
-            backend,
-            input_buffer,
-            is_batch_processing,
-            self.sample_rate.read().map(|sr| sr as u32).unwrap_or(44100),
-        );
-
-        // Persist playback thread / control handles.
-        {
-            *self.playback_tx.write() = Some(playback_tx);
-            *self.playback_thread.write() = Some(playback_handle);
-        }
+        let sr = self.sample_rate.read().map(|sr| sr as u32).unwrap_or(44100);
 
         // Spawn output stream owner.
         let (tx, handle) = spawn_owned_output_stream(
@@ -271,7 +253,7 @@ impl CpalController {
             output_default_cfg,
             stream_cfg,
             output_channels,
-            move || next_value,
+            move || playback_callback(backend, input_buffer, is_batch_processing, sr),
         )?;
 
         // Persist output thread / control handles.
@@ -558,27 +540,6 @@ impl CpalController {
     }
 
     fn shutdown_streams(&self) -> Result<()> {
-        // Playback stream shutdown
-        if let Some(tx) = self.playback_tx.write().take() {
-            let (ack_tx, ack_rx) = mpsc::channel();
-            tx.send(Control::Shutdown(ack_tx))
-                .map_err(|_| ControlError::ChannelSend {
-                    op: "shutdown".into(),
-                })?;
-            match ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS)) {
-                Ok(ControlInvocationResult::Ok(_)) => {}
-                Ok(ControlInvocationResult::Err(e)) => {
-                    return Err(InstrumentError::BuildStream { detail: e }.into())
-                }
-                Err(_) => {
-                    return Err(InstrumentError::AckTimeout {
-                        op: "shutdown".into(),
-                    }
-                    .into())
-                }
-            }
-        }
-
         // Output stream shutdown
         if let Some(tx) = self.control_tx.write().take() {
             let (ack_tx, ack_rx) = mpsc::channel();
@@ -611,7 +572,6 @@ impl CpalController {
         // Release thread handles
         *self.output_thread.write() = None;
         *self.input_thread.write() = None;
-        *self.playback_thread.write() = None;
 
         // Clear DSP & handles
         self.dsp_net_frontend.write().take();
@@ -773,31 +733,13 @@ impl AudioRuntime for CpalController {
         let (ack_tx, ack_rx) = mpsc::channel();
         tx.send(Control::Pause(ack_tx))
             .map_err(|_| ControlError::ChannelSend { op: "pause".into() })?;
-        let result_1 = match ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS)) {
+        match ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS)) {
             Ok(ControlInvocationResult::Ok(_)) => Ok(()),
             Ok(ControlInvocationResult::Err(e)) => {
                 Err(ControlError::BuildStream { detail: e }.into())
             }
             Err(_) => Err(ControlError::AckTimeout { op: "pause".into() }.into()),
-        };
-
-        let Some(p_tx) = self.playback_tx.read().as_ref().cloned() else {
-            return Err(ControlError::BackendMissing { op: "pause".into() }.into());
-        };
-
-        let (p_ack_tx, p_ack_rx) = mpsc::channel();
-        p_tx.send(Control::Pause(p_ack_tx))
-            .map_err(|_| ControlError::ChannelSend { op: "pause".into() })?;
-        let result_2 = match p_ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS))
-        {
-            Ok(ControlInvocationResult::Ok(_)) => Ok(()),
-            Ok(ControlInvocationResult::Err(e)) => {
-                Err(ControlError::BuildStream { detail: e }.into())
-            }
-            Err(_) => Err(ControlError::AckTimeout { op: "pause".into() }.into()),
-        };
-
-        result_1.and(result_2)
+        }
     }
 
     fn resume(&self) -> Result<()> {
@@ -813,7 +755,7 @@ impl AudioRuntime for CpalController {
             .map_err(|_| ControlError::ChannelSend {
                 op: "resume".into(),
             })?;
-        let result_1 = match ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS)) {
+        match ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS)) {
             Ok(ControlInvocationResult::Ok(_)) => {
                 self.fade_in();
                 Ok(())
@@ -825,33 +767,7 @@ impl AudioRuntime for CpalController {
                 op: "resume".into(),
             }
             .into()),
-        };
-
-        let Some(p_tx) = self.playback_tx.read().as_ref().cloned() else {
-            return Err(ControlError::BackendMissing {
-                op: "resume".into(),
-            }
-            .into());
-        };
-
-        let (p_ack_tx, p_ack_rx) = mpsc::channel();
-        p_tx.send(Control::Resume(p_ack_tx))
-            .map_err(|_| ControlError::ChannelSend {
-                op: "resume".into(),
-            })?;
-        let result_2 = match p_ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS))
-        {
-            Ok(ControlInvocationResult::Ok(_)) => Ok(()),
-            Ok(ControlInvocationResult::Err(e)) => {
-                Err(ControlError::BuildStream { detail: e }.into())
-            }
-            Err(_) => Err(ControlError::AckTimeout {
-                op: "resume".into(),
-            }
-            .into()),
-        };
-
-        result_1.and(result_2)
+        }
     }
 
     fn on_excitement_source_changed(&self, source: ExcitementSource) -> Result<()> {

@@ -14,7 +14,7 @@ mod throw_catch;
 
 use std::collections::HashMap;
 
-use channel::one_channel_subsystem;
+use channel::add_one_channel_subsystem;
 use common::{
     instrument::{Config, GroupChannel, GroupConfig, Scale},
     NodeKey,
@@ -68,7 +68,7 @@ pub fn mono_system(config: &Config, net: &mut Net, values: &FineTunedValues) -> 
 
     let (node_handles, group_handles, filter_handles) = prepare_handles(groups, config.1);
 
-    let id = one_channel_subsystem(
+    let id = add_one_channel_subsystem(
         groups,
         (group_handles, filter_handles),
         nodes_count_per_group,
@@ -105,7 +105,7 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
     let (left_filter_handles, right_filter_handles) =
         split_filter_handles_lr(filter_handles, config);
 
-    let left_id = one_channel_subsystem(
+    let left_id = add_one_channel_subsystem(
         left_groups.as_slice(),
         (left_group_handles, right_filter_handles),
         nodes_count_per_group,
@@ -113,7 +113,7 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
         net,
         values,
     );
-    let right_id = one_channel_subsystem(
+    let right_id = add_one_channel_subsystem(
         right_groups.as_slice(),
         (right_group_handles, left_filter_handles),
         nodes_count_per_group,
@@ -209,7 +209,7 @@ pub fn multi_channel_system(
     let (left_filter_handles, right_filter_handles) =
         split_filter_handles_lr(filter_handles, config);
 
-    let left_id = one_channel_subsystem(
+    let left_id = add_one_channel_subsystem(
         left_groups.as_slice(),
         (left_group_handles, right_filter_handles),
         nodes_count_per_group,
@@ -217,7 +217,7 @@ pub fn multi_channel_system(
         net,
         values,
     );
-    let right_id = one_channel_subsystem(
+    let right_id = add_one_channel_subsystem(
         right_groups.as_slice(),
         (right_group_handles, left_filter_handles),
         nodes_count_per_group,

@@ -86,6 +86,7 @@ pub fn run() {
         instrument::instrument_update_band_control,
         instrument::instrument_update_key_control,
         instrument::instrument_is_batch_processing,
+        instrument::snapshot_processed_output_spectrum,
         #[cfg(feature = "devtools")]
         instrument::instrument_edit_finetuned_values,
         #[cfg(feature = "devtools")]

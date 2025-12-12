@@ -121,6 +121,39 @@ where
         filter_handles.len(),
     );
 
+    let band_controls_value = constant(0.0)
+        >> (pipei::<F, _, _>({
+            let band_controls = RefCell::new(
+                filter_handles
+                    .iter()
+                    .map(|h| h.control.clone())
+                    .collect::<Vec<_>>(),
+            );
+            move |_| {
+                let mut band_controls = band_controls.borrow_mut();
+                pass() + An(band_controls.pop().unwrap())
+            }
+        }) | constant(F::USIZE as f32))
+        >> super::div::div::<S>();
+
+    let ab_controls_value = constant(0.0)
+        >> (pipei::<F, _, _>({
+            let ab_controls = RefCell::new(
+                filter_handles
+                    .iter()
+                    .map(|h| h.control_a_b.clone())
+                    .collect::<Vec<_>>(),
+            );
+            move |_| {
+                let mut ab_controls = ab_controls.borrow_mut();
+                pass() + An(ab_controls.pop().unwrap())
+            }
+        }) | constant(F::USIZE as f32))
+        >> super::div::div::<S>();
+
+    let panner_node =
+        (pass() | (band_controls_value + (ab_controls_value >> mul(-1.0)))) >> panner();
+
     let gain: S = (1.0 / F::USIZE as S) + 1.0;
 
     let filters = pass()
@@ -131,13 +164,13 @@ where
 
     let filter_channel = pinkpass::<S>()
         >> (filters * constant(gain as f32))
-        >> shape(Adaptive::new(0.003, Tanh(0.5)));
+        >> shape(Adaptive::new(0.003, Tanh(0.005)));
 
     let reverb_channel =
         reverb4_stereo(F::USIZE as f64 * 8.75, 1.0 / F::USIZE as f64) >> join::<U2>();
 
     let composite_channel =
-        split::<U2>() >> ((filter_channel * 1.75) | (pass() * 1.25)) >> reverb_channel;
+        panner_node >> ((filter_channel * 1.75) | (pass() * 1.25)) >> reverb_channel;
 
     let filter_id = net.push(Box::new(composite_channel));
     net.pipe_all(src_id, filter_id);

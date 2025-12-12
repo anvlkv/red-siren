@@ -28,6 +28,7 @@ use parking_lot::RwLock;
 #[cfg(feature = "editor")]
 use crate::system::values::{FineTunedSharedValues, FineTunedValues};
 use crate::{
+    output_analyzer::{self, OUTPUT_ANALYZER_FFT_WINDOW_SIZE},
     rt::{
         cpal::stream::{playback_callback, spawn_owned_input_stream},
         AudioRuntime, ExcitementSource,
@@ -54,6 +55,7 @@ struct CpalController {
     dsp_primary_node_id: RwLock<Option<NodeId>>,
     sample_rate: RwLock<Option<f64>>,
     gain_param: RwLock<Option<Shared>>,
+    processed_output_snoops: RwLock<Option<(Snoop, Snoop)>>,
     tuner_tap_gain_param: RwLock<Option<Shared>>,
 
     // Fine-tuned values for editor mode
@@ -68,12 +70,12 @@ struct CpalController {
     input_sender: RwLock<Option<Sender<Control>>>,
     input_thread: RwLock<Option<thread::JoinHandle<()>>>,
 
-    // Per-string data taps and controls
-    excitement_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
-    output_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
-    band_controls: RwLock<HashMap<NodeKey, Shared>>,
-    key_controls: RwLock<HashMap<NodeKey, Shared>>,
-    sensor_controls: RwLock<HashMap<NodeKey, SensorHandles>>,
+    // Per-node data taps and controls
+    node_excitement_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
+    node_output_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
+    node_band_controls: RwLock<HashMap<NodeKey, Shared>>,
+    node_key_controls: RwLock<HashMap<NodeKey, Shared>>,
+    node_sensor_controls: RwLock<HashMap<NodeKey, SensorHandles>>,
 
     // Spectrum data tap
     spectrum_data_thb: crate::system::input::analyzer::SpectrumBuffer,
@@ -101,6 +103,7 @@ impl Default for CpalController {
             dsp_primary_node_id: RwLock::new(None),
             sample_rate: RwLock::new(None),
             gain_param: RwLock::new(None),
+            processed_output_snoops: RwLock::new(None),
             tuner_tap_gain_param: RwLock::new(None),
             #[cfg(feature = "editor")]
             fine_tuned_shared_values: RwLock::new(FineTunedSharedValues::default()),
@@ -108,11 +111,11 @@ impl Default for CpalController {
             output_thread: RwLock::new(None),
             input_sender: RwLock::new(None),
             input_thread: RwLock::new(None),
-            excitement_snoops: RwLock::new(HashMap::new()),
-            output_snoops: RwLock::new(HashMap::new()),
-            band_controls: RwLock::new(HashMap::new()),
-            key_controls: RwLock::new(HashMap::new()),
-            sensor_controls: RwLock::new(HashMap::new()),
+            node_excitement_snoops: RwLock::new(HashMap::new()),
+            node_output_snoops: RwLock::new(HashMap::new()),
+            node_band_controls: RwLock::new(HashMap::new()),
+            node_key_controls: RwLock::new(HashMap::new()),
+            node_sensor_controls: RwLock::new(HashMap::new()),
             spectrum_data_thb: Arc::new(ThingBuf::new(SPECTRUM_BUFFER_CAPACITY)),
             siren_excitements: RwLock::new(HashMap::new()),
             last_layout: RwLock::new(InstrumentLayout::default()),
@@ -272,9 +275,16 @@ impl CpalController {
 
         let main_node_id = net.push(Box::new(subnet));
 
+        let (processed_output_snoop_l, processed_output_snoop_backend_l) =
+            snoop(OUTPUT_ANALYZER_FFT_WINDOW_SIZE);
+        let (processed_output_snoop_r, processed_output_snoop_backend_r) =
+            snoop(OUTPUT_ANALYZER_FFT_WINDOW_SIZE);
         // Insert smoothed gain after main node for fade in/out.
         let gain_param = shared(1.0f32);
         let tuner_tap_gain = shared(0.0f32);
+        let processed_output_snoops_id = net.push(Box::new(
+            processed_output_snoop_backend_l | processed_output_snoop_backend_r,
+        ));
         let gain_id = if output_channels == 2 {
             net.push(Box::new(
                 (pass() | pass() | (pass() >> delay(0.25)))
@@ -292,7 +302,8 @@ impl CpalController {
                     >> join::<U2>(),
             ))
         };
-        net.pipe_all(main_node_id, gain_id);
+        net.pipe_all(main_node_id, processed_output_snoops_id);
+        net.pipe_all(processed_output_snoops_id, gain_id);
         net.pipe_input(main_node_id);
         net.pipe_output(gain_id);
 
@@ -302,6 +313,8 @@ impl CpalController {
 
         {
             *self.gain_param.write() = Some(gain_param);
+            *self.processed_output_snoops.write() =
+                Some((processed_output_snoop_l, processed_output_snoop_r));
             *self.tuner_tap_gain_param.write() = Some(tuner_tap_gain);
             *self.dsp_primary_node_id.write() = Some(main_node_id);
             log::trace!("stored primary node id and gain params");
@@ -354,7 +367,7 @@ impl CpalController {
 
         {
             log::trace!("Storing {} sensor controls", handles.len());
-            *self.sensor_controls.write() =
+            *self.node_sensor_controls.write() =
                 HashMap::from_iter(handles.into_iter().map(|h| (h.key, h)));
             log::trace!("setting tuner_only_mode to true");
             *self.tuner_only_mode.write() = true;
@@ -385,7 +398,7 @@ impl CpalController {
 
         // Preserve old control values before clearing
         let old_band_values = {
-            let stored_band_controls = self.band_controls.read();
+            let stored_band_controls = self.node_band_controls.read();
             stored_band_controls
                 .iter()
                 .map(|(k, v)| (*k, v.value()))
@@ -393,7 +406,7 @@ impl CpalController {
         };
 
         let old_key_values = {
-            let stored_key_controls = self.key_controls.read();
+            let stored_key_controls = self.node_key_controls.read();
             stored_key_controls
                 .iter()
                 .map(|(k, v)| (*k, v.value()))
@@ -421,10 +434,10 @@ impl CpalController {
 
         // Store node handle artifacts (excitement/output snoops, control vars).
         {
-            let mut excitement_snoops = self.excitement_snoops.write();
-            let mut output_snoops = self.output_snoops.write();
-            let mut stored_band_controls = self.band_controls.write();
-            let mut stored_key_controls = self.key_controls.write();
+            let mut excitement_snoops = self.node_excitement_snoops.write();
+            let mut output_snoops = self.node_output_snoops.write();
+            let mut stored_band_controls = self.node_band_controls.write();
+            let mut stored_key_controls = self.node_key_controls.write();
 
             excitement_snoops.clear();
             output_snoops.clear();
@@ -481,7 +494,7 @@ impl CpalController {
         );
 
         {
-            *self.sensor_controls.write() =
+            *self.node_sensor_controls.write() =
                 HashMap::from_iter(handles.into_iter().map(|h| (h.key, h)));
             *self.tuner_only_mode.write() = false;
             log::trace!("stored sensor controls");
@@ -577,11 +590,11 @@ impl CpalController {
         self.dsp_net_frontend.write().take();
         self.dsp_primary_node_id.write().take();
         self.gain_param.write().take();
-        self.excitement_snoops.write().clear();
-        self.output_snoops.write().clear();
-        self.band_controls.write().clear();
-        self.key_controls.write().clear();
-        self.sensor_controls.write().clear();
+        self.node_excitement_snoops.write().clear();
+        self.node_output_snoops.write().clear();
+        self.node_band_controls.write().clear();
+        self.node_key_controls.write().clear();
+        self.node_sensor_controls.write().clear();
         self.sample_rate.write().take();
 
         Ok(())
@@ -589,7 +602,7 @@ impl CpalController {
 
     /// Set band control value for a specific node
     fn set_band_control(&self, key: NodeKey, value: f32) -> Result<()> {
-        let band_controls = self.band_controls.read();
+        let band_controls = self.node_band_controls.read();
         if let Some(control) = band_controls.get(&key) {
             control.set_value(value);
             Ok(())
@@ -600,7 +613,7 @@ impl CpalController {
 
     /// Get band control value for a specific node
     fn get_band_control(&self, key: NodeKey) -> Result<f32> {
-        let band_controls = self.band_controls.read();
+        let band_controls = self.node_band_controls.read();
         if let Some(control) = band_controls.get(&key) {
             Ok(control.value())
         } else {
@@ -610,7 +623,7 @@ impl CpalController {
 
     /// Set key control value for a specific node (0.0 = false/released, 1.0 = true/pressed)
     fn set_key_control(&self, key: NodeKey, value: f32) -> Result<()> {
-        let key_controls = self.key_controls.read();
+        let key_controls = self.node_key_controls.read();
         if let Some(control) = key_controls.get(&key) {
             control.set_value(value);
             Ok(())
@@ -621,7 +634,7 @@ impl CpalController {
 
     /// Get key control value for a specific node (0.0 = false/released, 1.0 = true/pressed)
     fn get_key_control(&self, key: NodeKey) -> Result<f32> {
-        let key_controls = self.key_controls.read();
+        let key_controls = self.node_key_controls.read();
         if let Some(control) = key_controls.get(&key) {
             Ok(control.value())
         } else {
@@ -837,7 +850,7 @@ impl AudioRuntime for CpalController {
 
     fn snapshot_output_snoop(&self, node_key: NodeKey) -> Vec<f32> {
         let mut out = Vec::new();
-        let mut snoops = self.output_snoops.write();
+        let mut snoops = self.node_output_snoops.write();
         if let Some(snoop) = snoops.get_mut(&node_key) {
             snoop.update();
             let cap = snoop.capacity();
@@ -854,7 +867,7 @@ impl AudioRuntime for CpalController {
         let registry = layout.registry();
 
         let mut result = Vec::with_capacity(registry.total_keys());
-        let mut snoops = self.output_snoops.write();
+        let mut snoops = self.node_output_snoops.write();
 
         registry.iter_keys(|node_key| {
             if let Some(snoop) = snoops.get_mut(&node_key) {
@@ -872,7 +885,7 @@ impl AudioRuntime for CpalController {
 
     fn snapshot_excitement_snoop(&self, node_key: NodeKey) -> Vec<f32> {
         let mut out = Vec::new();
-        let mut snoops = self.excitement_snoops.write();
+        let mut snoops = self.node_excitement_snoops.write();
         if let Some(snoop) = snoops.get_mut(&node_key) {
             snoop.update();
             let cap = snoop.capacity();
@@ -889,7 +902,7 @@ impl AudioRuntime for CpalController {
         let registry = layout.registry();
 
         let mut result = Vec::with_capacity(registry.total_keys());
-        let mut snoops = self.excitement_snoops.write();
+        let mut snoops = self.node_excitement_snoops.write();
 
         registry.iter_keys(|node_key| {
             if let Some(snoop) = snoops.get_mut(&node_key) {
@@ -903,6 +916,35 @@ impl AudioRuntime for CpalController {
             }
         });
         result
+    }
+
+    fn snapshot_processed_output_spectrum(
+        &self,
+    ) -> Result<Option<crate::rt::ProcessedOutputSpectrumSnapshot>> {
+        self.processed_output_snoops
+            .write()
+            .as_mut()
+            .zip(self.sample_rate.read().as_ref())
+            .and_then(|((l, r), &sample_rate)| {
+                if let Some((l, r)) = l.get().zip(r.get()).filter(|(l, r)| {
+                    l.len() >= OUTPUT_ANALYZER_FFT_WINDOW_SIZE
+                        && r.len() >= OUTPUT_ANALYZER_FFT_WINDOW_SIZE
+                }) {
+                    Some(
+                        output_analyzer::analyze(core::array::from_fn(|i| l.at(i)), sample_rate)
+                            .and_then(|left_spectrum| {
+                                output_analyzer::analyze(
+                                    core::array::from_fn(|i| r.at(i)),
+                                    sample_rate,
+                                )
+                                .map(|right_spectrum| (left_spectrum, right_spectrum))
+                            }),
+                    )
+                } else {
+                    None
+                }
+            })
+            .transpose()
     }
 
     fn set_band_control(&self, key: NodeKey, value: f32) -> Result<()> {
@@ -1017,7 +1059,7 @@ impl AudioRuntime for CpalController {
         {
             self.update_primary_node(&self.last_config.read(), new_config);
         } else {
-            let controls = self.sensor_controls.read();
+            let controls = self.node_sensor_controls.read();
             for sensor_data in &new_config.sensor_data {
                 if let Some(ctrl) = controls.get(&sensor_data.key) {
                     ctrl.max_frequency.set_value(sensor_data.max_frequency);

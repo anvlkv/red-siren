@@ -3,6 +3,7 @@ mod debug;
 mod editor;
 mod element;
 mod keyboard;
+mod spectrum;
 mod strings;
 
 use crate::{
@@ -21,6 +22,7 @@ style_sheet!(
 pub use context::{expect_instrument_context, provide_instrument_context};
 
 use keyboard::*;
+use spectrum::*;
 use strings::*;
 
 #[component]
@@ -43,6 +45,7 @@ pub fn Instrument(#[prop(into, optional)] editor: Signal<bool>) -> impl IntoView
                 )
             }
         >
+            <SpectrumViz attr:class="absolute h-full w-full mix-blend-overlay blur-md" />
             <InstrumentStrings attr:class="absolute h-full w-auto right-0 bottom-0 fill-none stroke-gray/40 dark:stroke-cinnabar/40 stroke-[0.5px]" />
             <Keyboard attr:class="absolute inset-0 backdrop-blur-3xl" />
             <Show when=move || editor()>

@@ -332,6 +332,32 @@ impl InstrumentEngine {
             .snapshot_all_excitement_snoops()
     }
 
+    pub fn snapshot_processed_output_spectrum(&self) -> Option<Vec<(f32, f32)>> {
+        match self
+            .inner
+            .stream_controller
+            .read()
+            .snapshot_processed_output_spectrum()
+        {
+            Ok(data) => data.map(|(left, right)| {
+                if left.len() != right.len() {
+                    log::warn!(
+                        "Mismatched left-to-right [{}]/[{}] spectrum lengths",
+                        left.len(),
+                        right.len()
+                    );
+                }
+                left.into_values()
+                    .zip(right.into_values().rev())
+                    .collect::<Vec<(f32, f32)>>()
+            }),
+            Err(e) => {
+                log::error!("Error snapshotting processed output spectrum: {}", e);
+                None
+            }
+        }
+    }
+
     pub fn sample_rate(&self) -> f64 {
         self.inner.stream_controller.read().get_sample_rate()
     }

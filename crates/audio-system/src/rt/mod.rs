@@ -4,9 +4,13 @@ pub mod cpal;
 #[cfg(feature = "rt_web")]
 pub mod web;
 
+use std::collections::BTreeMap;
+
 use common::NodeKey;
 use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout};
 use common::tuner::Config as TunerConfig;
+
+pub type ProcessedOutputSpectrumSnapshot = (BTreeMap<u32, f32>, BTreeMap<u32, f32>);
 
 /// Source of excitement energy driving instrument strings / nodes.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -70,6 +74,7 @@ pub trait AudioRuntime {
     fn snapshot_all_output_snoops(&self) -> Vec<(NodeKey, Vec<f32>)>;
     fn snapshot_excitement_snoop(&self, key: NodeKey) -> Vec<f32>;
     fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<f32>)>;
+    fn snapshot_processed_output_spectrum(&self) -> common::error::Result<Option<ProcessedOutputSpectrumSnapshot>>;
 
     // Band control
     fn set_band_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()>;
@@ -173,6 +178,10 @@ impl AudioRuntime for NullController {
 
     fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
         Vec::new()
+    }
+
+    fn snapshot_processed_output_spectrum(&self) -> common::error::Result<Option<(BTreeMap<u32, f32>, BTreeMap<u32, f32>)>> {
+        Ok(None)
     }
 
     fn set_band_control(&self, _key: common::NodeKey, _value: f32) -> common::error::Result<()> {

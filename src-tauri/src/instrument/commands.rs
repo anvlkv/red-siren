@@ -485,6 +485,11 @@ pub fn instrument_is_batch_processing(state: State<'_, InstrumentEngine>) -> boo
     state.is_batch_processing()
 }
 
+#[tauri::command]
+pub fn snapshot_processed_output_spectrum(state: State<'_, InstrumentEngine>) -> Option<Vec<(f32, f32)>> {
+    state.snapshot_processed_output_spectrum()
+}
+
 #[cfg(feature="devtools")]
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]

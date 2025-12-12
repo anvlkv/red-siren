@@ -9,8 +9,8 @@ use parking_lot::RwLock;
 
 use crate::util::S;
 
-const OPTIMAL_BUFFER_MILLIS: f64 = 80.0;
-const MAX_BUFFER_MILLIS: f64 = 320.0;
+const BASE_OPTIMAL_BUFFER_MILLIS: f64 = 80.0;
+const BASE_MAX_BUFFER_MILLIS: f64 = 320.0;
 const HIGH_WATER_RATIO: f32 = 0.9;
 const LOW_WATER_RATIO: f32 = 0.2;
 
@@ -35,6 +35,27 @@ struct ProductionDelta {
     mode: ProcessingMode,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct Ema {
+    value: f64,
+    alpha: f64,
+}
+
+impl Ema {
+    fn new(initial: f64, alpha: f64) -> Self {
+        Self {
+            value: initial,
+            alpha,
+        }
+    }
+    fn update(&mut self, sample: f64) {
+        self.value = self.alpha * sample + (1.0 - self.alpha) * self.value;
+    }
+    fn get(&self) -> f64 {
+        self.value
+    }
+}
+
 pub fn playback_callback(
     net: NetBackend,
     input_buffer: Option<Arc<ThingBuf<S>>>,
@@ -45,18 +66,20 @@ pub fn playback_callback(
     // Causal latency in (fractional) samples. After a reset, we can discard this many samples from the output to avoid incurring a pre-delay. The latency may depend on the sample rate.
     let net_latency = backend.latency();
 
-    let buffer_capacity = ((sample_rate as f64 * MAX_BUFFER_MILLIS) / 1_000.0).ceil() as usize;
-    let optimal_duration = Duration::from_secs_f64((OPTIMAL_BUFFER_MILLIS / 1_000.0) / 2.0);
-    let sub_optimal_duration = Duration::from_secs_f64(OPTIMAL_BUFFER_MILLIS / 1_000.0);
-    let critical_duration = Duration::from_secs_f64((OPTIMAL_BUFFER_MILLIS / 1_000.0) * 2.0);
+    let buffer_capacity = ((sample_rate as f64 * BASE_MAX_BUFFER_MILLIS) / 1_000.0).ceil() as usize;
+    let optimal_duration = Duration::from_secs_f64((BASE_OPTIMAL_BUFFER_MILLIS / 1_000.0) / 2.0);
+    let sub_optimal_duration = Duration::from_secs_f64(BASE_OPTIMAL_BUFFER_MILLIS / 1_000.0);
+    let critical_duration = Duration::from_secs_f64((BASE_OPTIMAL_BUFFER_MILLIS / 1_000.0) * 2.0);
 
     let sample_duration = Duration::from_secs_f64(1.0 / sample_rate as f64);
 
-    let low_water = (buffer_capacity as f32 * LOW_WATER_RATIO).ceil() as usize;
-    let optimal_cap = (sample_rate as f64 * OPTIMAL_BUFFER_MILLIS / 1_000.0).ceil() as usize;
-    let high_water = (buffer_capacity as f32 * HIGH_WATER_RATIO).ceil() as usize;
+    let initial_optimal_cap =
+        (sample_rate as f64 * BASE_OPTIMAL_BUFFER_MILLIS / 1_000.0).ceil() as usize;
+    let initial_max_cap = (sample_rate as f64 * BASE_MAX_BUFFER_MILLIS / 1_000.0).ceil() as usize;
+    let initial_low_water = (initial_max_cap as f32 * LOW_WATER_RATIO).ceil() as usize;
+    let initial_high_water = (initial_max_cap as f32 * HIGH_WATER_RATIO).ceil() as usize;
 
-    log::info!("Starting playback with: buffer_capacity=[{buffer_capacity}], optimal_duration=[{optimal_duration:?}], sub_optimal_duration=[{sub_optimal_duration:?}], critical_duration=[{critical_duration:?}], sample_duration=[{sample_duration:?}], optimal_cap=[{optimal_cap}], low_water=[{low_water}], high_water=[{high_water}], net_latency=[{net_latency:?}]");
+    log::info!("Starting playback with: buffer_capacity=[{buffer_capacity}], optimal_duration=[{optimal_duration:?}], sub_optimal_duration=[{sub_optimal_duration:?}], critical_duration=[{critical_duration:?}], sample_duration=[{sample_duration:?}], optimal_cap=[{initial_optimal_cap}], low_water=[{initial_low_water}], high_water=[{initial_high_water}], net_latency=[{net_latency:?}]");
 
     let mut output_buffer = VecDeque::<(f32, f32)>::with_capacity(buffer_capacity);
     let mut frames_per_output_buffer = 64_usize;
@@ -65,6 +88,16 @@ pub fn playback_callback(
     let mut scratch_left = vec![0_f32; buffer_capacity];
     let mut scratch_right = vec![0_f32; buffer_capacity];
     let mut scratch_input = vec![0_f32; buffer_capacity];
+
+    // Adaptive telemetry
+    // - ema_prod_ns: moving average of production duration per callback
+    // - ema_avail_ns: moving average of available callback-to-playback slack
+    // - ema_jitter_ns: moving average of absolute jitter of available slack
+    // Alpha ~ 0.1: responds within ~10 cycles without being twitchy.
+    let mut ema_prod_ns = Ema::new(0.0, 0.1);
+    let mut ema_avail_ns = Ema::new(0.0, 0.1);
+    let mut ema_jitter_ns = Ema::new(0.0, 0.1);
+    let mut last_avail_ns: Option<f64> = None;
 
     // warm up backend and discard initial samples according to latency
     if let Some(lat) = net_latency {
@@ -97,14 +130,83 @@ pub fn playback_callback(
                 frames_per_output_buffer = num_frames;
             }
 
+            // Update slack telemetry
+            let avail_ns_opt = available_time.map(|d| d.as_nanos() as f64);
+            if let Some(av_ns) = avail_ns_opt {
+                ema_avail_ns.update(av_ns);
+                if let Some(prev) = last_avail_ns {
+                    ema_jitter_ns.update((av_ns - prev).abs());
+                }
+                last_avail_ns = Some(av_ns);
+            }
+
+            // Adapt buffer caps based on telemetry while preserving real-time feel.
+            // Heuristics:
+            // - If production often approaches/exceeds available slack, increase optimal/max caps up to 2x.
+            // - If slack is plentiful and stable (low jitter), allow shrinking down to 0.5x.
+            // - Keep low/high water in sync with max_cap.
+            let prod_ns = production_delta
+                .map(|d| d.duration.as_nanos() as f64)
+                .unwrap_or_else(|| ema_prod_ns.get());
+            if prod_ns > 0.0 {
+                ema_prod_ns.update(prod_ns);
+            }
+
+            let avail_ns = ema_avail_ns.get();
+            let ratio = if avail_ns > 0.0 {
+                ema_prod_ns.get() / avail_ns
+            } else {
+                // If we don't know avail yet, be conservative.
+                1.0
+            };
+
+            // Jitter normalization: compare jitter to average available
+            let jitter_ratio = if avail_ns > 0.0 {
+                (ema_jitter_ns.get() / avail_ns).min(2.0)
+            } else {
+                1.0
+            };
+
+            // Base scale from production pressure
+            // - ratio ~0.5 => scale ~0.75
+            // - ratio ~1.0 => scale ~1.25
+            // - ratio ~2.0 => scale ~1.75
+            let pressure_scale = 0.75 + 0.5 * ratio.clamp(0.0, 2.0);
+
+            // Additional scale when jitter is high
+            // - jitter_ratio ~0 => +0.0
+            // - jitter_ratio ~1 => +0.15
+            // - jitter_ratio ~2 => +0.3
+            let jitter_scale = 1.0 + 0.15 * jitter_ratio;
+
+            let mut adaptive_scale = pressure_scale * jitter_scale;
+
+            // Clamp for real-time feel
+            adaptive_scale = adaptive_scale.clamp(0.5, 2.0);
+
+            let base_optimal_samples =
+                (sample_rate as f64 * BASE_OPTIMAL_BUFFER_MILLIS / 1_000.0).ceil();
+            let base_max_samples = (sample_rate as f64 * BASE_MAX_BUFFER_MILLIS / 1_000.0).ceil();
+
+            let mut adaptive_optimal_cap = (base_optimal_samples * adaptive_scale).ceil() as usize;
+            let adaptive_max_cap = (base_max_samples * adaptive_scale).ceil() as usize;
+
+            if adaptive_optimal_cap > adaptive_max_cap {
+                adaptive_optimal_cap = adaptive_max_cap;
+            }
+
+            // Recompute watermarks from adapted max cap
+            let adaptive_low_water = (adaptive_max_cap as f32 * LOW_WATER_RATIO).ceil() as usize;
+            let adaptive_high_water = (adaptive_max_cap as f32 * HIGH_WATER_RATIO).ceil() as usize;
+
             let (mode, fill_size) = determine_mode_and_fill_in_size(
                 available_time,
                 &production_delta,
                 frames_per_output_buffer,
                 output_buffer.len(),
-                low_water,
-                optimal_cap,
-                high_water,
+                adaptive_low_water,
+                adaptive_optimal_cap,
+                adaptive_high_water,
             );
 
             match mode {

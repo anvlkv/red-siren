@@ -20,6 +20,8 @@ pub const UPDATE_BAND_CONTROL: &str = "instrument_update_band_control";
 pub const UPDATE_KEY_CONTROL: &str = "instrument_update_key_control";
 /// Get batch processing bool
 pub const IS_BATCH_PROCESSING: &str = "instrument_is_batch_processing";
+/// Get processed output spectrum snapshot
+pub const SNAPSHOT_PROCESSED_OUTPUT_SPECTRUM: &str = "snapshot_processed_output_spectrum";
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

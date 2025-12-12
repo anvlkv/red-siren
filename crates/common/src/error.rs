@@ -218,6 +218,8 @@ pub enum InstrumentError {
     ConfigError(#[from] InstrumentConfigError),
     #[error("instrument not initialized")]
     NotInitialized,
+    #[error("Output analysis failed: {0}")]
+    OutputAnalyzerError(String),
 }
 
 #[derive(Debug, Error, Serialize, Deserialize)]

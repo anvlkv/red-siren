@@ -17,12 +17,11 @@ insta = "1.44.3"
 js-sys = "0.3"
 log = "0.4"
 mint = { version = "0.5.9", features = ["serde"] }
-ringbuf = "0.4.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 strum = { version = "0.27.2", features = ["derive"] }
 tauri = { version = "2", features = ["rustls-tls"] }
 thiserror = "2.0.17"
-wasm-bindgen = "0.2.105"
-wasm-bindgen-futures = "0.4.50"
+wasm-bindgen = "0.2.106"
+wasm-bindgen-futures = "0.4.56"
 web-sys = "0.3"

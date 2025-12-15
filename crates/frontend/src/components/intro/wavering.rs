@@ -82,7 +82,7 @@ pub fn Wavering(#[prop(into)] paused: Signal<bool>) -> impl IntoView {
             .map(|i| {
                 let samples = vec![0.0; 32];
                 (
-                    crate::util::wave::waveform_path_x(
+                    waveform_path_x(
                         &samples,
                         WAVES_LENGHT[i],
                         WAVE_CENTER_X,
@@ -113,7 +113,7 @@ pub fn Wavering(#[prop(into)] paused: Signal<bool>) -> impl IntoView {
                         let base_y =
                             WAVE_TOP_Y + WAVE_Y_OFFSET + (i as f32) * WAVE_VERTICAL_SPACING;
                         let samples = &snoop.samples;
-                        let path = crate::util::wave::waveform_path_x(
+                        let path = waveform_path_x(
                             samples,
                             WAVES_LENGHT[i],
                             WAVE_CENTER_X,
@@ -150,6 +150,32 @@ pub fn Wavering(#[prop(into)] paused: Signal<bool>) -> impl IntoView {
             </g>
         </g>
     }
+}
+
+fn waveform_path_x(
+    samples: &[f32],
+    total_len: f32,
+    center_x: f32,
+    center_y: f32,
+    amp: f32,
+) -> String {
+    if samples.len() < 2 {
+        return String::new();
+    }
+    let points = samples.len();
+    let dx = total_len / (points - 1) as f32;
+    let start_x = center_x - total_len * 0.5;
+    let mut s = String::with_capacity(points * 12);
+    for (i, &src) in samples.iter().enumerate() {
+        let x = start_x + dx * i as f32;
+        let y = center_y - src * amp;
+        if i == 0 {
+            s.push_str(&format!("M{:.2} {:.2}", x, y));
+        } else {
+            s.push_str(&format!("L{:.2} {:.2}", x, y));
+        }
+    }
+    s
 }
 
 fn wave_scale(i: usize) -> String {

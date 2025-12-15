@@ -445,7 +445,7 @@ pub fn KeyboardElement(
         }
     };
     let band_class = move || {
-        let base = "absolute rounded-full bg-red/80 dark:bg-black/80 border-(length:--keyboard-band-stroke-width) border-black dark:border-red";
+        let base = "absolute rounded-full bg-red/90 dark:bg-black/90 border-(length:--keyboard-band-stroke-width) border-black dark:border-red backdrop-blur-xl";
         if band_should_animate() {
             format!(
                 "{} {}",

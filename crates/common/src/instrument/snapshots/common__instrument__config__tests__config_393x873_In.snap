@@ -12,7 +12,7 @@ expression: config
             0,
             0
           ],
-          "frequency": 99.62807297312229,
+          "frequency": 159.5081582833927,
           "l": 269.6615768867065,
           "phase": 0.0,
           "divisions": 3,
@@ -23,7 +23,7 @@ expression: config
             0,
             1
           ],
-          "frequency": 119.73493216963602,
+          "frequency": 191.69996912133436,
           "l": 314.13127451015896,
           "phase": 0.1061032953945969,
           "divisions": 3,
@@ -34,7 +34,7 @@ expression: config
             0,
             2
           ],
-          "frequency": 150.0097897542063,
+          "frequency": 240.1711141660609,
           "l": 358.60097213361144,
           "phase": 0.2122065907891938,
           "divisions": 3,
@@ -50,7 +50,7 @@ expression: config
             1,
             0
           ],
-          "frequency": 199.25961993884547,
+          "frequency": 319.0892882869484,
           "l": 423.33534209180175,
           "phase": 0.3183098861837907,
           "divisions": 3,
@@ -61,7 +61,7 @@ expression: config
             1,
             1
           ],
-          "frequency": 239.47403945032272,
+          "frequency": 383.48763705790503,
           "l": 467.8050397152542,
           "phase": 0.4244131815783876,
           "divisions": 3,
@@ -72,7 +72,7 @@ expression: config
             1,
             2
           ],
-          "frequency": 300.0248102921076,
+          "frequency": 480.452101704887,
           "l": 512.2747373387067,
           "phase": 0.5305164769729844,
           "divisions": 3,

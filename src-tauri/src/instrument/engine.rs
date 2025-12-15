@@ -349,6 +349,7 @@ impl InstrumentEngine {
                 }
                 left.into_values()
                     .zip(right.into_values().rev())
+                    .rev()
                     .collect::<Vec<(f32, f32)>>()
             }),
             Err(e) => {

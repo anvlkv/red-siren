@@ -29,7 +29,7 @@ pub struct StringSnoopEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StringSnoopBatchPayload {
-    pub t_unix_ms: u64,
+    pub t_unix_ms: f64,
     pub snoops: Vec<StringSnoopEntry>,
 }
 
@@ -61,6 +61,6 @@ pub struct ExcitementSnoopEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExcitementSnoopBatchPayload {
-    pub t_unix_ms: u64,
+    pub t_unix_ms: f64,
     pub snoops: Vec<ExcitementSnoopEntry>,
 }

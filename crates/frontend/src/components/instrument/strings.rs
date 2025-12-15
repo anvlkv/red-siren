@@ -1,15 +1,31 @@
-use leptos::prelude::*;
+use common::instrument::GroupChannel;
+use leptos::{html, prelude::*};
+use leptos_use::use_device_pixel_ratio;
 use tauri_use::{use_command, UseTauriWithReturn};
+use web_sys::CanvasRenderingContext2d;
 
+use crate::components::instrument::util::{get_2d_ctx, is_dark_mode, resolve_theme_color};
 use crate::components::intro::consts::{INTRO_FLUTE_POS_X, INTRO_FLUTE_POS_Y, INTRO_FLUTE_ROT_DEG};
 use crate::util::layout_context::{expect_layout_contex, LayoutContextReturn};
 
+#[derive(Debug, Clone, Default)]
+struct VizEntry {
+    left: Vec<Vec<f32>>,
+    right: Vec<Vec<f32>>,
+}
+
+impl VizEntry {
+    fn is_empty(&self) -> bool {
+        self.left.is_empty() && self.right.is_empty()
+    }
+}
+
 #[component]
 pub fn InstrumentStrings() -> impl IntoView {
+    const HISTORY_SIZE: usize = 12;
+
     let LayoutContextReturn {
         space,
-        num_groups,
-        num_keys_per_group,
         first_group_channel,
         left_string_position,
         right_string_position,
@@ -18,6 +34,9 @@ pub fn InstrumentStrings() -> impl IntoView {
     } = expect_layout_contex();
 
     let string_wave_amplitude = Memo::new(move |_| complete_layout().instrument_breadth * 0.55);
+
+    let (viz_data, set_viz_data) =
+        signal::<[VizEntry; HISTORY_SIZE]>(core::array::from_fn(|_| VizEntry::default()));
 
     // Instrument snoop batch stream (pull model).
     let UseTauriWithReturn {
@@ -29,9 +48,6 @@ pub fn InstrumentStrings() -> impl IntoView {
         common::instrument::data::GET_ALL_STRING_SNOOPS,
     );
 
-    let (visualize_batch, set_visualize_batch) =
-        signal(Vec::<common::instrument::StringSnoopEntry>::new());
-
     // Log errors for the batch command
     Effect::new(move |_| {
         if let Some(err) = batch_error() {
@@ -42,22 +58,134 @@ pub fn InstrumentStrings() -> impl IntoView {
         }
     });
 
+    // Canvas reference and device pixel ratio
+    let canvas_ref = NodeRef::<html::Canvas>::new();
+    let pixel_ratio = use_device_pixel_ratio();
+
+    let clear_cavas = move |ctx: Option<CanvasRenderingContext2d>| {
+        if let Some(ctx) = ctx.or_else(|| canvas_ref.get().and_then(|canvas| get_2d_ctx(&canvas))) {
+            let space = space();
+            ctx.clear_rect(0.0, 0.0, space.x, space.y);
+        }
+    };
+
+    // Setup canvas backing resolution and scaling whenever canvas mounts or layout/pixel ratio changes
+    Effect::new(move |_| {
+        if let Some(canvas) = canvas_ref.get() {
+            let pr = pixel_ratio();
+            let space = space();
+
+            clear_cavas(None);
+
+            // Set CSS size in CSS pixels
+            canvas
+                .set_attribute(
+                    "style",
+                    &format!("width: {}px; height: {}px;", space.x, space.y),
+                )
+                .ok();
+
+            // Set backing resolution in device pixels
+            let logical_w = space.x.max(0.0);
+            let logical_h = space.y.max(0.0);
+            let backing_w = (logical_w * pr).round().clamp(1.0, f64::MAX) as u32;
+            let backing_h = (logical_h * pr).round().clamp(1.0, f64::MAX) as u32;
+            canvas.set_width(backing_w);
+            canvas.set_height(backing_h);
+
+            // Acquire 2d context and scale so drawing uses logical CSS pixels
+            if let Some(ctx) = get_2d_ctx(&canvas) {
+                // Reset transform then scale by pixel ratio
+                // Note: set_transform requires a DOMMatrix; here we use reset_transform for clarity
+                _ = ctx.reset_transform().ok();
+                _ = ctx.scale(pr, pr).ok();
+            }
+        }
+    });
+
+    let last_ts = StoredValue::new(Option::<f64>::None);
     // Drive periodic fetch (20 FPS)
     let _raf = crate::util::raf_fn_fps::use_raf_fn_with_fps(
         move |_| {
             fetch_batch(Some(()));
-            if let Some(batch) = batch_data() {
-                set_visualize_batch(batch.snoops);
+            if let Some((batch, ctx)) = batch_data()
+                .filter(|b| last_ts.get_value() != Some(b.t_unix_ms))
+                .zip(
+                    canvas_ref
+                        .get_untracked()
+                        .and_then(|canvas| get_2d_ctx(&canvas)),
+                )
+            {
+                last_ts.set_value(Some(batch.t_unix_ms));
+                clear_cavas(Some(ctx.clone()));
+
+                let first_group_channel = first_group_channel.get_untracked();
+                let (left, right) = batch.snoops.into_iter().fold(
+                    (Vec::new(), Vec::new()),
+                    |(mut left, mut right), snoop| {
+                        match first_group_channel.nth_channel_from_first(snoop.group as usize) {
+                            GroupChannel::Left => {
+                                left.push(snoop.samples);
+                            }
+                            GroupChannel::Right => {
+                                right.push(snoop.samples);
+                            }
+                        }
+
+                        (left, right)
+                    },
+                );
+
+                set_viz_data.update(|data| {
+                    data.rotate_right(1);
+                    data[0] = VizEntry { left, right };
+                });
             }
         },
-        30.0,
+        20.0,
     );
 
-    // Root-level viewBox matches layout space; transforms use view-box coords via 'transform-box: view-box'
-    let view_box = move || {
-        let space = space();
-        format!("0 0 {} {}", space.x, space.y)
-    };
+    Effect::new(move |_| {
+        let VizEntry { left, right } = viz_data().into_iter().fold(
+            VizEntry::default(),
+            |mut acc, VizEntry { left, right }| {
+                if acc.is_empty() {
+                    acc.left = left;
+                    acc.right = right;
+                } else {
+                    acc.left.iter_mut().zip(left).for_each(|(a, b)| a.extend(b));
+                    acc.right
+                        .iter_mut()
+                        .zip(right)
+                        .for_each(|(a, b)| a.extend(b));
+                }
+                acc
+            },
+        );
+        let alpha_left = 2.0 / (left.len() as f64 + 1.0);
+        let alpha_right = 2.0 / (right.len() as f64 + 1.0);
+        if let Some(ctx) = canvas_ref.get().and_then(|canvas| get_2d_ctx(&canvas)) {
+            let string_wave_amplitude = string_wave_amplitude();
+            for samples in left {
+                draw_string_snoop_data(
+                    &ctx,
+                    left_string_position(),
+                    string_wave_amplitude,
+                    alpha_left,
+                    &samples,
+                );
+            }
+            for samples in right {
+                draw_string_snoop_data(
+                    &ctx,
+                    right_string_position(),
+                    string_wave_amplitude,
+                    alpha_right,
+                    &samples,
+                );
+            }
+        }
+    });
 
     // Inner: rotation animation origin + variables
     let root_inner_style = move || {
@@ -113,127 +241,92 @@ pub fn InstrumentStrings() -> impl IntoView {
         )
     };
 
-    let left_strings = move || {
-        let num_groups = num_groups();
-        let num_keys_per_group = num_keys_per_group();
-        let first_group_channel = first_group_channel();
-        let left_string_position = left_string_position();
-
-        view! {
-            <g id="left-channel-strings">
-                {move || {
-                    (0..num_groups)
-                        .filter(|g| {
-                            matches!(
-                                first_group_channel.nth_channel_from_first(*g as usize),
-                                common::instrument::GroupChannel::Left
-                            )
-                        })
-                        .flat_map(|g: u8| {
-                            (0..num_keys_per_group)
-                                .map(move |k: u8| {
-                                    let k = k as usize;
-                                    let g = g as usize;
-                                    let samples = Signal::derive(move || {
-                                        visualize_batch()
-                                            .into_iter()
-                                            .find(|e| e.group as usize == g && e.key as usize == k)
-                                            .map(|e| e.samples)
-                                    });
-                                    view! {
-                                        <StringView
-                                            line=left_string_position
-                                            samples=samples
-                                            amplitude=string_wave_amplitude
-                                        />
-                                    }
-                                })
-                        })
-                        .collect_view()
-                }}
-            </g>
-        }
-    };
-
-    let right_strings = move || {
-        let num_groups = num_groups();
-        let num_keys_per_group = num_keys_per_group();
-        let first_group_channel = first_group_channel();
-        let right_string_position = right_string_position();
-
-        view! {
-            <g id="right-channel-strings">
-                {move || {
-                    (0..num_groups)
-                        .filter(|g| {
-                            matches!(
-                                first_group_channel.nth_channel_from_first(*g as usize),
-                                common::instrument::GroupChannel::Right
-                            )
-                        })
-                        .flat_map(|g: u8| {
-                            (0..num_keys_per_group)
-                                .map(move |k: u8| {
-                                    let k = k as usize;
-                                    let g = g as usize;
-                                    let samples = Signal::derive(move || {
-                                        batch_data()
-                                            .and_then(|b| {
-                                                b.snoops
-                                                    .iter()
-                                                    .find(|e| e.group as usize == g && e.key as usize == k)
-                                                    .map(|e| e.samples.clone())
-                                            })
-                                    });
-                                    view! {
-                                        <StringView
-                                            line=right_string_position
-                                            samples=samples
-                                            amplitude=string_wave_amplitude
-                                        />
-                                    }
-                                })
-                        })
-                        .collect_view()
-                }}
-            </g>
-        }
-    };
-
     view! {
-        <svg viewBox=view_box fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g
-                id="strings-root"
-                class=super::instrument_animations::INSTRUMENT_STRINGS_ROOT_APPEAR
-                style=root_inner_style
-            >
-                {left_strings}
-                {right_strings}
-            </g>
-        </svg>
+        <canvas
+            node_ref=canvas_ref
+            // Width/height attributes are set via Effect to account for pixel ratio.
+            // Initial attributes to avoid 0 size before first Effect runs.
+            width=800
+            height=600
+            id="strings-root"
+            class=super::instrument_animations::INSTRUMENT_STRINGS_ROOT_APPEAR
+            style=root_inner_style
+        ></canvas>
     }
 }
 
-#[component]
-pub fn StringView(
-    line: common::Line,
-    #[prop(into)] samples: Signal<Option<Vec<f32>>>,
-    #[prop(into)] amplitude: Signal<f64>,
-) -> impl IntoView {
-    let path_def = Signal::derive(move || {
-        let (start, end) = line;
-        if let Some(samples) = samples.get() {
-            if !samples.is_empty() {
-                return crate::util::wave::waveform_path_along_dbe(
-                    &samples,
-                    start,
-                    end,
-                    amplitude(),
-                );
-            }
+fn draw_string_snoop_data(
+    ctx: &CanvasRenderingContext2d,
+    (start, end): common::Line,
+    amplitude: f64,
+    alpha: f64,
+    samples: &[f32],
+) {
+    let is_dark = is_dark_mode();
+    let var = if is_dark {
+        "--color-red"
+    } else {
+        "--color-black"
+    };
+    let stroke_color = resolve_theme_color(var).unwrap_or_else(|| {
+        if is_dark {
+            "#e30022".into()
+        } else {
+            "#353839".into()
         }
-        format!("M{},{} L{},{}", start.x, start.y, end.x, end.y)
     });
 
-    view! { <path d=path_def stroke-width="2" /> }
+    ctx.save();
+
+    ctx.set_stroke_style_str(&stroke_color);
+    ctx.set_global_alpha(alpha);
+    ctx.set_line_width(1.75);
+    ctx.set_filter("blur(1.5px)");
+
+    ctx.begin_path();
+
+    if samples.len() < 2 {
+        ctx.move_to(start.x, start.y);
+        ctx.line_to(end.x, end.y);
+        ctx.stroke();
+        ctx.restore();
+        return;
+    }
+
+    let dx = end.x - start.x;
+    let dy = end.y - start.y;
+    let len = (dx * dx + dy * dy).sqrt();
+    if len <= f64::EPSILON {
+        ctx.move_to(start.x, start.y);
+        ctx.line_to(end.x, end.y);
+        ctx.stroke();
+        ctx.restore();
+        return;
+    }
+
+    // Unit normal to the line (perpendicular)
+    let nx = -dy / len;
+    let ny = dx / len;
+
+    let points = samples.len();
+
+    for (i, &src) in samples.iter().enumerate() {
+        let t = i as f64 / (points - 1) as f64;
+        let px = start.x + dx * t;
+        let py = start.y + dy * t;
+
+        // Match existing convention: invert sample for displacement direction.
+        let off = -src as f64 * amplitude;
+        let x = px + off * nx;
+        let y = py + off * ny;
+
+        if i == 0 {
+            ctx.move_to(x, y);
+        } else {
+            ctx.line_to(x, y);
+        }
+    }
+
+    ctx.stroke();
+    ctx.restore();
 }

@@ -1,3 +1,5 @@
+#![feature(duration_millis_float)]
+
 mod health;
 mod instrument;
 mod intro;

@@ -1,8 +1,5 @@
 use common::instrument::NodeConfig;
-use fundsp::{
-    hacker::prelude::*,
-    typenum::{UInt, UTerm, B0, B1},
-};
+use fundsp::hacker::prelude::*;
 
 use super::formant::*;
 use super::siren::*;
@@ -14,18 +11,15 @@ use crate::{
     util::DbLin,
 };
 
-pub const ACTIVATION_SNOOP_CAPACITY: usize = 8;
-pub const OUTPUT_SNOOP_CAPACITY: usize = 256;
+pub const ACTIVATION_SNOOP_CAPACITY: usize = 4;
+pub const OUTPUT_SNOOP_CAPACITY: usize = 64;
 
 // Complete node type composed from the smaller parts
 pub type NodeType = Pipe<
     Pipe<
         Pipe<
-            Pipe<
-                Pipe<SirenWithInputs, Split<UInt<UInt<UTerm, B1>, B0>>>,
-                Stack<SourceOscillator, Pass>,
-            >,
-            Binop<FrameMul<UInt<UTerm, B1>>, FormantBank, Pass>,
+            Pipe<Pipe<SirenWithInputs, Split<U2>>, Stack<SourceOscillator, Pass>>,
+            Binop<FrameMul<U1>, FormantBank, Pass>,
         >,
         BellFilter,
     >,
@@ -115,11 +109,11 @@ type NonZeroControl<V = Var> = Pipe<V, Shaper<ClipTo>>;
 
 // Type alias for the siren alpha modulated by band control
 type SirenAlpha<V = Var> = Binop<
-    FrameMul<UInt<UTerm, B1>>,
+    FrameMul<U1>,
     Pipe<
         Stack<
             Pipe<Stack<NonZeroControl<V>, FineTunedValue>, super::div::Div<S>>,
-            Unop<V, FrameMulScalar<UInt<UTerm, B1>>>,
+            Unop<V, FrameMulScalar<U1>>,
         >,
         super::pow::Pow<S>,
     >,
@@ -175,21 +169,12 @@ where
 type FormantFilter = Pipe<Stack<Stack<Pass, Var>, FineTunedValue>, super::formant::Formant>;
 
 // Type alias for all three formant filters stacked with gain scaling
-type FormantBank = Pipe<
-    Pipe<
-        Split<U4>,
-        Stack<
-            Stack<
-                Stack<
-                    Unop<FormantFilter, FrameMulScalar<U1>>,
-                    Unop<FormantFilter, FrameMulScalar<U1>>,
-                >,
-                Unop<FormantFilter, FrameMulScalar<U1>>,
-            >,
-            Unop<Pass, FrameMulScalar<U1>>,
-        >,
+type FormantBank = Bus<
+    Bus<
+        Bus<Unop<FormantFilter, FrameMulScalar<U1>>, Unop<FormantFilter, FrameMulScalar<U1>>>,
+        Unop<FormantFilter, FrameMulScalar<U1>>,
     >,
-    Join<U4>,
+    Unop<Pass, FrameMulScalar<U1>>,
 >;
 
 fn formant_bank(
@@ -205,9 +190,7 @@ fn formant_bank(
     let formant3: An<FormantFilter> = (pass() | An(band_control.clone()) | formant_base_q.clone())
         >> formant(config.formant_hz(3) as S, 3);
 
-    split::<U4>()
-        >> ((formant1 * 1.8) | (formant2 * 1.6) | (formant3 * 1.2) | (pass() * 0.02))
-        >> join::<U4>()
+    (formant1 * 1.45) & (formant2 * 1.33) & (formant3 * 1.22) & (pass() * 0.015)
 }
 
 // Type alias for the bell filter with its 4 inputs
@@ -231,7 +214,7 @@ fn bell_filter(
 ) -> An<BellFilter> {
     (pass()
         | constant(frequency as f32)
-        | (node_bell_q.clone() * (constant(0.3) + An(band_control.clone())))
+        | (node_bell_q.clone() * (constant(1.0 / 3.0) + An(band_control.clone())))
         | (node_bell_gain_db.clone() >> super::db_lin::db_lin_converter()))
         >> bell()
 }

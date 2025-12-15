@@ -1,7 +1,9 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use audio_system::rt::ExcitementSource;
 
 use common::error::{InstrumentError, Result};
-use common::instrument::commands::{UpdateBandControlPayload, UpdateKeyControlPayload};
+use common::instrument::commands::{SpectrumPayload, UpdateBandControlPayload, UpdateKeyControlPayload};
 use common::instrument::events::{BAND_CONTROL_G_K, KEY_CONTROL_G_K};
 use common::instrument::{
     events::{ExcitementSourcePayload, PlaybackStatePayload},
@@ -321,7 +323,6 @@ pub fn instrument_string_snoop_data(
 pub fn instrument_all_string_snoops(
     state: tauri::State<'_, crate::instrument::engine::InstrumentEngine>,
 ) -> common::error::Result<common::instrument::data::StringSnoopBatchPayload> {
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     let entries = state
         .snapshot_all_output_snoops()
@@ -337,8 +338,8 @@ pub fn instrument_all_string_snoops(
 
     let t_unix_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0);
+        .map(|d| d.as_millis_f64())
+        .unwrap();
 
     Ok(common::instrument::data::StringSnoopBatchPayload {
         t_unix_ms,
@@ -360,7 +361,6 @@ pub fn instrument_excitement_snoop_data(
 pub fn instrument_all_excitement_snoops(
     state: tauri::State<'_, crate::instrument::engine::InstrumentEngine>,
 ) -> common::error::Result<common::instrument::data::ExcitementSnoopBatchPayload> {
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     let entries = state
         .snapshot_all_excitement_snoops()
@@ -376,8 +376,8 @@ pub fn instrument_all_excitement_snoops(
 
     let t_unix_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0);
+        .map(|d| d.as_millis_f64())
+        .unwrap();
 
     Ok(common::instrument::data::ExcitementSnoopBatchPayload {
         t_unix_ms,
@@ -486,8 +486,13 @@ pub fn instrument_is_batch_processing(state: State<'_, InstrumentEngine>) -> boo
 }
 
 #[tauri::command]
-pub fn snapshot_processed_output_spectrum(state: State<'_, InstrumentEngine>) -> Option<Vec<(f32, f32)>> {
-    state.snapshot_processed_output_spectrum()
+pub fn snapshot_processed_output_spectrum(state: State<'_, InstrumentEngine>) -> Option<SpectrumPayload> {
+    let data = state.snapshot_processed_output_spectrum();
+
+    data.map(|data| SpectrumPayload {
+        data,
+        t_unix_ms: SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis_f64() ).unwrap()
+    })
 }
 
 #[cfg(feature="devtools")]

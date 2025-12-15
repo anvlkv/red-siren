@@ -100,8 +100,11 @@ pub fn playback_callback(
     let mut last_avail_ns: Option<f64> = None;
 
     // warm up backend and discard initial samples according to latency
-    if let Some(lat) = net_latency {
-        let fill_size = lat.ceil() as usize;
+    {
+        let fill_size = net_latency
+            .map(|lat| lat.ceil() as usize)
+            .filter(|&lat| lat >= initial_optimal_cap)
+            .unwrap_or(initial_optimal_cap);
 
         batch_fill_size(
             &mut scratch_left,

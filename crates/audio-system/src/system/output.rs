@@ -6,7 +6,6 @@ mod div;
 mod filter;
 mod formant;
 mod group;
-mod lpc;
 mod node;
 mod pow;
 mod siren;
@@ -19,21 +18,13 @@ use common::{
     instrument::{Config, GroupChannel, GroupConfig, Scale},
     NodeKey,
 };
-use fundsp::funutd::prelude::hash_11;
 #[cfg(feature = "hi_fi")]
 use fundsp::hacker::prelude::*;
 #[cfg(not(feature = "hi_fi"))]
 use fundsp::hacker32::prelude::*;
 
 use super::NodeHandles;
-use crate::{
-    output::{
-        filter::FilterHandles,
-        lpc::{lpc, lpc_bank},
-    },
-    system::values::FineTunedValues,
-    util::S,
-};
+use crate::{output::filter::FilterHandles, system::values::FineTunedValues};
 
 #[derive(Clone)]
 pub(super) struct InnerHandles {
@@ -68,6 +59,8 @@ pub fn mono_system(config: &Config, net: &mut Net, values: &FineTunedValues) -> 
 
     let (node_handles, group_handles, filter_handles) = prepare_handles(groups, config.1);
 
+    let groups_count = groups.len();
+
     let id = add_one_channel_subsystem(
         groups,
         (group_handles, filter_handles),
@@ -77,7 +70,8 @@ pub fn mono_system(config: &Config, net: &mut Net, values: &FineTunedValues) -> 
         values,
     );
 
-    let system_filter = split::<U2>() >> ((pinkpass::<S>() >> lpc::<7>()) | pass()) >> join::<U2>();
+    let system_filter =
+        split::<U2>() >> (chorus(groups_count as u64, 0.05, 0.025, 17.0) | pass()) >> join::<U2>();
 
     let system_filter_id = net.push(Box::new(system_filter));
 
@@ -123,17 +117,8 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
     );
 
     let system_filter = |seed: u64| {
-        split::<U3>()
-        >> ((((lpc_bank::<8, U4>() | pass()) >> (mul(0.1) | mul(0.2) | mul(0.3) | mul(0.4) | pass())) >> map(move |frame: &Frame<f32, U5>| {
-            let original = frame[4];
-            let h11 = hash_11(seed);
-
-            let w_1 = lerp11(original, frame[0], h11.x);
-            let w_2 = lerp11(original, frame[1], h11.y);
-            let w_3 = lerp11(original, frame[2], h11.z);
-            let w_4 = lerp11(original, frame[3], h11.element_product());
-            (w_1 + w_2 + w_3 + w_4) / 4.0
-        })) | pass())
+        split::<U2>()
+        >> (chorus(seed, 0.05, 0.025, 17.0) | chorus(seed, 0.005, 0.001, 0.75))
         >> (pan(-0.15) | pan(0.85))
         // tt^ | tm | um | ut^
         // tt^ | um | tm | ut^
@@ -188,125 +173,10 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
 pub fn multi_channel_system(
     config: &Config,
     net: &mut Net,
-    num_channels: usize,
+    _num_channels: usize,
     values: &FineTunedValues,
 ) -> Vec<NodeHandles> {
-    log::info!(
-        "Creating stereo output system with {} total groups",
-        config.num_groups()
-    );
-
-    let (node_handles, group_handles, filter_handles) = prepare_handles(&config.0, config.1);
-
-    let nodes_count_per_group = config.num_nodes_per_group();
-    // let groups_count_left = config.num_groups_left();
-    // let groups_count_right = config.num_groups_right();
-
-    let (left_groups, right_groups) = split_groups_lr(config);
-
-    let (left_group_handles, right_group_handles) = split_group_handles_lr(group_handles, config);
-
-    let (left_filter_handles, right_filter_handles) =
-        split_filter_handles_lr(filter_handles, config);
-
-    let left_id = add_one_channel_subsystem(
-        left_groups.as_slice(),
-        (left_group_handles, right_filter_handles),
-        nodes_count_per_group,
-        GroupChannel::Left,
-        net,
-        values,
-    );
-    let right_id = add_one_channel_subsystem(
-        right_groups.as_slice(),
-        (right_group_handles, left_filter_handles),
-        nodes_count_per_group,
-        GroupChannel::Right,
-        net,
-        values,
-    );
-
-    // Side processing: widen into 4 channels per side with light coloration.
-    let system_filter = split::<U2>()
-        >> ((pinkpass::<S>() >> lpc::<3>()) | pass())
-        >> (pan(0.12) | pan(0.88))
-        >> (pass() | reverse::<U2>() | pass());
-
-    let left_filter_id = net.push(Box::new(system_filter.clone()));
-    let right_filter_id = net.push(Box::new(system_filter));
-
-    net.pipe_all(left_id, left_filter_id);
-    net.pipe_all(right_id, right_filter_id);
-
-    // Small helper mappers.
-    let map1 = map(|f: &Frame<f32, U1>| f[0]);
-    let map2 = map(|f: &Frame<f32, U2>| 0.6 * f[0] + 0.4 * f[1]);
-    let map3 = map(|f: &Frame<f32, U3>| 0.5 * f[0] + 0.3 * f[1] + 0.2 * f[2]);
-
-    let join_id = match num_channels {
-        3 => {
-            // Groups: [L0,L1,L2] | [L3,R0] | [R1,R2,R3]
-            let system_join = multipass::<U8>() >> (map3.clone() | map2.clone() | map3.clone());
-            net.push(Box::new(system_join))
-        }
-        4 => {
-            // Groups: [L0,L1] | [L2,L3] | [R0,R1] | [R2,R3]
-            let system_join =
-                multipass::<U8>() >> (map2.clone() | map2.clone() | map2.clone() | map2.clone());
-            net.push(Box::new(system_join))
-        }
-        5 => {
-            // Groups: [L0,L1] | [L2] | [L3,R0] | [R1] | [R2,R3]
-            let system_join = multipass::<U8>()
-                >> (map2.clone() | map1.clone() | map2.clone() | map1.clone() | map2.clone());
-            net.push(Box::new(system_join))
-        }
-        6 => {
-            // Groups: [L0] | [L1,L2] | [L3] | [R0] | [R1,R2] | [R3]
-            let system_join = multipass::<U8>()
-                >> (map1.clone()
-                    | map2.clone()
-                    | map1.clone()
-                    | map1.clone()
-                    | map2.clone()
-                    | map1.clone());
-            net.push(Box::new(system_join))
-        }
-        7 => {
-            // Groups: [L0] | [L1] | [L2] | [L3] | [R0] | [R1] | [R2,R3]
-            let system_join = multipass::<U8>()
-                >> (map1.clone()
-                    | map1.clone()
-                    | map1.clone()
-                    | map1.clone()
-                    | map1.clone()
-                    | map1.clone()
-                    | map2.clone());
-            net.push(Box::new(system_join))
-        }
-        8 => {
-            // Groups: [L0] | [L1] | [L2] | [L3] | [R0] | [R1] | [R2] | [R3]
-            let system_join = multipass::<U8>()
-                >> (map1.clone()
-                    | map1.clone()
-                    | map1.clone()
-                    | map1.clone()
-                    | map1.clone()
-                    | map1.clone()
-                    | map1.clone()
-                    | map1.clone());
-            net.push(Box::new(system_join))
-        }
-        _ => unreachable!(),
-    };
-
-    // Feed both sides into the joiner and expose the requested multi-channel output.
-    net.pipe_all(left_filter_id, join_id);
-    net.pipe_all(right_filter_id, join_id);
-
-    net.pipe_output(join_id);
-
-    node_handles
+    stereo_system(config, net, values)
 }
 
 pub(super) type Handles = (

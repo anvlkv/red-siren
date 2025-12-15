@@ -44,3 +44,10 @@ pub struct UpdateKeyControlPayload {
     pub key: u8,
     pub value: f32, // 0.0 = released, 1.0 = pressed
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SpectrumPayload {
+    pub t_unix_ms: f64,
+    pub data: Vec<(f32, f32)>,
+}

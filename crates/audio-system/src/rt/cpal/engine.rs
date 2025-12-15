@@ -4,7 +4,7 @@ use std::{
         mpsc::{self, Sender},
         Arc,
     },
-    thread,
+    thread::{self, sleep},
     time::Duration,
 };
 
@@ -925,24 +925,41 @@ impl AudioRuntime for CpalController {
             .write()
             .as_mut()
             .zip(self.sample_rate.read().as_ref())
-            .and_then(|((l, r), &sample_rate)| {
-                if let Some((l, r)) = l.get().zip(r.get()).filter(|(l, r)| {
-                    l.len() >= OUTPUT_ANALYZER_FFT_WINDOW_SIZE
-                        && r.len() >= OUTPUT_ANALYZER_FFT_WINDOW_SIZE
-                }) {
-                    Some(
-                        output_analyzer::analyze(core::array::from_fn(|i| l.at(i)), sample_rate)
-                            .and_then(|left_spectrum| {
-                                output_analyzer::analyze(
-                                    core::array::from_fn(|i| r.at(i)),
-                                    sample_rate,
-                                )
-                                .map(|right_spectrum| (left_spectrum, right_spectrum))
-                            }),
-                    )
-                } else {
-                    None
+            .map(|((l, r), &sample_rate)| {
+                let mut l_window = [0.0; OUTPUT_ANALYZER_FFT_WINDOW_SIZE];
+                let mut r_window = [0.0; OUTPUT_ANALYZER_FFT_WINDOW_SIZE];
+                let mut len = 0;
+
+                while len < OUTPUT_ANALYZER_FFT_WINDOW_SIZE {
+                    if let Some((l_buffer, r_buffer)) = l.get().zip(r.get()) {
+                        let remaining = OUTPUT_ANALYZER_FFT_WINDOW_SIZE - len;
+                        let num_samples = std::cmp::Ord::min(l_buffer.size(), remaining);
+                        l_window[len..]
+                            .iter_mut()
+                            .take(num_samples)
+                            .enumerate()
+                            .for_each(|(i, f)| {
+                                *f = l_buffer.at(i);
+                            });
+                        r_window[len..]
+                            .iter_mut()
+                            .take(num_samples)
+                            .enumerate()
+                            .for_each(|(i, f)| {
+                                *f = r_buffer.at(i);
+                            });
+                        len += num_samples;
+                    } else {
+                        sleep(Duration::from_secs_f64(
+                            (1.0 / sample_rate) * MAX_BUFFER_SIZE as f64,
+                        ));
+                    }
                 }
+
+                output_analyzer::analyze(l_window, sample_rate).and_then(|left_spectrum| {
+                    output_analyzer::analyze(r_window, sample_rate)
+                        .map(|right_spectrum| (left_spectrum, right_spectrum))
+                })
             })
             .transpose()
     }

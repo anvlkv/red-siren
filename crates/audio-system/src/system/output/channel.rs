@@ -60,12 +60,17 @@ pub fn add_one_channel_subsystem(
         }
     );
 
+    let filter_signum: S = match channel {
+        GroupChannel::Left => 1.0,
+        GroupChannel::Right => -1.0,
+    };
+
     u_num_it!(
         1..=71,
         match channel_filters_count {
             U => {
                 type FNum = NumType;
-                id = add_channel_filter::<FNum>(filter_handles, id, net, values);
+                id = add_channel_filter::<FNum>(filter_handles, filter_signum, id, net, values);
             }
             _ => {
                 panic!("unexpected number of filters");
@@ -109,6 +114,7 @@ where
 #[allow(clippy::unnecessary_cast)]
 fn add_channel_filter<F>(
     filter_handles: Vec<FilterHandles>,
+    signum: S,
     src_id: NodeId,
     net: &mut Net,
     values: &FineTunedValues,
@@ -154,7 +160,7 @@ where
     let panner_node =
         (pass() | (band_controls_value + (ab_controls_value >> mul(-1.0)))) >> panner();
 
-    let gain: S = (1.0 / F::USIZE as S) + 1.0;
+    let gain: S = ((1.0 / F::USIZE as S) + 1.0).powi(F::I32);
 
     let filters = pass()
         >> pipei::<F, _, _>({
@@ -162,15 +168,14 @@ where
             move |i| super::filter::create_filter(filter_handles[i as usize].clone(), &values, gain)
         });
 
-    let filter_channel = pinkpass::<S>()
-        >> (filters * constant(gain as f32))
-        >> shape(Adaptive::new(0.003, Tanh(0.005)));
+    let filter_channel = pinkpass::<S>() >> filters;
 
-    let reverb_channel =
-        reverb4_stereo(F::USIZE as f64 * 8.75, 1.0 / F::USIZE as f64) >> join::<U2>();
-
-    let composite_channel =
-        panner_node >> ((filter_channel * 1.75) | (pass() * 1.25)) >> reverb_channel;
+    let composite_channel = panner_node
+        >> (filter_channel | pass())
+        >> reverb4_stereo(F::USIZE as f64 * 8.75, 1.0 / F::USIZE as f64)
+        >> (pass() + pass())
+        >> mul((gain * signum) as f32)
+        >> shape(Adaptive::new(0.075, Tanh(0.75)));
 
     let filter_id = net.push(Box::new(composite_channel));
     net.pipe_all(src_id, filter_id);

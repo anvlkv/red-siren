@@ -5,6 +5,7 @@ mod element;
 mod keyboard;
 mod spectrum;
 mod strings;
+mod util;
 
 use crate::{
     components::intro::consts::INTRO_FADE_DURATION_MS,
@@ -32,7 +33,7 @@ pub fn Instrument(#[prop(into, optional)] editor: Signal<bool>) -> impl IntoView
     view! {
         <div
             class=format!(
-                "{} {} relative overflow-hidden",
+                "{} {} relative overflow-hidden isolate bg-red dark:bg-black",
                 instrument_animations::INSTRUMENT_SCENE_VT_BOTTOM,
                 instrument_animations::INSTRUMENT_SCENE_ENTER,
             )
@@ -45,9 +46,9 @@ pub fn Instrument(#[prop(into, optional)] editor: Signal<bool>) -> impl IntoView
                 )
             }
         >
-            <SpectrumViz attr:class="absolute h-full w-full mix-blend-overlay blur-md" />
-            <InstrumentStrings attr:class="absolute h-full w-auto right-0 bottom-0 fill-none stroke-gray/40 dark:stroke-cinnabar/40 stroke-[0.5px]" />
-            <Keyboard attr:class="absolute inset-0 backdrop-blur-3xl" />
+            <SpectrumViz attr:class="absolute h-full w-full mix-blend-plus-darker dark:mix-blend-plus-lighter blur-xs" />
+            <InstrumentStrings attr:class="absolute h-full w-auto right-0 bottom-0" />
+            <Keyboard attr:class="absolute inset-0" />
             <Show when=move || editor()>
                 <debug::DebugOverlay />
                 <editor::EditorOverlay />

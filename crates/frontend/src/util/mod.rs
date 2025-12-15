@@ -6,4 +6,3 @@ pub mod secondary_window;
 pub mod setup_context;
 pub mod tauri_resource;
 pub mod view_transitions;
-pub mod wave;

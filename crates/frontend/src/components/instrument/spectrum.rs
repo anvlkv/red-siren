@@ -191,7 +191,7 @@ pub fn SpectrumViz() -> impl IntoView {
     }
 }
 
-const MIN_CELL_SIZE: f64 = 0.5;
+const MIN_CELL_SIZE: f64 = 0.1;
 
 fn comp_aux_size(
     space: mint::Vector2<f64>,
@@ -259,8 +259,12 @@ fn draw_spectrum(
 
     // Precompute incremental positions and base split
     let cell_increment = match orientation {
-        common::orientation::LayoutOrientation::Vertical => cell_width,
-        common::orientation::LayoutOrientation::Horizontal => cell_height,
+        common::orientation::LayoutOrientation::Vertical => {
+            cell_width.min(width / row.len() as f64)
+        }
+        common::orientation::LayoutOrientation::Horizontal => {
+            cell_height.min(height / row.len() as f64)
+        }
     };
     // Center the right channel base within the safe area.
     // `width`/`height` here already represent safe area dimensions, so do not subtract padding again.

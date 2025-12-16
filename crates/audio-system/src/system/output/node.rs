@@ -12,14 +12,17 @@ use crate::{
 };
 
 pub const ACTIVATION_SNOOP_CAPACITY: usize = 4;
-pub const OUTPUT_SNOOP_CAPACITY: usize = 64;
+pub const OUTPUT_SNOOP_CAPACITY: usize = 512;
 
 // Complete node type composed from the smaller parts
 pub type NodeType = Pipe<
     Pipe<
         Pipe<
-            Pipe<Pipe<SirenWithInputs, Split<U2>>, Stack<SourceOscillator, Pass>>,
-            Binop<FrameMul<U1>, FormantBank, Pass>,
+            Pipe<
+                Pipe<Pipe<SirenWithInputs, Split<U2>>, Stack<SourceOscillator, Pass>>,
+                Binop<FrameMul<U1>, FormantBank, Pass>,
+            >,
+            Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>,
         >,
         BellFilter,
     >,
@@ -83,6 +86,7 @@ pub(super) fn create_node(
         >> split::<U2>()
         >> (source | pass())
         >> (formants * pass())
+        >> mul(1.0 / config.divisions as f32)
         >> bell_filter
         >> output_snoop
 }

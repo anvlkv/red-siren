@@ -61,11 +61,7 @@ type FreqBranches = Pipe<
 type ShelfInput = Stack<Stack<Stack<Pass, Constant<U1>>, Pass>, Pass>;
 type FreqCatch = Pipe<
     Pipe<
-        Binop<
-            FrameAdd<U1>,
-            Binop<FrameAdd<U1>, ThrowCatchCatch<U1>, ThrowCatchCatch<U1>>,
-            ThrowCatchCatch<U1>,
-        >,
+        Binop<FrameAdd<U1>, Binop<FrameAdd<U1>, ThrowCatchCatch, ThrowCatchCatch>, ThrowCatchCatch>,
         Stack<Stack<Pass, QControl>, Constant<U1>>,
     >,
     Bus<
@@ -249,9 +245,9 @@ pub fn create_filter(
     let b_lp_branch: An<LpBranchB> =
         lp_input >> dresonator(SoftCrush(shape)) >> (pass() * b_lp_gain);
 
-    let (hp_throw, hp_catch) = super::throw_catch::throw_catch::<U1>();
-    let (bp_throw, bp_catch) = super::throw_catch::throw_catch::<U1>();
-    let (lp_throw, lp_catch) = super::throw_catch::throw_catch::<U1>();
+    let (hp_throw, hp_catch) = super::throw_catch::throw_catch(2);
+    let (bp_throw, bp_catch) = super::throw_catch::throw_catch(2);
+    let (lp_throw, lp_catch) = super::throw_catch::throw_catch(2);
 
     let freq_branches: An<FreqBranches> = (hp_branch | bp_branch | lp_branch)
         >> multisplit::<U3, U2>()
@@ -264,7 +260,7 @@ pub fn create_filter(
         pass() | constant(config.formant_hz(2) as f32 as f32) | pass() | pass();
 
     let freq_catch: An<FreqCatch> = (hp_catch + bp_catch + lp_catch)
-        >> (pass() | q_shelf_controlled.clone() | constant(gain as f32 * 1.25))
+        >> (pass() | q_shelf_controlled.clone() | constant(gain as f32 * 0.25))
         >> ((hs1_input >> highshelf::<S>())
             & (hs2_input >> highshelf::<S>())
             & (ls_input >> lowshelf::<S>()));
@@ -285,7 +281,7 @@ pub fn create_filter(
         >> (join::<U2>() + join::<U2>() + join::<U2>());
 
     split::<U2>()
-        >> (mul(gain as f32 * 1.65) | mul(gain as f32 * 1.15))
+        >> (mul(gain as f32 * 0.6) | mul(gain as f32 * 0.15))
         >> (wet_chain | pass())
         >> (pass() + pass() + freq_catch)
 }

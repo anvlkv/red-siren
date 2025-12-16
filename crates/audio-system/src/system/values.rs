@@ -47,11 +47,11 @@ pub struct FineTunedSharedValues {
 }
 
 const SIREN_ALPHA: f32 = 100.0 / 7.5;
-const NODE_BELL_Q: f32 = 0.99;
-const NODE_BELL_GAIN_DB: f32 = 3.9;
+const NODE_BELL_Q: f32 = 0.09;
+const NODE_BELL_GAIN_DB: f32 = 5.9;
 const NODE_FOLLOW_RESPONSE_TIME_S: f32 = 0.175;
 const GROUP_Q: f32 = 0.085;
-const GROUP_LS_GAIN_DB: f32 = 2.8;
+const GROUP_LS_GAIN_DB: f32 = 3.8;
 const FORMANT_BASE_Q: f32 = 3.7;
 const FILTER_MORPH_FOLLOW_S: f32 = 0.05;
 const FILTER_Q_PIERCING: f32 = 1.2;

@@ -56,18 +56,11 @@ type NodesBus<K> = Pipe<
     Stack<Pass, ThrowCatchThrow>,
 >;
 
-type ProductionChain<K> =
-    Pipe<Follow<S>, Stack<Resampler<NodesBus<K>>, Pipe<ThrowCatchCatch<K>, Join<K>>>>;
+type ProductionChain<K> = Pipe<Follow<S>, Stack<Resampler<NodesBus<K>>, ThrowCatchCatch>>;
 
-type OutputChain = Pipe<Stack<Pass, Delay>, Join<U2>>;
+type OutputChain = Pipe<Stack<Pass, Delay>, Binop<FrameAdd<U1>, Pass, Pass>>;
 
-pub type GroupType<K> = Pipe<
-    Pipe<
-        Pipe<Pipe<ResamplerSpeed<K>, Split<U2>>, Stack<ProductionChain<K>, Pass>>,
-        Stack<OutputChain, Pass>,
-    >,
-    Allpole<S, U2>,
->;
+pub type GroupType<K> = Pipe<Pipe<ResamplerSpeed<K>, ProductionChain<K>>, OutputChain>;
 
 #[allow(clippy::unnecessary_cast)]
 pub fn create_group_node<K>(
@@ -129,7 +122,7 @@ where
     let bands_sum = constant(0.0)
         >> pipei::<K, _, _>(move |_| {
             let mut bands = bands_cell.borrow_mut();
-            pass() + (An(bands.pop().unwrap()) >> mul(coef as f32))
+            pass() + (An(bands.pop().unwrap()) >> mul((coef * coef) as f32))
         });
     let resampler_speed: An<ResamplerSpeed<K>> = constant(1.0)
         >> pipei::<K, _, _>(move |_| {
@@ -138,7 +131,7 @@ where
         })
         >> (pass() - bands_sum);
 
-    let (throw, catch) = super::throw_catch::throw_catch::<K>();
+    let (throw, catch) = super::throw_catch::throw_catch(K::USIZE);
 
     let nodes_bus: An<NodesBus<K>> = busi::<K, _, _>(move |i| {
         let key = nodes[i as usize].key;
@@ -161,18 +154,14 @@ where
     let follow_time = values.node_follow_response_time_s.value()[0];
 
     let production_chain: An<ProductionChain<K>> =
-        follow::<S>(follow_time as S) >> (resample(nodes_bus) | (catch >> join::<K>()));
+        follow::<S>(follow_time as S) >> (resample(nodes_bus) | catch);
 
     let group_d_cents = config.distance_cents();
     let group_delay = (1.0 / 1200.0) * group_d_cents;
 
-    let output_chain: An<OutputChain> = (pass() | delay(group_delay)) >> join::<U2>();
+    let output_chain: An<OutputChain> = (pass() | delay(group_delay)) >> (pass() + pass());
 
-    resampler_speed
-        >> split::<U2>()
-        >> (production_chain | pass())
-        >> (output_chain | pass())
-        >> allpole::<S>()
+    resampler_speed >> production_chain >> output_chain
 }
 
 #[cfg(test)]

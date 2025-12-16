@@ -117,8 +117,9 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
     );
 
     let system_filter = |seed: u64| {
-        split::<U2>()
-        >> (chorus(seed, 0.05, 0.025, 17.0) | chorus(seed, 0.005, 0.001, 0.75))
+        split::<U3>()
+        >> (chorus(seed, 0.05, 0.025, 17.0) | chorus(seed*2, 0.05, 0.025, 17.0) | pass())
+        >> (join::<U2>() | pass())
         >> (pan(-0.15) | pan(0.85))
         // tt^ | tm | um | ut^
         // tt^ | um | tm | ut^

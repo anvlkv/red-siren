@@ -16,11 +16,8 @@ pub struct ThrowCatchThrow {
     sx: Arc<ThingBuf<f32>>,
 }
 
-pub fn throw<O>() -> (Arc<ThingBuf<f32>>, An<ThrowCatchThrow>)
-where
-    O: typenum::Unsigned + Size<f32>,
-{
-    let buffer = Arc::new(ThingBuf::new(O::USIZE));
+pub fn throw(size: usize) -> (Arc<ThingBuf<f32>>, An<ThrowCatchThrow>) {
+    let buffer = Arc::new(ThingBuf::new(size));
     (buffer.clone(), An(ThrowCatchThrow { sx: buffer }))
 }
 
@@ -38,59 +35,28 @@ impl AudioNode for ThrowCatchThrow {
 }
 
 #[derive(Clone)]
-pub struct ThrowCatchCatch<O>
-where
-    O: typenum::Unsigned + Size<f32>,
-{
+pub struct ThrowCatchCatch {
     rx: Arc<ThingBuf<f32>>,
-    prev: Vec<f32>,
-    _o: std::marker::PhantomData<O>,
 }
 
-pub fn catch<O>(buffer: Arc<ThingBuf<f32>>) -> An<ThrowCatchCatch<O>>
-where
-    O: typenum::Unsigned + Size<f32>,
-{
-    An(ThrowCatchCatch {
-        rx: buffer,
-        prev: vec![0.0; O::USIZE],
-        _o: std::marker::PhantomData,
-    })
+pub fn catch(buffer: Arc<ThingBuf<f32>>) -> An<ThrowCatchCatch> {
+    An(ThrowCatchCatch { rx: buffer })
 }
 
-impl<O> AudioNode for ThrowCatchCatch<O>
-where
-    O: typenum::Unsigned + Size<f32>,
-{
+impl AudioNode for ThrowCatchCatch {
     const ID: u64 = CATCH_ID;
 
     type Inputs = U0;
 
-    type Outputs = O;
+    type Outputs = U1;
 
     fn tick(&mut self, _: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
-        let mut frame = Frame::splat(0.0);
-        for f in frame.iter_mut() {
-            if let Some(sample) = self.rx.pop() {
-                // Append the new sample at the tail, then output the head.
-                self.prev.rotate_left(1);
-                self.prev[O::USIZE - 1] = sample;
-                *f = self.prev[0];
-            } else {
-                // No new sample; continue advancing through the queue.
-                *f = self.prev[0];
-                self.prev.rotate_left(1);
-            }
-        }
-        frame
+        [self.rx.pop().unwrap_or_default()].into()
     }
 }
 
-pub fn throw_catch<O>() -> (An<ThrowCatchThrow>, An<ThrowCatchCatch<O>>)
-where
-    O: typenum::Unsigned + Size<f32>,
-{
-    let (buffer, throw_node) = throw::<O>();
-    let catch_node = catch::<O>(buffer);
+pub fn throw_catch(size: usize) -> (An<ThrowCatchThrow>, An<ThrowCatchCatch>) {
+    let (buffer, throw_node) = throw(size);
+    let catch_node = catch(buffer);
     (throw_node, catch_node)
 }

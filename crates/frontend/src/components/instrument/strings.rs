@@ -22,7 +22,7 @@ impl VizEntry {
 
 #[component]
 pub fn InstrumentStrings() -> impl IntoView {
-    const HISTORY_SIZE: usize = 12;
+    const HISTORY_SIZE: usize = 3;
 
     let LayoutContextReturn {
         space,
@@ -137,12 +137,12 @@ pub fn InstrumentStrings() -> impl IntoView {
                 );
 
                 set_viz_data.update(|data| {
-                    data.rotate_right(1);
-                    data[0] = VizEntry { left, right };
+                    data.rotate_left(1);
+                    data[HISTORY_SIZE - 1] = VizEntry { left, right };
                 });
             }
         },
-        20.0,
+        30.0,
     );
 
     Effect::new(move |_| {

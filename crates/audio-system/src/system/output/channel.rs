@@ -60,17 +60,12 @@ pub fn add_one_channel_subsystem(
         }
     );
 
-    let filter_signum: S = match channel {
-        GroupChannel::Left => 1.0,
-        GroupChannel::Right => -1.0,
-    };
-
     u_num_it!(
         1..=71,
         match channel_filters_count {
             U => {
                 type FNum = NumType;
-                id = add_channel_filter::<FNum>(filter_handles, filter_signum, id, net, values);
+                id = add_channel_filter::<FNum>(filter_handles, id, net, values);
             }
             _ => {
                 panic!("unexpected number of filters");
@@ -114,7 +109,6 @@ where
 #[allow(clippy::unnecessary_cast)]
 fn add_channel_filter<F>(
     filter_handles: Vec<FilterHandles>,
-    signum: S,
     src_id: NodeId,
     net: &mut Net,
     values: &FineTunedValues,
@@ -157,10 +151,10 @@ where
         }) | constant(F::USIZE as f32))
         >> super::div::div::<S>();
 
+    let gain: S = ((1.0 / F::USIZE as S) + 1.0).powi(F::I32);
+
     let panner_node =
         (pass() | (band_controls_value + (ab_controls_value >> mul(-1.0)))) >> panner();
-
-    let gain: S = ((1.0 / F::USIZE as S) + 1.0).powi(F::I32);
 
     let filters = pass()
         >> pipei::<F, _, _>({
@@ -172,10 +166,9 @@ where
 
     let composite_channel = panner_node
         >> (filter_channel | pass())
-        >> reverb4_stereo(F::USIZE as f64 * 8.75, 1.0 / F::USIZE as f64)
-        >> (pass() + pass())
-        >> mul((gain * signum) as f32)
-        >> shape(Adaptive::new(0.075, Tanh(0.75)));
+        >> reverb4_stereo(F::USIZE as f64 * 8.75, (F::USIZE as f64).sqrt())
+        >> (pass() + (pass() * -0.15))
+        >> shape(Adaptive::new(0.075, Tanh(0.8)));
 
     let filter_id = net.push(Box::new(composite_channel));
     net.pipe_all(src_id, filter_id);

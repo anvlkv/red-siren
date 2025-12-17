@@ -62,7 +62,14 @@ type ShelfInput = Stack<Stack<Stack<Pass, Constant<U1>>, Pass>, Pass>;
 type FreqCatch = Pipe<
     Pipe<
         Binop<FrameAdd<U1>, Binop<FrameAdd<U1>, ThrowCatchCatch, ThrowCatchCatch>, ThrowCatchCatch>,
-        Stack<Stack<Pass, QControl>, Constant<U1>>,
+        Stack<
+            Stack<Pass, QControl>,
+            Binop<
+                FrameMul<U1>,
+                Constant<U1>,
+                Pipe<Binop<FrameSub<U1>, Constant<U1>, Control>, Shaper<ClipTo>>,
+            >,
+        >,
     >,
     Bus<
         Bus<Pipe<ShelfInput, Svf<S, HighshelfMode<S>>>, Pipe<ShelfInput, Svf<S, HighshelfMode<S>>>>,
@@ -260,7 +267,10 @@ pub fn create_filter(
         pass() | constant(config.formant_hz(2) as f32 as f32) | pass() | pass();
 
     let freq_catch: An<FreqCatch> = (hp_catch + bp_catch + lp_catch)
-        >> (pass() | q_shelf_controlled.clone() | constant(gain as f32 * 0.25))
+        >> (pass()
+            | q_shelf_controlled.clone()
+            | (constant(gain as f32 * 0.35)
+                * ((constant(1.0) - control.clone()) >> safe_clip.clone())))
         >> ((hs1_input >> highshelf::<S>())
             & (hs2_input >> highshelf::<S>())
             & (ls_input >> lowshelf::<S>()));
@@ -281,7 +291,7 @@ pub fn create_filter(
         >> (join::<U2>() + join::<U2>() + join::<U2>());
 
     split::<U2>()
-        >> (mul(gain as f32 * 0.6) | mul(gain as f32 * 0.15))
+        >> (mul(gain as f32 * 0.4) | mul(gain as f32 * 0.25))
         >> (wet_chain | pass())
         >> (pass() + pass() + freq_catch)
 }

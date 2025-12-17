@@ -12,6 +12,8 @@ use crate::{
     },
 };
 
+const MIN_CELL_SIZE: f64 = 0.1;
+
 #[component]
 pub fn SpectrumViz() -> impl IntoView {
     // Layout and tauri invoke
@@ -118,8 +120,12 @@ pub fn SpectrumViz() -> impl IntoView {
                 let space = space.get_untracked();
                 let safe_area_padding = safe_area_padding.get_untracked();
                 let orientation = orientation.get_untracked();
-                let safe_x = space.x - safe_area_padding.left - safe_area_padding.right;
-                let safe_y = space.y - safe_area_padding.top - safe_area_padding.bottom;
+                let safe_breadth = orientation.safe_breadth(space, safe_area_padding);
+                let length = orientation.length(space);
+                let (safe_x, safe_y) = match orientation {
+                    common::orientation::LayoutOrientation::Vertical => (safe_breadth, length),
+                    common::orientation::LayoutOrientation::Horizontal => (length, safe_breadth),
+                };
                 let safe_space = mint::Vector2 {
                     x: safe_x,
                     y: safe_y,
@@ -191,8 +197,6 @@ pub fn SpectrumViz() -> impl IntoView {
     }
 }
 
-const MIN_CELL_SIZE: f64 = 0.1;
-
 fn comp_aux_size(
     space: mint::Vector2<f64>,
     orientation: common::orientation::LayoutOrientation,
@@ -240,19 +244,18 @@ fn draw_spectrum(
     cell_width: f64,
     cell_height: f64,
 ) {
-    const BASE_ALPHA: f64 = 0.8;
     // Resolve theme color based on dark mode; fallback to cinnabar
     let is_dark = is_dark_mode();
     let var = if is_dark {
-        "--color-cinnabar"
-    } else {
         "--color-gray"
+    } else {
+        "--color-cinnabar"
     };
     let fill_color = resolve_theme_color(var).unwrap_or_else(|| {
         if is_dark {
-            "#e44d2e".into()
-        } else {
             "#36454f".into()
+        } else {
+            "#e44d2e".into()
         }
     });
     ctx.set_fill_style_str(&fill_color);
@@ -297,41 +300,46 @@ fn draw_spectrum(
     ctx.save();
     ctx.translate(tx, ty).ok();
 
+    fn alpha(val: f32) -> f64 {
+        (val.abs().sqrt() as f64).clamp(f64::EPSILON, 1.0)
+    }
+
     // Draw each pair as two rectangles using global alpha scaled 0..1
     for (i, &(l, r)) in row.iter().enumerate() {
         let i = i as f64;
-        match orientation {
-            common::orientation::LayoutOrientation::Vertical => {
-                // Left channel
-                ctx.set_global_alpha(l as f64 * BASE_ALPHA);
-                ctx.fill_rect(cell_increment * i, 0.0, cell_width, cell_height);
-                // Right channel
-                ctx.set_global_alpha(r as f64 * BASE_ALPHA);
-                ctx.fill_rect(
-                    cell_increment * i + right_base,
-                    0.0,
-                    cell_width,
-                    cell_height,
-                );
+        if l != 0.0 {
+            ctx.set_global_alpha(alpha(l));
+            match orientation {
+                common::orientation::LayoutOrientation::Vertical => {
+                    ctx.fill_rect(cell_increment * i, 0.0, cell_width, cell_height);
+                }
+                common::orientation::LayoutOrientation::Horizontal => {
+                    ctx.fill_rect(0.0, cell_increment * i, cell_width, cell_height);
+                }
             }
-            common::orientation::LayoutOrientation::Horizontal => {
-                // Left channel
-                ctx.set_global_alpha(l as f64 * BASE_ALPHA);
-                ctx.fill_rect(0.0, cell_increment * i, cell_width, cell_height);
-                // Right channel
-                ctx.set_global_alpha(r as f64 * BASE_ALPHA);
-                ctx.fill_rect(
-                    0.0,
-                    cell_increment * i + right_base,
-                    cell_width,
-                    cell_height,
-                );
+        }
+        if r != 0.0 {
+            ctx.set_global_alpha(alpha(r));
+            match orientation {
+                common::orientation::LayoutOrientation::Vertical => {
+                    ctx.fill_rect(
+                        cell_increment * i + right_base,
+                        0.0,
+                        cell_width,
+                        cell_height,
+                    );
+                }
+                common::orientation::LayoutOrientation::Horizontal => {
+                    ctx.fill_rect(
+                        0.0,
+                        cell_increment * i + right_base,
+                        cell_width,
+                        cell_height,
+                    );
+                }
             }
         }
     }
 
     ctx.restore();
-
-    // Restore opaque drawing
-    ctx.set_global_alpha(1.0);
 }

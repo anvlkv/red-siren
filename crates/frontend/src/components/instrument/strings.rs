@@ -22,7 +22,7 @@ impl VizEntry {
 
 #[component]
 pub fn InstrumentStrings() -> impl IntoView {
-    const HISTORY_SIZE: usize = 3;
+    const HISTORY_SIZE: usize = 1;
 
     let LayoutContextReturn {
         space,

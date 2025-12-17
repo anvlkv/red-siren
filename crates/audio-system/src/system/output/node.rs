@@ -12,7 +12,7 @@ use crate::{
 };
 
 pub const ACTIVATION_SNOOP_CAPACITY: usize = 4;
-pub const OUTPUT_SNOOP_CAPACITY: usize = 512;
+pub const OUTPUT_SNOOP_CAPACITY: usize = 1024;
 
 // Complete node type composed from the smaller parts
 pub type NodeType = Pipe<

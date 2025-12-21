@@ -114,6 +114,22 @@ impl Config {
     pub fn num_nodes_total(&self) -> usize {
         self.0.iter().map(|g| g.nodes.len()).sum()
     }
+
+    pub fn min_frequency_hz(&self) -> f64 {
+        self.0
+            .first()
+            .and_then(|g| g.nodes.first())
+            .map(|n| n.frequency.min(n.formant_hz(1)))
+            .unwrap_or(super::consts::SOFT_MIN_FREQ_HZ)
+    }
+
+    pub fn max_frequency_hz(&self) -> f64 {
+        self.0
+            .last()
+            .and_then(|g| g.nodes.last())
+            .map(|n| n.frequency.max(n.formant_hz(5)))
+            .unwrap_or(super::consts::SOFT_MAX_FREQ_HZ)
+    }
 }
 
 impl TryFrom<Layout> for Config {

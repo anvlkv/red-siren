@@ -12,8 +12,9 @@ use crate::{
 
 #[derive(Clone)]
 pub struct FilterHandles {
-    pub control_a_b: Var,
-    pub control: Var,
+    pub control_a_b: Shared,
+    pub control: Shared,
+    pub secondary_xct: Shared,
     pub config: NodeConfig,
 }
 
@@ -31,6 +32,20 @@ type QControl = Pipe<
         Shaper<ClipTo>,
     >,
     Binop<FrameMul<U1>, Pass, FineTunedValue>,
+>;
+
+type FairGain = Pipe<
+    Pipe<
+        Pipe<
+            Pipe<
+                Unop<Unop<Var, FrameMulScalar<U1>>, FrameNegAddScalar<U1>>,
+                Binop<FrameAdd<U1>, Constant<U1>, Pass>,
+            >,
+            Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>,
+        >,
+        super::abs::Abs,
+    >,
+    Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>,
 >;
 
 // Frequency branches
@@ -62,14 +77,7 @@ type ShelfInput = Stack<Stack<Stack<Pass, Constant<U1>>, Pass>, Pass>;
 type FreqCatch = Pipe<
     Pipe<
         Binop<FrameAdd<U1>, Binop<FrameAdd<U1>, ThrowCatchCatch, ThrowCatchCatch>, ThrowCatchCatch>,
-        Stack<
-            Stack<Pass, QControl>,
-            Binop<
-                FrameMul<U1>,
-                Constant<U1>,
-                Pipe<Binop<FrameSub<U1>, Constant<U1>, Control>, Shaper<ClipTo>>,
-            >,
-        >,
+        Stack<Stack<Pass, QControl>, FairGain>,
     >,
     Bus<
         Bus<Pipe<ShelfInput, Svf<S, HighshelfMode<S>>>, Pipe<ShelfInput, Svf<S, HighshelfMode<S>>>>,
@@ -89,33 +97,19 @@ type APassBranch = Pipe<
 // B branches
 //
 // High frequency branch B
-type BHpGain = Pipe<
-    Stack<InvertedControl, Constant<U1>>,
-    Binop<FrameAdd<U1>, Binop<FrameMul<U1>, super::div::Div<S>, Constant<U1>>, Constant<U1>>,
->;
 type HpBranchB = Pipe<
     Pipe<BranchInput, DirtyBiquad<S, ResonatorBiquad<S>, Crush>>,
-    Binop<FrameMul<U1>, Pass, BHpGain>,
+    Binop<FrameMul<U1>, Pass, FairGain>,
 >;
 // Band frequency branch B
-type BBpDenominator =
-    Pipe<Pipe<Binop<FrameSub<U1>, Constant<U1>, InvertedControl>, super::abs::Abs>, Shaper<ClipTo>>;
-type BBpGain = Pipe<
-    Stack<BBpDenominator, Constant<U1>>,
-    Binop<FrameAdd<U1>, Binop<FrameMul<U1>, super::div::Div<S>, Constant<U1>>, Constant<U1>>,
->;
 type BpBranchB = Pipe<
     Pipe<BranchInput, FbBiquad<S, ResonatorBiquad<S>, SoftCrush>>,
-    Binop<FrameMul<U1>, Pass, BBpGain>,
+    Binop<FrameMul<U1>, Pass, FairGain>,
 >;
 // Low frequency branch B
-type BLpGain = Pipe<
-    Stack<Binop<FrameSub<U1>, Constant<U1>, InvertedControl>, Constant<U1>>,
-    Binop<FrameAdd<U1>, Binop<FrameMul<U1>, super::div::Div<S>, Constant<U1>>, Constant<U1>>,
->;
 type LpBranchB = Pipe<
     Pipe<BranchInput, DirtyBiquad<S, ResonatorBiquad<S>, SoftCrush>>,
-    Binop<FrameMul<U1>, Pass, BLpGain>,
+    Binop<FrameMul<U1>, Pass, FairGain>,
 >;
 
 // A/B treatment
@@ -135,10 +129,7 @@ pub type FilterType = Pipe<
     Pipe<
         Pipe<
             Split<U2>,
-            Stack<
-                Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>,
-                Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>,
-            >,
+            Stack<Binop<FrameMul<U1>, Pass, FairGain>, Binop<FrameMul<U1>, Pass, FairGain>>,
         >,
         Stack<WetChain, Pass>,
     >,
@@ -155,6 +146,7 @@ pub fn create_filter(
         control_a_b,
         control,
         config,
+        secondary_xct,
     } = handles;
 
     let FineTunedValues {
@@ -172,16 +164,24 @@ pub fn create_filter(
     #[cfg(not(feature = "editor"))]
     let follow_time = filter_morph_follow_s.value()[0];
 
+    let fair_gain = |v: f32| -> An<FairGain> {
+        (1.0 - var(&secondary_xct) * 2.0)
+            >> (constant(v.clamp(-1.0, 1.0)) + pass())
+            >> mul(0.5)
+            >> super::abs::abs()
+            >> mul(gain as f32)
+    };
+
     let filter_shelf_gain_lin: An<DbLin> =
         (filter_shelf_gain_db) >> super::db_lin::db_lin_converter();
 
-    let control_a_b: An<ClampedControl> = An(control_a_b)
+    let control_a_b: An<ClampedControl> = var(&control_a_b)
         >> follow::<S>(follow_time as S)
         >> mul(2.0)
         >> clip_to(S::EPSILON.sqrt() as f32, (2.0 - S::EPSILON.sqrt()) as f32)
         >> (constant(1.0) - pass());
 
-    let control: An<Control> = An(control) >> follow::<S>(follow_time as S);
+    let control: An<Control> = var(&control) >> follow::<S>(follow_time as S);
 
     let safe_clip = clip_to(0.001, 0.999);
 
@@ -221,36 +221,30 @@ pub fn create_filter(
 
     let hp_input: An<BranchInput> =
         pass() | constant(config.frequency as f32) | q_piercing_controlled.clone();
-    let b_hp_gain: An<BHpGain> = ((inverted_control.clone()) | constant(1.0))
-        >> ((super::div::div::<S>() * constant(gain as f32)) + constant(gain as f32 - 1.0));
     let a_hp_branch: An<APassBranch> = hp_input.clone()
         >> (pass() | pass() | pass() | filter_shelf_gain_lin.clone())
         >> dbell(Softsign(shape));
-    let b_hp_branch: An<HpBranchB> = hp_input >> dresonator(Crush(shape)) >> (pass() * b_hp_gain);
+    let b_hp_branch: An<HpBranchB> =
+        hp_input >> dresonator(Crush(shape)) >> (pass() * fair_gain(-0.2));
 
     let mid_f = (config.formant_hz(3) + config.formant_hz(5)) / 2.0;
     let bp_input: An<BranchInput> = pass() | constant(mid_f as f32) | q_bright_controlled.clone();
-    let bp_denom: An<BBpDenominator> =
-        ((constant(0.5) - inverted_control.clone()) >> super::abs::abs()) >> safe_clip.clone();
-    let b_bp_gain: An<BBpGain> = (bp_denom | constant(0.5))
-        >> ((super::div::div::<S>() * constant(gain as f32)) + constant(gain as f32 - 1.0));
+
     let a_bp_branch: An<APassBranch> = bp_input.clone()
         >> (pass() | pass() | pass() | filter_shelf_gain_lin.clone())
         >> dbell(Softsign(shape));
     let b_bp_branch: An<BpBranchB> =
-        bp_input >> fresonator(SoftCrush(shape)) >> (pass() * b_bp_gain);
+        bp_input >> fresonator(SoftCrush(shape)) >> (pass() * fair_gain(-0.1));
 
     let mass = config.cents.clamp(f64::EPSILON.sqrt(), 1200.0).powf(1.05) as S;
     let hr_bpm = (K_BASE as S) * mass.powf(-0.25);
     let hr_hz = hr_bpm / 60.0;
     let lp_input: An<BranchInput> = pass() | constant(hr_hz as f32) | q_warm_controlled.clone();
-    let b_lp_gain: An<BLpGain> = ((constant(1.0) - inverted_control.clone()) | constant(1.0))
-        >> ((super::div::div::<S>() * constant(gain as f32)) + constant(gain as f32 - 1.0));
     let a_lp_branch: An<APassBranch> = lp_input.clone()
         >> (pass() | pass() | pass() | filter_shelf_gain_lin.clone())
         >> dbell(Softsign(shape));
     let b_lp_branch: An<LpBranchB> =
-        lp_input >> dresonator(SoftCrush(shape)) >> (pass() * b_lp_gain);
+        lp_input >> dresonator(SoftCrush(shape)) >> (pass() * fair_gain(0.1));
 
     let (hp_throw, hp_catch) = super::throw_catch::throw_catch(2);
     let (bp_throw, bp_catch) = super::throw_catch::throw_catch(2);
@@ -267,10 +261,7 @@ pub fn create_filter(
         pass() | constant(config.formant_hz(2) as f32 as f32) | pass() | pass();
 
     let freq_catch: An<FreqCatch> = (hp_catch + bp_catch + lp_catch)
-        >> (pass()
-            | q_shelf_controlled.clone()
-            | (constant(gain as f32 * 0.35)
-                * ((constant(1.0) - control.clone()) >> safe_clip.clone())))
+        >> (pass() | q_shelf_controlled.clone() | fair_gain(0.5))
         >> ((hs1_input >> highshelf::<S>())
             & (hs2_input >> highshelf::<S>())
             & (ls_input >> lowshelf::<S>()));
@@ -291,7 +282,7 @@ pub fn create_filter(
         >> (join::<U2>() + join::<U2>() + join::<U2>());
 
     split::<U2>()
-        >> (mul(gain as f32 * 0.4) | mul(gain as f32 * 0.25))
+        >> ((pass() * fair_gain(0.3)) | (pass() * fair_gain(1.0)))
         >> (wet_chain | pass())
         >> (pass() + pass() + freq_catch)
 }
@@ -317,8 +308,9 @@ mod tests {
         let control_a_b = shared(0.0);
 
         let handles = FilterHandles {
-            control_a_b: Var::new(&control_a_b),
-            control: Var::new(&control),
+            control_a_b: control_a_b.clone(),
+            control: control.clone(),
+            secondary_xct: shared(0.0),
             config: node,
         };
 
@@ -327,8 +319,9 @@ mod tests {
         let control_a_b = shared(1.0);
 
         let handles = FilterHandles {
-            control_a_b: Var::new(&control_a_b),
-            control: Var::new(&control),
+            control_a_b: control_a_b.clone(),
+            control: control.clone(),
+            secondary_xct: shared(0.0),
             config: node,
         };
 
@@ -365,48 +358,54 @@ mod tests {
         let control_a = shared(0.0);
 
         let handles = FilterHandles {
-            control_a_b: Var::new(&control_a),
-            control: Var::new(&control_0),
+            control_a_b: control_a.clone(),
+            control: control_0.clone(),
+            secondary_xct: shared(0.0),
             config: node,
         };
 
         let filter_0 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
-            control_a_b: Var::new(&control_a),
-            control: Var::new(&control_01),
+            control_a_b: control_a.clone(),
+            control: control_01.clone(),
+            secondary_xct: shared(0.0),
             config: node,
         };
 
         let filter_01 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
-            control_a_b: Var::new(&control_a),
-            control: Var::new(&control_02),
+            control_a_b: control_a.clone(),
+            control: control_02.clone(),
+            secondary_xct: shared(0.0),
             config: node,
         };
 
         let filter_02 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
-            control_a_b: Var::new(&control_a),
-            control: Var::new(&control_05),
+            control_a_b: control_a.clone(),
+            control: control_05.clone(),
+            secondary_xct: shared(0.0),
             config: node,
         };
 
         let filter_05 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
-            control_a_b: Var::new(&control_a),
-            control: Var::new(&control_075),
+            control_a_b: control_a.clone(),
+            control: control_075.clone(),
+            secondary_xct: shared(0.0),
             config: node,
         };
 
         let filter_075 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
-            control_a_b: Var::new(&control_a),
-            control: Var::new(&control_100),
+            control_a_b: control_a.clone(),
+            control: control_100.clone(),
+            secondary_xct: shared(0.0),
             config: node,
         };
 
@@ -449,48 +448,54 @@ mod tests {
         let control_b = shared(1.0);
 
         let handles = FilterHandles {
-            control_a_b: Var::new(&control_b),
-            control: Var::new(&control_0),
+            control_a_b: control_b.clone(),
+            control: control_0.clone(),
+            secondary_xct: shared(0.0),
             config: node,
         };
 
         let filter_0 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
-            control_a_b: Var::new(&control_b),
-            control: Var::new(&control_01),
+            control_a_b: control_b.clone(),
+            control: control_01.clone(),
+            secondary_xct: shared(0.0),
             config: node,
         };
 
         let filter_01 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
-            control_a_b: Var::new(&control_b),
-            control: Var::new(&control_02),
+            control_a_b: control_b.clone(),
+            control: control_02.clone(),
+            secondary_xct: shared(0.0),
             config: node,
         };
 
         let filter_02 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
-            control_a_b: Var::new(&control_b),
-            control: Var::new(&control_05),
+            control_a_b: control_b.clone(),
+            control: control_05.clone(),
+            secondary_xct: shared(0.0),
             config: node,
         };
 
         let filter_05 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
-            control_a_b: Var::new(&control_b),
-            control: Var::new(&control_075),
+            control_a_b: control_b.clone(),
+            control: control_075.clone(),
+            secondary_xct: shared(0.0),
             config: node,
         };
 
         let filter_075 = create_filter(handles, &values, 1.7);
 
         let handles = FilterHandles {
-            control_a_b: Var::new(&control_b),
-            control: Var::new(&control_100),
+            control_a_b: control_b.clone(),
+            control: control_100.clone(),
+            secondary_xct: shared(0.0),
             config: node,
         };
 
@@ -551,7 +556,7 @@ mod tests {
             }
 
             node_handles.iter().for_each(|n| {
-                n.siren_control.set_value(0.25);
+                n.siren_control.set_value((0.25, 0.1));
                 n.band_control.set_value(0.25);
             });
 

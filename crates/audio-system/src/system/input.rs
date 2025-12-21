@@ -1,3 +1,4 @@
+mod adsr;
 mod new_york;
 
 pub mod analyzer;
@@ -15,6 +16,7 @@ use fundsp::hacker32::prelude::*;
 use u_num_it::u_num_it;
 
 use crate::system::values::FineTunedValues;
+use crate::ExcitementControl;
 
 use super::SensorHandles;
 
@@ -24,7 +26,7 @@ pub(crate) use random_excitor::RandomExcitor;
 pub fn sensors_system(
     config: &Config,
     net: &mut Net,
-    excitements: HashMap<NodeKey, Shared>,
+    excitements: HashMap<NodeKey, ExcitementControl>,
     values: &FineTunedValues,
     spectrum_thb: &analyzer::SpectrumBuffer,
     tap_channel: usize,
@@ -144,7 +146,11 @@ fn create_sensor_handles(config: &Config) -> Vec<SensorHandles> {
 
 /// Create a random excitement system that bypasses FFT analysis
 /// Used when excitement source is Entropy/Random
-pub fn randomized_system(_config: &Config, net: &mut Net, excitements: HashMap<NodeKey, Shared>) {
+pub fn randomized_system(
+    _config: &Config,
+    net: &mut Net,
+    excitements: HashMap<NodeKey, ExcitementControl>,
+) {
     log::info!(
         "Creating random sensors system with {} excitement controls",
         excitements.len()

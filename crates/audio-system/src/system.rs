@@ -1,3 +1,4 @@
+pub mod excitement_control;
 pub mod input;
 pub mod output;
 pub mod output_analyzer;
@@ -10,11 +11,13 @@ use common::NodeKey;
 use fundsp::{net::Net, shared::Shared, snoop::Snoop};
 use values::FineTunedValues;
 
+pub use excitement_control::ExcitementControl;
+
 pub struct NodeHandles {
     pub key: NodeKey,
     pub excitement_snoop: Snoop,
     pub output_snoop: Snoop,
-    pub siren_control: Shared,
+    pub siren_control: ExcitementControl,
     pub band_control: Shared,
     pub key_control: Shared,
 }
@@ -54,7 +57,7 @@ pub fn create_output_system(
 pub fn create_input_system(
     config: &common::tuner::Config,
     net: &mut Net,
-    excitements: HashMap<NodeKey, Shared>,
+    excitements: HashMap<NodeKey, ExcitementControl>,
     source: ExcitementSource,
     spectrum_thb: &input::analyzer::SpectrumBuffer,
     tap_channel: usize,

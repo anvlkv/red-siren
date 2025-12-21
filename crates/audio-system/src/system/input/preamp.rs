@@ -27,20 +27,17 @@ Frequencies outside table range are clamped to nearest endpoint.
 pub type PreampType = Pipe<
     Pipe<
         Pipe<
-            Pipe<
-                Pipe<DCBlock<S>, Split<U5>>,
-                Stack<
-                    Stack<
-                        Stack<
-                            Stack<FixedSvf<S, BellMode<S>>, FixedSvf<S, BellMode<S>>>,
-                            FixedSvf<S, BellMode<S>>,
-                        >,
+            DCBlock<S>,
+            Bus<
+                Bus<
+                    Bus<
+                        Bus<FixedSvf<S, BellMode<S>>, FixedSvf<S, BellMode<S>>>,
                         FixedSvf<S, BellMode<S>>,
                     >,
-                    Pass,
+                    FixedSvf<S, BellMode<S>>,
                 >,
+                Pass,
             >,
-            Join<U5>,
         >,
         Stack<Stack<Pass, FineTunedValue>, FineTunedValue>,
     >,
@@ -89,13 +86,11 @@ pub fn create_sensors_preamp(values: &FineTunedValues) -> An<PreampType> {
     // Create cascaded bell filters for frequency-selective amplification
     // Each bell filter applies gain at its center frequency with specified Q
     dcblock()
-        >> split::<U5>()
         >> (bell_hz(freq_20hz, q_20hz, gain_20hz_linear)
-            | bell_hz(freq_100hz, q_100hz, gain_100hz_linear)
-            | bell_hz(freq_1khz, q_1khz, gain_1khz_linear)
-            | bell_hz(freq_10khz, q_10khz, gain_10khz_linear)
-            | pass())
-        >> join::<U5>()
+            & bell_hz(freq_100hz, q_100hz, gain_100hz_linear)
+            & bell_hz(freq_1khz, q_1khz, gain_1khz_linear)
+            & bell_hz(freq_10khz, q_10khz, gain_10khz_linear)
+            & pass())
         >> (pass() | values.input_ny_threshold.clone() | values.input_ny_wet_ratio.clone())
         >> super::new_york::new_york::<S>()
 }

@@ -79,10 +79,10 @@ pub fn EditorOverlay() -> impl IntoView {
     };
 
     view! {
-        <div class="absolute right-0 bottom-8 z-60 rounded bg-red/70 dark:bg-black/60 border border-black/20 dark:border-red/20 p-4 shadow-sm">
+        <div class="absolute right-0 bottom-8 z-60 rounded bg-red/70 dark:bg-black/60 border border-black/20 dark:border-red/20 p-4 shadow-sm overflow-hidden max-w-screen">
             <Fold title="Fine-tune Audio Parameters">
-                <form on:submit=on_submit class="p-4">
-                    <div class="flex gap-4 max-w-screen overflow-x-auto">
+                <form on:submit=on_submit class="p-4 w-full overflow-x-auto">
+                    <div class="flex gap-4">
                         <fieldset class="flex flex-col gap-2">
                             <legend>"Siren Parameters"</legend>
 

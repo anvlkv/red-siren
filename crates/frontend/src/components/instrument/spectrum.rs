@@ -259,6 +259,7 @@ fn draw_spectrum(
         }
     });
     ctx.set_fill_style_str(&fill_color);
+    ctx.set_stroke_style_str(&fill_color);
 
     // Precompute incremental positions and base split
     let cell_increment = match orientation {
@@ -268,12 +269,6 @@ fn draw_spectrum(
         common::orientation::LayoutOrientation::Horizontal => {
             cell_height.min(height / row.len() as f64)
         }
-    };
-    // Center the right channel base within the safe area.
-    // `width`/`height` here already represent safe area dimensions, so do not subtract padding again.
-    let right_base = match orientation {
-        common::orientation::LayoutOrientation::Vertical => width / 2.0,
-        common::orientation::LayoutOrientation::Horizontal => height / 2.0,
     };
 
     // Translate the context to the row position
@@ -285,60 +280,64 @@ fn draw_spectrum(
             (row_index as f64 * cell_width, safe_area_padding.top)
         }
     };
-    ctx.clear_rect(
-        tx,
-        ty,
-        match orientation {
-            common::orientation::LayoutOrientation::Vertical => width,
-            common::orientation::LayoutOrientation::Horizontal => cell_width,
-        },
-        match orientation {
-            common::orientation::LayoutOrientation::Vertical => cell_height,
-            common::orientation::LayoutOrientation::Horizontal => height,
-        },
-    );
+
+    match orientation {
+        common::orientation::LayoutOrientation::Vertical => {
+            ctx.clear_rect(
+                0.0,
+                ty,
+                width + safe_area_padding.left + safe_area_padding.right,
+                cell_height,
+            );
+        }
+        common::orientation::LayoutOrientation::Horizontal => {
+            ctx.clear_rect(
+                tx,
+                0.0,
+                cell_width,
+                height + safe_area_padding.top + safe_area_padding.bottom,
+            );
+        }
+    }
+
     ctx.save();
     ctx.translate(tx, ty).ok();
 
-    fn alpha(val: f32) -> f64 {
-        (val.abs().sqrt() as f64).clamp(f64::EPSILON, 1.0)
-    }
+    let radius = cell_width.max(cell_height) / 2.0;
+
+    ctx.set_line_width(radius / 4.0);
+
+    // Center the right channel base within the safe area.
+    // `width`/`height` here already represent safe area dimensions, so do not subtract padding again.
+    let right_base = match orientation {
+        common::orientation::LayoutOrientation::Vertical => width / 2.0,
+        common::orientation::LayoutOrientation::Horizontal => height / 2.0,
+    };
+
+    let alpha = |val: f32| -> f64 { (val.abs().sqrt() as f64).clamp(f64::EPSILON.sqrt(), 1.0) };
+
+    let fill_sample = |i: f64, val: f32, base: f64| {
+        ctx.set_global_alpha(alpha(val));
+        ctx.begin_path();
+        let (x, y) = match orientation {
+            common::orientation::LayoutOrientation::Vertical => (cell_increment * i + base, radius),
+            common::orientation::LayoutOrientation::Horizontal => {
+                (radius, cell_increment * i + base)
+            }
+        };
+        _ = ctx.arc(x, y, radius, 0.0, std::f64::consts::TAU).ok();
+        if val != 0.0 {
+            ctx.fill();
+        } else {
+            ctx.stroke();
+        }
+    };
 
     // Draw each pair as two rectangles using global alpha scaled 0..1
     for (i, &(l, r)) in row.iter().enumerate() {
         let i = i as f64;
-        if l != 0.0 {
-            ctx.set_global_alpha(alpha(l));
-            match orientation {
-                common::orientation::LayoutOrientation::Vertical => {
-                    ctx.fill_rect(cell_increment * i, 0.0, cell_width, cell_height);
-                }
-                common::orientation::LayoutOrientation::Horizontal => {
-                    ctx.fill_rect(0.0, cell_increment * i, cell_width, cell_height);
-                }
-            }
-        }
-        if r != 0.0 {
-            ctx.set_global_alpha(alpha(r));
-            match orientation {
-                common::orientation::LayoutOrientation::Vertical => {
-                    ctx.fill_rect(
-                        cell_increment * i + right_base,
-                        0.0,
-                        cell_width,
-                        cell_height,
-                    );
-                }
-                common::orientation::LayoutOrientation::Horizontal => {
-                    ctx.fill_rect(
-                        0.0,
-                        cell_increment * i + right_base,
-                        cell_width,
-                        cell_height,
-                    );
-                }
-            }
-        }
+        fill_sample(i, l, radius * 0.5);
+        fill_sample(i, r, radius * 1.5 + right_base);
     }
 
     ctx.restore();

@@ -6,6 +6,7 @@ use super::siren::*;
 use super::InnerHandles;
 
 use crate::util::S;
+use crate::ExcitementControl;
 use crate::{
     system::values::{FineTunedValue, FineTunedValues},
     util::DbLin,
@@ -61,7 +62,7 @@ pub(super) fn create_node(
         excitement_snoop,
     );
 
-    let modulated_alpha: An<SirenAlpha> = siren_modulated_alpha(&siren_alpha, &band_control);
+    let modulated_alpha: An<SirenAlpha> = siren_modulated_alpha(&siren_alpha, &var(&band_control));
 
     // Stack inputs for siren
     let siren_output: An<SirenWithInputs> = siren_with_inputs(
@@ -95,7 +96,7 @@ pub(super) fn create_node(
 type SirenExcitement = Pipe<Pipe<Var, Pipe<Stack<Pass, Constant<U1>>, Hold>>, SnoopBackend>;
 
 fn siren_excitement(
-    control: &Var,
+    control: &ExcitementControl,
     hold_time: &An<FineTunedValue>,
     excitement_snoop: An<SnoopBackend>,
 ) -> An<SirenExcitement> {
@@ -104,9 +105,9 @@ fn siren_excitement(
     #[cfg(not(feature = "editor"))]
     let hold_time = hold_time.value()[0];
     let hold_hz_val = 1.0 / hold_time;
-    let hold_variability = 0.3;
+    let hold_variability = 0.9;
 
-    An(control.clone()) >> hold_hz(hold_hz_val, hold_variability) >> excitement_snoop
+    var(&control.primary) >> hold_hz(hold_hz_val, hold_variability) >> excitement_snoop
 }
 
 type NonZeroControl<V = Var> = Pipe<V, Shaper<ClipTo>>;
@@ -183,15 +184,15 @@ type FormantBank = Bus<
 
 fn formant_bank(
     config: &NodeConfig,
-    band_control: &Var,
+    band_control: &Shared,
     formant_base_q: &An<FineTunedValue>,
 ) -> An<FormantBank> {
     // Formants with base_q as input
-    let formant1: An<FormantFilter> = (pass() | An(band_control.clone()) | formant_base_q.clone())
+    let formant1: An<FormantFilter> = (pass() | var(band_control) | formant_base_q.clone())
         >> formant(config.formant_hz(1) as S, 1);
-    let formant2: An<FormantFilter> = (pass() | An(band_control.clone()) | formant_base_q.clone())
+    let formant2: An<FormantFilter> = (pass() | var(band_control) | formant_base_q.clone())
         >> formant(config.formant_hz(2) as S, 2);
-    let formant3: An<FormantFilter> = (pass() | An(band_control.clone()) | formant_base_q.clone())
+    let formant3: An<FormantFilter> = (pass() | var(band_control) | formant_base_q.clone())
         >> formant(config.formant_hz(3) as S, 3);
 
     (formant1 * 1.45) & (formant2 * 1.33) & (formant3 * 1.22) & (pass() * 0.015)
@@ -214,11 +215,11 @@ fn bell_filter(
     frequency: S,
     node_bell_q: &An<FineTunedValue>,
     node_bell_gain_db: &An<FineTunedValue>,
-    band_control: &Var,
+    band_control: &Shared,
 ) -> An<BellFilter> {
     (pass()
         | constant(frequency as f32)
-        | (node_bell_q.clone() * (constant(1.0 / 3.0) + An(band_control.clone())))
+        | (node_bell_q.clone() * (constant(1.0 / 3.0) + var(band_control)))
         | (node_bell_gain_db.clone() >> super::db_lin::db_lin_converter()))
         >> bell()
 }
@@ -240,12 +241,12 @@ type SourceOscillator = Pipe<
 >;
 
 #[allow(clippy::unnecessary_cast)]
-fn source_oscillator(frequency: S, phase: S, band_control: &Var) -> An<SourceOscillator> {
+fn source_oscillator(frequency: S, phase: S, band_control: &Shared) -> An<SourceOscillator> {
     let input = constant(1.0) - super::abs::abs();
 
     ((input >> clip_to(0.6, 1.0)) * constant(frequency as f32))
         >> split::<U2>()
-        >> (sine_phase::<S>(phase as f32) | soft_saw() | An(band_control.clone()))
+        >> (sine_phase::<S>(phase as f32) | soft_saw() | var(band_control))
         >> super::crossfade::equal_power_crossfade()
 }
 
@@ -264,9 +265,9 @@ mod tests {
         let values = FineTunedValues::new();
 
         let src_control = shared(0.0);
-        let var = Var::new(&src_control);
 
-        let modulated_alpha: An<SirenAlpha> = siren_modulated_alpha(&values.siren_alpha, &var);
+        let modulated_alpha: An<SirenAlpha> =
+            siren_modulated_alpha(&values.siren_alpha, &var(&src_control));
 
         let snapshot_config = SnapshotConfigBuilder::default()
             .num_samples(1000)
@@ -298,11 +299,11 @@ mod tests {
         let values = FineTunedValues::new();
 
         let src_control = shared(0.0);
-        let var = Var::new(&src_control);
 
         let handles = InnerHandles::default();
+        let excitement_control = ExcitementControl::new_primary(src_control.clone());
         let excitement: An<SirenExcitement> = siren_excitement(
-            &var,
+            &excitement_control,
             &values.node_follow_response_time_s,
             handles.excitement_snoop,
         );
@@ -337,16 +338,17 @@ mod tests {
         let values = FineTunedValues::new();
 
         let src_control = shared(0.0);
-        let var = Var::new(&src_control);
 
         let handles = InnerHandles::default();
 
+        let excitement_control = ExcitementControl::new_primary(src_control.clone());
         let excitement: An<SirenExcitement> = siren_excitement(
-            &var,
+            &excitement_control,
             &values.node_follow_response_time_s,
             handles.excitement_snoop,
         );
-        let modulated_alpha: An<SirenAlpha> = siren_modulated_alpha(&values.siren_alpha, &var);
+        let modulated_alpha: An<SirenAlpha> =
+            siren_modulated_alpha(&values.siren_alpha, &var(&src_control));
         let siren: An<SirenWithInputs> = siren_with_inputs(
             excitement,
             modulated_alpha,
@@ -386,11 +388,10 @@ mod tests {
         let values = FineTunedValues::new();
 
         let src_control = shared(0.0);
-        let var = Var::new(&src_control);
 
         let config = NodeConfig::new_test_node(440.0);
 
-        let bank: An<FormantBank> = formant_bank(&config, &var, &values.formant_base_q);
+        let bank: An<FormantBank> = formant_bank(&config, &src_control, &values.formant_base_q);
 
         let snapshot_config = SnapshotConfigBuilder::default()
             .num_samples(1000)
@@ -422,13 +423,12 @@ mod tests {
         let values = FineTunedValues::new();
 
         let src_control = shared(0.0);
-        let var = Var::new(&src_control);
 
         let filter: An<BellFilter> = bell_filter(
             440.0 as S,
             &values.node_bell_q,
             &values.node_bell_gain_db,
-            &var,
+            &src_control,
         );
 
         let snapshot_config = SnapshotConfigBuilder::default()
@@ -455,9 +455,8 @@ mod tests {
     #[test]
     fn test_source_oscillator() {
         let src_control = shared(0.0);
-        let var = Var::new(&src_control);
 
-        let osc: An<SourceOscillator> = source_oscillator(440.0 as S, 0.0 as S, &var);
+        let osc: An<SourceOscillator> = source_oscillator(440.0 as S, 0.0 as S, &src_control);
 
         let snapshot_config = SnapshotConfigBuilder::default()
             .num_samples(1000)
@@ -506,7 +505,7 @@ mod tests {
 
         // siren control 0.1
         let handles_2 = InnerHandles::default();
-        handles_2.siren_control.set_value(0.1);
+        handles_2.siren_control.set_value((0.1, 0.0));
         let node_2 = create_node(&config, handles_2, &values);
         let id = net.push(Box::new(node_2));
         net.pipe_output(id);
@@ -514,7 +513,7 @@ mod tests {
 
         // siren control 0.1, band control 0.1
         let handles_3 = InnerHandles::default();
-        handles_3.siren_control.set_value(0.1);
+        handles_3.siren_control.set_value((0.1, 0.0));
         handles_3.band_control.set_value(0.1);
         let node_3 = create_node(&config, handles_3, &values);
         let id = net.push(Box::new(node_3));
@@ -523,7 +522,7 @@ mod tests {
 
         // siren control 0.5
         let handles_4 = InnerHandles::default();
-        handles_4.siren_control.set_value(0.5);
+        handles_4.siren_control.set_value((0.5, 0.0));
         let node_4 = create_node(&config, handles_4, &values);
         let id = net.push(Box::new(node_4));
         net.pipe_output(id);
@@ -531,7 +530,7 @@ mod tests {
 
         // siren control 0.5, band control 0.5
         let handles_5 = InnerHandles::default();
-        handles_5.siren_control.set_value(0.5);
+        handles_5.siren_control.set_value((0.5, 0.0));
         handles_5.band_control.set_value(0.5);
         let node_5 = create_node(&config, handles_5, &values);
         let id = net.push(Box::new(node_5));
@@ -540,7 +539,7 @@ mod tests {
 
         // siren control 1.0
         let handles_6 = InnerHandles::default();
-        handles_6.siren_control.set_value(1.0);
+        handles_6.siren_control.set_value((1.0, 0.0));
         let node_6 = create_node(&config, handles_6, &values);
         let id = net.push(Box::new(node_6));
         net.pipe_output(id);
@@ -548,7 +547,7 @@ mod tests {
 
         // siren control 1.0, band control 1.0
         let handles_7 = InnerHandles::default();
-        handles_7.siren_control.set_value(1.0);
+        handles_7.siren_control.set_value((1.0, 0.0));
         handles_7.band_control.set_value(1.0);
         let node_7 = create_node(&config, handles_7, &values);
         let id = net.push(Box::new(node_7));
@@ -589,7 +588,7 @@ mod tests {
             for group in config.0 {
                 for node in group.nodes {
                     let handles = InnerHandles::default();
-                    handles.siren_control.set_value(0.25);
+                    handles.siren_control.set_value((0.25, 0.0));
                     handles.band_control.set_value(0.25);
                     let title = format!("node: {:?}; {}Hz", node.key, node.frequency);
                     svg_config.output_title(&title);

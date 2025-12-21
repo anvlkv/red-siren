@@ -10,6 +10,7 @@ use u_num_it::u_num_it;
 use super::{
     filter::{FilterHandles, FilterType},
     node::NodeType,
+    throw_catch::{ThrowCatchCatch, ThrowCatchThrow},
     InnerHandles,
 };
 
@@ -21,6 +22,7 @@ pub fn add_one_channel_subsystem(
     (group_handles, filter_handles): (Vec<HashMap<NodeKey, InnerHandles>>, Vec<FilterHandles>),
     nodes_count_per_group: usize,
     channel: GroupChannel,
+    (throw_x, catch_x): (An<ThrowCatchThrow>, An<ThrowCatchCatch>),
     net: &mut Net,
     values: &FineTunedValues,
 ) -> NodeId {
@@ -60,12 +62,29 @@ pub fn add_one_channel_subsystem(
         }
     );
 
+    let cross = split::<U2>()
+        >> (pass()
+            | (catch_x
+                * (constant(0.1)
+                    >> sine_phase::<S>(match channel {
+                        GroupChannel::Left => 0.25,
+                        GroupChannel::Right => 0.0,
+                    })))
+            | throw_x)
+        >> map(|frame: &Frame<f32, U2>| {
+            let main = frame[0];
+            let x = frame[1] * 0.2;
+            main + x.abs() * main.signum()
+        });
+    let cross_id = net.push(Box::new(cross));
+    net.pipe_all(id, cross_id);
+
     u_num_it!(
         1..=71,
         match channel_filters_count {
             U => {
                 type FNum = NumType;
-                id = add_channel_filter::<FNum>(filter_handles, id, net, values);
+                id = add_channel_filter::<FNum>(filter_handles, cross_id, net, values);
             }
             _ => {
                 panic!("unexpected number of filters");
@@ -131,7 +150,7 @@ where
             );
             move |_| {
                 let mut band_controls = band_controls.borrow_mut();
-                pass() + An(band_controls.pop().unwrap())
+                pass() + var(&band_controls.pop().unwrap())
             }
         }) | constant(F::USIZE as f32))
         >> super::div::div::<S>();
@@ -146,7 +165,7 @@ where
             );
             move |_| {
                 let mut ab_controls = ab_controls.borrow_mut();
-                pass() + An(ab_controls.pop().unwrap())
+                pass() + var(&ab_controls.pop().unwrap())
             }
         }) | constant(F::USIZE as f32))
         >> super::div::div::<S>();
@@ -166,7 +185,10 @@ where
 
     let composite_channel = panner_node
         >> (filter_channel | pass())
-        >> reverb4_stereo(F::USIZE as f64 * 8.75, (F::USIZE as f64).sqrt())
+        >> reverb4_stereo(
+            17.5,
+            (1.0 + (1.0 / F::USIZE as f64)) * (F::USIZE as f64).powf(-0.1),
+        )
         >> (pass() + (pass() * -0.15))
         >> shape(Adaptive::new(0.075, Tanh(0.8)));
 
@@ -179,8 +201,11 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::system::output::{
-        prepare_handles, split_filter_handles_lr, split_group_handles_lr, split_groups_lr,
+    use crate::{
+        output::throw_catch,
+        system::output::{
+            prepare_handles, split_filter_handles_lr, split_group_handles_lr, split_groups_lr,
+        },
     };
     use common::instrument::config_test_cases;
     use insta_fun::prelude::*;
@@ -211,7 +236,7 @@ mod tests {
                     prepare_handles(&groups, config.1);
 
                 node_handles.iter().for_each(|n| {
-                    n.siren_control.set_value(0.25);
+                    n.siren_control.set_value((0.25, 0.1));
                     n.band_control.set_value(0.1);
                 });
 
@@ -220,6 +245,7 @@ mod tests {
                     (group_handles, filter_handles),
                     layout.num_keys_per_group.get() as usize,
                     GroupChannel::Left,
+                    throw_catch::throw_catch(7),
                     &mut net,
                     &values,
                 );
@@ -267,7 +293,7 @@ mod tests {
                 prepare_handles(&config.0, config.1);
 
             node_handles.iter().for_each(|n| {
-                n.siren_control.set_value(0.25);
+                n.siren_control.set_value((0.25, 0.1));
                 n.band_control.set_value(0.1);
             });
 
@@ -287,6 +313,7 @@ mod tests {
                 (left_group_handles, left_filter_handles),
                 nodes_count_per_group,
                 GroupChannel::Left,
+                throw_catch::throw_catch(7),
                 &mut left_net,
                 &values,
             );
@@ -317,6 +344,7 @@ mod tests {
                 (right_group_handles, right_filter_handles),
                 nodes_count_per_group,
                 GroupChannel::Right,
+                throw_catch::throw_catch(7),
                 &mut right_net,
                 &values,
             );
@@ -363,7 +391,7 @@ mod tests {
                 prepare_handles(&config.0, config.1);
 
             node_handles.iter().for_each(|n| {
-                n.siren_control.set_value(0.25);
+                n.siren_control.set_value((0.25, 0.1));
                 n.band_control.set_value(0.1);
             });
 
@@ -383,6 +411,7 @@ mod tests {
                 (left_group_handles, right_filter_handles),
                 nodes_count_per_group,
                 GroupChannel::Left,
+                throw_catch::throw_catch(7),
                 &mut left_net,
                 &values,
             );
@@ -413,6 +442,7 @@ mod tests {
                 (right_group_handles, left_filter_handles),
                 nodes_count_per_group,
                 GroupChannel::Right,
+                throw_catch::throw_catch(7),
                 &mut right_net,
                 &values,
             );

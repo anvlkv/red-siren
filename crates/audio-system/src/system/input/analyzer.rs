@@ -18,15 +18,19 @@ use fundsp::hacker::prelude::*;
 #[cfg(not(feature = "hi_fi"))]
 use fundsp::hacker32::prelude::*;
 use fundsp::{audiounit::BigBlockAdapter, thingbuf::ThingBuf};
+use parking_lot::RwLock;
 use spectrum_analyzer::{
     samples_fft_to_spectrum, windows::hann_window, FrequencyLimit, FrequencySpectrum,
 };
 
-use crate::util::hash_str;
+use super::adsr::Adsr;
+use crate::{
+    util::{hash_str, SComplex, S},
+    ExcitementControl,
+};
 
 const ANALYZER_ID: u64 = hash_str(concat!(module_path!(), "::FFTAnalyzer"));
-
-pub const FFT_WINDOW_SIZE: usize = 2048; // Power of 2 for FFT, good balance of frequency resolution vs latency
+pub const FFT_WINDOW_SIZE: usize = 8192; // Power of 2 for FFT, good balance of frequency resolution vs latency
 
 pub type SpectrumBuffer = Arc<ThingBuf<Arc<FrequencySpectrum>>>;
 
@@ -37,11 +41,13 @@ pub struct FFTAnalyzer {
     window_thb: Arc<ThingBuf<f32>>,
     spectrum_thb: Arc<ThingBuf<Arc<FrequencySpectrum>>>,
     sensor_values: Arc<Vec<Shared>>,
+    next_excitements_abs: Arc<RwLock<Option<HashMap<NodeKey, SComplex>>>>,
 
     // Configuration and controls
     sample_rate: f32,
     config: Config,
-    excitement_controls: Arc<HashMap<NodeKey, Shared>>,
+    excitement_controls: HashMap<NodeKey, ExcitementControl>,
+    last_adsr: HashMap<NodeKey, (Adsr, SComplex)>,
 
     // processing thread
     processing_handle: Arc<JoinHandle<()>>,
@@ -52,7 +58,7 @@ impl FFTAnalyzer {
     pub fn new(
         inner_net: Box<dyn AudioUnit>,
         config: Config,
-        excitement_controls: HashMap<NodeKey, Shared>,
+        excitement_controls: HashMap<NodeKey, ExcitementControl>,
         spectrum_thb: Arc<ThingBuf<Arc<FrequencySpectrum>>>,
     ) -> Self {
         let window_thb = Arc::new(ThingBuf::new(FFT_WINDOW_SIZE * 2));
@@ -64,11 +70,17 @@ impl FFTAnalyzer {
                 shared(s.max_magnitude),
             ]
         })));
-        let excitement_controls = Arc::new(excitement_controls);
+        let last_adsr = HashMap::from_iter(
+            excitement_controls
+                .keys()
+                .map(|k| (*k, (Adsr::new(DEFAULT_SR), SComplex::ZERO))),
+        );
+        let next_excitements_abs = Arc::new(RwLock::new(None));
+
         let sensor_data = config.sensor_data.clone();
         let (processing_handle, processing_running) = Self::init_handle(
             window_thb.clone(),
-            excitement_controls.clone(),
+            next_excitements_abs.clone(),
             sensor_values.clone(),
             spectrum_thb.clone(),
             sensor_data,
@@ -79,6 +91,8 @@ impl FFTAnalyzer {
             inner_net: BigBlockAdapter::new(inner_net),
             window_thb,
             sensor_values,
+            last_adsr,
+            next_excitements_abs,
             sample_rate: config.sample_rate,
             config,
             spectrum_thb,
@@ -132,12 +146,13 @@ impl FFTAnalyzer {
         }
     }
 
+    #[allow(clippy::useless_conversion)]
     fn perform_fft_analysis(
         window: &[f32],
         sensor_inputs: &[f32],
         sample_rate: u32,
         sensor_data: &[SensorData],
-        excitement_controls: &HashMap<NodeKey, Shared>,
+        next_excitements_abs: &Arc<RwLock<Option<HashMap<NodeKey, SComplex>>>>,
         spectrum_thb: &Arc<ThingBuf<Arc<FrequencySpectrum>>>,
     ) {
         log::trace!(
@@ -166,6 +181,11 @@ impl FFTAnalyzer {
             }
         };
 
+        let mut next_excitements_lock = next_excitements_abs.write();
+        let excitements_abs = next_excitements_lock.insert(HashMap::new());
+
+        let spectrum_map = spectrum.to_map();
+
         // Process sensor excitements
         for (i, sensor) in sensor_data.iter().enumerate() {
             // Get sensor parameters from input channels
@@ -188,68 +208,28 @@ impl FFTAnalyzer {
                 }
             };
 
-            let center = 0.5 * (min_freq + max_freq);
+            let freq_range = min_freq.floor() as u32..max_freq.ceil() as u32;
+            let mag_range = min_mag..max_mag;
 
-            // Test min, center, and max frequencies
-            let test_freqs = [min_freq, center, max_freq];
+            let spectrum_range = spectrum_map.range(freq_range.clone());
 
-            let mut max_excitement = 0.0f32;
-
-            for &test_freq in &test_freqs {
-                let (f, v) = spectrum.freq_val_closest(test_freq);
-                let freq = f.val();
-                let peak_db = v.val();
-
-                // Check if the closest bin is within sensor band
-                let in_band = freq >= min_freq && freq <= max_freq;
-
-                // Calculate raw excitement value
-                let raw_excitement = if !in_band || peak_db <= min_mag || peak_db > max_mag {
-                    0.0
-                } else {
-                    // Linear interpolation based on min/max magnitude range
-                    ((peak_db - min_mag) / (max_mag - min_mag)).clamp(0.0, 1.0)
-                };
-
-                // Apply slow-growth function
-                let excitement = raw_excitement.powi(3);
-                max_excitement = max_excitement.max(excitement);
-
-                if log::log_enabled!(log::Level::Trace) && excitement > 0.01 {
-                    log::trace!(
-                        "fft_analyzer: sensor key={:?} test_freq={:.1} Hz, closest={:.1} Hz, peak={:.1} dB, raw={:.3}, excitement={:.3}",
-                        sensor.key,
-                        test_freq,
-                        freq,
-                        peak_db,
-                        raw_excitement,
-                        excitement
-                    );
-                }
-            }
-
-            if log::log_enabled!(log::Level::Trace) && max_excitement > 0.01 {
-                log::trace!(
-                    "fft_analyzer: sensor key={:?} range=[{:.1},{:.1}] final_excitement={:.3}",
-                    sensor.key,
-                    min_freq,
-                    max_freq,
-                    max_excitement
-                );
-            }
-
-            // Update siren control with the maximum excitement from all test points
-            if let Some(siren_control) = excitement_controls.get(&sensor.key) {
-                log::debug!(
-                    "set excitement value [{max_excitement}] for key [{:?}]",
-                    sensor.key
-                );
-                siren_control.set_value(max_excitement);
-            } else {
-                log::warn!(
-                    "fft_analyzer: no siren control found for sensor key={:?}",
-                    sensor.key
-                );
+            if let Some((re, im)) = spectrum_range
+                .filter(|(_, mag)| mag_range.contains(mag))
+                .max_by(|(_, a_mag), (_, b_mag)| {
+                    a_mag
+                        .partial_cmp(b_mag)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .and_then(|(&freq, &mag)| {
+                    freq_range.clone().position(|f| f == freq).map(|p| {
+                        (
+                            (mag - min_mag) as S / (max_mag - min_mag) as S,
+                            p as S / freq_range.len() as S,
+                        )
+                    })
+                })
+            {
+                excitements_abs.insert(sensor.key, SComplex::new(re, im));
             }
         }
 
@@ -267,7 +247,7 @@ impl FFTAnalyzer {
 
     fn init_handle(
         window_thb: Arc<ThingBuf<f32>>,
-        excitement_controls: Arc<HashMap<NodeKey, Shared>>,
+        next_excitements_abs: Arc<RwLock<Option<HashMap<NodeKey, SComplex>>>>,
         sensor_values: Arc<Vec<Shared>>,
         spectrum_thb: SpectrumBuffer,
         sensor_data: Vec<SensorData>,
@@ -297,7 +277,7 @@ impl FFTAnalyzer {
                         &sensor_inputs,
                         sample_rate,
                         &sensor_data,
-                        &excitement_controls,
+                        &next_excitements_abs,
                         &spectrum_thb,
                     );
                 }
@@ -312,7 +292,7 @@ impl FFTAnalyzer {
         let sensor_data = self.config.sensor_data.clone();
         let (processing_handle, processing_running) = Self::init_handle(
             self.window_thb.clone(),
-            self.excitement_controls.clone(),
+            self.next_excitements_abs.clone(),
             self.sensor_values.clone(),
             self.spectrum_thb.clone(),
             sensor_data,
@@ -326,6 +306,29 @@ impl FFTAnalyzer {
         }
 
         self.processing_running = processing_running;
+    }
+
+    #[allow(clippy::unnecessary_cast)]
+    fn tick_adsr(&mut self) {
+        self.excitement_controls.iter().for_each(|(key, control)| {
+            if let Some((adsr, _)) = self.last_adsr.get_mut(key) {
+                let adsr_value = adsr.tick();
+                control.set_value(adsr_value);
+            }
+        });
+
+        if let Some(excitements_abs) = self
+            .next_excitements_abs
+            .try_write()
+            .and_then(|mut next| next.take())
+        {
+            for (key, excitement) in excitements_abs.into_iter() {
+                if let Some((adsr, prev_excitement)) = self.last_adsr.get_mut(&key) {
+                    adsr.update(*prev_excitement, excitement);
+                    *prev_excitement = excitement;
+                }
+            }
+        }
     }
 }
 
@@ -356,6 +359,8 @@ impl AudioUnit for FFTAnalyzer {
         if self.window_thb.push(output[0]).is_err() {
             log::trace!("failed to push one sample")
         }
+
+        self.tick_adsr();
     }
 
     fn process(&mut self, size: usize, input: &BufferRef, output: &mut BufferMut) {
@@ -392,11 +397,16 @@ impl AudioUnit for FFTAnalyzer {
                 }
             }
         }
+
+        self.tick_adsr();
     }
 
     fn set_sample_rate(&mut self, sample_rate: f64) {
         self.inner_net.set_sample_rate(sample_rate);
         self.sample_rate = sample_rate as f32;
+        self.last_adsr.iter_mut().for_each(|(_, (adsr, _))| {
+            adsr.update_sample_rate(sample_rate);
+        });
         self.restart_processing();
     }
 
@@ -406,7 +416,7 @@ impl AudioUnit for FFTAnalyzer {
 
         // Reset all siren controls
         for siren_control in self.excitement_controls.values() {
-            siren_control.set_value(0.0);
+            siren_control.set_value((0.0, 0.0));
         }
 
         self.restart_processing();
@@ -456,7 +466,7 @@ mod tests {
 
         // Create siren controls
         let mut siren_controls = HashMap::new();
-        let control = shared(0.0);
+        let control = ExcitementControl::default();
         siren_controls.insert(NodeKey::new(0, 0), control.clone());
 
         let spectrum_thb = Arc::new(ThingBuf::new(10));
@@ -469,7 +479,7 @@ mod tests {
         assert_eq!(analyzer.outputs(), 1);
 
         // Test initial values
-        assert_eq!(control.value(), 0.0);
+        assert_eq!(control.value().re, 0.0);
     }
 
     #[test]
@@ -489,7 +499,7 @@ mod tests {
         };
 
         let mut siren_controls = HashMap::new();
-        let control = shared(0.0);
+        let control = ExcitementControl::default();
         siren_controls.insert(NodeKey::new(0, 0), control.clone());
 
         let spectrum_thb = Arc::new(ThingBuf::new(10));
@@ -498,6 +508,6 @@ mod tests {
 
         // Reset should clear everything
         analyzer.reset();
-        assert_eq!(control.value(), 0.0);
+        assert_eq!(control.value().re, 0.0);
     }
 }

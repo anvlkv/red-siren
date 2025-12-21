@@ -1,40 +1,39 @@
 {
   "languages": {
     "Rust": {
-      "language_servers": ["rust-analyzer", "tailwindcss-language-server"]
-    }
+      "language_servers": ["rust-analyzer", "tailwindcss-language-server"],
+    },
   },
   "lsp": {
     "rust-analyzer": {
       "initialization_options": {
         "cargo": {},
         "rustfmt": {
-          "overrideCommand": ["leptosfmt", "--stdin", "--rustfmt"]
+          "overrideCommand": ["leptosfmt", "--stdin", "--rustfmt"],
         },
         "procMacro": {
           "ignored": {
             "leptos": ["server"],
-            "u_num_it": ["u_num_it"]
-          }
-        }
-      }
+          },
+        },
+      },
     },
     "tailwindcss-language-server": {
       "settings": {
         "tailwindCSS": {
           "includeLanguages": {
-            "rust": "html"
+            "rust": "html",
           },
           "experimental": {
             "classRegex": [
               "class\\s*=\\s*\"([^\"]*)\"",
               "class\\s*=\\s*'([^']*)'",
               ["class\\s*=\\s*\\(([^)]*)\\)", "\"([^\"]+)\""],
-              "class:([\\w\\-:/]+)\\s*="
-            ]
-          }
-        }
-      }
-    }
-  }
+              "class:([\\w\\-:/]+)\\s*=",
+            ],
+          },
+        },
+      },
+    },
+  },
 }

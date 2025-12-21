@@ -24,14 +24,16 @@ use fundsp::hacker::prelude::*;
 use fundsp::hacker32::prelude::*;
 
 use super::NodeHandles;
-use crate::{output::filter::FilterHandles, system::values::FineTunedValues};
+use crate::{
+    output::filter::FilterHandles, system::values::FineTunedValues, util::S, ExcitementControl,
+};
 
 #[derive(Clone)]
 pub(super) struct InnerHandles {
     excitement_snoop: An<SnoopBackend>,
     output_snoop: An<SnoopBackend>,
-    siren_control: Var,
-    band_control: Var,
+    siren_control: ExcitementControl,
+    band_control: Shared,
     siren_signum: Constant<U1>,
 }
 
@@ -39,15 +41,15 @@ impl Default for InnerHandles {
     fn default() -> Self {
         let (_, excitement_snoop) = snoop(node::ACTIVATION_SNOOP_CAPACITY);
         let (_, output_snoop) = snoop(node::OUTPUT_SNOOP_CAPACITY);
-        let siren_control = shared(0.0);
+        let siren_control = ExcitementControl::default();
         let band_control = shared(0.0);
         let siren_signum = Constant::new([1.0].into());
 
         Self {
             excitement_snoop,
             output_snoop,
-            siren_control: Var::new(&siren_control),
-            band_control: Var::new(&band_control),
+            siren_control,
+            band_control,
             siren_signum,
         }
     }
@@ -61,11 +63,14 @@ pub fn mono_system(config: &Config, net: &mut Net, values: &FineTunedValues) -> 
 
     let groups_count = groups.len();
 
+    let (throw_x, catch_x) = throw_catch::throw_catch(7);
+
     let id = add_one_channel_subsystem(
         groups,
         (group_handles, filter_handles),
         nodes_count_per_group,
         GroupChannel::Left,
+        (throw_x, catch_x),
         net,
         values,
     );
@@ -82,6 +87,7 @@ pub fn mono_system(config: &Config, net: &mut Net, values: &FineTunedValues) -> 
     node_handles
 }
 
+#[allow(clippy::unnecessary_cast)]
 pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -> Vec<NodeHandles> {
     log::info!(
         "Creating stereo output system with {} total groups",
@@ -96,6 +102,9 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
 
     let (left_group_handles, right_group_handles) = split_group_handles_lr(group_handles, config);
 
+    let (throw_l, catch_r) = throw_catch::throw_catch(7);
+    let (throw_r, catch_l) = throw_catch::throw_catch(7);
+
     let (left_filter_handles, right_filter_handles) =
         split_filter_handles_lr(filter_handles, config);
 
@@ -104,6 +113,7 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
         (left_group_handles, right_filter_handles),
         nodes_count_per_group,
         GroupChannel::Left,
+        (throw_l, catch_l),
         net,
         values,
     );
@@ -112,14 +122,15 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
         (right_group_handles, left_filter_handles),
         nodes_count_per_group,
         GroupChannel::Right,
+        (throw_r, catch_r),
         net,
         values,
     );
 
     let system_filter = |seed: u64| {
-        split::<U3>()
-        >> (chorus(seed, 0.05, 0.025, 17.0) | chorus(seed*2, 0.05, 0.025, 17.0) | pass())
-        >> (join::<U2>() | pass())
+        split::<U2>()
+        >> (chorus(seed, 0.05, 0.025, 17.0) & (chorus(seed*2, 0.05, 0.025, 17.0) * -1.0) | pass())
+        >> (pass() | pass())
         >> (pan(-0.15) | pan(0.85))
         // tt^ | tm | um | ut^
         // tt^ | um | tm | ut^
@@ -151,13 +162,16 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
         own + season
     });
 
+    let min_hz = config.min_frequency_hz();
+
     let system_join = multipass::<U8>()
         // Initial: 0: L_tt^ | 1: L_um | 2: L_tm | 3: L_ut^ | 4: R_tt^ | 5: R_um | 6: R_tm | 7: R_ut^
         >> An(Map::new(|frame: &Frame<f32, U8>| -> Frame<f32, U8> {
             [frame[0], frame[5], frame[6], frame[3], frame[4], frame[1], frame[2], frame[7]].into()
         }, Routing::Reverse))
         // Final grouping: [Left mapper frame] | [Right mapper frame]
-        >> (mapper.clone() | mapper.clone());
+        >> (mapper.clone() | mapper.clone())
+        >> (dcblock_hz::<S>(min_hz as S * 0.1) | dcblock_hz::<S>(min_hz as S * 0.1));
 
     let join_id = net.push(Box::new(system_join));
 
@@ -165,8 +179,6 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
     net.pipe_all(right_filter_id, join_id);
 
     net.pipe_output(join_id);
-    // net.pipe_output(left_id);
-    // net.pipe_output(right_id);
 
     node_handles
 }
@@ -213,7 +225,7 @@ pub(super) fn prepare_handles(groups: &[GroupConfig], scale: Scale) -> Handles {
             let (excitement_snoop_front, excitement_snoop_backend) =
                 snoop(node::ACTIVATION_SNOOP_CAPACITY);
             let (output_snoop_front, output_snoop_backend) = snoop(node::OUTPUT_SNOOP_CAPACITY);
-            let siren_control = shared(0.0);
+            let siren_control = ExcitementControl::default();
             let band_control = shared(0.0);
             let key_control = shared(0.0);
 
@@ -222,15 +234,16 @@ pub(super) fn prepare_handles(groups: &[GroupConfig], scale: Scale) -> Handles {
                 InnerHandles {
                     excitement_snoop: excitement_snoop_backend,
                     output_snoop: output_snoop_backend,
-                    siren_control: Var::new(&siren_control),
-                    band_control: Var::new(&band_control),
+                    siren_control: siren_control.clone(),
+                    band_control: band_control.clone(),
                     siren_signum: siren_signum.clone(),
                 },
             );
 
             filter_handles.push(FilterHandles {
-                control_a_b: Var::new(&key_control),
-                control: Var::new(&siren_control),
+                control_a_b: key_control.clone(),
+                control: band_control.clone(),
+                secondary_xct: siren_control.secondary.clone(),
                 config: *node,
             });
 

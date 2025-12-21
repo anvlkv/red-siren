@@ -34,7 +34,7 @@ use crate::{
         AudioRuntime, ExcitementSource,
     },
     util::S,
-    SensorHandles,
+    ExcitementControl, SensorHandles,
 };
 
 use super::audio_session;
@@ -42,8 +42,8 @@ use super::stream::{spawn_owned_output_stream, Control, ControlInvocationResult,
 
 const CONTROL_INVOKE_TIMEOUT_MS: u64 = 500;
 const FADE_DURATION_MS: u64 = 120;
-const FOLLOW_RESPONSE_SECS: f32 = 0.01;
-const BUFFER_DURATION_MS: u64 = 100;
+const FOLLOW_RESPONSE_SECS: f32 = FADE_DURATION_MS as f32 / 1000.0;
+const INPUT_BUFFER_DURATION_MS: u64 = 100;
 const SPECTRUM_BUFFER_CAPACITY: usize = 2;
 
 /// CPAL-backed stream controller implementing audio I/O and DSP graph
@@ -56,6 +56,8 @@ struct CpalController {
     sample_rate: RwLock<Option<f64>>,
     gain_param: RwLock<Option<Shared>>,
     processed_output_snoops: RwLock<Option<(Snoop, Snoop)>>,
+    /// min and max values
+    freq_range: RwLock<(f64, f64)>,
     tuner_tap_gain_param: RwLock<Option<Shared>>,
 
     // Fine-tuned values for editor mode
@@ -79,7 +81,7 @@ struct CpalController {
 
     // Spectrum data tap
     spectrum_data_thb: crate::system::input::analyzer::SpectrumBuffer,
-    siren_excitements: RwLock<HashMap<NodeKey, Var>>,
+    siren_excitements: RwLock<HashMap<NodeKey, ExcitementControl>>,
 
     // Last known state for restarts
     last_layout: RwLock<InstrumentLayout>,
@@ -105,6 +107,10 @@ impl Default for CpalController {
             gain_param: RwLock::new(None),
             processed_output_snoops: RwLock::new(None),
             tuner_tap_gain_param: RwLock::new(None),
+            freq_range: RwLock::new((
+                common::instrument::consts::SOFT_MIN_FREQ_HZ,
+                common::instrument::consts::SOFT_MAX_FREQ_HZ,
+            )),
             #[cfg(feature = "editor")]
             fine_tuned_shared_values: RwLock::new(FineTunedSharedValues::default()),
             control_tx: RwLock::new(None),
@@ -202,7 +208,7 @@ impl CpalController {
         let input_sr = input_default_cfg.sample_rate().0 as f64;
 
         let samples_per_ms = input_sr / 1000.0;
-        let cap_samples = (samples_per_ms * BUFFER_DURATION_MS as f64).ceil() as usize;
+        let cap_samples = (samples_per_ms * INPUT_BUFFER_DURATION_MS as f64).ceil() as usize;
         let capacity = cap_samples.next_power_of_two();
 
         let thb = Arc::new(ThingBuf::<S>::new(capacity));
@@ -331,19 +337,15 @@ impl CpalController {
         let stub = net.push(Box::new(constant(0.0) | constant(0.0)));
         net.pipe_output(stub);
 
-        let siren_controls_stub = HashMap::<NodeKey, Shared>::from_iter(
+        let siren_controls_stub = HashMap::<NodeKey, ExcitementControl>::from_iter(
             tuner_config
                 .sensor_data
                 .iter()
-                .map(|s| (s.key, shared(0.0))),
+                .map(|s| (s.key, ExcitementControl::default())),
         );
 
         {
-            *self.siren_excitements.write() = HashMap::from_iter(
-                siren_controls_stub
-                    .iter()
-                    .map(|(key, shared)| (*key, Var::new(shared))),
-            );
+            *self.siren_excitements.write() = siren_controls_stub.clone();
         }
 
         // Initialize fine-tuned values if in editor mode
@@ -430,7 +432,7 @@ impl CpalController {
             &fine_tuned_values,
         );
 
-        let mut siren_controls = HashMap::<NodeKey, Shared>::new();
+        let mut siren_controls = HashMap::<NodeKey, ExcitementControl>::new();
 
         // Store node handle artifacts (excitement/output snoops, control vars).
         {
@@ -475,11 +477,7 @@ impl CpalController {
         );
 
         {
-            *self.siren_excitements.write() = HashMap::from_iter(
-                siren_controls
-                    .iter()
-                    .map(|(key, shared)| (*key, Var::new(shared))),
-            );
+            *self.siren_excitements.write() = siren_controls.clone();
         }
 
         let handles = crate::create_input_system(
@@ -498,6 +496,8 @@ impl CpalController {
                 HashMap::from_iter(handles.into_iter().map(|h| (h.key, h)));
             *self.tuner_only_mode.write() = false;
             log::trace!("stored sensor controls");
+
+            *self.freq_range.write() = (config.min_frequency_hz(), config.max_frequency_hz());
         }
 
         net.set_sample_rate(self.sample_rate());
@@ -532,10 +532,13 @@ impl CpalController {
             return;
         };
 
-        net.crossfade(primary_id, Fade::Power, 0.7, Box::new(new_node));
+        self.fade_out();
+        net.replace(primary_id, Box::new(new_node));
+        net.reset();
         net.check();
         net.commit();
         log::info!("Primary DSP node updated successfully");
+        self.fade_in();
     }
 
     fn fade_out(&self) {
@@ -956,10 +959,18 @@ impl AudioRuntime for CpalController {
                     }
                 }
 
-                output_analyzer::analyze(l_window, sample_rate).and_then(|left_spectrum| {
-                    output_analyzer::analyze(r_window, sample_rate)
+                let (min_hz, max_hz) = *self.freq_range.read();
+
+                output_analyzer::analyze(l_window, sample_rate, min_hz as f32, max_hz as f32)
+                    .and_then(|left_spectrum| {
+                        output_analyzer::analyze(
+                            r_window,
+                            sample_rate,
+                            min_hz as f32,
+                            max_hz as f32,
+                        )
                         .map(|right_spectrum| (left_spectrum, right_spectrum))
-                })
+                    })
             })
             .transpose()
     }
@@ -991,12 +1002,13 @@ impl AudioRuntime for CpalController {
         })
     }
 
+    #[allow(clippy::unnecessary_cast)]
     fn poll_tuner_excitements(&self) -> Vec<(NodeKey, f32)> {
         let mut data = self
             .siren_excitements
             .read()
             .iter()
-            .map(|(k, v)| (*k, v.value()))
+            .map(|(k, v)| (*k, v.value().re as f32))
             .collect::<Vec<_>>();
         data.sort_by_key(|(k, _)| *k);
 

@@ -102,8 +102,7 @@ pub fn playback_callback(
     // warm up backend and discard initial samples according to latency
     {
         let fill_size = net_latency
-            .map(|lat| lat.ceil() as usize)
-            .filter(|&lat| lat >= initial_optimal_cap)
+            .map(|lat| lat.ceil() as usize + initial_optimal_cap)
             .unwrap_or(initial_optimal_cap);
 
         batch_fill_size(

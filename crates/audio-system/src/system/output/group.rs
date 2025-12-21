@@ -26,17 +26,23 @@ type ShelfType = Pipe<
     Svf<S, HighshelfMode<S>>,
 >;
 
-type ResamplerSpeed<K> = Pipe<
-    Pipe<
-        Constant<U1>,
-        Chain<
-            K,
-            Binop<FrameAdd<U1>, Pass, Pipe<Var, Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>>>,
+type BandSum<K> = Pipe<
+    Constant<U1>,
+    Chain<
+        K,
+        Binop<
+            FrameAdd<U1>,
+            Pass,
+            Pipe<
+                Binop<FrameSub<U1>, Constant<U1>, Binop<FrameMul<U1>, Var, Constant<U1>>>,
+                Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>,
+            >,
         >,
     >,
-    Binop<
-        FrameSub<U1>,
-        Pass,
+>;
+
+type ResamplerSpeed<K> = Pipe<
+    Pipe<
         Pipe<
             Constant<U1>,
             Chain<
@@ -48,7 +54,9 @@ type ResamplerSpeed<K> = Pipe<
                 >,
             >,
         >,
+        Stack<Binop<FrameAdd<U1>, Pass, BandSum<K>>, Constant<U1>>,
     >,
+    super::div::Div<S>,
 >;
 
 type NodesBus<K> = Pipe<
@@ -117,19 +125,22 @@ where
 
     let butter = butterpass_hz(f_max * 1.5);
 
-    let coef = (1.0 / K::USIZE as S).powi(K::I32);
+    let coef = -1.0 + (1.0 - 1.0 / K::USIZE as S).powf(-1.0 / (K::USIZE as S).powi(2));
 
-    let bands_sum = constant(0.0)
+    let bands_sum: An<BandSum<K>> = constant(0.0)
         >> pipei::<K, _, _>(move |_| {
             let mut bands = bands_cell.borrow_mut();
-            pass() + (An(bands.pop().unwrap()) >> mul((coef * coef) as f32))
+            pass()
+                + ((constant(1.0) - (var(&bands.pop().unwrap()) * constant(2.0)))
+                    >> mul(-coef as f32))
         });
-    let resampler_speed: An<ResamplerSpeed<K>> = constant(1.0)
+    let resampler_speed: An<ResamplerSpeed<K>> = constant(K::USIZE as f32)
         >> pipei::<K, _, _>(move |_| {
             let mut excitements = excitements_cell.borrow_mut();
-            pass() + (An(excitements.pop().unwrap()) >> mul(coef as f32))
+            pass() + (var(&excitements.pop().unwrap().primary) >> mul(coef as f32))
         })
-        >> (pass() - bands_sum);
+        >> ((pass() + bands_sum) | constant(K::USIZE as f32))
+        >> super::div::div::<S>();
 
     let (throw, catch) = super::throw_catch::throw_catch(K::USIZE);
 
@@ -202,7 +213,9 @@ mod tests {
                 let group_handles =
                     HashMap::from_iter(group.nodes.iter().enumerate().map(|(i, node)| {
                         let handles = InnerHandles::default();
-                        handles.siren_control.set_value(i as f32 / i_max as f32);
+                        handles
+                            .siren_control
+                            .set_value((i as f32 / i_max as f32, i as f32 / i_max as f32));
                         (node.key, handles)
                     }));
 

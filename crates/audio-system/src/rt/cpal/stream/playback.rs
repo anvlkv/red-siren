@@ -33,6 +33,8 @@ struct ProductionDelta {
     frames_per_buffer_size: usize,
     duration: Duration,
     mode: ProcessingMode,
+    accumulated_latency: Duration,
+    underruns_count: u32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -55,6 +57,18 @@ impl Ema {
         self.value
     }
 }
+
+// Helpers to convert between duration and frames for clarity
+fn duration_to_frames(duration: Duration, sample_rate: u32) -> usize {
+    (duration.as_secs_f64() * sample_rate as f64).ceil() as usize
+}
+
+fn frames_to_duration(frames: u32, sample_rate: u32) -> Duration {
+    Duration::from_secs_f64(frames as f64 / sample_rate as f64)
+}
+
+const UNDERRUN_WINDOW_SECS: f64 = 3.0;
+const UNDERRUN_RESET_THRESHOLD: u32 = 5;
 
 pub fn playback_callback(
     net: NetBackend,
@@ -119,6 +133,9 @@ pub fn playback_callback(
         output_buffer.clear();
     }
 
+    // Underrun time window tracking (reset if too many underruns within the window)
+    let mut underrun_window_start = std::time::Instant::now();
+
     Box::new(
         move |timestamp: OutputStreamTimestamp, frames: &mut [&mut [f32]]| {
             let start_time = std::time::Instant::now();
@@ -130,6 +147,34 @@ pub fn playback_callback(
                     "Output buffer size changed from [{frames_per_output_buffer}] to [{num_frames}] frames."
                 );
                 frames_per_output_buffer = num_frames;
+            }
+
+            let mut local_underruns = 0u32;
+            for (i, (l, r)) in l_frames[0]
+                .iter_mut()
+                .zip(r_frames[0].iter_mut())
+                .enumerate()
+            {
+                // local_underruns declared above
+                let frame = match output_buffer.pop_front() {
+                    Some(f) => f,
+                    None => {
+                        // Underrun: output silence, account for drift
+                        *l = 0.0;
+                        *r = 0.0;
+                        local_underruns = local_underruns.saturating_add(1);
+                        (0.0, 0.0)
+                    }
+                };
+
+                if frame.0.is_nan() || frame.1.is_nan() {
+                    log::warn!("NaN sample detected in playback buffer at frame {i}");
+                } else if frame.0.is_infinite() || frame.1.is_infinite() {
+                    log::warn!("Infinite sample detected in playback buffer at frame {i}");
+                } else {
+                    *l = frame.0;
+                    *r = frame.1;
+                }
             }
 
             // Update slack telemetry
@@ -201,15 +246,54 @@ pub fn playback_callback(
             let adaptive_low_water = (adaptive_max_cap as f32 * LOW_WATER_RATIO).ceil() as usize;
             let adaptive_high_water = (adaptive_max_cap as f32 * HIGH_WATER_RATIO).ceil() as usize;
 
-            let (mode, fill_size) = determine_mode_and_fill_in_size(
-                available_time,
-                &production_delta,
-                frames_per_output_buffer,
-                output_buffer.len(),
-                adaptive_low_water,
-                adaptive_optimal_cap,
-                adaptive_high_water,
-            );
+            // Catch-up rule: if accumulated latency exceeds threshold, produce enough to cover
+            // accumulated latency plus the optimal buffer, then reset production delta and proceed in Optimal mode.
+            let prev_accumulated_latency = production_delta
+                .as_ref()
+                .map(|d| d.accumulated_latency)
+                .unwrap_or(Duration::ZERO);
+
+            let mut did_catch_up = false;
+
+            // Detect current underruns for this callback before deciding production.
+            // We don't consume frames yet; we only measure deficit to update accumulated latency early.
+            let mut local_underruns_probe = 0u32;
+            if output_buffer.len() < frames_per_output_buffer {
+                local_underruns_probe = (frames_per_output_buffer - output_buffer.len()) as u32;
+            }
+            // Update accumulated latency immediately with probe result so catch-up decision sees latest drift.
+            let catch_up_accumulated_latency = prev_accumulated_latency
+                .saturating_add(frames_to_duration(local_underruns_probe, sample_rate));
+
+            let (mode, fill_size) = if catch_up_accumulated_latency > sub_optimal_duration {
+                // Convert accumulated latency to frames, add optimal cap
+                let latency_frames = duration_to_frames(prev_accumulated_latency, sample_rate);
+                let mut catch_up_fill = latency_frames + adaptive_optimal_cap;
+
+                // Clamp so we don't exceed high water
+                let remaining_capacity = adaptive_high_water.saturating_sub(output_buffer.len());
+                catch_up_fill = catch_up_fill.min(remaining_capacity);
+
+                did_catch_up = true;
+                log::debug!(
+                    "Playback catch-up: latency_frames={}, optimal_cap={}, fill={}, remaining_capacity={}",
+                    latency_frames,
+                    adaptive_optimal_cap,
+                    catch_up_fill,
+                    remaining_capacity
+                );
+                (ProcessingMode::Optimal, catch_up_fill)
+            } else {
+                determine_mode_and_fill_in_size(
+                    available_time,
+                    &production_delta,
+                    frames_per_output_buffer,
+                    output_buffer.len(),
+                    adaptive_low_water,
+                    adaptive_optimal_cap,
+                    adaptive_high_water,
+                )
+            };
 
             match mode {
                 ProcessingMode::Easy | ProcessingMode::Optimal => {
@@ -237,29 +321,93 @@ pub fn playback_callback(
                 }
             }
 
-            for (i, (l, r)) in l_frames[0]
-                .iter_mut()
-                .zip(r_frames[0].iter_mut())
-                .enumerate()
-            {
-                let frame = output_buffer.pop_front().unwrap();
+            *is_batch_processing.write() = is_batch_for_mode(mode);
 
-                if frame.0.is_nan() || frame.1.is_nan() {
-                    log::warn!("NaN sample detected in playback buffer at frame {i}");
-                } else if frame.0.is_infinite() || frame.1.is_infinite() {
-                    log::warn!("Infinite sample detected in playback buffer at frame {i}");
-                } else {
-                    *l = frame.0;
-                    *r = frame.1;
+            // Update accumulated latency and underruns_count; reset both after catch-up
+            let prev_underruns = production_delta
+                .as_ref()
+                .map(|d| d.underruns_count)
+                .unwrap_or(0);
+            let mut updated_underruns = if did_catch_up {
+                0
+            } else {
+                prev_underruns.saturating_add(local_underruns)
+            };
+
+            let updated_accumulated_latency = if did_catch_up {
+                Duration::ZERO
+            } else {
+                let added =
+                    Duration::from_secs_f64(local_underruns as f64 * sample_duration.as_secs_f64());
+                prev_accumulated_latency.saturating_add(added)
+            };
+
+            // Time-windowed underrun threshold: reset backend and counters if exceeded
+            let underrun_window_secs: f64 = UNDERRUN_WINDOW_SECS;
+            let underrun_reset_threshold: u32 = UNDERRUN_RESET_THRESHOLD;
+            if underrun_window_start.elapsed().as_secs_f64() >= underrun_window_secs {
+                if updated_underruns >= underrun_reset_threshold {
+                    log::warn!(
+                        "Frequent underruns detected (count={} in ~{}s). Resetting backend.",
+                        updated_underruns,
+                        underrun_window_secs
+                    );
+                    backend.reset();
+                    output_buffer.clear();
+                    updated_underruns = 0;
+
+                    // Warm-up immediately to reduce audible gaps:
+                    // Produce up to adaptive_optimal_cap frames (bounded by remaining capacity)
+                    let remaining_capacity =
+                        adaptive_high_water.saturating_sub(output_buffer.len());
+                    let warmup_fill = adaptive_optimal_cap.min(remaining_capacity);
+                    if warmup_fill > 0 {
+                        batch_fill_size(
+                            &mut scratch_left,
+                            &mut scratch_right,
+                            &mut scratch_input,
+                            warmup_fill,
+                            frames_per_output_buffer,
+                            &mut backend,
+                            &input_buffer,
+                            &mut output_buffer,
+                        );
+                        log::debug!(
+                            "Playback warm-up after reset: warmup_fill={}, remaining_capacity={}",
+                            warmup_fill,
+                            remaining_capacity
+                        );
+                    }
+
+                    // After a reset, also clear accumulated latency
+                    production_delta = Some(ProductionDelta {
+                        fill_size,
+                        frames_per_buffer_size: frames_per_output_buffer,
+                        duration: start_time.elapsed(),
+                        mode: ProcessingMode::Optimal,
+                        accumulated_latency: Duration::ZERO,
+                        underruns_count: updated_underruns,
+                    });
+                    // Restart the window and continue without early return; frames already filled this callback
+                    underrun_window_start = std::time::Instant::now();
                 }
+                // restart window even if not resetting
+                underrun_window_start = std::time::Instant::now();
+                // decay the count across windows to avoid permanent buildup
+                updated_underruns = updated_underruns.saturating_div(2);
             }
 
-            *is_batch_processing.write() = is_batch_for_mode(mode);
             production_delta = Some(ProductionDelta {
                 fill_size,
                 frames_per_buffer_size: frames_per_output_buffer,
                 duration: start_time.elapsed(),
-                mode,
+                mode: if did_catch_up {
+                    ProcessingMode::Optimal
+                } else {
+                    mode
+                },
+                accumulated_latency: updated_accumulated_latency,
+                underruns_count: updated_underruns,
             });
         },
     ) as Box<super::GenType>

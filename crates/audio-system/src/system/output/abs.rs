@@ -41,18 +41,6 @@ impl AudioNode for Abs {
     fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
         [input[0].abs()].into()
     }
-
-    fn process(&mut self, size: usize, input: &BufferRef, output: &mut BufferMut) {
-        for i in 0..full_simd_items(size) {
-            let element: [f32; SIMD_N] = core::array::from_fn(|j| {
-                let input_sample = input.at_f32(0, (i << SIMD_S) + j);
-                input_sample.abs()
-            });
-            output.set(0, i, F32x::new(element));
-        }
-
-        self.process_remainder(size, input, output);
-    }
 }
 
 /// Create an absolute value node.

@@ -16,6 +16,7 @@ pub use excitement_control::ExcitementControl;
 pub struct NodeHandles {
     pub key: NodeKey,
     pub excitement_snoop: Snoop,
+    pub secondary_excitement_snoop: Snoop,
     pub output_snoop: Snoop,
     pub siren_control: ExcitementControl,
     pub band_control: Shared,

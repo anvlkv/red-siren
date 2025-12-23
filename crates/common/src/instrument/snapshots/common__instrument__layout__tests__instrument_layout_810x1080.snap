@@ -42,6 +42,6 @@ expression: layout
   "groups_gap": 25.06969773369629,
   "num_keys_per_group": 3,
   "num_groups": 2,
-  "first_group_channel": "Right",
+  "first_group_channel": "Left",
   "scale": "In"
 }

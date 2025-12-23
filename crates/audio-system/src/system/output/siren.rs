@@ -155,44 +155,6 @@ impl<F: Real> AudioNode for Siren<F> {
         [sample.to_f32()].into()
     }
 
-    fn process(&mut self, size: usize, input: &BufferRef, output: &mut BufferMut) {
-        let mut phase = self.phase;
-        let mut sign = self.sign;
-
-        for i in 0..full_simd_items(size) {
-            let element: [f32; SIMD_N] = core::array::from_fn(|j| {
-                let idx = (i << SIMD_S) + j;
-
-                let excitement = F::from_f32(input.at_f32(0, idx));
-                let alpha = F::from_f32(input.at_f32(1, idx));
-                let beta = F::from_f32(input.at_f32(2, idx));
-                let gamma = F::from_f32(input.at_f32(3, idx));
-                let signum = F::from_f32(input.at_f32(4, idx));
-
-                let (sample, next_phase, next_sign) = Self::tick_internal(
-                    excitement,
-                    alpha,
-                    self.sample_duration,
-                    phase,
-                    sign,
-                    beta,
-                    gamma,
-                    signum,
-                );
-
-                phase = next_phase;
-                sign = next_sign;
-
-                sample.to_f32()
-            });
-            output.set(0, i, F32x::new(element));
-        }
-
-        self.phase = phase;
-        self.sign = sign;
-        self.process_remainder(size, input, output);
-    }
-
     fn set_hash(&mut self, hash: u64) {
         self.hash = hash;
         self.reset();

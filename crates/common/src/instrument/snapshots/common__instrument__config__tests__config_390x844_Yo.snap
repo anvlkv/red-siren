@@ -5,7 +5,7 @@ expression: config
 [
   [
     {
-      "channel": "Right",
+      "channel": "Left",
       "nodes": [
         {
           "key": [
@@ -43,14 +43,14 @@ expression: config
       ]
     },
     {
-      "channel": "Left",
+      "channel": "Right",
       "nodes": [
         {
           "key": [
             1,
             0
           ],
-          "frequency": 240.18285584041791,
+          "frequency": 240.16204008690505,
           "l": 401.17716608738675,
           "phase": 0.3183098861837907,
           "divisions": 3,
@@ -61,7 +61,7 @@ expression: config
             1,
             1
           ],
-          "frequency": 302.6114358972083,
+          "frequency": 302.585209691188,
           "l": 442.42063230508313,
           "phase": 0.4244131815783876,
           "divisions": 3,
@@ -72,7 +72,7 @@ expression: config
             1,
             2
           ],
-          "frequency": 381.2665180258058,
+          "frequency": 381.23347507678193,
           "l": 483.66409852277957,
           "phase": 0.5305164769729844,
           "divisions": 3,

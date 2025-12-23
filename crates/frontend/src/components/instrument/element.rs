@@ -17,7 +17,7 @@ pub fn KeyboardElement(
     k: usize,
     first_group_channel: common::instrument::GroupChannel,
     orientation: common::orientation::LayoutOrientation,
-    #[prop(into)] excitement_samples: Signal<Option<Vec<f32>>>,
+    #[prop(into)] excitement_samples: Signal<Option<Vec<(f32, f32)>>>,
 ) -> impl IntoView {
     let ctx = expect_instrument_context();
     let LayoutContextReturn {
@@ -542,7 +542,7 @@ pub fn KeyboardElement(
                         ""
                     };
                     format!(
-                        "border-none text-thin md:text-base text-sm absolute {} {} will-change-[transform, top, left]",
+                        "border-none text-thin md:text-base text-sm absolute {} {} will-change-[transform, top, left] p-0 ",
                         if is_dragging() { "cursor-grabbing" } else { "cursor-grab" },
                         ring,
                     )
@@ -584,14 +584,21 @@ pub fn KeyboardElement(
                 }
                 style:transform=move || {
                     let samples = excitement_samples.get().unwrap_or_default();
-                    let inc = samples.iter().map(|v| v.abs()).sum::<f32>();
+                    let inc = samples.iter().map(|(v, _)| v.abs()).sum::<f32>();
                     format!("scale({s}, {s})", s = 0.75 + (inc / samples.len() as f32) * 0.275)
                 }
                 style:top=move || { format!("{}px", constrained_position().y) }
                 style:left=move || { format!("{}px", constrained_position().x) }
                 node_ref=draggable_ref
             >
-                {""}
+                <div
+                    class="w-full h-full rounded-full bg-gray dark:bg-cinnabar mix-blend-plus-lighter"
+                    style:opacity=move || {
+                        let samples = excitement_samples.get().unwrap_or_default();
+                        let inc = samples.iter().map(|(_, v)| v.abs()).sum::<f32>();
+                        format!("{}", (inc / samples.len() as f32))
+                    }
+                ></div>
             </Button>
         </div>
     }

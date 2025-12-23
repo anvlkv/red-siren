@@ -38,7 +38,7 @@ pub const GET_ACTIVATION_SNOOP_DATA: &str = "instrument_excitement_snoop_data";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExcitementSnoopDataResponse {
-    pub samples: Vec<f32>,
+    pub samples: Vec<(f32, f32)>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,7 +55,7 @@ pub const GET_ALL_ACTIVATION_SNOOPS: &str = "instrument_all_excitement_snoops";
 pub struct ExcitementSnoopEntry {
     pub group: u8,
     pub key: u8,
-    pub samples: Vec<f32>,
+    pub samples: Vec<(f32, f32)>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

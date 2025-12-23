@@ -6,6 +6,7 @@ mod div;
 mod filter;
 mod formant;
 mod group;
+mod metro;
 mod node;
 mod pow;
 mod siren;
@@ -31,25 +32,31 @@ use crate::{
 #[derive(Clone)]
 pub(super) struct InnerHandles {
     excitement_snoop: An<SnoopBackend>,
+    secondary_excitement_snoop: An<SnoopBackend>,
     output_snoop: An<SnoopBackend>,
     siren_control: ExcitementControl,
     band_control: Shared,
+    key_control: Shared,
     siren_signum: Constant<U1>,
 }
 
 impl Default for InnerHandles {
     fn default() -> Self {
         let (_, excitement_snoop) = snoop(node::ACTIVATION_SNOOP_CAPACITY);
+        let (_, secondary_excitement_snoop) = snoop(node::ACTIVATION_SNOOP_CAPACITY);
         let (_, output_snoop) = snoop(node::OUTPUT_SNOOP_CAPACITY);
         let siren_control = ExcitementControl::default();
         let band_control = shared(0.0);
+        let key_control = shared(0.0);
         let siren_signum = Constant::new([1.0].into());
 
         Self {
             excitement_snoop,
+            secondary_excitement_snoop,
             output_snoop,
             siren_control,
             band_control,
+            key_control,
             siren_signum,
         }
     }
@@ -102,8 +109,8 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
 
     let (left_group_handles, right_group_handles) = split_group_handles_lr(group_handles, config);
 
-    let (throw_l, catch_r) = throw_catch::throw_catch(7);
-    let (throw_r, catch_l) = throw_catch::throw_catch(7);
+    let (throw_l, catch_r) = throw_catch::throw_catch(3);
+    let (throw_r, catch_l) = throw_catch::throw_catch(3);
 
     let (left_filter_handles, right_filter_handles) =
         split_filter_handles_lr(filter_handles, config);
@@ -224,6 +231,8 @@ pub(super) fn prepare_handles(groups: &[GroupConfig], scale: Scale) -> Handles {
 
             let (excitement_snoop_front, excitement_snoop_backend) =
                 snoop(node::ACTIVATION_SNOOP_CAPACITY);
+            let (secondary_excitement_snoop_front, secondary_excitement_snoop_backend) =
+                snoop(node::ACTIVATION_SNOOP_CAPACITY);
             let (output_snoop_front, output_snoop_backend) = snoop(node::OUTPUT_SNOOP_CAPACITY);
             let siren_control = ExcitementControl::default();
             let band_control = shared(0.0);
@@ -233,9 +242,11 @@ pub(super) fn prepare_handles(groups: &[GroupConfig], scale: Scale) -> Handles {
                 key,
                 InnerHandles {
                     excitement_snoop: excitement_snoop_backend,
+                    secondary_excitement_snoop: secondary_excitement_snoop_backend,
                     output_snoop: output_snoop_backend,
                     siren_control: siren_control.clone(),
                     band_control: band_control.clone(),
+                    key_control: key_control.clone(),
                     siren_signum: siren_signum.clone(),
                 },
             );
@@ -250,6 +261,7 @@ pub(super) fn prepare_handles(groups: &[GroupConfig], scale: Scale) -> Handles {
             node_handles.push(NodeHandles {
                 key,
                 excitement_snoop: excitement_snoop_front,
+                secondary_excitement_snoop: secondary_excitement_snoop_front,
                 output_snoop: output_snoop_front,
                 siren_control,
                 band_control,

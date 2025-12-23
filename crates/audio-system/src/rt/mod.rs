@@ -72,8 +72,8 @@ pub trait AudioRuntime {
     // Data taps
     fn snapshot_output_snoop(&self, key: NodeKey) -> Vec<f32>;
     fn snapshot_all_output_snoops(&self) -> Vec<(NodeKey, Vec<f32>)>;
-    fn snapshot_excitement_snoop(&self, key: NodeKey) -> Vec<f32>;
-    fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<f32>)>;
+    fn snapshot_excitement_snoop(&self, key: NodeKey) -> Vec<(f32, f32)>;
+    fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<(f32, f32)>)>;
     fn snapshot_processed_output_spectrum(&self) -> common::error::Result<Option<ProcessedOutputSpectrumSnapshot>>;
 
     // Band control
@@ -172,11 +172,11 @@ impl AudioRuntime for NullController {
         Vec::new()
     }
 
-    fn snapshot_excitement_snoop(&self, _key: NodeKey) -> Vec<f32> {
+    fn snapshot_excitement_snoop(&self, _key: NodeKey) -> Vec<(f32, f32)> {
         Vec::new()
     }
 
-    fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
+    fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<(f32, f32)>)> {
         Vec::new()
     }
 

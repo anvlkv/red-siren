@@ -73,7 +73,7 @@ struct CpalController {
     input_thread: RwLock<Option<thread::JoinHandle<()>>>,
 
     // Per-node data taps and controls
-    node_excitement_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
+    node_excitement_snoops: RwLock<HashMap<NodeKey, (fundsp::snoop::Snoop, fundsp::snoop::Snoop)>>,
     node_output_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
     node_band_controls: RwLock<HashMap<NodeKey, Shared>>,
     node_key_controls: RwLock<HashMap<NodeKey, Shared>>,
@@ -447,7 +447,10 @@ impl CpalController {
             stored_key_controls.clear();
 
             for handle in node_handles {
-                excitement_snoops.insert(handle.key, handle.excitement_snoop);
+                excitement_snoops.insert(
+                    handle.key,
+                    (handle.excitement_snoop, handle.secondary_excitement_snoop),
+                );
                 output_snoops.insert(handle.key, handle.output_snoop);
                 siren_controls.insert(handle.key, handle.siren_control);
                 stored_band_controls.insert(handle.key, handle.band_control);
@@ -886,37 +889,29 @@ impl AudioRuntime for CpalController {
         result
     }
 
-    fn snapshot_excitement_snoop(&self, node_key: NodeKey) -> Vec<f32> {
+    fn snapshot_excitement_snoop(&self, node_key: NodeKey) -> Vec<(f32, f32)> {
         let mut out = Vec::new();
         let mut snoops = self.node_excitement_snoops.write();
-        if let Some(snoop) = snoops.get_mut(&node_key) {
-            snoop.update();
-            let cap = snoop.capacity();
+        if let Some((primary, secondary)) = snoops.get_mut(&node_key) {
+            primary.update();
+            secondary.update();
+            let cap = primary.capacity();
             out.reserve(cap + 2);
             for rev in (0..cap).rev() {
-                out.push(snoop.at(rev));
+                out.push((primary.at(rev), secondary.at(rev)));
             }
         }
         out
     }
 
-    fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
+    fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<(f32, f32)>)> {
         let layout = *self.last_layout.read();
         let registry = layout.registry();
 
         let mut result = Vec::with_capacity(registry.total_keys());
-        let mut snoops = self.node_excitement_snoops.write();
 
         registry.iter_keys(|node_key| {
-            if let Some(snoop) = snoops.get_mut(&node_key) {
-                snoop.update();
-                let cap = snoop.capacity();
-                let mut samples = Vec::with_capacity(cap + 2);
-                for rev in (0..cap).rev() {
-                    samples.push(snoop.at(rev));
-                }
-                result.push((node_key, samples));
-            }
+            result.push((node_key, self.snapshot_excitement_snoop(node_key)))
         });
         result
     }

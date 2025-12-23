@@ -37,6 +37,7 @@ pub(super) fn create_node(
 ) -> An<NodeType> {
     let InnerHandles {
         excitement_snoop,
+        secondary_excitement_snoop,
         output_snoop,
         siren_control,
         band_control,
@@ -60,6 +61,7 @@ pub(super) fn create_node(
         &siren_control,
         &node_follow_response_time_s,
         excitement_snoop,
+        secondary_excitement_snoop,
     );
 
     let modulated_alpha: An<SirenAlpha> = siren_modulated_alpha(&siren_alpha, &var(&band_control));
@@ -93,12 +95,16 @@ pub(super) fn create_node(
 }
 
 // Type alias for the siren excitement with follow envelope
-type SirenExcitement = Pipe<Pipe<Var, Pipe<Stack<Pass, Constant<U1>>, Hold>>, SnoopBackend>;
+type SirenExcitement = Stack<
+    Pipe<Pipe<Var, Pipe<Stack<Pass, Constant<U1>>, Hold>>, SnoopBackend>,
+    Pipe<Pipe<Var, SnoopBackend>, Sink<U1>>,
+>;
 
 fn siren_excitement(
     control: &ExcitementControl,
     hold_time: &An<FineTunedValue>,
     excitement_snoop: An<SnoopBackend>,
+    secondary_excitement_snoop: An<SnoopBackend>,
 ) -> An<SirenExcitement> {
     #[cfg(feature = "editor")]
     let hold_time = hold_time.value();
@@ -107,7 +113,11 @@ fn siren_excitement(
     let hold_hz_val = 1.0 / hold_time;
     let hold_variability = 0.9;
 
-    var(&control.primary) >> hold_hz(hold_hz_val, hold_variability) >> excitement_snoop
+    let primary =
+        var(&control.primary) >> hold_hz(hold_hz_val, hold_variability) >> excitement_snoop;
+    let secondary = var(&control.secondary) >> secondary_excitement_snoop >> sink();
+
+    primary | secondary
 }
 
 type NonZeroControl<V = Var> = Pipe<V, Shaper<ClipTo>>;
@@ -306,6 +316,7 @@ mod tests {
             &excitement_control,
             &values.node_follow_response_time_s,
             handles.excitement_snoop,
+            handles.secondary_excitement_snoop,
         );
 
         let snapshot_config = SnapshotConfigBuilder::default()
@@ -346,6 +357,7 @@ mod tests {
             &excitement_control,
             &values.node_follow_response_time_s,
             handles.excitement_snoop,
+            handles.secondary_excitement_snoop,
         );
         let modulated_alpha: An<SirenAlpha> =
             siren_modulated_alpha(&values.siren_alpha, &var(&src_control));

@@ -47,21 +47,6 @@ impl<F: Real> AudioNode for Div<F> {
 
         [value.to_f32()].into()
     }
-
-    fn process(&mut self, size: usize, input: &BufferRef, output: &mut BufferMut) {
-        for i in 0..full_simd_items(size) {
-            let element: [f32; SIMD_N] = core::array::from_fn(|j| {
-                let signal: F = convert(input.at_f32(0, (i << SIMD_S) + j));
-                let divisor: F = convert(input.at_f32(1, (i << SIMD_S) + j));
-                let value: F = signal / divisor;
-
-                value.to_f32()
-            });
-            output.set(0, i, F32x::new(element));
-        }
-
-        self.process_remainder(size, input, output);
-    }
 }
 
 pub fn div<F: Real>() -> An<Div<F>> {

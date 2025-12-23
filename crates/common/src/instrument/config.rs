@@ -172,7 +172,7 @@ impl TryFrom<Layout> for Config {
             let channel = layout.first_group_channel.nth_channel_from_first(g);
 
             let (octave_f_base, next_n_base) =
-                channel.compute_fundamentals(string_len, n_base, target_f_min);
+                compute_fundamentals(string_len, n_base, target_f_min);
 
             let mut nodes = vec![];
 
@@ -216,6 +216,31 @@ impl TryFrom<Layout> for Config {
 
         Ok(config)
     }
+}
+
+fn fundamental_frequency(n: usize, v: f64, l: f64) -> f64 {
+    (n as f64 * v) / (2.0 * l)
+}
+
+fn compute_fundamentals(l: f64, mut n_base: usize, min_freq: Option<f64>) -> (f64, usize) {
+    let v = if n_base.is_multiple_of(2) {
+        CRIMSON_RED_WAVESPEED
+    } else {
+        CINNABAR_RED_WAVESPEED
+    };
+
+    let mut f: f64 = 0.0;
+
+    let min_target = min_freq.unwrap_or(SOFT_MIN_FREQ_HZ);
+
+    while f < min_target {
+        f = fundamental_frequency(n_base, v, l);
+        if f < min_target {
+            n_base += 1;
+        }
+    }
+
+    (f, n_base)
 }
 
 #[cfg(any(test, feature = "test"))]

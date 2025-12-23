@@ -87,30 +87,6 @@ impl<F: Real> AudioNode for NewYork<F> {
         [output.to_f32()].into()
     }
 
-    fn process(&mut self, size: usize, input: &BufferRef, output: &mut BufferMut) {
-        // Cache control parameters for this block
-        let threshold = F::from_f32(input.at_f32(1, 0).clamp(f32::EPSILON, 1.0));
-        let wet_mix = F::from_f32(input.at_f32(2, 0).clamp(0.0, 1.0));
-
-        let dry_mix = F::one() - wet_mix;
-
-        for i in 0..full_simd_items(size) {
-            let element: [f32; SIMD_N] = core::array::from_fn(|j| {
-                let dry_signal = F::from_f32(input.at_f32(0, (i << SIMD_S) + j));
-
-                // Apply compression
-                let wet_signal = self.soft_compress(dry_signal, threshold);
-
-                // Mix dry and wet
-                let output = dry_signal * dry_mix + wet_signal * wet_mix;
-                output.to_f32()
-            });
-            output.set(0, i, F32x::new(element));
-        }
-
-        self.process_remainder(size, input, output);
-    }
-
     fn set_hash(&mut self, hash: u64) {
         self.hash = hash;
         self.reset();

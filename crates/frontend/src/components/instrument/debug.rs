@@ -91,11 +91,19 @@ pub fn DebugOverlay() -> impl IntoView {
                                                     excitement_batch()
                                                         .and_then(|b| {
                                                             b.snoops
-                                                                .iter()
+                                                                .into_iter()
                                                                 .find(|e| e.group as usize == g && e.key as usize == k)
-                                                                .map(|e| e.samples.clone())
+                                                                .map(|e| -> (Vec<f32>, Vec<f32>) {
+                                                                    e.samples.into_iter().unzip()
+                                                                })
                                                         })
                                                 }
+                                            });
+                                            let act_samples_primary = Signal::derive({
+                                                move || { act_samples().map(|a| a.0).unwrap_or_default() }
+                                            });
+                                            let act_samples_secondary = Signal::derive({
+                                                move || { act_samples().map(|a| a.1).unwrap_or_default() }
                                             });
                                             let out_samples = Signal::derive({
                                                 move || {
@@ -108,9 +116,18 @@ pub fn DebugOverlay() -> impl IntoView {
                                                         })
                                                 }
                                             });
+
                                             // Derive per-tile signals by pairing excitement/output entries
 
-                                            view! { <PairTile g k act_samples out_samples /> }
+                                            view! {
+                                                <PairTile
+                                                    g
+                                                    k
+                                                    act_samples_primary
+                                                    act_samples_secondary
+                                                    out_samples
+                                                />
+                                            }
                                         })
                                 })
                                 .collect_view()
@@ -126,15 +143,19 @@ pub fn DebugOverlay() -> impl IntoView {
 fn PairTile(
     g: usize,
     k: usize,
-    #[prop(into)] act_samples: Signal<Option<Vec<f32>>>,
+    #[prop(into)] act_samples_primary: Signal<Option<Vec<f32>>>,
+    #[prop(into)] act_samples_secondary: Signal<Option<Vec<f32>>>,
     #[prop(into)] out_samples: Signal<Option<Vec<f32>>>,
 ) -> impl IntoView {
     // Simple, cheap metric = mean absolute value (clamped to [0,1])
-    let act_level = Memo::new(move |_| mean_abs_clamped(act_samples.with(|s| s.clone())));
+    let act_level_1 = Memo::new(move |_| mean_abs_clamped(act_samples_primary.with(|s| s.clone())));
+    let act_level_2 =
+        Memo::new(move |_| mean_abs_clamped(act_samples_secondary.with(|s| s.clone())));
     let out_level = Memo::new(move |_| mean_abs_clamped(out_samples.with(|s| s.clone())));
 
     // Bar widths as percentages
-    let act_w = move || format!("width: {:.0}%;", (act_level() * 100.0).clamp(0.0, 100.0));
+    let act_w = move || format!("width: {:.0}%;", (act_level_1() * 100.0).clamp(0.0, 100.0));
+    let act_2_w = move || format!("width: {:.0}%;", (act_level_2() * 100.0).clamp(0.0, 100.0));
     let out_w = move || format!("width: {:.0}%;", (out_level() * 100.0).clamp(0.0, 100.0));
 
     // Tile visual: id + two tiny bars (A/O)
@@ -145,7 +166,9 @@ fn PairTile(
                     {move || format!("{g},{k}")}
                 </span>
                 <span class="text-[9px] tabular-nums text-black/50 dark:text-red/50">
-                    {move || format!("{:.2}/{:.2}", act_level(), out_level())}
+                    {move || {
+                        format!("{:.2}:{:.2}/{:.2}", act_level_1(), act_level_2(), out_level())
+                    }}
                 </span>
             </div>
 
@@ -153,7 +176,14 @@ fn PairTile(
                 <div class="h-[3px] w-[70px] bg-black/15 dark:bg-red/15 rounded">
                     <div class="h-[3px] bg-black dark:bg-red rounded" style=act_w></div>
                 </div>
-                <div class="text-[9px] text-black/50 dark:text-red/50 mt-[1px]">A</div>
+                <div class="text-[9px] text-black/50 dark:text-red/50 mt-[1px]">A1</div>
+            </div>
+
+            <div class="mb-[2px]">
+                <div class="h-[3px] w-[70px] bg-black/15 dark:bg-red/15 rounded">
+                    <div class="h-[3px] bg-black dark:bg-red rounded" style=act_2_w></div>
+                </div>
+                <div class="text-[9px] text-black/50 dark:text-red/50 mt-[1px]">A2</div>
             </div>
 
             <div>

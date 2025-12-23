@@ -9,7 +9,10 @@ use fundsp::{
 use super::InnerHandles;
 
 use crate::{
-    output::node::NodeType,
+    output::{
+        metro::{metro_busi, MetroBusType},
+        node::NodeType,
+    },
     system::values::{FineTunedValue, FineTunedValues},
     util::DbLin,
 };
@@ -60,8 +63,11 @@ type ResamplerSpeed<K> = Pipe<
 >;
 
 type NodesBus<K> = Pipe<
-    Pipe<Pipe<Pipe<MultiBus<K, NodeType>, ShelfType>, ButterLowpass<S, U1>>, Split<U2>>,
-    Stack<Pass, ThrowCatchThrow>,
+    Pipe<
+        Pipe<Pipe<Pipe<MultiBus<K, NodeType>, ShelfType>, ButterLowpass<S, U1>>, Split<U2>>,
+        Stack<Pass, ThrowCatchThrow>,
+    >,
+    MetroBusType<K>,
 >;
 
 type ProductionChain<K> = Pipe<Follow<S>, Stack<Resampler<NodesBus<K>>, ThrowCatchCatch>>;
@@ -102,6 +108,9 @@ where
             .map(|h| h.band_control.clone())
             .collect::<Vec<_>>(),
     );
+
+    let metro = metro_busi::<K>(config, &group_handles);
+
     let handles_cell = RefCell::new(group_handles);
     let values_clone = values.clone();
     let f_min = config
@@ -125,7 +134,15 @@ where
 
     let butter = butterpass_hz(f_max * 1.5);
 
-    let coef = -1.0 + (1.0 - 1.0 / K::USIZE as S).powf(-1.0 / (K::USIZE as S).powi(2));
+    let coef = (1.0 / K::USIZE as S).powf(
+        config
+            .nodes
+            .first()
+            .map(|n| n.key.group() as S + 2.0)
+            .unwrap_or_default(),
+    ) / K::USIZE as S;
+
+    log::info!("created group with speed coefficient: [{coef}]");
 
     let bands_sum: An<BandSum<K>> = constant(0.0)
         >> pipei::<K, _, _>(move |_| {
@@ -156,9 +173,10 @@ where
     }) >> shelf
         >> butter
         >> split::<U2>()
-        >> (pass() | throw);
+        >> (pass() | throw)
+        >> metro;
 
-    // Get the follow response time value
+    // Get the follow response time valueF
     #[cfg(feature = "editor")]
     let follow_time = values.node_follow_response_time_s.value();
     #[cfg(not(feature = "editor"))]
@@ -215,7 +233,7 @@ mod tests {
                         let handles = InnerHandles::default();
                         handles
                             .siren_control
-                            .set_value((i as f32 / i_max as f32, i as f32 / i_max as f32));
+                            .set_value((i as S / i_max as S, i as S / i_max as S));
                         (node.key, handles)
                     }));
 

@@ -73,7 +73,7 @@ pub fn add_one_channel_subsystem(
             | throw_x)
         >> map(|frame: &Frame<f32, U2>| {
             let main = frame[0];
-            let x = frame[1] * 0.2;
+            let x = frame[1] * 0.1;
             main + x.abs() * main.signum()
         });
     let cross_id = net.push(Box::new(cross));
@@ -189,8 +189,7 @@ where
             17.5,
             (1.0 + (1.0 / F::USIZE as f64)) * (F::USIZE as f64).powf(-0.1),
         )
-        >> (pass() + (pass() * -0.15))
-        >> shape(Adaptive::new(0.075, Tanh(0.8)));
+        >> (pass() + (pass() * -0.15));
 
     let filter_id = net.push(Box::new(composite_channel));
     net.pipe_all(src_id, filter_id);

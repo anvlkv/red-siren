@@ -318,14 +318,14 @@ impl InstrumentEngine {
             .snapshot_all_output_snoops()
     }
 
-    pub fn snapshot_excitement_snoop(&self, key: NodeKey) -> Vec<f32> {
+    pub fn snapshot_excitement_snoop(&self, key: NodeKey) -> Vec<(f32, f32)> {
         self.inner
             .stream_controller
             .read()
             .snapshot_excitement_snoop(key)
     }
 
-    pub fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
+    pub fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<(f32, f32)>)> {
         self.inner
             .stream_controller
             .read()

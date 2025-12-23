@@ -54,32 +54,6 @@ impl AudioNode for Formant {
     fn set_sample_rate(&mut self, sample_rate: f64) {
         self.resonator.set_sample_rate(sample_rate);
     }
-
-    fn process(&mut self, size: usize, input: &BufferRef, output: &mut BufferMut) {
-        for i in 0..size {
-            let input_sample = input.at_f32(0, i);
-            let control = input.at_f32(1, i);
-            let base_q = input.at_f32(2, i);
-            let element = Self::resonator_params(
-                input_sample as S,
-                control as S,
-                base_q as S,
-                self.base,
-                self.index as S,
-            );
-
-            let tick = self.resonator.tick(
-                &[
-                    convert(element[0]),
-                    convert(element[1]),
-                    convert(element[2]),
-                ]
-                .into(),
-            );
-
-            output.set_f32(0, i, tick[0]);
-        }
-    }
 }
 
 #[allow(clippy::unnecessary_cast)]

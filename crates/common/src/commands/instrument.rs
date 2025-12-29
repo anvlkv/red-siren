@@ -19,7 +19,7 @@ pub const UPDATE_BAND_CONTROL: &str = "instrument_update_band_control";
 /// Update key control state (pressed/released) for a key
 pub const UPDATE_KEY_CONTROL: &str = "instrument_update_key_control";
 /// Get batch processing bool
-pub const IS_BATCH_PROCESSING: &str = "instrument_is_batch_processing";
+pub const QUALITY_INDICATOR: &str = "instrument_quality_indicator";
 /// Get processed output spectrum snapshot
 pub const SNAPSHOT_PROCESSED_OUTPUT_SPECTRUM: &str = "snapshot_processed_output_spectrum";
 

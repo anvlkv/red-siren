@@ -285,14 +285,14 @@ fn draw_spectrum(
         common::orientation::LayoutOrientation::Vertical => {
             ctx.clear_rect(
                 0.0,
-                ty,
+                ty - 1.0,
                 width + safe_area_padding.left + safe_area_padding.right,
                 cell_height,
             );
         }
         common::orientation::LayoutOrientation::Horizontal => {
             ctx.clear_rect(
-                tx,
+                tx - 1.0,
                 0.0,
                 cell_width,
                 height + safe_area_padding.top + safe_area_padding.bottom,

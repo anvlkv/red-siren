@@ -4,7 +4,7 @@ use parking_lot::RwLock;
 use audio_system::rt::{make_stream_controller, AudioRuntime, ExcitementSource};
 
 use common::error::Result;
-use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout};
+use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, PlaybackQuality};
 use common::tuner::Config as TunerConfig;
 use mint::Vector2;
 use tauri::{AppHandle, Emitter, Manager};
@@ -397,8 +397,8 @@ impl InstrumentEngine {
         self.inner.stream_controller.read().stop_tap_tuner_audio()
     }
 
-    pub fn is_batch_processing(&self) -> bool {
-        self.inner.stream_controller.read().is_batch_processing()
+    pub fn quality_indicator(&self) -> PlaybackQuality {
+        self.inner.stream_controller.read().quality_indicator()
     }
 
     #[cfg(feature = "devtools")]

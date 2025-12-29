@@ -3,6 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use audio_system::rt::ExcitementSource;
 
 use common::error::{InstrumentError, Result};
+use common::instrument::PlaybackQuality;
 use common::instrument::commands::{SpectrumPayload, UpdateBandControlPayload, UpdateKeyControlPayload};
 use common::instrument::events::{BAND_CONTROL_G_K, KEY_CONTROL_G_K};
 use common::instrument::{
@@ -481,8 +482,8 @@ pub fn instrument_update_key_control(
 }
 
 #[tauri::command]
-pub fn instrument_is_batch_processing(state: State<'_, InstrumentEngine>) -> bool {
-    state.is_batch_processing()
+pub fn instrument_quality_indicator(state: State<'_, InstrumentEngine>) -> PlaybackQuality {
+    state.quality_indicator()
 }
 
 #[tauri::command]

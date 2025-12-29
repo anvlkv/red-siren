@@ -39,7 +39,7 @@ type FairGain = Pipe<
         Pipe<
             Pipe<
                 Unop<Unop<Var, FrameMulScalar<U1>>, FrameNegAddScalar<U1>>,
-                Binop<FrameAdd<U1>, Constant<U1>, Pass>,
+                Binop<FrameAdd<U1>, Constant<U1>, Binop<FrameMul<U1>, Pass, ClampedControl>>,
             >,
             Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>,
         >,
@@ -128,12 +128,15 @@ type WetChain = Pipe<
 pub type FilterType = Pipe<
     Pipe<
         Pipe<
-            Split<U2>,
-            Stack<Binop<FrameMul<U1>, Pass, FairGain>, Binop<FrameMul<U1>, Pass, FairGain>>,
+            Pipe<
+                MultiPass<U2>,
+                Stack<Binop<FrameMul<U1>, Pass, FairGain>, Binop<FrameMul<U1>, Pass, FairGain>>,
+            >,
+            Stack<WetChain, Pass>,
         >,
-        Stack<WetChain, Pass>,
+        Stack<Pass, Binop<FrameAdd<U1>, Pass, FreqCatch>>,
     >,
-    Binop<FrameAdd<U1>, Binop<FrameAdd<U1>, Pass, Pass>, FreqCatch>,
+    MultiPass<U2>,
 >;
 
 #[allow(clippy::unnecessary_cast)]
@@ -164,14 +167,6 @@ pub fn create_filter(
     #[cfg(not(feature = "editor"))]
     let follow_time = filter_morph_follow_s.value()[0];
 
-    let fair_gain = |v: f32| -> An<FairGain> {
-        (1.0 - var(&secondary_xct) * 2.0)
-            >> (constant(v.clamp(-1.0, 1.0)) + pass())
-            >> mul(0.5)
-            >> super::abs::abs()
-            >> mul(gain as f32)
-    };
-
     let filter_shelf_gain_lin: An<DbLin> =
         (filter_shelf_gain_db) >> super::db_lin::db_lin_converter();
 
@@ -180,6 +175,14 @@ pub fn create_filter(
         >> mul(2.0)
         >> clip_to(S::EPSILON.sqrt() as f32, (2.0 - S::EPSILON.sqrt()) as f32)
         >> (constant(1.0) - pass());
+
+    let fair_gain = |v: f32| -> An<FairGain> {
+        (1.0 - var(&secondary_xct) * 2.0)
+            >> (constant(v.clamp(-1.0, 1.0)) + (pass() * control_a_b.clone()))
+            >> mul(0.5)
+            >> super::abs::abs()
+            >> mul(gain as f32)
+    };
 
     let control: An<Control> = var(&control) >> follow::<S>(follow_time as S);
 
@@ -234,7 +237,7 @@ pub fn create_filter(
         >> (pass() | pass() | pass() | filter_shelf_gain_lin.clone())
         >> dbell(Softsign(shape));
     let b_bp_branch: An<BpBranchB> =
-        bp_input >> fresonator(SoftCrush(shape)) >> (pass() * fair_gain(-0.1));
+        bp_input >> fresonator(SoftCrush(shape)) >> (pass() * fair_gain(0.1));
 
     let mass = config.cents.clamp(f64::EPSILON.sqrt(), 1200.0).powf(1.05) as S;
     let hr_bpm = (K_BASE as S) * mass.powf(-0.25);
@@ -244,7 +247,7 @@ pub fn create_filter(
         >> (pass() | pass() | pass() | filter_shelf_gain_lin.clone())
         >> dbell(Softsign(shape));
     let b_lp_branch: An<LpBranchB> =
-        lp_input >> dresonator(SoftCrush(shape)) >> (pass() * fair_gain(0.1));
+        lp_input >> dresonator(SoftCrush(shape)) >> (pass() * fair_gain(-0.1));
 
     let (hp_throw, hp_catch) = super::throw_catch::throw_catch(2);
     let (bp_throw, bp_catch) = super::throw_catch::throw_catch(2);
@@ -261,7 +264,7 @@ pub fn create_filter(
         pass() | constant(config.formant_hz(2) as f32 as f32) | pass() | pass();
 
     let freq_catch: An<FreqCatch> = (hp_catch + bp_catch + lp_catch)
-        >> (pass() | q_shelf_controlled.clone() | fair_gain(0.5))
+        >> (pass() | q_shelf_controlled.clone() | fair_gain(-0.3))
         >> ((hs1_input >> highshelf::<S>())
             & (hs2_input >> highshelf::<S>())
             & (ls_input >> lowshelf::<S>()));
@@ -281,10 +284,11 @@ pub fn create_filter(
         >> ab_treatment
         >> (join::<U2>() + join::<U2>() + join::<U2>());
 
-    split::<U2>()
-        >> ((pass() * fair_gain(0.3)) | (pass() * fair_gain(1.0)))
+    multipass::<U2>()
+        >> ((pass() * fair_gain(-0.7)) | (pass() * fair_gain(0.3)))
         >> (wet_chain | pass())
-        >> (pass() + pass() + freq_catch)
+        >> (pass() | (pass() + freq_catch))
+        >> multipass::<U2>()
 }
 
 #[cfg(test)]
@@ -327,7 +331,7 @@ mod tests {
 
         let filter_b = create_filter(handles, &values, 1.7);
 
-        let schema = sine_hz::<f32>(440.0) >> split::<U2>() >> (filter_a | filter_b);
+        let schema = sine_hz::<f32>(440.0) >> split::<U4>() >> (filter_a | filter_b);
 
         let config = SnapshotConfigBuilder::default()
             .chart_layout(Layout::Combined)
@@ -412,7 +416,7 @@ mod tests {
         let filter_100 = create_filter(handles, &values, 1.7);
 
         let schema = sine_hz::<f32>(440.0)
-            >> split::<U6>()
+            >> split::<U12>()
             >> (filter_0 | filter_01 | filter_02 | filter_05 | filter_075 | filter_100);
 
         let config = SnapshotConfigBuilder::default()
@@ -502,7 +506,7 @@ mod tests {
         let filter_100 = create_filter(handles, &values, 1.7);
 
         let schema = sine_hz::<f32>(440.0)
-            >> split::<U6>()
+            >> split::<U12>()
             >> (filter_0 | filter_01 | filter_02 | filter_05 | filter_075 | filter_100);
 
         let config = SnapshotConfigBuilder::default()
@@ -548,7 +552,7 @@ mod tests {
                 svg_config_bldr.output_title(format!("{f:.0}Hz_g{}_k{}", key.0, key.1));
 
                 let filter = create_filter(handle, &values, 1.7);
-                let node = saw_hz(f as f32) >> filter;
+                let node = saw_hz(f as f32) >> split::<U2>() >> filter;
 
                 let id = net.push(Box::new(node));
 

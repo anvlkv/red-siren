@@ -1,4 +1,4 @@
-use common::RouteId;
+use common::{instrument::PlaybackQuality, RouteId};
 use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
 use tauri_use::{use_command, UseTauriWithReturn};
@@ -121,46 +121,47 @@ pub fn Play() -> impl IntoView {
     let icon_ref = NodeRef::new();
 
     let UseTauriWithReturn {
-        trigger: check_is_batch_processing,
-        data: is_batch_processing_data,
-        error: is_batch_processing_error,
-    } = use_command::<bool>(common::instrument::commands::IS_BATCH_PROCESSING);
+        trigger: check_quality_indicator,
+        data: quality_indicator_data,
+        error: quality_indicator_error,
+    } = use_command::<PlaybackQuality>(common::instrument::commands::QUALITY_INDICATOR);
 
-    let is_batch_processing_data = Memo::new(move |prev| {
-        is_batch_processing_data().unwrap_or_else(|| prev.copied().unwrap_or_default())
+    let quality_indicator_data = Memo::new(move |prev| {
+        quality_indicator_data().unwrap_or_else(|| prev.copied().unwrap_or_default())
     });
 
     _ = use_raf_fn_with_fps(
         move |_| {
-            check_is_batch_processing(Some(()));
+            check_quality_indicator(Some(()));
         },
         20.0,
     );
 
     Effect::new(move |_| {
-        if let Some(err) = is_batch_processing_error() {
-            log::error!("Error checking batch processing status: {}", err);
+        if let Some(err) = quality_indicator_error() {
+            log::error!("Error checking quality status: {}", err);
         }
     });
 
     with_tooltip(
         icon_ref,
         Signal::derive(move || {
-            if is_batch_processing_data() {
-                "Optimized".to_string()
-            } else {
-                "High Quality".to_string()
+            match quality_indicator_data() {
+                PlaybackQuality::HighQuality => "High Quality",
+                PlaybackQuality::OptimizedQuality => "Optimized",
+                PlaybackQuality::Resetting => "Restarting...",
+                PlaybackQuality::Underruns => "Overload!",
             }
+            .to_string()
         }),
         Signal::derive(move || Some(placement().opposite())),
     );
 
-    let process_icon = Signal::derive(move || {
-        if is_batch_processing_data() {
-            "batch"
-        } else {
-            "cube"
-        }
+    let process_icon = Signal::derive(move || match quality_indicator_data() {
+        PlaybackQuality::HighQuality => "cube",
+        PlaybackQuality::OptimizedQuality => "batch",
+        PlaybackQuality::Resetting => "reset",
+        PlaybackQuality::Underruns => "skull",
     });
 
     view! {

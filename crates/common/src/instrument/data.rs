@@ -64,3 +64,13 @@ pub struct ExcitementSnoopBatchPayload {
     pub t_unix_ms: f64,
     pub snoops: Vec<ExcitementSnoopEntry>,
 }
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PlaybackQuality {
+    HighQuality,
+    OptimizedQuality,
+    #[default]
+    Resetting,
+    Underruns,
+}

@@ -7,7 +7,7 @@ pub mod web;
 use std::collections::BTreeMap;
 
 use common::NodeKey;
-use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout};
+use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, PlaybackQuality};
 use common::tuner::Config as TunerConfig;
 
 pub type ProcessedOutputSpectrumSnapshot = (BTreeMap<u32, f32>, BTreeMap<u32, f32>);
@@ -105,7 +105,7 @@ pub trait AudioRuntime {
     fn poll_tuner_excitements(&self) -> Vec<(NodeKey, f32)>;
     fn get_sample_rate(&self) -> f64;
 
-    fn is_batch_processing(&self) -> bool;
+    fn quality_indicator(&self) -> PlaybackQuality;
 }
 
 /// Null / no-op runtime used when no concrete backend feature is enabled.
@@ -228,8 +228,8 @@ impl AudioRuntime for NullController {
         44100.0
     }
 
-    fn is_batch_processing(&self) -> bool {
-        false
+    fn quality_indicator(&self) -> PlaybackQuality {
+        PlaybackQuality::default()
     }
 }
 

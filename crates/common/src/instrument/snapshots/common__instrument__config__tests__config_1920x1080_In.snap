@@ -5,7 +5,7 @@ expression: config
 [
   [
     {
-      "channel": "Left",
+      "channel": "Right",
       "nodes": [
         {
           "key": [
@@ -65,7 +65,7 @@ expression: config
       ]
     },
     {
-      "channel": "Right",
+      "channel": "Left",
       "nodes": [
         {
           "key": [
@@ -125,7 +125,7 @@ expression: config
       ]
     },
     {
-      "channel": "Left",
+      "channel": "Right",
       "nodes": [
         {
           "key": [

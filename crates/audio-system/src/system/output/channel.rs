@@ -172,16 +172,17 @@ where
 
     let gain: S = ((1.0 / F::USIZE as S) + 1.0).powi(F::I32);
 
-    let panner_node =
-        (pass() | (band_controls_value + (ab_controls_value >> mul(-1.0)))) >> panner();
+    let panner_node = (pass()
+        | ((band_controls_value + (ab_controls_value.clone() >> mul(-1.5))) >> mul(0.25)))
+        >> panner();
 
-    let filters = pass()
+    let filter_channel = pinkpass::<S>()
+        >> split::<U2>()
         >> pipei::<F, _, _>({
             let values = values.clone();
             move |i| super::filter::create_filter(filter_handles[i as usize].clone(), &values, gain)
-        });
-
-    let filter_channel = pinkpass::<S>() >> filters;
+        })
+        >> (pass() + pass());
 
     let composite_channel = panner_node
         >> (filter_channel | pass())
@@ -189,7 +190,11 @@ where
             17.5,
             (1.0 + (1.0 / F::USIZE as f64)) * (F::USIZE as f64).powf(-0.1),
         )
-        >> (pass() + (pass() * -0.15));
+        >> ((pass() + (pass() * -0.15))
+            * (constant(1.0)
+                + (((constant(1.0) - ab_controls_value) | constant(1.0 / F::USIZE as f32))
+                    >> super::div::div::<S>())))
+        >> dcblock::<S>();
 
     let filter_id = net.push(Box::new(composite_channel));
     net.pipe_all(src_id, filter_id);

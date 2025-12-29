@@ -8,7 +8,6 @@ use std::{
     time::Duration,
 };
 
-use common::tuner::Config as TunerConfig;
 use common::{
     error::TunerError,
     instrument::{Config as InstrumentConfig, Layout as InstrumentLayout},
@@ -17,6 +16,7 @@ use common::{
     error::{ControlError, InstrumentError, Result},
     NodeKey,
 };
+use common::{instrument::PlaybackQuality, tuner::Config as TunerConfig};
 use cpal::traits::{DeviceTrait, HostTrait};
 #[cfg(feature = "hi_fi")]
 use fundsp::hacker::prelude::*;
@@ -95,7 +95,7 @@ struct CpalController {
 
     // operation
     tuner_only_mode: RwLock<bool>,
-    is_batch_processing: Arc<RwLock<bool>>,
+    quality_indicator: Arc<RwLock<PlaybackQuality>>,
 }
 
 impl Default for CpalController {
@@ -131,7 +131,7 @@ impl Default for CpalController {
             output_device: RwLock::new(None),
             input_device: RwLock::new(None),
             tuner_only_mode: RwLock::new(false),
-            is_batch_processing: Arc::new(RwLock::new(false)),
+            quality_indicator: Arc::new(RwLock::new(PlaybackQuality::default())),
         }
     }
 }
@@ -157,7 +157,7 @@ impl CpalController {
                 self.output_device()
                     .and_then(|d| d.default_output_config().ok())
                     .map(|c| {
-                        let sample_rate = c.sample_rate().0;
+                        let sample_rate = c.sample_rate();
                         {
                             *self.sample_rate.write() = Some(sample_rate as f64);
                         }
@@ -196,16 +196,14 @@ impl CpalController {
             .input_device()
             .ok_or(InstrumentError::DeviceUnavailable)?;
 
-        let input_device_name = input_device
-            .name()
-            .unwrap_or_else(|e| format!("(error getting name: {e})"));
+        let input_device_name = input_device.id().unwrap();
         log::debug!("input device: {}", input_device_name);
         let input_default_cfg = input_device
             .default_input_config()
             .map_err(|_| InstrumentError::InputConfigUnavailable)?;
 
         // Get sample rate from InputStreamManager or use output rate
-        let input_sr = input_default_cfg.sample_rate().0 as f64;
+        let input_sr = input_default_cfg.sample_rate() as f64;
 
         let samples_per_ms = input_sr / 1000.0;
         let cap_samples = (samples_per_ms * INPUT_BUFFER_DURATION_MS as f64).ceil() as usize;
@@ -253,7 +251,7 @@ impl CpalController {
 
         let output_channels = std::cmp::Ord::min(output_default_cfg.channels(), 2) as usize;
 
-        let is_batch_processing = self.is_batch_processing.clone();
+        let quality_indicator = self.quality_indicator.clone();
         let sr = self.sample_rate.read().map(|sr| sr as u32).unwrap_or(44100);
 
         // Spawn output stream owner.
@@ -262,7 +260,7 @@ impl CpalController {
             output_default_cfg,
             stream_cfg,
             output_channels,
-            move || playback_callback(backend, input_buffer, is_batch_processing, sr),
+            move || playback_callback(backend, input_buffer, quality_indicator, sr),
         )?;
 
         // Persist output thread / control handles.
@@ -674,9 +672,7 @@ impl AudioRuntime for CpalController {
         let output_device = self
             .output_device()
             .ok_or(InstrumentError::DeviceUnavailable)?;
-        let output_device_name = output_device
-            .name()
-            .unwrap_or_else(|e| format!("(error getting name: {e})"));
+        let output_device_name = output_device.id().unwrap();
         log::trace!(
             "CpalController.start: default output device: {}",
             output_device_name
@@ -688,7 +684,7 @@ impl AudioRuntime for CpalController {
             "CpalController.start: output default cfg: format={:?}, channels={}, sample_rate={} Hz, buffer={:?}",
             output_default_cfg.sample_format(),
             output_default_cfg.channels(),
-            output_default_cfg.sample_rate().0,
+            output_default_cfg.sample_rate(),
             output_default_cfg.buffer_size(),
         );
 
@@ -1108,8 +1104,8 @@ impl AudioRuntime for CpalController {
         self.sample_rate()
     }
 
-    fn is_batch_processing(&self) -> bool {
-        *self.is_batch_processing.read()
+    fn quality_indicator(&self) -> PlaybackQuality {
+        *self.quality_indicator.read()
     }
 
     #[cfg(feature = "editor")]

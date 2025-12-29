@@ -13,7 +13,7 @@ common = { path = "crates/common" }
 console_error_panic_hook = "0.1.7"
 fastrand = "2.3.0"
 fundsp = { version = "0.20", default-features = false, features = ["std"] }
-insta = "1.44.3"
+insta = "1.45.0"
 js-sys = "0.3"
 log = "0.4"
 mint = { version = "0.5.9", features = ["serde"] }

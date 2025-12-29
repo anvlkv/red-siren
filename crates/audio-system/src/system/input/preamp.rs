@@ -27,17 +27,20 @@ Frequencies outside table range are clamped to nearest endpoint.
 pub type PreampType = Pipe<
     Pipe<
         Pipe<
-            DCBlock<S>,
-            Bus<
+            Pipe<
+                DCBlock<S>,
                 Bus<
                     Bus<
-                        Bus<FixedSvf<S, BellMode<S>>, FixedSvf<S, BellMode<S>>>,
+                        Bus<
+                            Bus<FixedSvf<S, BellMode<S>>, FixedSvf<S, BellMode<S>>>,
+                            FixedSvf<S, BellMode<S>>,
+                        >,
                         FixedSvf<S, BellMode<S>>,
                     >,
-                    FixedSvf<S, BellMode<S>>,
+                    Pass,
                 >,
-                Pass,
             >,
+            Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>,
         >,
         Stack<Stack<Pass, FineTunedValue>, FineTunedValue>,
     >,
@@ -91,6 +94,7 @@ pub fn create_sensors_preamp(values: &FineTunedValues) -> An<PreampType> {
             & bell_hz(freq_1khz, q_1khz, gain_1khz_linear)
             & bell_hz(freq_10khz, q_10khz, gain_10khz_linear)
             & pass())
+        >> mul((1.0 / 5.0) as f32)
         >> (pass() | values.input_ny_threshold.clone() | values.input_ny_wet_ratio.clone())
         >> super::new_york::new_york::<S>()
 }

@@ -164,10 +164,7 @@ impl Candidate {
             return None;
         }
 
-        let first_group_channel = GroupChannel::from_keys_groups(self.k, self.g)
-            .nth_channel_from_first(
-                (orientation.safe_length(space, safe_area_padding).round() as usize) % 2,
-            );
+        let first_group_channel = GroupChannel::Right;
         let safe_breadth = orientation.safe_breadth(space, safe_area_padding).max(1.0);
         let instrument_breadth = self.band_breadth * (1.0 + 2.0 * STRING_TO_BAND_MIN_GAP_RATIO);
         let band_length = (safe_breadth - instrument_breadth) / 2.0;
@@ -579,7 +576,7 @@ fn fallback(
         groups_gap: group_gap,
         num_keys_per_group: NonZero::new(2).unwrap(),
         num_groups: NonZero::new(2).unwrap(),
-        first_group_channel: GroupChannel::from_keys_groups(2, 1),
+        first_group_channel: GroupChannel::Right,
         scale: super::Scale::default(),
     }
 }

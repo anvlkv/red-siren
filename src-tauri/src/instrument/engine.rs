@@ -297,6 +297,10 @@ impl InstrumentEngine {
             .set_band_control(key, value)
     }
 
+    pub fn get_band_control(&self, key: common::NodeKey) -> common::error::Result<f32> {
+        self.inner.stream_controller.read().get_band_control(key)
+    }
+
     pub fn set_key_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()> {
         self.inner
             .stream_controller

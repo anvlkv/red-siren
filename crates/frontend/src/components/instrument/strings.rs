@@ -4,8 +4,8 @@ use leptos_use::use_device_pixel_ratio;
 use tauri_use::{use_command, UseTauriWithReturn};
 use web_sys::CanvasRenderingContext2d;
 
-use crate::components::instrument::util::{get_2d_ctx, is_dark_mode, resolve_theme_color};
 use crate::components::intro::consts::{INTRO_FLUTE_POS_X, INTRO_FLUTE_POS_Y, INTRO_FLUTE_ROT_DEG};
+use crate::util::drawing::{get_2d_ctx, is_dark_mode, resolve_theme_color};
 use crate::util::layout_context::{expect_layout_contex, LayoutContextReturn};
 
 #[derive(Debug, Clone, Default)]
@@ -246,8 +246,8 @@ pub fn InstrumentStrings() -> impl IntoView {
             node_ref=canvas_ref
             // Width/height attributes are set via Effect to account for pixel ratio.
             // Initial attributes to avoid 0 size before first Effect runs.
-            width=800
-            height=600
+            width=move || space().x as u32
+            height=move || space().y as u32
             id="strings-root"
             class=super::instrument_animations::INSTRUMENT_STRINGS_ROOT_APPEAR
             style=root_inner_style

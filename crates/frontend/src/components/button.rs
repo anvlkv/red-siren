@@ -44,7 +44,7 @@ pub fn Button(
 
     #[prop(optional)] node_ref: NodeRef<html::Button>,
 ) -> impl IntoView {
-    let base = "relative inline-flex items-center justify-center \
+    let base = "inline-flex items-center justify-center \
             transition-colors transition-shadow transition-opacity duration-200 focus:outline-none \
             focus-visible:ring-2 focus-visible:ring-offset-2 \
             hover:shadow-md active:shadow-sm italic backface-hidden antialiased font-bold lg:font-normal";

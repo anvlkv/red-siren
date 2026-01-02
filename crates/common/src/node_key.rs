@@ -47,6 +47,7 @@ impl NodeKey {
 }
 
 /// Utility for managing NodeKeys with layout validation
+#[derive(Debug, Clone, Copy)]
 pub struct NodeKeyRegistry {
     num_groups: u8,
     num_keys_per_group: u8,
@@ -89,9 +90,17 @@ impl NodeKeyRegistry {
         let mut keys =
             Vec::with_capacity((self.num_groups as usize) * (self.num_keys_per_group as usize));
         for group in 0..self.num_groups {
-            for key in 0..self.num_keys_per_group {
-                keys.push(NodeKey::new(group, key));
-            }
+            keys.extend(self.group_keys(group))
+        }
+        keys
+    }
+
+    /// Generate all valid NodeKeys for a specific group
+    pub fn group_keys(&self, group: u8) -> Vec<NodeKey> {
+        assert!(group < self.num_groups);
+        let mut keys = Vec::with_capacity(self.num_keys_per_group as usize);
+        for key in 0..self.num_keys_per_group {
+            keys.push(NodeKey::new(group, key));
         }
         keys
     }
@@ -105,6 +114,16 @@ impl NodeKeyRegistry {
             for key in 0..self.num_keys_per_group {
                 f(NodeKey::new(group, key));
             }
+        }
+    }
+
+    pub fn iter_group_keys<F>(&self, group: u8, mut f: F)
+    where
+        F: FnMut(NodeKey),
+    {
+        assert!(group < self.num_groups);
+        for key in 0..self.num_keys_per_group {
+            f(NodeKey::new(group, key));
         }
     }
 

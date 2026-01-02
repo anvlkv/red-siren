@@ -217,7 +217,7 @@ fn Group(
             {move || {
                 let first_group_channel = first_group_channel();
                 let num_keys_per_group = num_keys_per_group();
-                let orientation = orientation();
+                let channel = first_group_channel.nth_channel_from_first(g);
                 (0..(num_keys_per_group as usize))
                     .rev()
                     .map(move |k| {
@@ -231,15 +231,8 @@ fn Group(
                                             .map(|e| e.samples.clone())
                                     })
                             });
-                            view! {
-                                <KeyboardElement
-                                    g
-                                    k
-                                    first_group_channel
-                                    orientation
-                                    excitement_samples=samples
-                                />
-                            }
+
+                            view! { <KeyboardElement g k channel excitement_samples=samples /> }
                         }
                     })
                     .collect_view()

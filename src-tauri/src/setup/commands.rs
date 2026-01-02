@@ -116,8 +116,13 @@ pub fn update_window_size(
     width: f64,
     height: f64,
     app: AppHandle,
+    window: tauri::Window,
     state: State<'_, WindowState>,
 ) -> Result<()> {
+    if window.label() != "main" {
+        return Ok(());
+    }
+
     {
         let mut guard = state.lock();
         guard.width = width;

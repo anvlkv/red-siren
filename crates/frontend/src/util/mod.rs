@@ -1,3 +1,4 @@
+pub mod drawing;
 pub mod layout_context;
 pub mod log;
 pub mod playback_service;

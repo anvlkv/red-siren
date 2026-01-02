@@ -1,13 +1,21 @@
-use common::instrument::commands::{UpdateBandControlPayload, UpdateKeyControlPayload};
-use leptos::{html, prelude::*};
+use common::{
+    instrument::commands::{
+        ReflectBandControlPayload, ReflectKeyControlPayload, UpdateBandControlPayload,
+        UpdateKeyControlPayload,
+    },
+    NodeKey, NodeKeyRegistry,
+};
+use leptos::{ev, prelude::*};
 use leptos_use::{
-    core::Position, use_draggable_with_options, use_element_bounding_with_options,
-    UseDraggableOptions, UseDraggableReturn, UseElementBoundingOptions,
+    use_document, use_element_bounding_with_options, use_event_listener, UseElementBoundingOptions,
+    UseElementBoundingReturn,
 };
 use tauri_use::{use_invoke, use_listen, UseListenReturn, UseTauriReturn};
+use web_sys::WheelEvent;
+use web_time::Instant;
 
 use crate::{
-    components::{expect_instrument_context, Button, UiSize},
+    components::{expect_instrument_context, instrument::context::Bounding, Button, UiSize},
     util::layout_context::{expect_layout_contex, LayoutContextReturn},
 };
 
@@ -15,112 +23,27 @@ use crate::{
 pub fn KeyboardElement(
     g: usize,
     k: usize,
-    first_group_channel: common::instrument::GroupChannel,
-    orientation: common::orientation::LayoutOrientation,
+    channel: common::instrument::GroupChannel,
     #[prop(into)] excitement_samples: Signal<Option<Vec<(f32, f32)>>>,
 ) -> impl IntoView {
     let ctx = expect_instrument_context();
+
     let LayoutContextReturn {
         key_radius,
-        space,
-        num_keys_per_group,
         key_band_breadth,
-        complete_layout,
+        key_band_length,
+        orientation,
+        num_groups,
+        num_keys_per_group,
+        space,
         ..
     } = expect_layout_contex();
 
-    // NodeRefs for band and key wrapper
-    let band_ref = NodeRef::<html::Div>::new();
-    let key_ref = NodeRef::<html::Div>::new();
-    let draggable_ref = NodeRef::<html::Button>::new();
+    let (drag_start_pos, set_drag_start_pos) = signal(Option::<(i32, i32, i32)>::None);
+    let (prev_instant, set_prev_instant) = signal(Instant::now());
 
-    // Measure band
-    let leptos_use::UseElementBoundingReturn {
-        x: band_x,
-        y: band_y,
-        top: band_top,
-        right: band_right,
-        bottom: band_bottom,
-        left: band_left,
-        width: band_width,
-        height: band_height,
-        update: band_update,
-        ..
-    } = use_element_bounding_with_options(
-        band_ref,
-        UseElementBoundingOptions::default().immediate(false),
-    );
+    let registry = Signal::derive(move || NodeKeyRegistry::new(num_groups(), num_keys_per_group()));
 
-    // Measure key (wrapper)
-    let leptos_use::UseElementBoundingReturn {
-        x: key_x,
-        y: key_y,
-        top: key_top,
-        right: key_right,
-        bottom: key_bottom,
-        left: key_left,
-        width: key_width,
-        height: key_height,
-        update: key_update,
-        ..
-    } = use_element_bounding_with_options(
-        key_ref,
-        UseElementBoundingOptions::default().immediate(false),
-    );
-
-    // One-shot guards to attach animation classes only once per element
-    let band_should_animate = RwSignal::new(false);
-    let key_should_animate = RwSignal::new(false);
-
-    // Upsert band bbox; animate on first measurement
-    Effect::new({
-        let ctx = ctx.clone();
-        move |_| {
-            let w = band_width();
-            let h = band_height();
-            if w > 0.0 && h > 0.0 {
-                let bbox = super::context::Bounding {
-                    x: band_x() as f32,
-                    y: band_y() as f32,
-                    width: w as f32,
-                    height: h as f32,
-                    top: band_top() as f32,
-                    right: band_right() as f32,
-                    bottom: band_bottom() as f32,
-                    left: band_left() as f32,
-                };
-                if ctx.upsert_band_bbox((g, k), bbox) {
-                    band_should_animate.set(true);
-                }
-            }
-        }
-    });
-
-    // Upsert key bbox; animate on first measurement
-    Effect::new({
-        let ctx = ctx.clone();
-        move |_| {
-            let w = key_width();
-            let h = key_height();
-            if w > 0.0 && h > 0.0 {
-                let bbox = super::context::Bounding {
-                    x: key_x() as f32,
-                    y: key_y() as f32,
-                    width: w as f32,
-                    height: h as f32,
-                    top: key_top() as f32,
-                    right: key_right() as f32,
-                    bottom: key_bottom() as f32,
-                    left: key_left() as f32,
-                };
-                if ctx.upsert_key_bbox((g, k), bbox) {
-                    key_should_animate.set(true);
-                }
-            }
-        }
-    });
-
-    // Backend update command
     let UseTauriReturn {
         error: band_control_error,
         trigger: update_band_control,
@@ -128,6 +51,89 @@ pub fn KeyboardElement(
     } = use_invoke::<UpdateBandControlPayload, (), ()>(
         common::commands::instrument::UPDATE_BAND_CONTROL,
     );
+
+    let delta_change = move |d_x: i32, d_y: i32, alt: bool, ctrl: bool, instant: Instant| {
+        let duration = instant.duration_since(prev_instant());
+        set_prev_instant.set(instant);
+        let delta = match orientation() {
+            common::orientation::LayoutOrientation::Vertical => d_x,
+            common::orientation::LayoutOrientation::Horizontal => d_y,
+        } as f64
+            * match channel {
+                common::instrument::GroupChannel::Left => -1.0,
+                common::instrument::GroupChannel::Right => 1.0,
+            };
+        let bound = key_band_length();
+
+        let velocity = if duration.as_millis() > 0 {
+            delta / (duration.as_millis() as f64 / 1000.0)
+        } else {
+            0.0
+        };
+        // Scale movement fraction by velocity: small at low velocity, larger at high velocity.
+        // v0 is a tuning constant that controls how quickly the scaling ramps up.
+        let v0 = bound; // px/sec threshold
+        let v_abs = velocity.abs();
+        let scale = v_abs / (v_abs + v0);
+        let frac = ((delta / bound) * scale).clamp(-1.0, 1.0) as f32;
+
+        if ctrl {
+            let keys = registry().all_keys();
+            update_band_control.set(Some((
+                UpdateBandControlPayload {
+                    keys,
+                    increment: frac,
+                },
+                (),
+            )));
+        } else if alt {
+            let keys = registry().group_keys(g as u8);
+            update_band_control.set(Some((
+                UpdateBandControlPayload {
+                    keys,
+                    increment: frac,
+                },
+                (),
+            )));
+        } else {
+            update_band_control.set(Some((
+                UpdateBandControlPayload {
+                    keys: vec![NodeKey(g as u8, k as u8)],
+                    increment: frac,
+                },
+                (),
+            )));
+        }
+    };
+
+    let unlisten_pointermove = use_event_listener(use_document(), ev::pointermove, move |ev| {
+        let pointer = ev.pointer_id();
+        if let Some((start_x, start_y, _)) = drag_start_pos().filter(|(_, _, pid)| pointer == *pid)
+        {
+            let pos_x = ev.client_x();
+            let d_x = start_x - pos_x;
+            let pos_y = ev.client_y();
+            let d_y = start_y - pos_y;
+            let alt = ev.alt_key();
+            let ctrl = ev.ctrl_key();
+            delta_change(d_x, d_y, alt, ctrl, Instant::now());
+            set_drag_start_pos.set(Some((pos_x, pos_y, pointer)));
+        }
+    });
+    let unlisten_pointerup = use_event_listener(use_document(), ev::pointerup, move |ev| {
+        let pointer = ev.pointer_id();
+        if let Some((start_x, start_y, _)) = drag_start_pos().filter(|(_, _, pid)| pointer == *pid)
+        {
+            let pos_x = ev.client_x();
+            let d_x = start_x - pos_x;
+            let pos_y = ev.client_y();
+            let d_y = start_y - pos_y;
+            let alt = ev.alt_key();
+            let ctrl = ev.ctrl_key();
+            delta_change(d_x, d_y, alt, ctrl, Instant::now());
+            set_drag_start_pos.set(None);
+        }
+    });
 
     let UseTauriReturn {
         error: key_control_error,
@@ -143,7 +149,7 @@ pub fn KeyboardElement(
         open: listen_band_control_open,
         close: listen_band_control_close,
         ..
-    } = use_listen::<UpdateBandControlPayload>(tauri_use::EventType::Custom(
+    } = use_listen::<ReflectBandControlPayload>(tauri_use::EventType::Custom(
         common::events::instrument::BAND_CONTROL_G_K,
     ));
 
@@ -153,57 +159,45 @@ pub fn KeyboardElement(
         open: listen_key_control_open,
         close: listen_key_control_close,
         ..
-    } = use_listen::<UpdateKeyControlPayload>(tauri_use::EventType::Custom(
+    } = use_listen::<ReflectKeyControlPayload>(tauri_use::EventType::Custom(
         common::events::instrument::KEY_CONTROL_G_K,
     ));
 
-    // Local state for pressed/released
-    let is_pressed = RwSignal::new(false);
+    Effect::new(move |_| {
+        listen_key_control_open();
+        listen_band_control_open();
+    });
 
-    let band_control_data = Memo::new(move |prev| {
+    let band_control_pos = Memo::new(move |prev| {
+        let radius = key_radius();
+        let pad = key_band_breadth() - radius * 2.0;
+        let len = key_band_length() - pad - radius;
         band_control_data()
             .iter()
-            .filter_map(|d| {
+            .find_map(|d| {
                 if d.group == g as u8 && d.key == k as u8 {
-                    Some(d.value)
+                    let value = (len / 2.0) + (d.value as f64 * (len / 2.0));
+                    Some(value - radius + pad / 2.0)
                 } else {
                     None
                 }
             })
-            .next()
             .or(prev.copied())
-            .unwrap_or_default()
+            .unwrap_or_else(|| len / 2.0 - radius + pad / 2.0)
     });
 
     let key_control_data = Memo::new(move |prev| {
         key_control_data()
             .iter()
-            .filter_map(|d| {
+            .find_map(|d| {
                 if d.group == g as u8 && d.key == k as u8 {
-                    Some(d.value)
+                    Some(d.value > 0.0)
                 } else {
                     None
                 }
             })
-            .next()
             .or(prev.copied())
-            .unwrap_or(0.0)
-    });
-
-    // Sync key control state
-    Effect::new(move |_| {
-        let value = key_control_data();
-        is_pressed.set(value > 0.5);
-    });
-
-    // Get initial band control
-    Effect::new(move |_| {
-        listen_band_control_open();
-    });
-
-    // Get initial key control
-    Effect::new(move |_| {
-        listen_key_control_open();
+            .unwrap_or(false)
     });
 
     // Log errors from band control updates
@@ -225,151 +219,109 @@ pub fn KeyboardElement(
     on_cleanup(move || {
         listen_band_control_close();
         listen_key_control_close();
+        unlisten_pointermove();
+        unlisten_pointerup();
     });
 
-    // Calculate drag constraints based on band dimensions and alignment
-    let calculated_drag_constraints = Memo::new(move |_| {
-        let band_w = band_width.get();
-        let band_h = band_height.get();
-        let key_dia = key_radius.get() * 2.0;
-        let key_margin = ((key_band_breadth.get() - key_dia) / 2.0).max(0.0);
-        let key_full_size = key_dia + key_margin * 2.0;
+    let on_wheel = move |ev: WheelEvent| {
+        ev.prevent_default();
+        let delta_mode = ev.delta_mode();
+        let delta = ev.delta_y()
+            * match delta_mode {
+                WheelEvent::DOM_DELTA_PIXEL => 1.0,
+                WheelEvent::DOM_DELTA_LINE => 1.6,
+                WheelEvent::DOM_DELTA_PAGE => 16.0,
+                _ => 1.0,
+            };
+        let alt = ev.alt_key();
+        let ctrl = ev.ctrl_key();
+        let (d_x, d_y) = match orientation() {
+            common::orientation::LayoutOrientation::Horizontal => (0, delta as i32),
+            common::orientation::LayoutOrientation::Vertical => (delta as i32, 0),
+        };
+        delta_change(d_x, d_y, alt, ctrl, Instant::now());
+    };
 
-        if band_w <= 0.0 || band_h <= 0.0 || key_full_size <= 0.0 {
-            return (0.0, 0.0, 0.0, 0.0);
-        }
+    let button_ref = NodeRef::new();
 
-        let channel = first_group_channel.nth_channel_from_first(g);
-
-        match orientation {
-            common::orientation::LayoutOrientation::Vertical => {
-                // Vertical: keys stack vertically, drag horizontally along band's length (width)
-                let available_x = (band_w - key_full_size).max(0.0);
-                match channel {
-                    common::instrument::GroupChannel::Left => {
-                        // Left aligned: can drag from 0 to available_x
-                        (0.0, available_x, 0.0, 0.0)
-                    }
-                    common::instrument::GroupChannel::Right => {
-                        // Right aligned: can drag from -available_x to 0
-                        (-available_x, 0.0, 0.0, 0.0)
-                    }
-                }
-            }
-            common::orientation::LayoutOrientation::Horizontal => {
-                // Horizontal: keys stack horizontally, drag vertically along band's length (height)
-                let available_y = (band_h - key_full_size).max(0.0);
-                match channel {
-                    common::instrument::GroupChannel::Left => {
-                        // Top aligned: can drag from 0 to available_y
-                        (0.0, 0.0, 0.0, available_y)
-                    }
-                    common::instrument::GroupChannel::Right => {
-                        // Bottom aligned: can drag from -available_y to 0
-                        (0.0, 0.0, -available_y, 0.0)
-                    }
-                }
-            }
-        }
-    });
-
-    // Setup draggable for the wrapper div
-    let UseDraggableReturn {
-        position: drag_position,
-        is_dragging,
-        ..
-    } = use_draggable_with_options(
-        draggable_ref,
-        UseDraggableOptions::default().prevent_default(true),
+    let UseElementBoundingReturn {
+        height: button_height,
+        width: button_width,
+        left: button_left,
+        right: button_right,
+        top: button_top,
+        bottom: button_bottom,
+        x: button_x,
+        y: button_y,
+        update,
+    } = use_element_bounding_with_options(
+        button_ref,
+        UseElementBoundingOptions {
+            reset: true,
+            window_resize: true,
+            window_scroll: false,
+            immediate: false,
+        },
     );
 
-    // Constrain position and update backend
-    let constrained_position = Signal::derive(move || {
-        let pos = band_control_data.get() as f64;
-        let (min_x, max_x, min_y, max_y) = calculated_drag_constraints();
+    Effect::new(move |_| update());
 
-        match (orientation, first_group_channel.nth_channel_from_first(g)) {
-            (
-                common::orientation::LayoutOrientation::Vertical,
-                common::instrument::GroupChannel::Left,
-            ) => {
-                let x_range = max_x - min_x;
-                let x = pos * x_range;
-                Position { x, y: 0.0 }
-            }
-            (
-                common::orientation::LayoutOrientation::Vertical,
-                common::instrument::GroupChannel::Right,
-            ) => {
-                let x_range = max_x - min_x;
-                let x = pos * -x_range;
-                Position { x, y: 0.0 }
-            }
-            (
-                common::orientation::LayoutOrientation::Horizontal,
-                common::instrument::GroupChannel::Left,
-            ) => {
-                let y_range = max_y - min_y;
-                let y = pos * y_range;
-                Position { x: 0.0, y }
-            }
-            (
-                common::orientation::LayoutOrientation::Horizontal,
-                common::instrument::GroupChannel::Right,
-            ) => {
-                let y_range = max_y - min_y;
-                let y = pos * -y_range;
-                Position { x: 0.0, y }
-            }
-        }
-    });
+    Effect::new(move |_| {});
 
-    // Calculate normalized value for band control
+    let band_ref = NodeRef::new();
+
+    let UseElementBoundingReturn {
+        height: band_height,
+        width: band_width,
+        left: band_left,
+        right: band_right,
+        top: band_top,
+        bottom: band_bottom,
+        x: band_x,
+        y: band_y,
+        update,
+    } = use_element_bounding_with_options(
+        band_ref,
+        UseElementBoundingOptions {
+            reset: true,
+            window_resize: true,
+            window_scroll: false,
+            immediate: false,
+        },
+    );
+
+    Effect::new(move |_| update());
+
+    let should_animate = RwSignal::new(false);
+
     Effect::new(move |_| {
-        let Position { x, y } = drag_position.get();
-        let (min_x, max_x, min_y, max_y) = calculated_drag_constraints();
-        let base_x = key_x();
-        let base_y = key_y();
-
-        if is_dragging.get() {
-            let normalized_value = match orientation {
-                common::orientation::LayoutOrientation::Vertical => {
-                    let x_range = max_x - min_x;
-
-                    let d_x = match first_group_channel.nth_channel_from_first(g) {
-                        common::instrument::GroupChannel::Left => x - base_x,
-                        common::instrument::GroupChannel::Right => base_x - x,
-                    };
-
-                    log::debug!("d_x: {d_x}");
-
-                    d_x / x_range
-                }
-                common::orientation::LayoutOrientation::Horizontal => {
-                    let y_range = max_y - min_y;
-
-                    let d_y = match first_group_channel.nth_channel_from_first(g) {
-                        common::instrument::GroupChannel::Left => y - base_y,
-                        common::instrument::GroupChannel::Right => base_y - y,
-                    };
-
-                    log::debug!("d_y: {d_y}");
-
-                    d_y / y_range
-                }
-            }
-            .clamp(0.0, 1.0);
-
-            // Update backend
-            update_band_control(Some((
-                UpdateBandControlPayload {
-                    group: g as u8,
-                    key: k as u8,
-                    value: normalized_value as f32,
+        should_animate.set(
+            ctx.upsert_key_bbox(
+                (g, k),
+                Bounding {
+                    x: button_x(),
+                    y: button_y(),
+                    width: button_width(),
+                    height: button_height(),
+                    top: button_top(),
+                    right: button_right(),
+                    bottom: button_bottom(),
+                    left: button_left(),
                 },
-                (),
-            )));
-        }
+            ) && ctx.upsert_band_bbox(
+                (g, k),
+                Bounding {
+                    x: band_x(),
+                    y: band_y(),
+                    width: band_width(),
+                    height: band_height(),
+                    top: band_top(),
+                    right: band_right(),
+                    bottom: band_bottom(),
+                    left: band_left(),
+                },
+            ),
+        )
     });
 
     // Stage variables: collapse under sun (k1), then breadth-first and length unstack
@@ -398,11 +350,11 @@ pub fn KeyboardElement(
         let sun_screen_y = sun_y * viewport_scale;
 
         // Align with sun position in screen space (center-to-center)
-        let k1_tx = sun_screen_x - (key_x() + key_width() / 2.0);
-        let k1_ty = sun_screen_y - (key_y() + key_height() / 2.0);
+        let k1_tx = sun_screen_x - (button_x() + button_width() / 2.0);
+        let k1_ty = sun_screen_y - (button_y() + button_height() / 2.0);
 
         // Breadth-first move: fix the axis orthogonal to main
-        let (breadth_tx, breadth_ty) = match orientation {
+        let (breadth_tx, breadth_ty) = match orientation() {
             common::orientation::LayoutOrientation::Vertical => (0.0, k1_ty),
             common::orientation::LayoutOrientation::Horizontal => (k1_tx, 0.0),
         };
@@ -431,143 +383,138 @@ pub fn KeyboardElement(
         )
     };
 
-    // Classes with one-shot appear animation
-    let key_wrapper_class = move || {
-        let base = "relative";
-        if key_should_animate() {
-            format!(
-                "{} {}",
-                super::instrument_animations::INSTRUMENT_KEY_APPEAR,
-                base
-            )
-        } else {
-            base.to_string()
-        }
-    };
-    let band_class = move || {
-        let base = "absolute rounded-full bg-red/90 dark:bg-black/90 border-(length:--keyboard-band-stroke-width) border-black dark:border-red backdrop-blur-xl";
-        if band_should_animate() {
-            format!(
-                "{} {}",
-                super::instrument_animations::INSTRUMENT_BAND_APPEAR,
-                base
-            )
-        } else {
-            base.to_string()
-        }
-    };
-
-    let channel_alignment = match first_group_channel.nth_channel_from_first(g) {
-        common::instrument::GroupChannel::Left => {
-            r#"
-            top: 0;
-            left: 0;
-            "#
-        }
-        common::instrument::GroupChannel::Right => {
-            r#"
-            bottom: 0;
-            right: 0;
-            "#
-        }
-    };
-
-    // Orientation-dependent geometry CSS for the band
-    let band_geom_style = match orientation {
-        common::orientation::LayoutOrientation::Vertical => {
-            format!(
-                r#"
-                        width: var(--keyboard-band-length);
-                        height: var(--keyboard-band-breadth);
-                        {channel_alignment}
-                        "#
-            )
-        }
-        common::orientation::LayoutOrientation::Horizontal => {
-            format!(
-                r#"
-                        width: var(--keyboard-band-breadth);
-                        height: var(--keyboard-band-length);
-                        {channel_alignment}
-                        "#
-            )
-        }
-    };
-    // Bands move with their wrapper; only glare scales are per-element
-    let band_scale_vars = move || {
-        // Reverse glare sequencing: deeper (background) bands start earlier,
-        // foreground bands later, to respect stacking order.
-        let total = num_keys_per_group() as f32;
-        let glare_index = (total - 1.0 - k as f32).max(0.0);
-        let glare_start = 0.75 + 0.05 * glare_index;
-        let glare_peak = 1.5 + 0.1 * glare_index;
-        format!(
-            concat!(
-                "--inst-band-glare-scale: {};",
-                " --inst-band-glare-scale-peak: {};"
-            ),
-            glare_start, glare_peak
-        )
-    };
-    let band_style = move || {
-        let mut s = String::new();
-        s.push_str(&band_scale_vars());
-        s.push_str(&band_geom_style);
-        s
-    };
-
-    Effect::new(move |prev: Option<common::instrument::Layout>| {
-        let complete_layout = complete_layout();
-        if prev.is_none_or(|old_layout| old_layout != complete_layout) {
-            band_update();
-            key_update();
-        }
-        complete_layout
-    });
-
     view! {
-        <div class=key_wrapper_class node_ref=key_ref style=key_stage1_vars>
-            <div
-                class=band_class
-                node_ref=band_ref
-                id=format!("key-band-{g}-{k}")
-                role="presentation"
-                style=band_style
-            ></div>
-            <Button
-                class=Signal::derive(move || {
-                    let ring = if is_pressed() {
-                        "inset-ring-3 inset-ring-cinnabar dark:inset-ring-gray ring-2 ring-gray dark:ring-cinnabar"
+        <div
+            class=move || {
+                format!(
+                    "overflow-visible relative {}",
+                    if should_animate() {
+                        super::instrument_animations::INSTRUMENT_KEY_APPEAR
                     } else {
                         ""
-                    };
+                    },
+                )
+            }
+            style=move || {
+                format!(
+                    "width: {size}px; height: {size}px; {vars}",
+                    size = key_band_breadth(),
+                    vars = key_stage1_vars(),
+                )
+            }
+            role="slider"
+            aria-orientation=move || {
+                match orientation() {
+                    common::orientation::LayoutOrientation::Vertical => "horizontal",
+                    common::orientation::LayoutOrientation::Horizontal => "vertical",
+                }
+            }
+            aria-valuemin="-1.0"
+            aria-valuemax="1.0"
+            aria-valuenow=move || {
+                band_control_data()
+                    .iter()
+                    .find_map(|d| {
+                        if d.group == g as u8 && d.key == k as u8 {
+                            Some(format!("{}", d.value))
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_default()
+            }
+        >
+            <div
+                style:width=move || {
                     format!(
-                        "border-none text-thin md:text-base text-sm absolute {} {} will-change-[transform, top, left] p-0 ",
-                        if is_dragging() { "cursor-grabbing" } else { "cursor-grab" },
-                        ring,
+                        "{}px",
+                        match orientation() {
+                            common::orientation::LayoutOrientation::Vertical => key_band_length(),
+                            common::orientation::LayoutOrientation::Horizontal => key_band_breadth(),
+                        },
                     )
-                })
+                }
+                style:height=move || {
+                    format!(
+                        "{}px",
+                        match orientation() {
+                            common::orientation::LayoutOrientation::Vertical => key_band_breadth(),
+                            common::orientation::LayoutOrientation::Horizontal => key_band_length(),
+                        },
+                    )
+                }
+                class=move || {
+                    format!(
+                        "absolute rounded-full bg-red/80 dark:bg-black/80 border-black dark:border-red backdrop-blur-xl border-(length:--keyboard-band-stroke-width) {} {}",
+                        match (orientation(), channel) {
+                            (
+                                common::orientation::LayoutOrientation::Horizontal,
+                                common::instrument::GroupChannel::Left,
+                            ) => "top-0",
+                            (
+                                common::orientation::LayoutOrientation::Vertical,
+                                common::instrument::GroupChannel::Left,
+                            ) => "left-0",
+                            (
+                                common::orientation::LayoutOrientation::Horizontal,
+                                common::instrument::GroupChannel::Right,
+                            ) => "bottom-0",
+                            (
+                                common::orientation::LayoutOrientation::Vertical,
+                                common::instrument::GroupChannel::Right,
+                            ) => "right-0",
+                        },
+                        if should_animate() {
+                            super::instrument_animations::INSTRUMENT_BAND_APPEAR
+                        } else {
+                            ""
+                        },
+                    )
+                }
+                on:wheel=on_wheel
+                role="presentation"
+                node_ref=band_ref
+            ></div>
+            <Button
                 size=UiSize::Sm
                 round=true
                 square=true
-                attr:id=format!("key-{g}-{k}")
-                on:click=move |ev| {
-                    ev.prevent_default();
-                    ev.stop_propagation();
-                    let new_value = if is_pressed() { 0.0 } else { 1.0 };
-                    is_pressed.set(!is_pressed());
-                    update_key_control(
-                        Some((
-                            UpdateKeyControlPayload {
-                                group: g as u8,
-                                key: k as u8,
-                                value: new_value,
+                class=Signal::derive(move || {
+                    format!(
+                        "absolute {}",
+                        if key_control_data() {
+                            "inset-ring-3 inset-ring-cinnabar dark:inset-ring-gray ring-2 ring-gray dark:ring-cinnabar"
+                        } else {
+                            ""
+                        },
+                    )
+                })
+                style:top=move || {
+                    if matches!(orientation(), common::orientation::LayoutOrientation::Horizontal) {
+                        format!(
+                            "{}px",
+                            match channel {
+                                common::instrument::GroupChannel::Left => band_control_pos(),
+                                common::instrument::GroupChannel::Right => -band_control_pos(),
                             },
-                            (),
-                        )),
-                    );
+                        )
+                    } else {
+                        "".to_string()
+                    }
                 }
-                attr:aria-pressed=move || is_pressed().to_string()
+                style:left=move || {
+                    if matches!(orientation(), common::orientation::LayoutOrientation::Vertical) {
+                        format!(
+                            "{}px",
+                            match channel {
+                                common::instrument::GroupChannel::Left => band_control_pos(),
+                                common::instrument::GroupChannel::Right => -band_control_pos(),
+                            },
+                        )
+                    } else {
+                        "".to_string()
+                    }
+                }
                 style:width=move || {
                     let dia = key_radius() * 2.0;
                     format!("{dia}px")
@@ -587,9 +534,38 @@ pub fn KeyboardElement(
                     let inc = samples.iter().map(|(v, _)| v.abs()).sum::<f32>();
                     format!("scale({s}, {s})", s = 0.75 + (inc / samples.len() as f32) * 0.275)
                 }
-                style:top=move || { format!("{}px", constrained_position().y) }
-                style:left=move || { format!("{}px", constrained_position().x) }
-                node_ref=draggable_ref
+                on:wheel=on_wheel
+                on:pointerup=move |ev| {
+                    let alt = ev.alt_key();
+                    let ctrl = ev.ctrl_key();
+                    let payload = if ctrl {
+                        let keys = registry().all_keys();
+                        UpdateKeyControlPayload {
+                            keys,
+                            value: if key_control_data() { 0.0 } else { 1.0 },
+                        }
+                    } else if alt {
+                        let keys = registry().group_keys(g as u8);
+                        UpdateKeyControlPayload {
+                            keys,
+                            value: if key_control_data() { 0.0 } else { 1.0 },
+                        }
+                    } else {
+                        UpdateKeyControlPayload {
+                            keys: vec![NodeKey(g as u8, k as u8)],
+                            value: if key_control_data() { 0.0 } else { 1.0 },
+                        }
+                    };
+                    update_key_control(Some((payload, ())));
+                    set_drag_start_pos.set(None);
+                }
+                on:pointerdown=move |ev| {
+                    let pos_x = ev.client_x();
+                    let pos_y = ev.client_y();
+                    let id = ev.pointer_id();
+                    set_drag_start_pos.set(Some((pos_x, pos_y, id)));
+                }
+                node_ref=button_ref
             >
                 <div
                     class="w-full h-full rounded-full bg-gray dark:bg-cinnabar mix-blend-plus-lighter"

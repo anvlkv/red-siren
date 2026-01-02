@@ -1,3 +1,5 @@
+use crate::NodeKey;
+
 /// Start instrument playback
 pub const PLAYBACK_START: &str = "instrument_playback_start";
 /// Kill instrument engine
@@ -32,6 +34,13 @@ pub struct ExcitementSourcePayload {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateBandControlPayload {
+    pub keys: Vec<NodeKey>,
+    pub increment: f32,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReflectBandControlPayload {
     pub group: u8,
     pub key: u8,
     pub value: f32,
@@ -40,6 +49,13 @@ pub struct UpdateBandControlPayload {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateKeyControlPayload {
+    pub keys: Vec<NodeKey>,
+    pub value: f32, // 0.0 = released, 1.0 = pressed
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReflectKeyControlPayload {
     pub group: u8,
     pub key: u8,
     pub value: f32, // 0.0 = released, 1.0 = pressed

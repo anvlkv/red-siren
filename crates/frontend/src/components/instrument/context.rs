@@ -79,14 +79,14 @@ impl InstrumentContext {
 /// Kept intentionally simple; callers provide values derived from leptos_use::use_element_bounding.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Bounding {
-    pub x: f32,
-    pub y: f32,
-    pub width: f32,
-    pub height: f32,
-    pub top: f32,
-    pub right: f32,
-    pub bottom: f32,
-    pub left: f32,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub top: f64,
+    pub right: f64,
+    pub bottom: f64,
+    pub left: f64,
 }
 
 impl Bounding {

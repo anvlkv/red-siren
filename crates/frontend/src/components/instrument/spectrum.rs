@@ -4,12 +4,10 @@ use leptos_use::use_device_pixel_ratio;
 use tauri_use::{use_command, UseTauriWithReturn};
 use web_sys::CanvasRenderingContext2d;
 
-use crate::{
-    components::instrument::util::{get_2d_ctx, is_dark_mode, resolve_theme_color},
-    util::{
-        layout_context::{expect_layout_contex, LayoutContextReturn},
-        raf_fn_fps::use_raf_fn_with_fps,
-    },
+use crate::util::{
+    drawing::{get_2d_ctx, is_dark_mode, resolve_theme_color},
+    layout_context::{expect_layout_contex, LayoutContextReturn},
+    raf_fn_fps::use_raf_fn_with_fps,
 };
 
 const MIN_CELL_SIZE: f64 = 0.1;
@@ -191,8 +189,8 @@ pub fn SpectrumViz() -> impl IntoView {
             node_ref=canvas_ref
             // Width/height attributes are set via Effect to account for pixel ratio.
             // Initial attributes to avoid 0 size before first Effect runs.
-            width=800
-            height=600
+            width=move || space().x as u32
+            height=move || space().y as u32
         ></canvas>
     }
 }
@@ -336,8 +334,8 @@ fn draw_spectrum(
     // Draw each pair as two rectangles using global alpha scaled 0..1
     for (i, &(l, r)) in row.iter().enumerate() {
         let i = i as f64;
-        fill_sample(i, l, radius * 0.5);
-        fill_sample(i, r, radius * 1.5 + right_base);
+        fill_sample(i, l, radius * 2.0);
+        fill_sample(i, r, right_base);
     }
 
     ctx.restore();

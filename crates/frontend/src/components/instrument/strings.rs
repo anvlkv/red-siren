@@ -6,7 +6,7 @@ use web_sys::CanvasRenderingContext2d;
 
 use crate::components::intro::consts::{INTRO_FLUTE_POS_X, INTRO_FLUTE_POS_Y, INTRO_FLUTE_ROT_DEG};
 use crate::util::drawing::{get_2d_ctx, is_dark_mode, resolve_theme_color};
-use crate::util::layout_context::{expect_layout_contex, LayoutContextReturn};
+use crate::util::layout_context::{expect_layout_context, LayoutContextReturn};
 
 #[derive(Debug, Clone, Default)]
 struct VizEntry {
@@ -22,7 +22,7 @@ impl VizEntry {
 
 #[component]
 pub fn InstrumentStrings() -> impl IntoView {
-    const HISTORY_SIZE: usize = 1;
+    const HISTORY_SIZE: usize = 3;
 
     let LayoutContextReturn {
         space,
@@ -31,7 +31,7 @@ pub fn InstrumentStrings() -> impl IntoView {
         right_string_position,
         complete_layout,
         ..
-    } = expect_layout_contex();
+    } = expect_layout_context();
 
     let string_wave_amplitude = Memo::new(move |_| complete_layout().instrument_breadth * 0.55);
 
@@ -103,6 +103,22 @@ pub fn InstrumentStrings() -> impl IntoView {
         }
     });
 
+    let is_dark = is_dark_mode();
+    let stroke_color = Memo::new(move |_| {
+        let var = if is_dark() {
+            "--color-red"
+        } else {
+            "--color-black"
+        };
+        resolve_theme_color(var).unwrap_or_else(|| {
+            if is_dark() {
+                "#e30022".into()
+            } else {
+                "#353839".into()
+            }
+        })
+    });
+
     let last_ts = StoredValue::new(Option::<f64>::None);
     // Drive periodic fetch (20 FPS)
     let _raf = crate::util::raf_fn_fps::use_raf_fn_with_fps(
@@ -142,8 +158,10 @@ pub fn InstrumentStrings() -> impl IntoView {
                 });
             }
         },
-        30.0,
+        24.0,
     );
+
+    let slice_edge = StoredValue::new(0_usize);
 
     Effect::new(move |_| {
         let VizEntry { left, right } = viz_data().into_iter().fold(
@@ -162,23 +180,30 @@ pub fn InstrumentStrings() -> impl IntoView {
                 acc
             },
         );
+        let slice_start = slice_edge.get_value();
+        slice_edge.set_value((slice_start + 1) % left.first().map(|f| f.len()).unwrap_or(1));
+        let stroke_color = stroke_color();
         let alpha_left = 2.0 / (left.len() as f64 + 1.0);
         let alpha_right = 2.0 / (right.len() as f64 + 1.0);
         if let Some(ctx) = canvas_ref.get().and_then(|canvas| get_2d_ctx(&canvas)) {
             let string_wave_amplitude = string_wave_amplitude();
-            for samples in left {
+            for mut samples in left {
+                samples.rotate_left(slice_start);
                 draw_string_snoop_data(
                     &ctx,
                     left_string_position(),
+                    &stroke_color,
                     string_wave_amplitude,
                     alpha_left,
                     &samples,
                 );
             }
-            for samples in right {
+            for mut samples in right {
+                samples.rotate_left(slice_start);
                 draw_string_snoop_data(
                     &ctx,
                     right_string_position(),
+                    &stroke_color,
                     string_wave_amplitude,
                     alpha_right,
                     &samples,
@@ -258,27 +283,14 @@ pub fn InstrumentStrings() -> impl IntoView {
 fn draw_string_snoop_data(
     ctx: &CanvasRenderingContext2d,
     (start, end): common::Line,
+    stroke_color: &str,
     amplitude: f64,
     alpha: f64,
     samples: &[f32],
 ) {
-    let is_dark = is_dark_mode();
-    let var = if is_dark {
-        "--color-red"
-    } else {
-        "--color-black"
-    };
-    let stroke_color = resolve_theme_color(var).unwrap_or_else(|| {
-        if is_dark {
-            "#e30022".into()
-        } else {
-            "#353839".into()
-        }
-    });
-
     ctx.save();
 
-    ctx.set_stroke_style_str(&stroke_color);
+    ctx.set_stroke_style_str(stroke_color);
     ctx.set_global_alpha(alpha);
     ctx.set_line_width(1.75);
     ctx.set_filter("blur(1.5px)");

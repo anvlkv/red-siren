@@ -4,7 +4,7 @@ use crate::{
         UiVariant,
     },
     util::{
-        layout_context::{expect_layout_contex, LayoutContextReturn},
+        layout_context::{expect_layout_context, LayoutContextReturn},
         secondary_window::is_secondary_window,
         setup_context::{is_devtools_enabled, is_mic_premission_granted},
     },
@@ -39,7 +39,7 @@ pub fn Tune() -> impl IntoView {
         }
     });
 
-    let LayoutContextReturn { orientation, .. } = expect_layout_contex();
+    let LayoutContextReturn { orientation, .. } = expect_layout_context();
 
     let placement = Signal::derive(move || match orientation() {
         common::orientation::LayoutOrientation::Vertical => UiPlacement::Left,

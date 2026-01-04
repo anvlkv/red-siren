@@ -2,7 +2,7 @@ use common::safe_area::SafeArea;
 use leptos::prelude::*;
 use tauri_use::{use_command, UseTauriWithReturn};
 
-use crate::util::layout_context::{expect_layout_contex, LayoutContextReturn};
+use crate::util::layout_context::{expect_layout_context, LayoutContextReturn};
 
 use super::element::KeyboardElement;
 
@@ -22,7 +22,7 @@ pub fn Keyboard() -> impl IntoView {
         key_radius,
         key_pad_main,
         ..
-    } = expect_layout_contex();
+    } = expect_layout_context();
 
     // Excitement snoop batch stream (pull model).
     let UseTauriWithReturn {
@@ -187,7 +187,7 @@ fn Group(
         key_band_length,
         key_band_breadth,
         ..
-    } = expect_layout_contex();
+    } = expect_layout_context();
 
     let class = move || {
         format!(

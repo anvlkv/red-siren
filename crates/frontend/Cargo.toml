@@ -38,14 +38,15 @@ wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 web-sys = { workspace = true, features = [
   "CanvasRenderingContext2d",
-  "HtmlCanvasElement",
-  "DragEvent",
-  "MouseEvent",
-  "Event",
-  "UiEvent",
-  "WheelEvent",
   "DataTransfer",
-  "Document"
+  "Document",
+  "DragEvent",
+  "Event",
+  "HtmlCanvasElement",
+  "ImageData",
+  "MouseEvent",
+  "UiEvent",
+  "WheelEvent"
 ] }
 web-time = "1.1"
 

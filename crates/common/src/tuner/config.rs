@@ -16,8 +16,8 @@ pub struct SensorData {
     pub key: NodeKey,
     pub min_frequency: f32, // Hz
     pub max_frequency: f32, // Hz
-    pub min_magnitude: f32, // dB (20*log10) threshold
-    pub max_magnitude: f32, // dB (20*log10) threshold
+    pub min_magnitude: f32, // 0.0 scaled
+    pub max_magnitude: f32, // 1.0 scaled
 }
 
 impl Config {
@@ -47,8 +47,9 @@ impl Config {
         &self,
         layout: &Layout,
         frequency: f32,
-        magnitude: f32,
+        mag_norm: f32,
     ) -> mint::Point2<f64> {
+        let mag_norm = mag_norm.clamp(0.0, 1.0) as f64;
         // Normalize inputs (log-frequency mapping: 20Hz..Nyquist)
         let nyquist = (self.sample_rate / 2.0) as f64;
         let f_min = 20.0_f64;
@@ -56,9 +57,6 @@ impl Config {
         let log_max = nyquist.ln();
         let freq_ratio =
             (((frequency as f64).max(f_min).ln() - log_min) / (log_max - log_min)).clamp(0.0, 1.0);
-        let min_db = -120.0_f64;
-        let max_db = 0.0_f64;
-        let mag_norm = (((magnitude as f64) - min_db) / (max_db - min_db)).clamp(0.0, 1.0);
 
         // Anchor to baseline with sensor-radius margins and full perpendicular range
         let (start, end) = layout.line_position;
@@ -132,11 +130,8 @@ impl Config {
         let log_min = f_min.ln();
         let log_max = nyquist.ln();
         let frequency = (log_min + freq_ratio * (log_max - log_min)).exp();
-        let min_db = -120.0_f64;
-        let max_db = 0.0_f64;
-        let magnitude = min_db + mag_norm * (max_db - min_db);
 
-        (frequency as f32, magnitude as f32)
+        (frequency as f32, mag_norm as f32)
     }
 }
 
@@ -153,9 +148,9 @@ fn generate_default_sensors(total_keys: usize, registry: &NodeKeyRegistry) -> Ve
     let log_max = max_freq.ln();
     let log_step = (log_max - log_min) / (total_keys as f32);
 
-    // Default magnitude thresholds (dB)
-    let default_min_magnitude = -80.0;
-    let default_max_magnitude = -20.0;
+    // Default magnitude thresholds
+    let default_min_magnitude = 0.015;
+    let default_max_magnitude = 0.75;
 
     // Generate sensors for each key using registry
     let mut sensor_idx = 0;

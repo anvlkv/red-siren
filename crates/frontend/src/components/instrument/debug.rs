@@ -3,7 +3,7 @@ use tauri_use::{use_command, UseTauriWithReturn};
 
 use crate::{
     components::Fold,
-    util::layout_context::{expect_layout_contex, LayoutContextReturn},
+    util::layout_context::{expect_layout_context, LayoutContextReturn},
 };
 
 const REFRESH_FPS: f64 = 12.0; // small & cheap; good enough to spot trends
@@ -14,7 +14,7 @@ pub fn DebugOverlay() -> impl IntoView {
         num_groups,
         num_keys_per_group,
         ..
-    } = expect_layout_contex();
+    } = expect_layout_context();
 
     // Pull excitement batches
     let UseTauriWithReturn {

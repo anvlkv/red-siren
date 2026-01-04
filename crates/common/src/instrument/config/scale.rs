@@ -22,4 +22,8 @@ impl Scale {
             }
         }
     }
+
+    pub fn is_dark(&self) -> bool {
+        matches!(self, Scale::In)
+    }
 }

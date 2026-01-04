@@ -16,7 +16,7 @@ use web_time::Instant;
 
 use crate::{
     components::{expect_instrument_context, instrument::context::Bounding, Button, UiSize},
-    util::layout_context::{expect_layout_contex, LayoutContextReturn},
+    util::layout_context::{expect_layout_context, LayoutContextReturn},
 };
 
 #[component]
@@ -37,7 +37,7 @@ pub fn KeyboardElement(
         num_keys_per_group,
         space,
         ..
-    } = expect_layout_contex();
+    } = expect_layout_context();
 
     let (drag_start_pos, set_drag_start_pos) = signal(Option::<(i32, i32, i32)>::None);
     let (prev_instant, set_prev_instant) = signal(Instant::now());
@@ -62,7 +62,8 @@ pub fn KeyboardElement(
             * match channel {
                 common::instrument::GroupChannel::Left => -1.0,
                 common::instrument::GroupChannel::Right => 1.0,
-            };
+            }
+            * if ctrl { 0.1 } else { 1.0 };
         let bound = key_band_length();
 
         let velocity = if duration.as_millis() > 0 {
@@ -171,7 +172,7 @@ pub fn KeyboardElement(
     let band_control_pos = Memo::new(move |prev| {
         let radius = key_radius();
         let pad = key_band_breadth() - radius * 2.0;
-        let len = key_band_length() - pad - radius;
+        let len = key_band_length() - pad * 2.0;
         band_control_data()
             .iter()
             .find_map(|d| {
@@ -225,14 +226,8 @@ pub fn KeyboardElement(
 
     let on_wheel = move |ev: WheelEvent| {
         ev.prevent_default();
-        let delta_mode = ev.delta_mode();
-        let delta = ev.delta_y()
-            * match delta_mode {
-                WheelEvent::DOM_DELTA_PIXEL => 1.0,
-                WheelEvent::DOM_DELTA_LINE => 1.6,
-                WheelEvent::DOM_DELTA_PAGE => 16.0,
-                _ => 1.0,
-            };
+        let _delta_mode = ev.delta_mode();
+        let delta = ev.delta_y();
         let alt = ev.alt_key();
         let ctrl = ev.ctrl_key();
         let (d_x, d_y) = match orientation() {
@@ -240,6 +235,38 @@ pub fn KeyboardElement(
             common::orientation::LayoutOrientation::Vertical => (delta as i32, 0),
         };
         delta_change(d_x, d_y, alt, ctrl, Instant::now());
+    };
+
+    let on_pointerup = move |ev: ev::PointerEvent| {
+        let alt = ev.alt_key();
+        let ctrl = ev.ctrl_key();
+        let payload = if ctrl {
+            let keys = registry().all_keys();
+            UpdateKeyControlPayload {
+                keys,
+                value: if key_control_data() { 0.0 } else { 1.0 },
+            }
+        } else if alt {
+            let keys = registry().group_keys(g as u8);
+            UpdateKeyControlPayload {
+                keys,
+                value: if key_control_data() { 0.0 } else { 1.0 },
+            }
+        } else {
+            UpdateKeyControlPayload {
+                keys: vec![NodeKey(g as u8, k as u8)],
+                value: if key_control_data() { 0.0 } else { 1.0 },
+            }
+        };
+        update_key_control(Some((payload, ())));
+        set_drag_start_pos.set(None);
+    };
+
+    let on_pointerdown = move |ev: ev::PointerEvent| {
+        let pos_x = ev.client_x();
+        let pos_y = ev.client_y();
+        let id = ev.pointer_id();
+        set_drag_start_pos.set(Some((pos_x, pos_y, id)));
     };
 
     let button_ref = NodeRef::new();
@@ -265,8 +292,6 @@ pub fn KeyboardElement(
     );
 
     Effect::new(move |_| update());
-
-    Effect::new(move |_| {});
 
     let band_ref = NodeRef::new();
 
@@ -445,7 +470,7 @@ pub fn KeyboardElement(
                 }
                 class=move || {
                     format!(
-                        "absolute rounded-full bg-red/80 dark:bg-black/80 border-black dark:border-red backdrop-blur-xl border-(length:--keyboard-band-stroke-width) {} {}",
+                        "absolute rounded-full bg-red/50 dark:bg-black/50 border-black dark:border-red backdrop-blur-md border-(length:--keyboard-band-stroke-width) shadow-sm overflow-visible {} {}",
                         match (orientation(), channel) {
                             (
                                 common::orientation::LayoutOrientation::Horizontal,
@@ -481,7 +506,7 @@ pub fn KeyboardElement(
                 square=true
                 class=Signal::derive(move || {
                     format!(
-                        "absolute {}",
+                        "absolute transition-opacity {}",
                         if key_control_data() {
                             "inset-ring-3 inset-ring-cinnabar dark:inset-ring-gray ring-2 ring-gray dark:ring-cinnabar"
                         } else {
@@ -534,37 +559,22 @@ pub fn KeyboardElement(
                     let inc = samples.iter().map(|(v, _)| v.abs()).sum::<f32>();
                     format!("scale({s}, {s})", s = 0.75 + (inc / samples.len() as f32) * 0.275)
                 }
-                on:wheel=on_wheel
-                on:pointerup=move |ev| {
-                    let alt = ev.alt_key();
-                    let ctrl = ev.ctrl_key();
-                    let payload = if ctrl {
-                        let keys = registry().all_keys();
-                        UpdateKeyControlPayload {
-                            keys,
-                            value: if key_control_data() { 0.0 } else { 1.0 },
-                        }
-                    } else if alt {
-                        let keys = registry().group_keys(g as u8);
-                        UpdateKeyControlPayload {
-                            keys,
-                            value: if key_control_data() { 0.0 } else { 1.0 },
-                        }
+                style:opacity=move || {
+                    if excitement_samples
+                        .get()
+                        .unwrap_or_default()
+                        .iter()
+                        .all(|s| s.1 == 0.0 && s.0 == 0.0)
+                    {
+                        0.85
                     } else {
-                        UpdateKeyControlPayload {
-                            keys: vec![NodeKey(g as u8, k as u8)],
-                            value: if key_control_data() { 0.0 } else { 1.0 },
-                        }
-                    };
-                    update_key_control(Some((payload, ())));
-                    set_drag_start_pos.set(None);
+                        1.0
+                    }
+                        .to_string()
                 }
-                on:pointerdown=move |ev| {
-                    let pos_x = ev.client_x();
-                    let pos_y = ev.client_y();
-                    let id = ev.pointer_id();
-                    set_drag_start_pos.set(Some((pos_x, pos_y, id)));
-                }
+                on:wheel=on_wheel
+                on:pointerup=on_pointerup
+                on:pointerdown=on_pointerdown
                 node_ref=button_ref
             >
                 <div

@@ -6,7 +6,7 @@ use web_sys::CanvasRenderingContext2d;
 
 use crate::util::{
     drawing::{get_2d_ctx, is_dark_mode, resolve_theme_color},
-    layout_context::{expect_layout_contex, LayoutContextReturn},
+    layout_context::{expect_layout_context, LayoutContextReturn},
     raf_fn_fps::use_raf_fn_with_fps,
 };
 
@@ -20,7 +20,7 @@ pub fn SpectrumViz() -> impl IntoView {
         orientation,
         safe_area_padding,
         ..
-    } = expect_layout_contex();
+    } = expect_layout_context();
 
     let UseTauriWithReturn {
         trigger: fetch_spectrum,
@@ -64,6 +64,23 @@ pub fn SpectrumViz() -> impl IntoView {
         }
 
         new_len
+    });
+
+    let is_dark = is_dark_mode();
+
+    let fill_color = Memo::new(move |_| {
+        let var = if is_dark() {
+            "--color-gray"
+        } else {
+            "--color-cinnabar"
+        };
+        resolve_theme_color(var).unwrap_or_else(|| {
+            if is_dark() {
+                "#36454f".into()
+            } else {
+                "#e44d2e".into()
+            }
+        })
     });
 
     // Setup canvas backing resolution and scaling whenever canvas mounts or layout/pixel ratio changes
@@ -138,6 +155,8 @@ pub fn SpectrumViz() -> impl IntoView {
                 let history_length = history_length.get_untracked();
                 let current_row = current_row.get_untracked();
 
+                let fill_color = fill_color();
+
                 // Draw current visualization
                 if let Some(ctx) = canvas_ref.get().and_then(|canvas| get_2d_ctx(&canvas)) {
                     let (cell_w, cell_h) = {
@@ -158,6 +177,7 @@ pub fn SpectrumViz() -> impl IntoView {
                         data,
                         current_row,
                         orientation,
+                        &fill_color,
                         safe_x,
                         safe_y,
                         safe_area_padding,
@@ -170,7 +190,7 @@ pub fn SpectrumViz() -> impl IntoView {
                 }
             }
         },
-        20.0,
+        16.0,
     );
 
     // Error logging for invoke failures
@@ -236,28 +256,15 @@ fn draw_spectrum(
     row: Vec<(f32, f32)>,
     row_index: usize,
     orientation: common::orientation::LayoutOrientation,
+    fill_color: &str,
     width: f64,
     height: f64,
     safe_area_padding: SafeArea,
     cell_width: f64,
     cell_height: f64,
 ) {
-    // Resolve theme color based on dark mode; fallback to cinnabar
-    let is_dark = is_dark_mode();
-    let var = if is_dark {
-        "--color-gray"
-    } else {
-        "--color-cinnabar"
-    };
-    let fill_color = resolve_theme_color(var).unwrap_or_else(|| {
-        if is_dark {
-            "#36454f".into()
-        } else {
-            "#e44d2e".into()
-        }
-    });
-    ctx.set_fill_style_str(&fill_color);
-    ctx.set_stroke_style_str(&fill_color);
+    ctx.set_fill_style_str(fill_color);
+    ctx.set_stroke_style_str(fill_color);
 
     // Precompute incremental positions and base split
     let cell_increment = match orientation {

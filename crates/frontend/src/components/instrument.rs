@@ -8,7 +8,7 @@ mod strings;
 
 use crate::{
     components::intro::consts::INTRO_FADE_DURATION_MS,
-    util::layout_context::{expect_layout_contex, LayoutContextReturn},
+    util::layout_context::{expect_layout_context, LayoutContextReturn},
 };
 use leptos::prelude::*;
 use leptos_styling::style_sheet;
@@ -28,7 +28,7 @@ use strings::*;
 #[component]
 pub fn Instrument(#[prop(into, optional)] editor: Signal<bool>) -> impl IntoView {
     provide_instrument_context();
-    let LayoutContextReturn { space, .. } = expect_layout_contex();
+    let LayoutContextReturn { space, .. } = expect_layout_context();
     view! {
         <div
             class=format!(

@@ -255,7 +255,7 @@ impl TunerState {
                     {
                         *frequency = *freq;
                         *current_magnitude = *mag;
-                        *max_magnitude = f32::min(*mag, *max_magnitude * HOLD_DECAY);
+                        *max_magnitude = f32::max(*mag, *max_magnitude * HOLD_DECAY);
                     }
                 }
 

@@ -396,7 +396,11 @@ pub fn instrument_update_band_control(
 ) -> Result<()> {
     for node_key in keys {
         let value = state.get_band_control(node_key)?;
-        let next_value = (value + increment).clamp(-1.0, 1.0);
+        let mut next_value = (value + increment).clamp(-1.0, 1.0);
+
+        if value.signum() != next_value.signum() {
+            next_value = 0.0 * next_value.signum()
+        }
 
         state.set_band_control(node_key, next_value)?;
 

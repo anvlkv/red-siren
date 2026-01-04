@@ -9,7 +9,7 @@ use crate::{
         MenuItem, UiPlacement, UiSize,
     },
     util::{
-        layout_context::{expect_layout_contex, LayoutContextReturn},
+        layout_context::{expect_layout_context, LayoutContextReturn},
         playback_service::{expect_playback_service, PlaybackService},
         raf_fn_fps::use_raf_fn_with_fps,
         secondary_window::is_secondary_window,
@@ -47,7 +47,7 @@ pub fn Play() -> impl IntoView {
     });
 
     // Derive compact menu placement from current instrument layout orientation
-    let LayoutContextReturn { orientation, .. } = expect_layout_contex();
+    let LayoutContextReturn { orientation, .. } = expect_layout_context();
 
     let placement = Signal::derive(move || match orientation() {
         common::orientation::LayoutOrientation::Vertical => UiPlacement::Left,

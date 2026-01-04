@@ -1,10 +1,7 @@
 mod commands;
 mod engine;
-// Runtime implementation now lives in audio_system::rt (cpal/web/null).
-// This crate only keeps the generic engine logic in engine.rs.
 
 use common::error::{AppError, Result, SetupError};
-
 use tauri::{async_runtime::spawn, App, Emitter, Listener, Manager};
 
 use crate::setup::WindowState;
@@ -21,7 +18,6 @@ pub fn setup(app: &mut App) -> Result<()> {
         let windows = app.webview_windows();
         let window = windows.get("main").ok_or(AppError::Setup(SetupError::MainWindowMissing))?;
         let size = window.inner_size()?;
-
         let base_handle_new = app.handle().clone();
         spawn(async move {
             let state = base_handle_new.state::<engine::InstrumentEngine>();
@@ -55,6 +51,10 @@ pub fn setup(app: &mut App) -> Result<()> {
             if let Err(e) = state.set_is_dark(is_dark) {
                 log::error!("error updating `{}`: {e}", common::events::setup::UPDATE_WINDOW_APPEARANCE)
             }
+
+            if let Err(e) = handle.emit(common::instrument::events::LAYOUT, state.layout()) {
+                log::error!("Failed emitting instrument layout: {e}");
+            }
         });
     });
 
@@ -74,16 +74,9 @@ pub fn setup(app: &mut App) -> Result<()> {
             match state.set_size(window_state.width, window_state.height) {
                 Ok(_) => {
                     log::debug!("Updated instrument layout for new window size: {}x{}", window_state.width, window_state.height);
-                    let layout = state.layout();
-
-
-
-                    // Emit updated layouts and config
-                    if let Err(e) = handle.emit(common::instrument::events::LAYOUT, layout) {
+                    if let Err(e) = handle.emit(common::instrument::events::LAYOUT, state.layout()) {
                         log::error!("Failed emitting instrument layout: {e}");
                     }
-
-
                 }
                 Err(e) => {
                     log::error!("error updating `{}`: {e}", common::events::setup::UPDATE_WINDOW_SIZE)

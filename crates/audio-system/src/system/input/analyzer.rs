@@ -164,8 +164,8 @@ impl FFTAnalyzer {
 
         // Perform FFT using spectrum-analyzer
         let scaling = spectrum_analyzer::scaling::combined(&[
-            &spectrum_analyzer::scaling::divide_by_N_sqrt,
             &spectrum_analyzer::scaling::scale_20_times_log10,
+            &spectrum_analyzer::scaling::scale_to_zero_to_one,
         ]);
         let spectrum = match samples_fft_to_spectrum(
             &windowed,

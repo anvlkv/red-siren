@@ -1,5 +1,8 @@
+use leptos::prelude::{Get, Signal};
 use wasm_bindgen::JsCast;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
+
+use crate::util::layout_context::expect_layout_context;
 
 /// Helper: acquire 2D rendering context
 pub fn get_2d_ctx(canvas: &HtmlCanvasElement) -> Option<CanvasRenderingContext2d> {
@@ -26,15 +29,7 @@ pub fn resolve_theme_color(var_name: &str) -> Option<String> {
     }
 }
 
-/// Detect dark mode: checks if the root element (controlled by app.rs window_appearance_class)
-/// has the "dark" class applied.
-pub fn is_dark_mode() -> bool {
-    if let Some(window) = web_sys::window() {
-        if let Some(document) = window.document() {
-            // Detect dark mode by presence of any element with the 'dark' class,
-            // as applied by the App wrapper (window_appearance_class).
-            return document.query_selector(".dark").ok().flatten().is_some();
-        }
-    }
-    false
+pub fn is_dark_mode() -> Signal<bool> {
+    let ctx = expect_layout_context();
+    Signal::derive(move || ctx.scale.get().is_dark())
 }

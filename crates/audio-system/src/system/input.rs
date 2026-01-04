@@ -8,7 +8,7 @@ pub mod random_excitor;
 use std::collections::HashMap;
 
 use common::tuner::Config;
-use common::{NodeKey, NodeKeyRegistry};
+use common::NodeKey;
 #[cfg(feature = "hi_fi")]
 use fundsp::hacker::prelude::*;
 #[cfg(not(feature = "hi_fi"))]
@@ -156,10 +156,8 @@ pub fn randomized_system(
         excitements.len()
     );
 
-    let seed = NodeKeyRegistry::seed_from_keys(excitements.keys());
-
     // Create RandomExcitor node
-    let random_excitor = RandomExcitor::new_seeded(seed, excitements);
+    let random_excitor = RandomExcitor::new(excitements);
 
     // Add to network
     let id = net.push(Box::new(random_excitor));

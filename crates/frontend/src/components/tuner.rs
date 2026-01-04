@@ -3,12 +3,10 @@ mod editor;
 mod sensor_handles;
 mod spectrum;
 
-use common::tuner::{SpectrumData, UpdateSensorPayload};
+use common::tuner::UpdateSensorPayload;
 use leptos::callback::Callback;
 use leptos::prelude::*;
-use tauri_use::{use_command, use_invoke, UseTauriReturn, UseTauriWithReturn};
-
-use crate::util::raf_fn_fps::use_raf_fn_with_fps;
+use tauri_use::{use_invoke, UseTauriReturn};
 
 pub use context::{expect_tuner_service, provide_tuner_service};
 pub use sensor_handles::SensorHandles;
@@ -19,13 +17,6 @@ pub use spectrum::SpectrumVisualizer;
 pub fn Tuner(#[prop(into, optional)] editor: Signal<bool>) -> impl IntoView {
     let context = expect_tuner_service();
 
-    // Fetch spectrum data
-    let UseTauriWithReturn {
-        data: spectrum_data,
-        error: spectrum_error,
-        trigger: poll_spectrum,
-    } = use_command::<SpectrumData>(common::commands::tuner::SPECTRUM_DATA);
-
     // Update sensor command
     let UseTauriReturn {
         error: update_sensor_error,
@@ -35,9 +26,6 @@ pub fn Tuner(#[prop(into, optional)] editor: Signal<bool>) -> impl IntoView {
 
     // Log errors
     Effect::new(move |_| {
-        if let Some(err) = spectrum_error() {
-            log::error!("Error listening to spectrum data: {err}");
-        }
         if let Some(err) = update_sensor_error() {
             log::error!("Error updating sensor: {err}");
         }
@@ -62,23 +50,13 @@ pub fn Tuner(#[prop(into, optional)] editor: Signal<bool>) -> impl IntoView {
         update_sensor_invoke(Some((payload, ())));
     });
 
-    _ = use_raf_fn_with_fps(
-        move |_| {
-            poll_spectrum(Some(()));
-            if let Some(data) = spectrum_data() {
-                context.spectrum.set(Some(data));
-            }
-        },
-        20.0,
-    );
-
     view! {
         <div
             class="relative overflow-hidden"
             style:width=move || format!("{}px", context.layout.get().unwrap_or_default().space.x)
             style:height=move || format!("{}px", context.layout.get().unwrap_or_default().space.y)
         >
-            <SpectrumVisualizer spectrum=context.spectrum layout=context.layout />
+            <SpectrumVisualizer layout=context.layout />
 
             <SensorHandles
                 config=Signal::derive(move || context.config.get().unwrap_or_default())

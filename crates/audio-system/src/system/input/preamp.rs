@@ -94,7 +94,7 @@ pub fn create_sensors_preamp(values: &FineTunedValues) -> An<PreampType> {
             & bell_hz(freq_1khz, q_1khz, gain_1khz_linear)
             & bell_hz(freq_10khz, q_10khz, gain_10khz_linear)
             & pass())
-        >> mul((1.0 / 5.0) as f32)
+        >> mul(0.5)
         >> (pass() | values.input_ny_threshold.clone() | values.input_ny_wet_ratio.clone())
         >> super::new_york::new_york::<S>()
 }

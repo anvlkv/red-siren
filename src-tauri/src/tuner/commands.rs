@@ -37,22 +37,32 @@ pub fn tuner_spectrum_data(app: AppHandle) -> Result<SpectrumData> {
 #[tauri::command]
 pub fn tuner_update_sensor(
     state: State<'_, TunerState>,
-    key: NodeKey,
-    min_frequency: f32,
-    max_frequency: f32,
-    min_magnitude: f32,
-    max_magnitude: f32,
-) -> Result<()> {
+    keys: Vec<NodeKey>,
+    min_frequency_increment: f32,
+    max_frequency_increment: f32,
+    min_magnitude_increment: f32,
+    max_magnitude_increment: f32,
+) -> Result<Config> {
+    let mut cfg = state.tuner_config();
+    let eps = f32::EPSILON.sqrt();
     // Update tuner config
-    _ = state.update_sensor_valuess(
-        key,
-        min_frequency,
-        max_frequency,
-        min_magnitude,
-        max_magnitude,
-    )?;
+    for key in keys {
+        if let Some(old_value) = cfg.sensor_data.iter().find(|s| s.key == key).copied() {
+            let min_freq = (old_value.min_frequency + min_frequency_increment).max(cfg.min_freq());
+            let max_freq = (old_value.max_frequency + max_frequency_increment).min(cfg.max_freq());
+            let min_mag = (old_value.min_magnitude + min_magnitude_increment).clamp(0.0, 1.0);
+            let max_mag = (old_value.max_magnitude + max_magnitude_increment).clamp(0.0, 1.0);
+            cfg = state.update_sensor_valuess(
+                key,
+                min_freq.min(max_freq - eps),
+                max_freq.max(min_freq + eps),
+                min_mag.min(max_mag - eps),
+                max_mag.max(min_mag + eps),
+            )?;
+        }
+    }
 
-    Ok(())
+    Ok(cfg)
 }
 
 #[tauri::command]
@@ -64,7 +74,12 @@ pub fn tuner_reset_config(
     let sample_rate = instrument.sample_rate() as f32;
     // Generate default tuner config from layout
     let tuner_layout: TunerLayout = inst_layout.into();
-    let new_config = Config::new(tuner_layout, sample_rate, inst_layout.registry());
+    let new_config = Config::new(
+        tuner_layout,
+        sample_rate,
+        audio_system::FFT_WINDOW_SIZE,
+        inst_layout.registry(),
+    );
 
     // Update tuner config
     state.reset(&new_config, &tuner_layout)?;

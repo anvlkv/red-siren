@@ -9,6 +9,7 @@ use crate::{NodeKey, NodeKeyRegistry};
 pub struct Config {
     pub sensor_data: Vec<SensorData>,
     pub sample_rate: f32,
+    pub fft_size: usize,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy, Default, Serialize, Deserialize)]
@@ -21,7 +22,12 @@ pub struct SensorData {
 }
 
 impl Config {
-    pub fn new(tuner_layout: Layout, sample_rate: f32, registry: NodeKeyRegistry) -> Self {
+    pub fn new(
+        tuner_layout: Layout,
+        sample_rate: f32,
+        fft_size: usize,
+        registry: NodeKeyRegistry,
+    ) -> Self {
         // Calculate total keys from layout - ensure consistency
         let total_keys = registry.total_keys();
 
@@ -34,13 +40,16 @@ impl Config {
             );
         }
 
-        // Generate logarithmically spaced frequency ranges
-        let sensor_data = generate_default_sensors(total_keys, &registry);
-
-        Self {
-            sensor_data,
+        let cfg = Self {
+            sensor_data: vec![],
             sample_rate,
-        }
+            fft_size,
+        };
+
+        // Generate logarithmically spaced frequency ranges
+        let sensor_data = cfg.generate_default_sensors(&registry);
+
+        Self { sensor_data, ..cfg }
     }
 
     pub fn frequency_magnitude_to_space(
@@ -50,13 +59,9 @@ impl Config {
         mag_norm: f32,
     ) -> mint::Point2<f64> {
         let mag_norm = mag_norm.clamp(0.0, 1.0) as f64;
-        // Normalize inputs (log-frequency mapping: 20Hz..Nyquist)
-        let nyquist = (self.sample_rate / 2.0) as f64;
-        let f_min = 20.0_f64;
-        let log_min = f_min.ln();
-        let log_max = nyquist.ln();
-        let freq_ratio =
-            (((frequency as f64).max(f_min).ln() - log_min) / (log_max - log_min)).clamp(0.0, 1.0);
+        let freq_clamped = frequency.clamp(self.min_freq(), self.max_freq()) as f64;
+        let freq_range = (self.max_freq() as f64) - (self.min_freq() as f64);
+        let freq_ratio = ((freq_clamped - (self.min_freq() as f64)) / freq_range).clamp(0.0, 1.0);
 
         // Anchor to baseline with sensor-radius margins and full perpendicular range
         let (start, end) = layout.line_position;
@@ -94,7 +99,7 @@ impl Config {
         layout: &Layout,
         point: mint::Point2<f64>,
     ) -> (f32, f32) {
-        let nyquist = (self.sample_rate / 2.0) as f64;
+        let freq_range = (self.max_freq() as f64) - (self.min_freq() as f64);
         let (start, end) = layout.line_position;
         let r = layout.sensor_radius;
         let inset = r + 0.5;
@@ -126,56 +131,59 @@ impl Config {
             }
         };
 
-        let f_min = 20.0_f64;
-        let log_min = f_min.ln();
-        let log_max = nyquist.ln();
-        let frequency = (log_min + freq_ratio * (log_max - log_min)).exp();
+        let frequency = ((freq_ratio * freq_range) + (self.min_freq() as f64))
+            .clamp(self.min_freq() as f64, self.max_freq() as f64);
 
         (frequency as f32, mag_norm as f32)
     }
-}
 
-/// Generate default sensors with logarithmic frequency spacing
-fn generate_default_sensors(total_keys: usize, registry: &NodeKeyRegistry) -> Vec<SensorData> {
-    let mut sensors = Vec::with_capacity(total_keys);
+    pub fn min_freq(&self) -> f32 {
+        self.sample_rate / (self.fft_size as f32)
+    }
 
-    // Frequency range for sensors (20Hz to 20kHz covers human hearing)
-    let min_freq = 20.0_f32;
-    let max_freq = 20000.0_f32;
+    pub fn max_freq(&self) -> f32 {
+        self.sample_rate / 2.0
+    }
 
-    // Calculate logarithmic spacing
-    let log_min = min_freq.ln();
-    let log_max = max_freq.ln();
-    let log_step = (log_max - log_min) / (total_keys as f32);
+    /// Generate default sensors with linear (even) frequency spacing across [min_freq, max_freq].
+    pub fn generate_default_sensors(&self, registry: &NodeKeyRegistry) -> Vec<SensorData> {
+        let total_keys = registry.total_keys();
+        let mut sensors = Vec::with_capacity(total_keys);
 
-    // Default magnitude thresholds
-    let default_min_magnitude = 0.015;
-    let default_max_magnitude = 0.75;
+        let min_freq = self.min_freq();
+        let max_freq = self.max_freq();
+        let total = total_keys as f32;
+        let step = if total_keys > 0 {
+            (max_freq - min_freq) / total
+        } else {
+            0.0
+        };
 
-    // Generate sensors for each key using registry
-    let mut sensor_idx = 0;
-    registry.iter_keys(|node_key| {
-        if sensor_idx < total_keys {
-            // Calculate frequency range for this sensor
-            let log_freq_start = log_min + (sensor_idx as f32) * log_step;
-            let log_freq_end = log_min + ((sensor_idx + 1) as f32) * log_step;
+        // Default magnitude thresholds
+        let default_min_magnitude = 0.015;
+        let default_max_magnitude = 0.75;
 
-            let sensor_min_freq = log_freq_start.exp();
-            let sensor_max_freq = log_freq_end.exp();
+        // Generate sensors for each key using registry order
+        let mut sensor_idx = 0;
+        registry.iter_keys(|node_key| {
+            if sensor_idx < total_keys {
+                let sensor_min_freq = min_freq + (sensor_idx as f32) * step;
+                let sensor_max_freq = min_freq + ((sensor_idx + 1) as f32) * step;
 
-            sensors.push(SensorData {
-                key: node_key,
-                min_frequency: sensor_min_freq,
-                max_frequency: sensor_max_freq,
-                min_magnitude: default_min_magnitude,
-                max_magnitude: default_max_magnitude,
-            });
+                sensors.push(SensorData {
+                    key: node_key,
+                    min_frequency: sensor_min_freq,
+                    max_frequency: sensor_max_freq,
+                    min_magnitude: default_min_magnitude,
+                    max_magnitude: default_max_magnitude,
+                });
 
-            sensor_idx += 1;
-        }
-    });
+                sensor_idx += 1;
+            }
+        });
 
-    sensors
+        sensors
+    }
 }
 
 #[cfg(test)]
@@ -189,7 +197,7 @@ mod tests {
     fn tuner_config() {
         for layout in layout_test_cases() {
             let tuner_layout: Layout = layout.into();
-            let config = Config::new(tuner_layout, 44100.0, layout.registry());
+            let config = Config::new(tuner_layout, 44100.0, 2048, layout.registry());
 
             assert_json_snapshot!(
                 format!("tuner_config_{}x{}", layout.space.x, layout.space.y),

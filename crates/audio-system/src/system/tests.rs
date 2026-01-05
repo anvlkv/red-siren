@@ -23,7 +23,12 @@ fn instrument_with_rand_src() {
         let instrument_config =
             common::instrument::Config::try_from(layout).expect("valid instrument config");
         let tuner_layout: common::tuner::layout::Layout = layout.into();
-        let tuner_config = common::tuner::Config::new(tuner_layout, 44_100.0, layout.registry());
+        let tuner_config = common::tuner::Config::new(
+            tuner_layout,
+            44_100.0,
+            crate::input::analyzer::FFT_WINDOW_SIZE,
+            layout.registry(),
+        );
 
         // Create a simple stereo output system network (no inputs)
         let mut net = Net::new(1, 2);
@@ -107,7 +112,12 @@ fn instrument_with_mic_src() {
     let instrument_config =
         common::instrument::Config::try_from(layout).expect("valid instrument config");
     let tuner_layout: common::tuner::layout::Layout = layout.into();
-    let tuner_config = common::tuner::Config::new(tuner_layout, 44_100.0, layout.registry());
+    let tuner_config = common::tuner::Config::new(
+        tuner_layout,
+        44_100.0,
+        crate::input::analyzer::FFT_WINDOW_SIZE,
+        layout.registry(),
+    );
 
     // Create a stereo output + tuner (mic) analysis network.
     // We give the Net one input channel and three outputs (following earlier integration

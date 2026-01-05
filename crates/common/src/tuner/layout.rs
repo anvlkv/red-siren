@@ -44,7 +44,8 @@ impl From<crate::instrument::Layout> for Layout {
         // Compute spectrum baseline from safe-area: bottom-most for Horizontal, left-most for Vertical
         let baseline = match value.orientation {
             LayoutOrientation::Horizontal => {
-                let y = (value.space.y - value.safe_area_padding.bottom).clamp(0.0, value.space.y);
+                let y = (value.space.y - value.safe_area_padding.bottom - value.key_radius)
+                    .clamp(0.0, value.space.y);
                 (
                     Point2 { x: 0.0, y },
                     Point2 {
@@ -54,7 +55,7 @@ impl From<crate::instrument::Layout> for Layout {
                 )
             }
             LayoutOrientation::Vertical => {
-                let x = (value.safe_area_padding.left).clamp(0.0, value.space.x);
+                let x = (value.safe_area_padding.left + value.key_radius).clamp(0.0, value.space.x);
                 (
                     Point2 { x, y: 0.0 },
                     Point2 {

@@ -94,7 +94,7 @@ struct CpalController {
     input_device: RwLock<Option<cpal::Device>>,
 
     // operation
-    tuner_only_mode: RwLock<bool>,
+    tuner_only_mode: Arc<RwLock<bool>>,
     quality_indicator: Arc<RwLock<PlaybackQuality>>,
 }
 
@@ -130,7 +130,7 @@ impl Default for CpalController {
             last_tuner_config: RwLock::new(TunerConfig::default()),
             output_device: RwLock::new(None),
             input_device: RwLock::new(None),
-            tuner_only_mode: RwLock::new(false),
+            tuner_only_mode: Arc::new(RwLock::new(false)),
             quality_indicator: Arc::new(RwLock::new(PlaybackQuality::default())),
         }
     }
@@ -253,14 +253,14 @@ impl CpalController {
 
         let quality_indicator = self.quality_indicator.clone();
         let sr = self.sample_rate.read().map(|sr| sr as u32).unwrap_or(44100);
-
+        let no_reset = self.tuner_only_mode.clone();
         // Spawn output stream owner.
         let (tx, handle) = spawn_owned_output_stream(
             output_device,
             output_default_cfg,
             stream_cfg,
             output_channels,
-            move || playback_callback(backend, input_buffer, quality_indicator, sr),
+            move || playback_callback(backend, input_buffer, quality_indicator, no_reset, sr),
         )?;
 
         // Persist output thread / control handles.

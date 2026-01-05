@@ -455,6 +455,7 @@ mod tests {
         // Create test config
         let config = Config {
             sample_rate: 44100.0,
+            fft_size: FFT_WINDOW_SIZE,
             sensor_data: vec![SensorData {
                 key: NodeKey::new(0, 0),
                 min_frequency: 100.0,
@@ -489,6 +490,7 @@ mod tests {
         // Create test config
         let config = Config {
             sample_rate: 44100.0,
+            fft_size: FFT_WINDOW_SIZE,
             sensor_data: vec![SensorData {
                 key: NodeKey::new(0, 0),
                 min_frequency: 440.0,

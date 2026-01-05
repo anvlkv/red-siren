@@ -160,6 +160,7 @@ pub fn SpectrumVisualizer(
                     let cfg = Config {
                         sensor_data: vec![],
                         sample_rate: spectrum.sample_rate,
+                        fft_size: spectrum.fft_size,
                     };
 
                     if !spectrum.max_magnitudes.is_empty() && !spectrum.frequencies.is_empty() {

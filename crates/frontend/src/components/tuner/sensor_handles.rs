@@ -7,22 +7,13 @@ use common::{
 use leptos::{callback::Callback, ev};
 use leptos::{html, prelude::*};
 use leptos_use::{
-    core::Position, use_device_pixel_ratio, use_document, use_window_size, UseWindowSizeReturn,
-};
-use leptos_use::{
-    use_draggable_with_options, UseDraggableCallbackArgs, UseDraggableOptions, UseDraggableReturn,
+    use_device_pixel_ratio, use_event_listener, use_window, use_window_size, UseWindowSizeReturn,
 };
 use mint::Point2;
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
+use web_sys::CanvasRenderingContext2d;
 use web_time::Instant;
 
-use crate::{
-    components::with_tooltip,
-    util::{
-        drawing::{get_2d_ctx, is_dark_mode, resolve_theme_color},
-        setup_context::is_devtools_enabled,
-    },
-};
+use crate::util::drawing::{get_2d_ctx, is_dark_mode, resolve_theme_color};
 
 type Color = (u8, u8, u8);
 type Highlight<'a> = (&'a str, f64, f64);
@@ -131,7 +122,7 @@ pub fn SensorHandles(
 
     let object_map = StoredValue::new(HashMap::<Color, Object>::new());
     let highlighted_object = RwSignal::new(None::<Object>);
-    let selected_bjects = RwSignal::new(HashMap::<i32, (Object, Point2<f64>, Instant)>::new());
+    let selected_objects = RwSignal::new(HashMap::<i32, (Object, Point2<f64>, Instant)>::new());
 
     Effect::new(move |_| {
         let lay = layout();
@@ -141,7 +132,7 @@ pub fn SensorHandles(
         let highlighted_object = highlighted_object();
         let base_color = base_color();
         let secondary_color = secondary_color();
-        let selection = selected_bjects.get();
+        let selection = selected_objects.get();
 
         object_map.update_value(|object_map| {
             if let Some((ctx, picking_ctx)) =
@@ -157,30 +148,28 @@ pub fn SensorHandles(
 
                 // draw sensors
                 for sensor in config.sensor_data.iter() {
-                    let main_obj = (sensor.key, None);
-                    let min_obj = (sensor.key, Some(SensorArmDirection::Min));
-                    let max_obj = (sensor.key, Some(SensorArmDirection::Max));
+                    let (main_picking_color, min_picking_color, max_picking_color) = {
+                        let main_obj = (sensor.key, None);
+                        let min_obj = (sensor.key, Some(SensorArmDirection::Min));
+                        let max_obj = (sensor.key, Some(SensorArmDirection::Max));
+                        let (main_picking_color, min_picking_color, max_picking_color) = (
+                            picking_color_for_object(main_obj),
+                            picking_color_for_object(min_obj),
+                            picking_color_for_object(max_obj),
+                        );
 
-                    let (main_picking_color, min_picking_color, max_picking_color) =
                         if !object_map.contains_key(&picking_color_for_object(main_obj)) {
-                            let color_1 = picking_color_for_object(main_obj);
-                            object_map.insert(color_1, main_obj);
-                            let color_2 = picking_color_for_object(min_obj);
-                            object_map.insert(color_2, min_obj);
-                            let color_3 = picking_color_for_object(max_obj);
-                            object_map.insert(color_3, max_obj);
-                            (
-                                color_to_string(color_1),
-                                color_to_string(color_2),
-                                color_to_string(color_3),
-                            )
-                        } else {
-                            (
-                                color_to_string(picking_color_for_object(main_obj)),
-                                color_to_string(picking_color_for_object(min_obj)),
-                                color_to_string(picking_color_for_object(max_obj)),
-                            )
+                            object_map.insert(main_picking_color, main_obj);
+                            object_map.insert(min_picking_color, min_obj);
+                            object_map.insert(max_picking_color, max_obj);
                         };
+
+                        (
+                            color_to_string(main_picking_color),
+                            color_to_string(min_picking_color),
+                            color_to_string(max_picking_color),
+                        )
+                    };
 
                     let start = config.frequency_magnitude_to_space(
                         &lay,
@@ -270,6 +259,37 @@ pub fn SensorHandles(
         });
     });
 
+    let freq_mag_space = Memo::new(move |_| {
+        let config = config();
+        let lay = layout();
+
+        // Point A: baseline start
+        let a = Point2 {
+            x: lay.line_position.0.x,
+            y: lay.line_position.0.y,
+        };
+
+        // Point B: extreme along the magnitude and frequency axes depending on orientation
+        let b = match lay.orientation {
+            common::orientation::LayoutOrientation::Horizontal => Point2 {
+                x: lay.line_position.1.x, // x max frequency
+                y: 0.0,                   // top edge (max magnitude)
+            },
+            common::orientation::LayoutOrientation::Vertical => Point2 {
+                x: lay.space.x,           // right edge (max magnitude)
+                y: lay.line_position.1.y, // y max frequency
+            },
+        };
+
+        let (a_freq, a_mag) = config.space_to_frequency_magnitude(&lay, a);
+        let (b_freq, b_mag) = config.space_to_frequency_magnitude(&lay, b);
+
+        (
+            (a_freq as f64)..=(b_freq as f64),
+            (a_mag as f64)..=(b_mag as f64),
+        )
+    });
+
     let object_under_pointer = move |x: f64, y: f64| -> Option<Object> {
         let (scale_x, scale_y) = scale();
         picking_canvas_ref
@@ -293,27 +313,109 @@ pub fn SensorHandles(
             })
     };
 
+    let unlisten_pointerout =
+        use_event_listener(use_window(), ev::pointerout, move |ev: ev::PointerEvent| {
+            let id = ev.pointer_id();
+            selected_objects.update(|selected| {
+                selected.remove(&id);
+            });
+        });
+
     let on_move = move |ev: ev::PointerEvent| {
         let x = ev.x() as f64;
         let y = ev.y() as f64;
         let id = ev.pointer_id();
-        let selected = selected_bjects();
-        if let Some((obj, mut point, inst)) = selected.get(&id).cloned() {
+        let selected = selected_objects();
+        if let Some(((key, part), mut point, inst)) = selected.get(&id).cloned() {
+            let (freq_space, mag_space) = freq_mag_space();
+            let freq_range = freq_space.end() - freq_space.start();
+            let mag_range = mag_space.end() - mag_space.start();
+            let lay = layout();
             let d_x = x - point.x;
             let d_y = y - point.y;
             let now = Instant::now();
-            let dur = now.duration_since(inst).as_secs_f64();
+            let dur = (now.duration_since(inst).as_secs_f64()).max(1e-3);
+            let v0_x = lay.space.x;
+            let v0_y = lay.space.y;
             let v_x = d_x.abs() / dur;
             let v_y = d_y.abs() / dur;
+            let scale_x = if v0_x > 0.0 { v_x / (v_x + v0_x) } else { 1.0 };
+            let scale_y = if v0_y > 0.0 { v_y / (v_y + v0_y) } else { 1.0 };
+            let frac_x = ((d_x / v0_x) * scale_x).clamp(-1.0, 1.0);
+            let frac_y = ((d_y / v0_y) * scale_y).clamp(-1.0, 1.0);
+            let ctrl = ev.ctrl_key();
+            let alt = ev.alt_key();
 
-            // let (mag_increment, freq_increment) = match layout().orientation {
-            //     common::orientation::LayoutOrientation::Vertical => todo!(),
-            //     common::orientation::LayoutOrientation::Horizontal => todo!(),
-            // };
+            let (mag_increment, freq_increment) = match layout().orientation {
+                common::orientation::LayoutOrientation::Horizontal => {
+                    // x controls frequency, y controls magnitude
+                    let freq_inc = (freq_range * frac_x) as f32;
+                    let mag_inc = (-mag_range * frac_y) as f32;
+                    if alt {
+                        if d_x.abs() > d_y.abs() {
+                            (0.0, freq_inc)
+                        } else {
+                            (mag_inc, 0.0)
+                        }
+                    } else {
+                        (mag_inc, freq_inc)
+                    }
+                }
+                common::orientation::LayoutOrientation::Vertical => {
+                    // y controls frequency, x controls magnitude
+                    let freq_inc = (freq_range * frac_y) as f32;
+                    let mag_inc = (mag_range * frac_x) as f32;
+                    if alt {
+                        if d_y.abs() > d_x.abs() {
+                            (0.0, freq_inc)
+                        } else {
+                            (mag_inc, 0.0)
+                        }
+                    } else {
+                        (mag_inc, freq_inc)
+                    }
+                }
+            };
+
+            let keys = if ctrl {
+                config()
+                    .sensor_data
+                    .iter()
+                    .map(|s| s.key)
+                    .collect::<Vec<_>>()
+            } else {
+                vec![key]
+            };
+
+            let update_payload = match part {
+                None => UpdateSensorPayload {
+                    keys,
+                    min_frequency_increment: freq_increment,
+                    max_frequency_increment: freq_increment,
+                    min_magnitude_increment: mag_increment,
+                    max_magnitude_increment: mag_increment,
+                },
+                Some(SensorArmDirection::Min) => UpdateSensorPayload {
+                    keys,
+                    min_frequency_increment: freq_increment,
+                    max_frequency_increment: 0.0,
+                    min_magnitude_increment: mag_increment,
+                    max_magnitude_increment: 0.0,
+                },
+                Some(SensorArmDirection::Max) => UpdateSensorPayload {
+                    keys,
+                    max_frequency_increment: freq_increment,
+                    min_frequency_increment: 0.0,
+                    max_magnitude_increment: mag_increment,
+                    min_magnitude_increment: 0.0,
+                },
+            };
+
+            on_update.run(update_payload);
 
             point.x = x;
             point.y = y;
-            selected_bjects.update(|objects| {
+            selected_objects.update(|objects| {
                 let entry = objects.entry(id);
                 entry.and_modify(|v| {
                     v.1 = point;
@@ -331,7 +433,7 @@ pub fn SensorHandles(
         let y = ev.y() as f64;
         let id = ev.pointer_id();
         if let Some(object_under_pointer) = object_under_pointer(x, y) {
-            selected_bjects.update(|selected| {
+            selected_objects.update(|selected| {
                 selected.insert(id, (object_under_pointer, Point2 { x, y }, Instant::now()));
             });
         }
@@ -339,10 +441,14 @@ pub fn SensorHandles(
 
     let on_up = move |ev: ev::PointerEvent| {
         let id = ev.pointer_id();
-        selected_bjects.update(|selected| {
+        selected_objects.update(|selected| {
             selected.remove(&id);
         });
     };
+
+    on_cleanup(move || {
+        unlisten_pointerout();
+    });
 
     view! {
         <>
@@ -360,6 +466,15 @@ pub fn SensorHandles(
                 on:pointermove=on_move
                 on:pointerdown=on_down
                 on:pointerup=on_up
+                style:cursor=move || {
+                    if highlighted_object().is_some() && selected_objects().is_empty() {
+                        "grab"
+                    } else if !selected_objects().is_empty() {
+                        "grabbing"
+                    } else {
+                        "default"
+                    }
+                }
             />
         </>
     }
@@ -506,7 +621,7 @@ fn highlight_color<'a>(
     base_color: &'a str,
     secondary_color: &'a str,
 ) -> Highlight<'a> {
-    let (is_selcted, is_selected_part) = selection
+    let (is_selected, is_selected_part) = selection
         .values()
         .find_map(|((k, p), _, _)| {
             let is_same = k == key;
@@ -520,7 +635,7 @@ fn highlight_color<'a>(
         .unwrap_or((false, false));
     let is_highlighted_part = &part == highlight_part;
 
-    match (is_selcted, is_selected_part, is_highlighted_part) {
+    match (is_selected, is_selected_part, is_highlighted_part) {
         (false, _, true) => (secondary_color, 0.6, 4.0),
         (false, _, false) => (secondary_color, 0.3, 2.0),
         (true, true, _) => (base_color, 0.9, 6.0),

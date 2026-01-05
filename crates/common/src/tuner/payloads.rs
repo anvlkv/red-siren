@@ -35,19 +35,19 @@ pub struct SpectrumData {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSensorPayload {
     /// Index of the sensor to update
-    pub key: NodeKey,
+    pub keys: Vec<NodeKey>,
 
     /// Minimum frequency in Hz
-    pub min_frequency: f32,
+    pub min_frequency_increment: f32,
 
     /// Maximum frequency in Hz
-    pub max_frequency: f32,
+    pub max_frequency_increment: f32,
 
-    /// Minimum magnitude threshold in dB (20*log10)
-    pub min_magnitude: f32,
+    /// Minimum magnitude threshold in 0..1
+    pub min_magnitude_increment: f32,
 
-    /// Maximum magnitude threshold in dB (20*log10)
-    pub max_magnitude: f32,
+    /// Maximum magnitude threshold in 0..1
+    pub max_magnitude_increment: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

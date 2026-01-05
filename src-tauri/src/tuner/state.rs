@@ -130,7 +130,8 @@ impl TunerState {
             let instrument_state = self.app.state::<InstrumentEngine>();
             let sample_rate = instrument_state.sample_rate() as f32;
 
-            let mut new_config: Config = Config::new(layout, sample_rate, registry);
+            let mut new_config: Config =
+                Config::new(layout, sample_rate, audio_system::FFT_WINDOW_SIZE, registry);
 
             // Restore preserved settings where possible
             for sensor in &mut new_config.sensor_data {

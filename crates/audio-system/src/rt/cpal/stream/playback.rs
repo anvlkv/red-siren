@@ -27,6 +27,7 @@ pub fn playback_callback(
     net: NetBackend,
     input_buffer: Option<Arc<ThingBuf<S>>>,
     quality_indicator: Arc<parking_lot::RwLock<PlaybackQuality>>,
+    no_reset_on_silence: Arc<parking_lot::RwLock<bool>>,
     sample_rate: u32,
 ) -> Box<super::GenType> {
     let mut backend = BigBlockAdapter::new(Box::new(net));
@@ -103,10 +104,11 @@ pub fn playback_callback(
             }
         }
 
-        if l_frames[0]
-            .iter()
-            .zip(r_frames[0].iter())
-            .all(|(l, r)| !l.is_normal() && !r.is_normal())
+        if !*no_reset_on_silence.read()
+            && l_frames[0]
+                .iter()
+                .zip(r_frames[0].iter())
+                .all(|(l, r)| !l.is_normal() && !r.is_normal())
         {
             accumulated_silence +=
                 Duration::from_secs_f64(num_frames as f64 * sample_duration.as_secs_f64());

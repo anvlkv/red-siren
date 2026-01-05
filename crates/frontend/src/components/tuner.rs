@@ -3,7 +3,7 @@ mod editor;
 mod sensor_handles;
 mod spectrum;
 
-use common::tuner::UpdateSensorPayload;
+use common::tuner::{Config, UpdateSensorPayload};
 use leptos::callback::Callback;
 use leptos::prelude::*;
 use tauri_use::{use_invoke, UseTauriReturn};
@@ -21,8 +21,9 @@ pub fn Tuner(#[prop(into, optional)] editor: Signal<bool>) -> impl IntoView {
     let UseTauriReturn {
         error: update_sensor_error,
         trigger: update_sensor_invoke,
+        data: update_sensor_data,
         ..
-    } = use_invoke::<UpdateSensorPayload, (), ()>(common::commands::tuner::UPDATE_SENSOR);
+    } = use_invoke::<UpdateSensorPayload, (), Config>(common::commands::tuner::UPDATE_SENSOR);
 
     // Log errors
     Effect::new(move |_| {
@@ -31,21 +32,15 @@ pub fn Tuner(#[prop(into, optional)] editor: Signal<bool>) -> impl IntoView {
         }
     });
 
+    Effect::new(move |_| {
+        if let Some(data) = update_sensor_data() {
+            context.config.set(Some(data));
+        }
+    });
+
     // Callback for updating sensors
     let on_update_sensor = Callback::new(move |payload: UpdateSensorPayload| {
         log::debug!("Updating sensor: {:#?}", payload);
-        // optimistic update
-        context.config.update(|cfg| {
-            if let Some(sensor) = cfg
-                .as_mut()
-                .and_then(|cfg| cfg.sensor_data.iter_mut().find(|s| s.key == payload.key))
-            {
-                sensor.min_frequency = payload.min_frequency;
-                sensor.max_frequency = payload.max_frequency;
-                sensor.min_magnitude = payload.min_magnitude;
-                sensor.max_magnitude = payload.max_magnitude;
-            }
-        });
         // invoke update
         update_sensor_invoke(Some((payload, ())));
     });

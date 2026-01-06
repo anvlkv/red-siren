@@ -2,7 +2,7 @@ mod commands;
 mod engine;
 
 use common::{error::{AppError, InstrumentError, Result, SetupError}, instrument::{Preset, commands::{ReflectBandControlPayload, ReflectKeyControlPayload}, events::{BAND_CONTROL_G_K, KEY_CONTROL_G_K}}};
-use tauri::{App, AppHandle, Emitter, Listener, Manager, async_runtime::spawn};
+use tauri::{App, AppHandle, Emitter, Manager, async_runtime::spawn};
 use tauri_plugin_store::StoreExt;
 
 use crate::setup::WindowState;
@@ -58,70 +58,9 @@ pub fn setup(app: &mut App) -> Result<()> {
         log::debug!("Instrument engine state already exists; skipping initialization");
     }
 
-    let base_handle_appearance = app.handle().clone();
-    app.listen(common::events::setup::UPDATE_WINDOW_APPEARANCE, move |_| {
-        let handle = base_handle_appearance.clone();
-        log::debug!("Received UPDATE_WINDOW_APPEARANCE event");
-        // Acquire state objects inside spawned task so they have 'static lifetime relative to task.
-        spawn(async move {
-            let state = handle.state::<engine::InstrumentEngine>();
-            let win_state = handle.state::<WindowState>();
-            let is_dark = win_state.lock().dark;
-            if let Err(e) = state.set_is_dark(is_dark) {
-                log::error!("error updating `{}`: {e}", common::events::setup::UPDATE_WINDOW_APPEARANCE)
-            }
+    // Window appearance updates are coordinated by AppBus; instrument listeners trimmed.
 
-            if let Err(e) = handle.emit(common::instrument::events::LAYOUT, state.layout()) {
-                log::error!("Failed emitting instrument layout: {e}");
-            }
-        });
-    });
-
-    let base_handle_size = app.handle().clone();
-    app.listen(common::events::setup::UPDATE_WINDOW_SIZE, move |_| {
-        let handle = base_handle_size.clone();
-        // Acquire state objects inside spawned task so they have 'static lifetime relative to task.
-        log::debug!("Received UPDATE_WINDOW_SIZE event");
-        spawn(async move {
-            log::trace!("updating engine state");
-            let state = handle.state::<engine::InstrumentEngine>();
-            let win_state = handle.state::<WindowState>();
-            log::trace!("acquired states, locking window state");
-            let window_state = win_state.lock();
-            log::trace!("locked window state: {:#?}", *window_state);
-            log::trace!("Setting instrument layout for new window size: {}x{}", window_state.width, window_state.height);
-            match state.set_size(window_state.width, window_state.height) {
-                Ok(_) => {
-                    log::debug!("Updated instrument layout for new window size: {}x{}", window_state.width, window_state.height);
-                    if let Err(e) = handle.emit(common::instrument::events::LAYOUT, state.layout()) {
-                        log::error!("Failed emitting instrument layout: {e}");
-                    }
-                }
-                Err(e) => {
-                    log::error!("error updating `{}`: {e}", common::events::setup::UPDATE_WINDOW_SIZE)
-                }
-            }
-
-            let new_layout = state.layout();
-
-            for node_key in new_layout.registry().all_keys() {
-                let band_value = state.get_band_control(node_key).unwrap();
-                let key_value = state.get_key_control(node_key).unwrap();
-                handle.emit(
-                    BAND_CONTROL_G_K,
-                    ReflectBandControlPayload { group: node_key.group(), key: node_key.key(), value: band_value },
-                ).unwrap();
-                handle.emit(
-                    KEY_CONTROL_G_K,
-                    ReflectKeyControlPayload { group: node_key.group(), key: node_key.key(), value: key_value },
-                ).unwrap();
-            }
-
-            let preset = state.get_preset();
-
-            save_preset(preset, &handle).unwrap();
-        });
-    });
+    // Window size updates are coordinated by AppBus; instrument listeners trimmed.
 
     Ok(())
 }

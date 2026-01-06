@@ -1,5 +1,6 @@
 #![feature(duration_millis_float)]
 
+mod app_bus;
 mod health;
 mod instrument;
 mod intro;
@@ -109,6 +110,9 @@ pub fn run() {
 
         // Setup instrument last
         instrument::setup(app)?;
+
+        // Wire AppBus coordinator after states are ready
+        app_bus::AppBus::setup(app)?;
 
         Ok(())
     });

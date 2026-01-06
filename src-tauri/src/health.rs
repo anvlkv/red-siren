@@ -115,12 +115,7 @@ pub async fn health_on_gui_ready(
 
     maybe_toggle_windows(&state_lock, &app)?;
 
-    let state = app.state::<super::instrument::InstrumentEngine>();
-    let layout = state.layout();
-    app.emit(common::instrument::events::LAYOUT, layout).map_err(|e| HealthError::Emit {
-        event: common::instrument::events::LAYOUT.to_string(),
-        message: e.to_string(),
-    })?;
+
 
     Ok(())
 }

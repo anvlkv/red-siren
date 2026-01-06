@@ -7,7 +7,7 @@ pub mod web;
 use std::collections::BTreeMap;
 
 use common::NodeKey;
-use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, PlaybackQuality};
+use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, PlaybackQuality, Preset};
 use common::tuner::Config as TunerConfig;
 
 pub type ProcessedOutputSpectrumSnapshot = (BTreeMap<u32, f32>, BTreeMap<u32, f32>);
@@ -106,6 +106,10 @@ pub trait AudioRuntime {
     fn get_sample_rate(&self) -> f64;
 
     fn quality_indicator(&self) -> PlaybackQuality;
+
+    fn set_preset(&self, preset: Preset) -> common::error::Result<()>;
+
+    fn get_preset(&self) -> Preset;
 }
 
 /// Null / no-op runtime used when no concrete backend feature is enabled.
@@ -230,6 +234,14 @@ impl AudioRuntime for NullController {
 
     fn quality_indicator(&self) -> PlaybackQuality {
         PlaybackQuality::default()
+    }
+
+    fn set_preset(&self, _preset: Preset) -> common::error::Result<()> {
+        Ok(())
+    }
+
+    fn get_preset(&self) -> Preset{
+        Preset::default()
     }
 }
 

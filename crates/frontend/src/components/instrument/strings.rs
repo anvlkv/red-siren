@@ -189,6 +189,7 @@ pub fn InstrumentStrings() -> impl IntoView {
             let string_wave_amplitude = string_wave_amplitude();
             for mut samples in left {
                 samples.rotate_left(slice_start);
+                samples.reverse();
                 draw_string_snoop_data(
                     &ctx,
                     left_string_position(),
@@ -200,6 +201,7 @@ pub fn InstrumentStrings() -> impl IntoView {
             }
             for mut samples in right {
                 samples.rotate_left(slice_start);
+                samples.reverse();
                 draw_string_snoop_data(
                     &ctx,
                     right_string_position(),

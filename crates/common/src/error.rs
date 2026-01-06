@@ -220,6 +220,10 @@ pub enum InstrumentError {
     NotInitialized,
     #[error("Output analysis failed: {0}")]
     OutputAnalyzerError(String),
+    #[error("Preset store error: {0}")]
+    PresetStoreError(String),
+    #[error("preset serialization error: {0}")]
+    PresetSerializationError(String),
 }
 
 #[derive(Debug, Error, Serialize, Deserialize)]

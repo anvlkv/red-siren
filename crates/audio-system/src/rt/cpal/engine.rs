@@ -10,7 +10,7 @@ use std::{
 
 use common::{
     error::TunerError,
-    instrument::{Config as InstrumentConfig, Layout as InstrumentLayout},
+    instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, Preset},
 };
 use common::{
     error::{ControlError, InstrumentError, Result},
@@ -75,6 +75,9 @@ struct CpalController {
     // Per-node data taps and controls
     node_excitement_snoops: RwLock<HashMap<NodeKey, (fundsp::snoop::Snoop, fundsp::snoop::Snoop)>>,
     node_output_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
+
+    // presets
+    preset: RwLock<Preset>,
     node_band_controls: RwLock<HashMap<NodeKey, Shared>>,
     node_key_controls: RwLock<HashMap<NodeKey, Shared>>,
     node_sensor_controls: RwLock<HashMap<NodeKey, SensorHandles>>,
@@ -119,6 +122,7 @@ impl Default for CpalController {
             input_thread: RwLock::new(None),
             node_excitement_snoops: RwLock::new(HashMap::new()),
             node_output_snoops: RwLock::new(HashMap::new()),
+            preset: RwLock::new(Preset::default()),
             node_band_controls: RwLock::new(HashMap::new()),
             node_key_controls: RwLock::new(HashMap::new()),
             node_sensor_controls: RwLock::new(HashMap::new()),
@@ -396,23 +400,6 @@ impl CpalController {
 
         let mut net = Net::new(1, 3);
 
-        // Preserve old control values before clearing
-        let old_band_values = {
-            let stored_band_controls = self.node_band_controls.read();
-            stored_band_controls
-                .iter()
-                .map(|(k, v)| (*k, v.value()))
-                .collect::<HashMap<NodeKey, f32>>()
-        };
-
-        let old_key_values = {
-            let stored_key_controls = self.node_key_controls.read();
-            stored_key_controls
-                .iter()
-                .map(|(k, v)| (*k, v.value()))
-                .collect::<HashMap<NodeKey, f32>>()
-        };
-
         // Initialize fine-tuned values if in editor mode
         #[cfg(feature = "editor")]
         let fine_tuned_values = {
@@ -438,6 +425,7 @@ impl CpalController {
             let mut output_snoops = self.node_output_snoops.write();
             let mut stored_band_controls = self.node_band_controls.write();
             let mut stored_key_controls = self.node_key_controls.write();
+            let mut stored_preset = self.preset.write();
 
             excitement_snoops.clear();
             output_snoops.clear();
@@ -451,24 +439,11 @@ impl CpalController {
                 );
                 output_snoops.insert(handle.key, handle.output_snoop);
                 siren_controls.insert(handle.key, handle.siren_control);
+                let entry = stored_preset.entry(&handle.key);
+                handle.band_control.set_value(entry.band_value);
+                handle.key_control.set_value(entry.key_value_as_f32());
                 stored_band_controls.insert(handle.key, handle.band_control);
                 stored_key_controls.insert(handle.key, handle.key_control);
-            }
-
-            // Restore old band control values after insertion
-            for (key, old_value) in old_band_values {
-                if let Some(control) = stored_band_controls.get(&key) {
-                    control.set_value(old_value);
-                    log::debug!("Restored band control value for {:?}: {}", key, old_value);
-                }
-            }
-
-            // Restore old key control values after insertion
-            for (key, old_value) in old_key_values {
-                if let Some(control) = stored_key_controls.get(&key) {
-                    control.set_value(old_value);
-                    log::debug!("Restored key control value for {:?}: {}", key, old_value);
-                }
             }
         }
 
@@ -606,6 +581,7 @@ impl CpalController {
 
     /// Set band control value for a specific node
     fn set_band_control(&self, key: NodeKey, value: f32) -> Result<()> {
+        self.preset.write().set_band_value(&key, value);
         let band_controls = self.node_band_controls.read();
         if let Some(control) = band_controls.get(&key) {
             control.set_value(value);
@@ -627,6 +603,7 @@ impl CpalController {
 
     /// Set key control value for a specific node (0.0 = false/released, 1.0 = true/pressed)
     fn set_key_control(&self, key: NodeKey, value: f32) -> Result<()> {
+        self.preset.write().set_key_value(&key, value);
         let key_controls = self.node_key_controls.read();
         if let Some(control) = key_controls.get(&key) {
             control.set_value(value);
@@ -1106,6 +1083,51 @@ impl AudioRuntime for CpalController {
 
     fn quality_indicator(&self) -> PlaybackQuality {
         *self.quality_indicator.read()
+    }
+
+    fn set_preset(&self, preset: Preset) -> common::error::Result<()> {
+        self.node_band_controls.write().retain(|k, _| preset.has(k));
+        self.node_key_controls.write().retain(|k, _| preset.has(k));
+
+        self.node_band_controls
+            .read()
+            .iter()
+            .for_each(|(key, shared)| {
+                if let Some(val) = preset.get_band_value(key) {
+                    shared.set_value(val);
+                }
+            });
+        self.node_key_controls
+            .read()
+            .iter()
+            .for_each(|(key, shared)| {
+                if let Some(val) = preset.get_key_value(key) {
+                    shared.set_value(val);
+                }
+            });
+        for &key in preset
+            .keys()
+            .filter(|&k| !self.node_band_controls.read().contains_key(k))
+        {
+            self.node_band_controls
+                .write()
+                .insert(key, shared(preset.get_band_value(&key).unwrap()));
+        }
+        for &key in preset
+            .keys()
+            .filter(|&k| !self.node_key_controls.read().contains_key(k))
+        {
+            self.node_key_controls
+                .write()
+                .insert(key, shared(preset.get_key_value(&key).unwrap()));
+        }
+        *self.preset.write() = preset;
+
+        Ok(())
+    }
+
+    fn get_preset(&self) -> Preset {
+        self.preset.read().clone()
     }
 
     #[cfg(feature = "editor")]

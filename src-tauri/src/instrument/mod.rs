@@ -1,8 +1,9 @@
 mod commands;
 mod engine;
 
-use common::error::{AppError, Result, SetupError};
-use tauri::{async_runtime::spawn, App, Emitter, Listener, Manager};
+use common::{error::{AppError, InstrumentError, Result, SetupError}, instrument::{Preset, commands::{ReflectBandControlPayload, ReflectKeyControlPayload}, events::{BAND_CONTROL_G_K, KEY_CONTROL_G_K}}};
+use tauri::{App, AppHandle, Emitter, Listener, Manager, async_runtime::spawn};
+use tauri_plugin_store::StoreExt;
 
 use crate::setup::WindowState;
 
@@ -10,11 +11,21 @@ pub use commands::*;
 pub use engine::InstrumentEngine;
 
 
+pub(super) const PRESETS_STORE_NAME: &str = "presets.json";
+pub(super) const PRESETS_STORE_KEY: &str = "presets";
+
 pub fn setup(app: &mut App) -> Result<()> {
     let is_new = app.manage(engine::InstrumentEngine::new(app.handle())?);
 
     if is_new {
         log::debug!("Instrument engine initialized and managed state created");
+        let store = app.store(PRESETS_STORE_NAME).map_err(|e| {
+            AppError::Setup(SetupError::StoreSetupErr {
+                message: e.to_string(),
+            })
+        })?;
+        let presets = store.get(PRESETS_STORE_KEY).and_then(|val| serde_json::from_value::<Preset>(val).ok()).unwrap_or_default();
+
         let windows = app.webview_windows();
         let window = windows.get("main").ok_or(AppError::Setup(SetupError::MainWindowMissing))?;
         let size = window.inner_size()?;
@@ -33,6 +44,14 @@ pub fn setup(app: &mut App) -> Result<()> {
                 Err(e) => {
                     log::error!("error setting initial instrument layout: {e}");
                 }
+            }
+            match state.set_preset(presets) {
+                Ok(_) => {
+                    log::debug!("Set initial instrument presets");
+                },
+                Err(e) => {
+                    log::error!("error setting initial instrument presets: {e}");
+                },
             }
         });
     } else {
@@ -82,8 +101,44 @@ pub fn setup(app: &mut App) -> Result<()> {
                     log::error!("error updating `{}`: {e}", common::events::setup::UPDATE_WINDOW_SIZE)
                 }
             }
+
+            let new_layout = state.layout();
+
+            for node_key in new_layout.registry().all_keys() {
+                let band_value = state.get_band_control(node_key).unwrap();
+                let key_value = state.get_key_control(node_key).unwrap();
+                handle.emit(
+                    BAND_CONTROL_G_K,
+                    ReflectBandControlPayload { group: node_key.group(), key: node_key.key(), value: band_value },
+                ).unwrap();
+                handle.emit(
+                    KEY_CONTROL_G_K,
+                    ReflectKeyControlPayload { group: node_key.group(), key: node_key.key(), value: key_value },
+                ).unwrap();
+            }
+
+            let preset = state.get_preset();
+
+            save_preset(preset, &handle).unwrap();
         });
     });
 
+    Ok(())
+}
+
+
+pub (super) fn save_preset(preset: Preset, app: &AppHandle) -> Result<()> {
+    let store = app.store(PRESETS_STORE_NAME).map_err(|e| {
+        AppError::Instrument(InstrumentError::PresetStoreError(e.to_string(),
+        ))
+    })?;
+    let preset_value = serde_json::to_value(&preset)
+        .map_err(|e| AppError::Instrument(InstrumentError::PresetSerializationError(e.to_string())))?;
+    store.set(PRESETS_STORE_KEY, preset_value);
+    store.save().map_err(|e| {
+        AppError::Instrument(InstrumentError::PresetStoreError(e.to_string(),
+        ))
+    })?;
+    log::debug!("Instrument presets saved to store");
     Ok(())
 }

@@ -6,8 +6,6 @@ use crate::util::layout_context::{expect_layout_context, LayoutContextReturn};
 
 use super::element::KeyboardElement;
 
-const BAND_STROKE_WIDTH: f32 = 4.0;
-
 #[component]
 pub fn Keyboard() -> impl IntoView {
     let LayoutContextReturn {
@@ -127,7 +125,6 @@ pub fn Keyboard() -> impl IntoView {
             --keyboard-band-length: {length}px;
             --keyboard-key-diameter: {diameter}px;
             --keyboard-key-padding: {key_pad}px;
-            --keyboard-band-stroke-width: {band_stroke}px;
 
             /* Explicit sizing + padding for outer container */
             width: {space_w}px;
@@ -149,7 +146,6 @@ pub fn Keyboard() -> impl IntoView {
             safe_right = safe_right,
             safe_bottom = safe_bottom,
             safe_left = safe_left,
-            band_stroke = BAND_STROKE_WIDTH,
         ));
 
         defs

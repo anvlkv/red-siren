@@ -319,10 +319,9 @@ fn draw_spectrum(
         common::orientation::LayoutOrientation::Horizontal => height / 2.0,
     };
 
-    let alpha = |val: f32| -> f64 { (val.abs().sqrt() as f64).clamp(f64::EPSILON.sqrt(), 1.0) };
+    let alpha = |val: f32| -> f64 { val.abs() as f64 };
 
     let fill_sample = |i: f64, val: f32, base: f64| {
-        ctx.set_global_alpha(alpha(val));
         ctx.begin_path();
         let (x, y) = match orientation {
             common::orientation::LayoutOrientation::Vertical => (cell_increment * i + base, radius),
@@ -332,6 +331,7 @@ fn draw_spectrum(
         };
         _ = ctx.arc(x, y, radius, 0.0, std::f64::consts::TAU).ok();
         if val != 0.0 {
+            ctx.set_global_alpha(alpha(val));
             ctx.fill();
         } else {
             ctx.stroke();

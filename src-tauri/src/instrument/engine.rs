@@ -4,7 +4,9 @@ use parking_lot::RwLock;
 use audio_system::rt::{make_stream_controller, AudioRuntime, ExcitementSource};
 
 use common::error::Result;
-use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, PlaybackQuality};
+use common::instrument::{
+    Config as InstrumentConfig, Layout as InstrumentLayout, PlaybackQuality, Preset,
+};
 use common::tuner::Config as TunerConfig;
 use mint::Vector2;
 use tauri::{AppHandle, Emitter, Manager};
@@ -254,6 +256,10 @@ impl InstrumentEngine {
         Ok(())
     }
 
+    pub fn set_preset(&self, preset: Preset) -> common::error::Result<()> {
+        self.inner.stream_controller.read().set_preset(preset)
+    }
+
     pub fn set_safe_area(
         &self,
         top: f64,
@@ -306,6 +312,10 @@ impl InstrumentEngine {
             .stream_controller
             .read()
             .set_key_control(key, value)
+    }
+
+    pub fn get_key_control(&self, key: common::NodeKey) -> common::error::Result<f32> {
+        self.inner.stream_controller.read().get_key_control(key)
     }
 
     pub fn snapshot_output_snoop(&self, key: NodeKey) -> Vec<f32> {
@@ -403,6 +413,10 @@ impl InstrumentEngine {
 
     pub fn quality_indicator(&self) -> PlaybackQuality {
         self.inner.stream_controller.read().quality_indicator()
+    }
+
+    pub fn get_preset(&self) -> Preset {
+        self.inner.stream_controller.read().get_preset()
     }
 
     #[cfg(feature = "devtools")]

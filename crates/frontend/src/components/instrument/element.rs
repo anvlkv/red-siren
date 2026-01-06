@@ -470,24 +470,24 @@ pub fn KeyboardElement(
                 }
                 class=move || {
                     format!(
-                        "absolute rounded-full bg-red/50 dark:bg-black/50 border-black dark:border-red backdrop-blur-md border-(length:--keyboard-band-stroke-width) shadow-sm overflow-visible {} {}",
+                        "absolute rounded-full bg-red/50 dark:bg-black/50 border-black dark:border-red backdrop-blur-md shadow-sm overflow-visible {} {}",
                         match (orientation(), channel) {
                             (
                                 common::orientation::LayoutOrientation::Horizontal,
                                 common::instrument::GroupChannel::Left,
-                            ) => "top-0",
+                            ) => "top-0 border-t-1 border-x-3 border-b-5",
                             (
                                 common::orientation::LayoutOrientation::Vertical,
                                 common::instrument::GroupChannel::Left,
-                            ) => "left-0",
+                            ) => "left-0 border-l-1 border-y-3 border-r-5",
                             (
                                 common::orientation::LayoutOrientation::Horizontal,
                                 common::instrument::GroupChannel::Right,
-                            ) => "bottom-0",
+                            ) => "bottom-0 border-b-1 border-x-3 border-t-5",
                             (
                                 common::orientation::LayoutOrientation::Vertical,
                                 common::instrument::GroupChannel::Right,
-                            ) => "right-0",
+                            ) => "right-0 border-r-1 border-y-3 border-l-5",
                         },
                         if should_animate() {
                             super::instrument_animations::INSTRUMENT_BAND_APPEAR

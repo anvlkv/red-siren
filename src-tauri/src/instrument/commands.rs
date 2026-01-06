@@ -297,6 +297,23 @@ pub fn ui_safe_area_insets_apply(
                 event: common::instrument::events::LAYOUT.to_string(),
                 message: e.to_string(),
             })?;
+
+        for node_key in new_layout.registry().all_keys() {
+            let band = state.get_band_control(node_key)?;
+            let key = state.get_key_control(node_key)?;
+            app.emit(
+                BAND_CONTROL_G_K,
+                ReflectBandControlPayload { group: node_key.group(), key: node_key.key(), value: key },
+            )?;
+            app.emit(
+                KEY_CONTROL_G_K,
+                ReflectKeyControlPayload { group: node_key.group(), key: node_key.key(), value: band },
+            )?;
+        }
+
+        let preset = state.get_preset();
+
+        super::save_preset(preset, &app)?;
     } else {
         log::debug!(
             "UI safe area values unchanged [top: {}, right: {}, bottom: {}, left: {}] - skipping layout emission",
@@ -414,6 +431,9 @@ pub fn instrument_update_band_control(
         )?;
     }
 
+    let preset = state.get_preset();
+
+    super::save_preset(preset, &app)?;
 
     Ok(())
 }
@@ -440,6 +460,10 @@ pub fn instrument_update_key_control(
             if value > 0.5 { "pressed" } else { "released" }
         );
     }
+
+    let preset = state.get_preset();
+
+    super::save_preset(preset, &app)?;
 
     Ok(())
 }

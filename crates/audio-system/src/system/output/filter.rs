@@ -219,8 +219,8 @@ pub fn create_filter(
         | q_warm_controlled.clone())
         >> lowpass();
 
-    let shape: f32 = (1.0 / (config.cents as S + S::EPSILON.sqrt()))
-        .clamp(S::EPSILON.sqrt(), 1.0 - S::EPSILON.sqrt()) as f32;
+    let shape: f32 = (1.0 / ((config.cents as S + S::EPSILON.sqrt()) / 1200.0))
+        .clamp(S::EPSILON.sqrt(), 1.0) as f32;
 
     let hp_input: An<BranchInput> =
         pass() | constant(config.frequency as f32) | q_piercing_controlled.clone();

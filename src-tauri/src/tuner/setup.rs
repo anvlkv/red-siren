@@ -14,7 +14,7 @@ pub fn save_tuner_config(app: &AppHandle, config: Config) -> Result<()> {
     let store = app.store(TUNER_STORE_NAME).map_err(|e| AppError::Tauri(format!("Plugin store error: [{e}]")))?;
     let value = serde_json::to_value(config).map_err(|e| AppError::Internal { message: format!("Serialization error: [{e}]") })?;
     store.set(TUNER_CONFIG_KEY, value);
-
+    store.save().map_err(|e| AppError::Tauri(format!("Plugin store error: [{e}]")))?;
     Ok(())
 }
 

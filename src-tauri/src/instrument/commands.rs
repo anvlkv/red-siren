@@ -38,6 +38,21 @@ pub fn instrument_playback_start(state: State<'_, InstrumentEngine>, app: AppHan
     })?;
     log::info!("Emitted playback state: playing");
 
+    // Emit reflect values for all nodes so UI aligns with runtime state
+    let layout = state.layout();
+    for node_key in layout.registry().all_keys() {
+        let band = state.get_band_control(node_key)?;
+        let key = state.get_key_control(node_key)?;
+        app.emit(
+            BAND_CONTROL_G_K,
+            ReflectBandControlPayload { group: node_key.group(), key: node_key.key(), value: band },
+        )?;
+        app.emit(
+            KEY_CONTROL_G_K,
+            ReflectKeyControlPayload { group: node_key.group(), key: node_key.key(), value: key },
+        )?;
+    }
+
     Ok(())
 }
 
@@ -303,11 +318,11 @@ pub fn ui_safe_area_insets_apply(
             let key = state.get_key_control(node_key)?;
             app.emit(
                 BAND_CONTROL_G_K,
-                ReflectBandControlPayload { group: node_key.group(), key: node_key.key(), value: key },
+                ReflectBandControlPayload { group: node_key.group(), key: node_key.key(), value: band },
             )?;
             app.emit(
                 KEY_CONTROL_G_K,
-                ReflectKeyControlPayload { group: node_key.group(), key: node_key.key(), value: band },
+                ReflectKeyControlPayload { group: node_key.group(), key: node_key.key(), value: key },
             )?;
         }
 

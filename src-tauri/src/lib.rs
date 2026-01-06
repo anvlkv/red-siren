@@ -4,6 +4,7 @@ mod app_bus;
 mod health;
 mod instrument;
 mod intro;
+mod persistence;
 mod setup;
 mod tuner;
 
@@ -102,22 +103,34 @@ pub fn run() {
         let config = app.config();
         log::debug!("App starting with config: {config:#?}");
 
-        // Setup supporting modules
-        setup::app_setup(app)?;
-        health::setup(app)?;
-        intro::setup(app)?;
-        tuner::setup(app)?;
+        // Setup supporting modules (best-effort; log and continue)
+        if let Err(e) = setup::app_setup(app) {
+            log::error!("setup::app_setup failed: {}", e);
+        }
+        if let Err(e) = health::setup(app) {
+            log::error!("health::setup failed: {}", e);
+        }
+        if let Err(e) = intro::setup(app) {
+            log::error!("intro::setup failed: {}", e);
+        }
+        if let Err(e) = tuner::setup(app) {
+            log::error!("tuner::setup failed: {}", e);
+        }
 
-        // Setup instrument last
-        instrument::setup(app)?;
+        // Setup instrument last (best-effort)
+        if let Err(e) = instrument::setup(app) {
+            log::error!("instrument::setup failed: {}", e);
+        }
 
-        // Wire AppBus coordinator after states are ready
-        app_bus::AppBus::setup(app)?;
+        // Wire AppBus coordinator after states are ready (best-effort)
+        if let Err(e) = app_bus::AppBus::setup(app) {
+            log::error!("AppBus::setup failed: {}", e);
+        }
 
         Ok(())
     });
 
-    builder
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    if let Err(e) = builder.run(tauri::generate_context!()) {
+        log::error!("error while running tauri application: {}", e);
+    }
 }

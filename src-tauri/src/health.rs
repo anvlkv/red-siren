@@ -1,7 +1,7 @@
 use audio_system::rt::{check_mic_permission, supports_mic};
-use serde_json::Value;
+use crate::persistence::persistence::{load_bool, save_bool};
 use tauri::{App, AppHandle, Emitter, Manager, State};
-use tauri_plugin_store::StoreExt;
+
 use parking_lot::{Mutex, MutexGuard}; // switched from tokio::sync::Mutex to parking_lot for non-async, faster locking
 use common::error::{HealthError, AppError};
 
@@ -17,10 +17,8 @@ const MIC_PEMISSION_KEY:&str = "mic_permission";
 
 pub type HealthSetupState = Mutex<SetupState>;
 
-pub fn setup(app: &mut App) -> tauri_plugin_store::Result<()> {
-    let store = app.store(HEALTH_STORE_NAME)?;
-
-    let mic_permission = store.get(MIC_PEMISSION_KEY).and_then(|v: Value| v.as_bool());
+pub fn setup(app: &mut App) -> common::error::Result<()> {
+    let mic_permission = load_bool(app.handle(), HEALTH_STORE_NAME, MIC_PEMISSION_KEY)?;
 
     let initial_state = SetupState {
         mic_permission,
@@ -80,9 +78,9 @@ pub async fn health_grant_mic_premission(
         message: e.to_string(),
     })?;
 
-    let store = app.store(HEALTH_STORE_NAME).unwrap();
+    save_bool(&app, HEALTH_STORE_NAME, MIC_PEMISSION_KEY, check_result)?;
 
-    store.set(MIC_PEMISSION_KEY, check_result);
+
 
     Ok(check_result)
 }

@@ -1,9 +1,8 @@
-use serde_json::Value;
-use tauri::{App, AppHandle, Emitter, Listener, Manager};
-use tauri::async_runtime::spawn;
-use tauri_plugin_store::StoreExt;
-use common::error::{AppError, Result};
+use crate::persistence::persistence::{load_json_or_default, save_json};
+use common::error::Result;
 use common::tuner::{Config, Layout as TunerLayout};
+use std::thread;
+use tauri::{App, AppHandle, Emitter, Listener, Manager};
 
 use super::TunerState;
 
@@ -11,38 +10,28 @@ const TUNER_STORE_NAME: &str = "tuner.json";
 const TUNER_CONFIG_KEY: &str = "config";
 
 pub fn save_tuner_config(app: &AppHandle, config: Config) -> Result<()> {
-    let store = app.store(TUNER_STORE_NAME).map_err(|e| AppError::Tauri(format!("Plugin store error: [{e}]")))?;
-    let value = serde_json::to_value(config).map_err(|e| AppError::Internal { message: format!("Serialization error: [{e}]") })?;
-    store.set(TUNER_CONFIG_KEY, value);
-    store.save().map_err(|e| AppError::Tauri(format!("Plugin store error: [{e}]")))?;
-    Ok(())
+    save_json(app, TUNER_STORE_NAME, TUNER_CONFIG_KEY, &config)
 }
 
 /// Setup tuner: manage state, restore persisted config, wire event listeners, persist on change.
 pub fn setup(app: &mut App) -> Result<()> {
-
     // Restore persisted config if present
-    let config = app.store(TUNER_STORE_NAME).ok().and_then(|store| {
-        store
-            .get(TUNER_CONFIG_KEY)
-            .and_then(|v: Value| serde_json::from_value::<Config>(v).ok())
-    }).unwrap_or_default();
+    let config: Config = load_json_or_default(app.handle(), TUNER_STORE_NAME, TUNER_CONFIG_KEY)?;
 
     // Emit current config so UI picks it up
     app.emit(common::events::tuner::CONFIG, config.clone())?;
 
     let _is_new = app.manage(TunerState::new(app.handle().clone(), config));
 
-
     // Persist config upon change
     let handle = app.handle().clone();
     app.listen(common::events::tuner::CONFIG, move |_| {
         let handle = handle.clone();
-        spawn(async move {
+        thread::spawn(move || {
             let state = handle.state::<TunerState>();
             let cfg = state.tuner_config();
-            if let Ok(store) = handle.store(TUNER_STORE_NAME) {
-                store.set(TUNER_CONFIG_KEY, serde_json::to_value(&cfg).unwrap_or(Value::Null));
+            if let Err(e) = save_json(&handle, TUNER_STORE_NAME, TUNER_CONFIG_KEY, &cfg) {
+                log::error!("Failed saving tuner config: {e}");
             }
         });
     });
@@ -61,11 +50,13 @@ pub fn setup(app: &mut App) -> Result<()> {
 
                 match state.update_layout(tuner_layout, registry) {
                     Ok(Some(new_config)) => {
-                        if let Ok(store) = handle.store(TUNER_STORE_NAME) {
-                            store.set(TUNER_CONFIG_KEY, serde_json::to_value(&new_config).unwrap_or(Value::Null));
+                        if let Err(e) =
+                            save_json(&handle, TUNER_STORE_NAME, TUNER_CONFIG_KEY, &new_config)
+                        {
+                            log::error!("Failed saving tuner config after layout update: {e}");
                         }
                     }
-                    Ok(None) => {},
+                    Ok(None) => {}
                     Err(e) => {
                         log::error!("Error updating tuner layout: {e}")
                     }
@@ -76,7 +67,10 @@ pub fn setup(app: &mut App) -> Result<()> {
                 }
             }
             Err(err) => {
-                log::error!("Failed parsing instrument layout payload for tuner mapping: {}", err);
+                log::error!(
+                    "Failed parsing instrument layout payload for tuner mapping: {}",
+                    err
+                );
             }
         }
     });

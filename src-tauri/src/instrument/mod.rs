@@ -1,11 +1,11 @@
 mod commands;
 mod engine;
 
-use common::{error::{AppError, InstrumentError, Result, SetupError}, instrument::{Preset, commands::{ReflectBandControlPayload, ReflectKeyControlPayload}, events::{BAND_CONTROL_G_K, KEY_CONTROL_G_K}}};
+use common::{error::Result, instrument::Preset};
 use tauri::{App, AppHandle, Emitter, Manager, async_runtime::spawn};
-use tauri_plugin_store::StoreExt;
+use crate::persistence::persistence::{load_json_or_default, save_json};
 
-use crate::setup::WindowState;
+
 
 pub use commands::*;
 pub use engine::InstrumentEngine;
@@ -19,41 +19,66 @@ pub fn setup(app: &mut App) -> Result<()> {
 
     if is_new {
         log::debug!("Instrument engine initialized and managed state created");
-        let store = app.store(PRESETS_STORE_NAME).map_err(|e| {
-            AppError::Setup(SetupError::StoreSetupErr {
-                message: e.to_string(),
-            })
-        })?;
-        let presets = store.get(PRESETS_STORE_KEY).and_then(|val| serde_json::from_value::<Preset>(val).ok()).unwrap_or_default();
+        let presets: Preset = load_json_or_default(app.handle(), PRESETS_STORE_NAME, PRESETS_STORE_KEY)?;
 
         let windows = app.webview_windows();
-        let window = windows.get("main").ok_or(AppError::Setup(SetupError::MainWindowMissing))?;
-        let size = window.inner_size()?;
         let base_handle_new = app.handle().clone();
-        spawn(async move {
-            let state = base_handle_new.state::<engine::InstrumentEngine>();
-            match state.set_size(size.width as f64, size.height as f64) {
-                Ok(_) => {
-                    log::debug!("Set initial instrument layout for window size: {}x{}", size.width, size.height);
-                    let layout = state.layout();
-                    // Emit initial layouts and config
-                    if let Err(e) = base_handle_new.emit(common::instrument::events::LAYOUT, layout) {
-                        log::error!("Failed emitting initial instrument layout: {e}");
-                    }
+        if let Some(window) = windows.get("main") {
+            match window.inner_size() {
+                Ok(size) => {
+                    spawn(async move {
+                        let state = base_handle_new.state::<engine::InstrumentEngine>();
+                        match state.set_size(size.width as f64, size.height as f64) {
+                            Ok(_) => {
+                                log::debug!(
+                                    "Set initial instrument layout for window size: {}x{}",
+                                    size.width,
+                                    size.height
+                                );
+                                let layout = state.layout();
+                                if let Err(e) = base_handle_new
+                                    .emit(common::instrument::events::LAYOUT, layout)
+                                {
+                                    log::error!("Failed emitting initial instrument layout: {e}");
+                                }
+                            }
+                            Err(e) => {
+                                log::error!("error setting initial instrument layout: {e}");
+                            }
+                        }
+                        match state.set_preset(presets) {
+                            Ok(_) => {
+                                log::debug!("Set initial instrument presets");
+                            }
+                            Err(e) => {
+                                log::error!("error setting initial instrument presets: {e}");
+                            }
+                        }
+                    });
                 }
                 Err(e) => {
-                    log::error!("error setting initial instrument layout: {e}");
+                    log::warn!("Main window size unavailable at setup (proceeding without initial layout): {e}");
+                    spawn(async move {
+                        let state = base_handle_new.state::<engine::InstrumentEngine>();
+                        if let Err(e) = state.set_preset(presets) {
+                            log::error!("error setting initial instrument presets: {e}");
+                        } else {
+                            log::debug!("Set initial instrument presets");
+                        }
+                    });
                 }
             }
-            match state.set_preset(presets) {
-                Ok(_) => {
-                    log::debug!("Set initial instrument presets");
-                },
-                Err(e) => {
+        } else {
+            log::warn!("Main window not yet available at setup; proceeding without initial layout");
+            spawn(async move {
+                let state = base_handle_new.state::<engine::InstrumentEngine>();
+                if let Err(e) = state.set_preset(presets) {
                     log::error!("error setting initial instrument presets: {e}");
-                },
-            }
-        });
+                } else {
+                    log::debug!("Set initial instrument presets");
+                }
+            });
+        }
     } else {
         log::debug!("Instrument engine state already exists; skipping initialization");
     }
@@ -67,17 +92,7 @@ pub fn setup(app: &mut App) -> Result<()> {
 
 
 pub (super) fn save_preset(preset: Preset, app: &AppHandle) -> Result<()> {
-    let store = app.store(PRESETS_STORE_NAME).map_err(|e| {
-        AppError::Instrument(InstrumentError::PresetStoreError(e.to_string(),
-        ))
-    })?;
-    let preset_value = serde_json::to_value(&preset)
-        .map_err(|e| AppError::Instrument(InstrumentError::PresetSerializationError(e.to_string())))?;
-    store.set(PRESETS_STORE_KEY, preset_value);
-    store.save().map_err(|e| {
-        AppError::Instrument(InstrumentError::PresetStoreError(e.to_string(),
-        ))
-    })?;
+    save_json(app, PRESETS_STORE_NAME, PRESETS_STORE_KEY, &preset)?;
     log::debug!("Instrument presets saved to store");
     Ok(())
 }

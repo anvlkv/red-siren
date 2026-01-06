@@ -106,6 +106,41 @@ impl AppBus {
                                 "AppBus: failed emitting instrument layout on GUI ready: {e}"
                             );
                         }
+
+                        // Emit reflect from persisted preset so UI aligns before playback starts
+                        let preset = state.get_preset();
+                        for node_key in layout.registry().all_keys() {
+                            let band_value = preset.get_band_value(&node_key).unwrap_or(0.0);
+                            let key_value = preset.get_key_value(&node_key).unwrap_or(0.0);
+
+                            if let Err(e) = handle.emit(
+                                BAND_CONTROL_G_K,
+                                ReflectBandControlPayload {
+                                    group: node_key.group(),
+                                    key: node_key.key(),
+                                    value: band_value,
+                                },
+                            ) {
+                                log::error!(
+                                    "AppBus: Failed emitting band reflect on GUI ready for {:?}: {e}",
+                                    node_key
+                                );
+                            }
+
+                            if let Err(e) = handle.emit(
+                                KEY_CONTROL_G_K,
+                                ReflectKeyControlPayload {
+                                    group: node_key.group(),
+                                    key: node_key.key(),
+                                    value: key_value,
+                                },
+                            ) {
+                                log::error!(
+                                    "AppBus: Failed emitting key reflect on GUI ready for {:?}: {e}",
+                                    node_key
+                                );
+                            }
+                        }
                     });
                 }
             }

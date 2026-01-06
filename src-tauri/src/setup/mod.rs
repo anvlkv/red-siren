@@ -2,12 +2,12 @@ mod commands;
 #[cfg(target_os = "macos")]
 mod setup_mac_window;
 
+use crate::persistence::persistence::load_json;
 use common::error::{AppError, Result, SetupError};
 use parking_lot::Mutex;
-use serde_json::Value;
 use tauri::{App, Manager};
 use tauri_plugin_safe_area_insets_css::SafeAreaInsetsCssExt;
-use tauri_plugin_store::StoreExt;
+
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 use tauri_plugin_window_state::WindowExt; // parking_lot chosen over tokio::sync::Mutex to avoid awaiting locks and reduce deadlock risk
 
@@ -28,41 +28,85 @@ pub struct Window {
 pub type WindowState = Mutex<Window>;
 
 pub fn app_setup(app: &mut App) -> Result<()> {
-    let store = app.store(SETUP_STORE_NAME).map_err(|e| {
-        AppError::Setup(SetupError::StoreSetupErr {
-            message: e.to_string(),
-        })
-    })?;
+    // Load Option<bool> directly so null or missing entries don't fail setup
+    let override_dark: Option<bool> =
+        match load_json::<Option<bool>>(app.handle(), SETUP_STORE_NAME, DARK_OVERRIDE_KEY) {
+            Ok(v) => v.flatten(),
+            Err(e) => {
+                log::error!(
+                    "Failed to load window appearance override from store {} key {}: {}",
+                    SETUP_STORE_NAME,
+                    DARK_OVERRIDE_KEY,
+                    e
+                );
+                None
+            }
+        };
 
-    let override_dark = store
-        .get(DARK_OVERRIDE_KEY)
-        .and_then(|v: Value| v.as_bool());
+    // Defaults; will be overridden if main window is available
+    let mut width = 800.0_f64;
+    let mut height = 600.0_f64;
+    let mut state_dark_mode = override_dark.unwrap_or(false);
 
-    let mut main_window = app
-        .get_webview_window("main")
-        .ok_or(SetupError::MainWindowMissing)?;
+    // Try to access main window; never early-return on errors to ensure state is managed
+    let mut main_window_opt = app.get_webview_window("main");
 
-    let size = main_window.inner_size().map_err(SetupError::window_query)?;
+    if let Some(ref mut main_window) = main_window_opt {
+        match main_window.inner_size() {
+            Ok(size) => {
+                width = size.width as f64;
+                height = size.height as f64;
+            }
+            Err(e) => {
+                log::warn!(
+                    "Main window size unavailable during setup, using defaults: {}",
+                    e
+                );
+            }
+        }
 
-    let state_dark_mode = {
         // Set background color only when building for macOS
         #[cfg(target_os = "macos")]
         {
-            setup_mac_window::setup(&mut main_window, override_dark)
-                .map_err(SetupError::appearance)?
+            match setup_mac_window::setup(main_window, override_dark) {
+                Ok(dark) => state_dark_mode = dark,
+                Err(e) => {
+                    log::warn!(
+                        "Mac window appearance setup failed, using override/default: {}",
+                        e
+                    );
+                    state_dark_mode = override_dark.unwrap_or(false);
+                }
+            }
         }
         #[cfg(not(target_os = "macos"))]
         {
-            override_dark.unwrap_or(false)
+            state_dark_mode = override_dark.unwrap_or(false);
         }
-    };
+    } else {
+        log::warn!("Main window not available in setup; using default size and dark mode");
+    }
 
     let safe_area_insets = app.safe_area_insets_css();
+    let top_inset = safe_area_insets
+        .get_top_inset()
+        .map(|v| v.inset)
+        .unwrap_or_else(|e| {
+            log::warn!("Failed to get top safe area inset: {}", e);
+            0.0
+        });
+    let bottom_inset = safe_area_insets
+        .get_bottom_inset()
+        .map(|v| v.inset)
+        .unwrap_or_else(|e| {
+            log::warn!("Failed to get bottom safe area inset: {}", e);
+            0.0
+        });
 
     // Initialize window state
     let initial_state = Window {
-        width: size.width as f64,
-        height: size.height as f64,
+        width,
+        height,
         dark: state_dark_mode,
         override_dark,
         ui_safe_area: common::safe_area::SafeArea {
@@ -72,37 +116,36 @@ pub fn app_setup(app: &mut App) -> Result<()> {
             left: 0.0,
         },
         system_safe_area: common::safe_area::SafeArea {
-            top: safe_area_insets
-                .get_top_inset()
-                .map_err(|e| AppError::Tauri(e.to_string()))?
-                .inset,
+            top: top_inset,
             right: 0.0,
-            bottom: safe_area_insets
-                .get_bottom_inset()
-                .map_err(|e| AppError::Tauri(e.to_string()))?
-                .inset,
+            bottom: bottom_inset,
             left: 0.0,
         },
     };
 
     app.manage(Mutex::new(initial_state));
 
+    // Best-effort restore and window event wiring if window exists
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
-    main_window
-        .restore_state(
+    if let Some(ref mut main_window) = main_window_opt {
+        if let Err(e) = main_window.restore_state(
             tauri_plugin_window_state::StateFlags::SIZE
                 & tauri_plugin_window_state::StateFlags::POSITION,
-        )
-        .map_err(|e| SetupError::window_state_op("restore_state", e))?;
-
-    main_window.on_window_event({
-        let app_handle = app.app_handle().clone();
-        move |event| {
-            if matches!(event, tauri::WindowEvent::Destroyed) {
-                app_handle.exit(0);
-            }
+        ) {
+            log::warn!("restore_state failed: {}", e);
         }
-    });
+    }
+
+    if let Some(main_window) = main_window_opt {
+        main_window.on_window_event({
+            let app_handle = app.app_handle().clone();
+            move |event| {
+                if matches!(event, tauri::WindowEvent::Destroyed) {
+                    app_handle.exit(0);
+                }
+            }
+        });
+    }
 
     Ok(())
 }

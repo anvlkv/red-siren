@@ -1,10 +1,10 @@
+use crate::persistence::persistence::save_json;
 use common::{
     commands::setup::UpdateWindowAppearanceOverridePayload,
     error::{Result, SetupError},
     RouteId,
 };
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
-use tauri_plugin_store::StoreExt;
 
 use super::WindowState;
 
@@ -61,9 +61,20 @@ pub fn update_window_appearance_dark_override(
         guard.override_dark = dark;
     }
 
-    let store = app.store(super::SETUP_STORE_NAME).unwrap();
-    // Persist the override (Option<bool>)
-    store.set(super::DARK_OVERRIDE_KEY, dark);
+    // Persist the override (Option<bool>) via persistence helper
+    if let Err(e) = save_json(
+        &app,
+        super::SETUP_STORE_NAME,
+        super::DARK_OVERRIDE_KEY,
+        &dark,
+    ) {
+        log::error!(
+            "Failed to persist window appearance override to store {} key {}: {}",
+            super::SETUP_STORE_NAME,
+            super::DARK_OVERRIDE_KEY,
+            e
+        );
+    }
 
     let mut system_dark = false;
 

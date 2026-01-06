@@ -251,7 +251,7 @@ fn string_positions(
 }
 
 fn adaptive_min_key_radius(safe_length: f64, instrument_breadth: f64) -> f64 {
-    let scale_len = (safe_length / 600.0).clamp(0.85, 1.35);
+    let scale_len = ((safe_length - instrument_breadth * 2.0) / 600.0).clamp(0.85, 1.35);
     let scale_breadth = (instrument_breadth / 180.0).clamp(0.85, 1.30);
     let blended = 0.5 * (scale_len + scale_breadth);
     (MIN_KEY_RADIUS * blended).clamp(MIN_KEY_RADIUS * 0.70, MIN_KEY_RADIUS * 1.28)
@@ -262,12 +262,12 @@ fn enumerate(
     orientation: LayoutOrientation,
     safe_area_padding: SafeArea,
 ) -> Vec<Candidate> {
-    let safe_length = orientation.safe_length(space, safe_area_padding);
     let safe_breadth = orientation.safe_breadth(space, safe_area_padding);
+    let instrument_breadth = safe_breadth / 3.0;
+    let safe_length = orientation.safe_length(space, safe_area_padding) - instrument_breadth * 2.0;
     if safe_length <= 0.0 || safe_breadth <= 0.0 {
         return vec![];
     }
-    let instrument_breadth = safe_breadth / 3.0;
     let r_cap = instrument_breadth * SOFT_RADIUS_RATIO;
     let abs_r_cap = instrument_breadth * ABSOLUTE_RADIUS_RATIO_MAX;
     let adaptive_min = adaptive_min_key_radius(safe_length, instrument_breadth);

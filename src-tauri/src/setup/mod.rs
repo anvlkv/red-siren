@@ -3,7 +3,7 @@ mod commands;
 mod setup_mac_window;
 
 use crate::persistence::persistence::load_json;
-use common::error::{AppError, Result, SetupError};
+use common::error::Result;
 use parking_lot::Mutex;
 use tauri::{App, Manager};
 use tauri_plugin_safe_area_insets_css::SafeAreaInsetsCssExt;

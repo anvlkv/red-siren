@@ -86,6 +86,32 @@ impl InstrumentEngine {
                 log::trace!("Inner.start_playback: ctrl.start() returned Ok");
             }
 
+            // After the stream has started, emit reflect values based on the current preset
+            {
+                let layout = self.inner.layout.read();
+                let preset = self.get_preset();
+                for node_key in layout.registry().all_keys() {
+                    let band = preset.get_band_value(&node_key).unwrap_or(0.0);
+                    let key = preset.get_key_value(&node_key).unwrap_or(0.0);
+                    let _ = self.app.emit(
+                        common::instrument::events::BAND_CONTROL_G_K,
+                        common::instrument::commands::ReflectBandControlPayload {
+                            group: node_key.group(),
+                            key: node_key.key(),
+                            value: band,
+                        },
+                    );
+                    let _ = self.app.emit(
+                        common::instrument::events::KEY_CONTROL_G_K,
+                        common::instrument::commands::ReflectKeyControlPayload {
+                            group: node_key.group(),
+                            key: node_key.key(),
+                            value: key,
+                        },
+                    );
+                }
+            }
+
             Ok(true)
         }
     }

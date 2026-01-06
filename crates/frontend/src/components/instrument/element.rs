@@ -164,10 +164,8 @@ pub fn KeyboardElement(
         common::events::instrument::KEY_CONTROL_G_K,
     ));
 
-    Effect::new(move |_| {
-        listen_key_control_open();
-        listen_band_control_open();
-    });
+    listen_key_control_open();
+    listen_band_control_open();
 
     let band_control_pos = Memo::new(move |prev| {
         let radius = key_radius();
@@ -500,6 +498,34 @@ pub fn KeyboardElement(
                 role="presentation"
                 node_ref=band_ref
             ></div>
+            <Show when=move || band_control_data().is_some_and(|d| d.value == 0.0)>
+                <div
+                    role="presentation"
+                    class=move || {
+                        format!(
+                            "absolute content-[' '] border-0.5 border-black dark:border-red {}",
+                            match (orientation(), channel) {
+                                (
+                                    common::orientation::LayoutOrientation::Vertical,
+                                    common::instrument::GroupChannel::Left,
+                                ) => "h-3 left-1/2 top-0 w-[1px]",
+                                (
+                                    common::orientation::LayoutOrientation::Vertical,
+                                    common::instrument::GroupChannel::Right,
+                                ) => "h-3 right-1/2 bottom-0 w-[1px]",
+                                (
+                                    common::orientation::LayoutOrientation::Horizontal,
+                                    common::instrument::GroupChannel::Left,
+                                ) => "w-3 top-1/2 left-0 h-[1px]",
+                                (
+                                    common::orientation::LayoutOrientation::Horizontal,
+                                    common::instrument::GroupChannel::Right,
+                                ) => "w-3 bottom-1/2 right-0 h-[1px]",
+                            },
+                        )
+                    }
+                />
+            </Show>
             <Button
                 size=UiSize::Sm
                 round=true

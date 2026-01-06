@@ -46,7 +46,7 @@ pub fn setup(app: &mut App) -> Result<()> {
                                 log::error!("error setting initial instrument layout: {e}");
                             }
                         }
-                        match state.set_preset(presets) {
+                        match state.set_preset(presets.clone()) {
                             Ok(_) => {
                                 log::debug!("Set initial instrument presets");
                             }
@@ -60,7 +60,7 @@ pub fn setup(app: &mut App) -> Result<()> {
                     log::warn!("Main window size unavailable at setup (proceeding without initial layout): {e}");
                     spawn(async move {
                         let state = base_handle_new.state::<engine::InstrumentEngine>();
-                        if let Err(e) = state.set_preset(presets) {
+                        if let Err(e) = state.set_preset(presets.clone()) {
                             log::error!("error setting initial instrument presets: {e}");
                         } else {
                             log::debug!("Set initial instrument presets");
@@ -72,7 +72,7 @@ pub fn setup(app: &mut App) -> Result<()> {
             log::warn!("Main window not yet available at setup; proceeding without initial layout");
             spawn(async move {
                 let state = base_handle_new.state::<engine::InstrumentEngine>();
-                if let Err(e) = state.set_preset(presets) {
+                if let Err(e) = state.set_preset(presets.clone()) {
                     log::error!("error setting initial instrument presets: {e}");
                 } else {
                     log::debug!("Set initial instrument presets");

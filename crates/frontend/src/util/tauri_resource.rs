@@ -231,8 +231,9 @@ where
         set_loading.set(is_loading);
     });
 
+    event_open();
+
     Effect::new(move || {
-        event_open();
         if options.immediate {
             set_inner_trigger.update(|n| n.count = 1);
         }

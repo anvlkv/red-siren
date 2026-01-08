@@ -15,7 +15,7 @@ use common::error::{InstrumentError, Result};
 #[cfg(target_os = "ios")]
 use objc::runtime::{Object, BOOL, YES};
 #[cfg(target_os = "ios")]
-use objc::{msg_send, sel, sel_impl};
+use objc::{msg_send, sel, sel_impl, class};
 
 /// Global flag tracking whether audio session has been configured
 static AUDIO_SESSION_CONFIGURED: OnceLock<bool> = OnceLock::new();

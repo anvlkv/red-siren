@@ -30,6 +30,7 @@ objc = "0.2"
 
 [features]
 default = []
+cargo-clippy = []
 editor = []
 hi_fi = []
 # Native CPAL runtime

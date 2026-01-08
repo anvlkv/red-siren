@@ -6,9 +6,7 @@ use common::{
 };
 use leptos::{callback::Callback, ev};
 use leptos::{html, prelude::*};
-use leptos_use::{
-    use_device_pixel_ratio, use_event_listener, use_window, use_window_size, UseWindowSizeReturn,
-};
+use leptos_use::{use_event_listener, use_window};
 use mint::Point2;
 use web_sys::CanvasRenderingContext2d;
 use web_time::Instant;
@@ -33,6 +31,9 @@ pub fn SensorHandles(
     /// Tuner layout signal
     #[prop(into)]
     layout: Signal<TunerLayout>,
+    /// Unified canvas transform provided by the parent Tuner
+    #[prop(into)]
+    canvas_transform: Signal<super::CanvasTransform>,
     /// Callback for updating sensors
     #[prop(into)]
     on_update: Callback<UpdateSensorPayload>,
@@ -40,22 +41,7 @@ pub fn SensorHandles(
     // let context = expect_tuner_service();
     let canvas_ref = NodeRef::<html::Canvas>::new();
     let picking_canvas_ref = NodeRef::<html::Canvas>::new();
-
-    let pixel_ratio = use_device_pixel_ratio();
-    let UseWindowSizeReturn {
-        width: window_width,
-        height: window_height,
-    } = use_window_size();
-
-    let scale = Memo::new(move |_| {
-        let pr = pixel_ratio();
-        let window_width = window_width();
-        let window_height = window_height();
-        let l = layout();
-        let sx = (window_width / l.space.x) * pr;
-        let sy = (window_height / l.space.y) * pr;
-        sx.min(sy)
-    });
+    let cursor_canvas_ref = NodeRef::<html::Canvas>::new();
 
     let is_dark = is_dark_mode();
 
@@ -89,38 +75,45 @@ pub fn SensorHandles(
         })
     });
 
-    // Setup canvas backing resolution and scaling whenever canvas mounts or layout/pixel ratio changes
+    // Setup canvas backing resolution and scaling whenever canvas mounts or transform changes
     Effect::new(move |_| {
-        let scale_x = scale();
-        let lay = layout();
-        if let Some((canvas, picking_canvas)) = canvas_ref.get().zip(picking_canvas_ref.get()) {
-            let space = lay.space;
+        if let Some(((canvas, picking_canvas), cursor_canvas)) = canvas_ref
+            .get()
+            .zip(picking_canvas_ref.get())
+            .zip(cursor_canvas_ref.get())
+        {
+            let tr = canvas_transform();
+            // Set backing resolution in device pixels (provided by parent)
+            let bw = tr.backing_width_dev;
+            let bh = tr.backing_height_dev;
+            canvas.set_width(bw);
+            canvas.set_height(bh);
+            picking_canvas.set_width(bw);
+            picking_canvas.set_height(bh);
+            cursor_canvas.set_width(bw);
+            cursor_canvas.set_height(bh);
 
-            // Set backing resolution in device pixels (fill window)
-            let pr = pixel_ratio();
-            let ww = window_width();
-            let wh = window_height();
-            let backing_w = (ww * pr).round().clamp(1.0, f64::MAX) as u32;
-            let backing_h = (wh * pr).round().clamp(1.0, f64::MAX) as u32;
-            canvas.set_width(backing_w);
-            canvas.set_height(backing_h);
-            picking_canvas.set_width(backing_w);
-            picking_canvas.set_height(backing_h);
-
-            // Apply uniform scale with letterboxing/pillarboxing
-            let s = scale_x;
-            let tx = ((ww - space.x * (s / pr)) / 2.0) * pr;
-            let ty = ((wh - space.y * (s / pr)) / 2.0) * pr;
+            // Apply uniform scale with letterboxing/pillarboxing using provided transform
             if let Some(ctx) = get_2d_ctx(&canvas) {
                 _ = ctx.reset_transform().ok();
-                _ = ctx.translate(tx, ty).ok();
-                _ = ctx.scale(s, s).ok();
+                _ = ctx.translate(tr.translate_x_dev, tr.translate_y_dev).ok();
+                _ = ctx.scale(tr.device_scale, tr.device_scale).ok();
             }
 
             if let Some(picking_ctx) = get_2d_ctx(&picking_canvas) {
                 _ = picking_ctx.reset_transform().ok();
-                _ = picking_ctx.translate(tx, ty).ok();
-                _ = picking_ctx.scale(s, s).ok();
+                _ = picking_ctx
+                    .translate(tr.translate_x_dev, tr.translate_y_dev)
+                    .ok();
+                _ = picking_ctx.scale(tr.device_scale, tr.device_scale).ok();
+            }
+
+            if let Some(cursor_ctx) = get_2d_ctx(&cursor_canvas) {
+                _ = cursor_ctx.reset_transform().ok();
+                _ = cursor_ctx
+                    .translate(tr.translate_x_dev, tr.translate_y_dev)
+                    .ok();
+                _ = cursor_ctx.scale(tr.device_scale, tr.device_scale).ok();
             }
         }
     });
@@ -147,16 +140,16 @@ pub fn SensorHandles(
                 )
             {
                 // Clear full canvas (in device pixels), independent of current transform
-                let pr = pixel_ratio();
-                let ww = window_width();
-                let wh = window_height();
+                let tr = canvas_transform();
+                let bw = tr.backing_width_dev as f64;
+                let bh = tr.backing_height_dev as f64;
                 ctx.save();
                 _ = ctx.reset_transform().ok();
-                ctx.clear_rect(0.0, 0.0, ww * pr, wh * pr);
+                ctx.clear_rect(0.0, 0.0, bw, bh);
                 ctx.restore();
                 picking_ctx.save();
                 _ = picking_ctx.reset_transform().ok();
-                picking_ctx.clear_rect(0.0, 0.0, ww * pr, wh * pr);
+                picking_ctx.clear_rect(0.0, 0.0, bw, bh);
                 picking_ctx.restore();
 
                 // draw sensors
@@ -303,12 +296,11 @@ pub fn SensorHandles(
         )
     });
 
-    let object_under_pointer = move |x: f64, y: f64| -> Option<Object> {
-        let pr = pixel_ratio();
-        // Screen CSS px -> device px
-        let dx = x * pr;
-        let dy = y * pr;
-
+    let object_under_pointer = move |x_css: f64, y_css: f64| -> Option<Object> {
+        let tr = canvas_transform();
+        let (dx, dy) = tr.css_to_device(x_css, y_css);
+        let dx = dx.floor();
+        let dy = dy.floor();
         picking_canvas_ref
             .get()
             .and_then(|canvas| get_2d_ctx(&canvas))
@@ -329,6 +321,29 @@ pub fn SensorHandles(
             })
     };
 
+    let cross_hair = move |x_css: f64, y_css: f64| {
+        let color = base_color();
+        if let Some(ctx) = cursor_canvas_ref
+            .get()
+            .and_then(|canvas| get_2d_ctx(&canvas))
+        {
+            // Clear entire backing store in device pixels, independent of transform
+            let tr = canvas_transform();
+            let bw = tr.backing_width_dev as f64;
+            let bh = tr.backing_height_dev as f64;
+            ctx.save();
+            _ = ctx.reset_transform().ok();
+            ctx.clear_rect(0.0, 0.0, bw, bh);
+            ctx.restore();
+
+            // Convert CSS pointer to world-space under current transform
+            let (world_x, world_y) = tr.css_to_world(x_css, y_css);
+
+            // Draw crosshair at world coordinates
+            draw_cross_hair(world_x, world_y, 10.0, &color, &ctx);
+        }
+    };
+
     let unlisten_pointerout =
         use_event_listener(use_window(), ev::pointerout, move |ev: ev::PointerEvent| {
             let id = ev.pointer_id();
@@ -338,8 +353,11 @@ pub fn SensorHandles(
         });
 
     let on_move = move |ev: ev::PointerEvent| {
-        let x = ev.x() as f64;
-        let y = ev.y() as f64;
+        let x = ev.offset_x() as f64;
+        let y = ev.offset_y() as f64;
+
+        cross_hair(x, y);
+
         let id = ev.pointer_id();
         let selected = selected_objects();
         if let Some(((key, part), mut point, inst)) = selected.get(&id).cloned() {
@@ -347,18 +365,30 @@ pub fn SensorHandles(
             let freq_range = freq_space.end() - freq_space.start();
             let mag_range = mag_space.end() - mag_space.start();
             let lay = layout();
+
+            // Deltas in CSS px (match world units since canvas CSS equals layout space)
             let d_x = x - point.x;
             let d_y = y - point.y;
+
+            // World-space deltas
+            let d_x_world = d_x;
+            let d_y_world = d_y;
+
             let now = Instant::now();
             let dur = (now.duration_since(inst).as_secs_f64()).max(1e-3);
+
+            // Velocity in world units per second
             let v0_x = lay.space.x;
             let v0_y = lay.space.y;
-            let v_x = d_x.abs() / dur;
-            let v_y = d_y.abs() / dur;
+            let v_x = d_x_world.abs() / dur;
+            let v_y = d_y_world.abs() / dur;
+
+            // Fractional movement relative to full space with smoothing
             let scale_x = if v0_x > 0.0 { v_x / (v_x + v0_x) } else { 1.0 };
             let scale_y = if v0_y > 0.0 { v_y / (v_y + v0_y) } else { 1.0 };
-            let frac_x = ((d_x / v0_x) * scale_x).clamp(-1.0, 1.0);
-            let frac_y = ((d_y / v0_y) * scale_y).clamp(-1.0, 1.0);
+            let frac_x = ((d_x_world / v0_x) * scale_x).clamp(-1.0, 1.0);
+            let frac_y = ((d_y_world / v0_y) * scale_y).clamp(-1.0, 1.0);
+
             let ctrl = ev.ctrl_key();
             let alt = ev.alt_key();
 
@@ -445,13 +475,15 @@ pub fn SensorHandles(
     };
 
     let on_down = move |ev: ev::PointerEvent| {
-        let x = ev.x() as f64;
-        let y = ev.y() as f64;
-        let id = ev.pointer_id();
-        if let Some(object_under_pointer) = object_under_pointer(x, y) {
-            selected_objects.update(|selected| {
-                selected.insert(id, (object_under_pointer, Point2 { x, y }, Instant::now()));
-            });
+        if let Some(_canvas) = cursor_canvas_ref.get() {
+            let x = ev.offset_x() as f64;
+            let y = ev.offset_y() as f64;
+            let id = ev.pointer_id();
+            if let Some(object_under_pointer) = object_under_pointer(x, y) {
+                selected_objects.update(|selected| {
+                    selected.insert(id, (object_under_pointer, Point2 { x, y }, Instant::now()));
+                });
+            }
         }
     };
 
@@ -469,16 +501,15 @@ pub fn SensorHandles(
     view! {
         <>
             <canvas
-                class="absolute inset-0 w-full h-full pointer-events-none"
-                width=window_width
-                height=window_height
+                class="absolute inset-0 w-full h-full pointer-events-none invisible pointer-events-none"
                 node_ref=picking_canvas_ref
             />
             <canvas
-                class="absolute inset-0 w-full h-full mix-blend-difference"
-                width=window_width
-                height=window_height
+                class="absolute inset-0 w-full h-full mix-blend-difference pointer-events-none"
                 node_ref=canvas_ref
+            />
+            <canvas
+                class="absolute inset-0 w-full h-full mix-blend-exclusion"
                 on:pointermove=on_move
                 on:pointerdown=on_down
                 on:pointerup=on_up
@@ -491,9 +522,31 @@ pub fn SensorHandles(
                         "default"
                     }
                 }
+                node_ref=cursor_canvas_ref
             />
         </>
     }
+}
+
+fn draw_cross_hair(
+    center_x: f64,
+    center_y: f64,
+    length: f64,
+    color: &str,
+    ctx: &CanvasRenderingContext2d,
+) {
+    ctx.save();
+    ctx.set_stroke_style_str(color);
+    ctx.set_line_width(1.0);
+    ctx.begin_path();
+    // Horizontal line
+    ctx.move_to(center_x - length / 2.0, center_y);
+    ctx.line_to(center_x + length / 2.0, center_y);
+    // Vertical line
+    ctx.move_to(center_x, center_y - length / 2.0);
+    ctx.line_to(center_x, center_y + length / 2.0);
+    ctx.stroke();
+    ctx.restore();
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -548,10 +601,10 @@ fn draw_sensor_handle(
 
     if let Some((highlight_color, alpha, spread)) = highlight {
         ctx.save();
+        // Outer glow (lighter, blurred)
         ctx.set_global_alpha(alpha);
         ctx.set_stroke_style_str(highlight_color);
         ctx.set_line_width(1.5);
-        // Apply a blur to the shape using canvas shadows
         ctx.set_shadow_color(highlight_color);
         ctx.set_shadow_blur(spread);
         ctx.set_shadow_offset_x(0.0);
@@ -559,6 +612,18 @@ fn draw_sensor_handle(
         ctx.begin_path();
         path();
         ctx.stroke();
+
+        // Inner ring (solid, most prominent for shape highlight)
+        ctx.set_global_alpha(1.0);
+        ctx.set_shadow_blur(0.0);
+        ctx.set_shadow_offset_x(0.0);
+        ctx.set_shadow_offset_y(0.0);
+        ctx.set_line_width(2.0);
+        ctx.set_stroke_style_str(highlight_color);
+        ctx.begin_path();
+        path();
+        ctx.stroke();
+
         ctx.restore();
     }
 
@@ -583,10 +648,16 @@ fn draw_connector(
 ) {
     if let Some((highlight_color, alpha, spread)) = highlight {
         ctx.save();
+        // Outer glow (lighter, blurred)
         ctx.set_global_alpha(alpha);
         ctx.set_stroke_style_str(highlight_color);
-        ctx.set_line_width(thickness * 3.0);
-        // Apply a blur to the line using canvas shadows
+        // Boost width if this is a selected part (alpha ~ 1.0 from mapping)
+        let wide = if alpha >= 0.99 {
+            thickness * 4.0
+        } else {
+            thickness * 3.0
+        };
+        ctx.set_line_width(wide);
         ctx.set_shadow_color(highlight_color);
         ctx.set_shadow_blur(spread);
         ctx.set_shadow_offset_x(0.0);
@@ -595,6 +666,19 @@ fn draw_connector(
         ctx.move_to(p1.x, p1.y);
         ctx.line_to(p2.x, p2.y);
         ctx.stroke();
+
+        // Inner ring (solid, most prominent for selected-part)
+        ctx.set_global_alpha(1.0);
+        ctx.set_shadow_blur(0.0);
+        ctx.set_shadow_offset_x(0.0);
+        ctx.set_shadow_offset_y(0.0);
+        ctx.set_line_width(thickness * 2.0);
+        ctx.set_stroke_style_str(highlight_color);
+        ctx.begin_path();
+        ctx.move_to(p1.x, p1.y);
+        ctx.line_to(p2.x, p2.y);
+        ctx.stroke();
+
         ctx.restore();
     }
     ctx.save();
@@ -652,10 +736,14 @@ fn highlight_color<'a>(
     let is_highlighted_part = &part == highlight_part;
 
     match (is_selected, is_selected_part, is_highlighted_part) {
-        (false, _, true) => (secondary_color, 0.6, 4.0),
-        (false, _, false) => (secondary_color, 0.3, 2.0),
-        (true, true, _) => (base_color, 0.9, 6.0),
-        (true, false, _) => (base_color, 0.7, 4.0),
+        // Generic highlight -> least prominent
+        (false, _, false) => (secondary_color, 0.4, 3.0),
+        // Highlighted part (not selected) -> more prominent than generic highlight
+        (false, _, true) => (secondary_color, 0.7, 5.0),
+        // Selected (whole) -> second most prominent
+        (true, false, _) => (base_color, 0.85, 6.0),
+        // Selected part -> most prominent
+        (true, true, _) => (base_color, 1.0, 8.0),
     }
 }
 

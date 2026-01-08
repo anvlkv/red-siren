@@ -1,5 +1,4 @@
 use leptos::{html, prelude::*};
-use leptos_use::{use_device_pixel_ratio, use_window_size, UseWindowSizeReturn};
 use tauri_use::{use_command, UseTauriWithReturn};
 use web_sys::CanvasRenderingContext2d;
 
@@ -16,27 +15,14 @@ pub fn SpectrumVisualizer(
     /// Tuner layout (space, orientation, baseline, sensors count)
     #[prop(into)]
     layout: Signal<Option<TunerLayout>>,
+    /// Unified canvas transform provided by the parent Tuner
+    #[prop(into)]
+    canvas_transform: Signal<super::CanvasTransform>,
 ) -> impl IntoView {
     let context = expect_tuner_service();
     let canvas_ref = NodeRef::<html::Canvas>::new();
-    let pixel_ratio = use_device_pixel_ratio();
-    let UseWindowSizeReturn {
-        width: window_width,
-        height: window_height,
-    } = use_window_size();
 
-    let scale = Memo::new(move |_| {
-        let pr = pixel_ratio();
-        let window_width = window_width();
-        let window_height = window_height();
-        layout()
-            .map(|l| {
-                let sx = (window_width / l.space.x) * pr;
-                let sy = (window_height / l.space.y) * pr;
-                sx.min(sy)
-            })
-            .unwrap_or(pr)
-    });
+    // scale is now provided by the parent Tuner via props
 
     // Baseline from layout (no fallback)
     let baseline = Memo::new(move |_| layout.with(|l| l.as_ref().map(|lay| lay.line_position)));
@@ -73,29 +59,22 @@ pub fn SpectrumVisualizer(
         })
     });
 
-    // Setup canvas backing resolution and scaling whenever canvas mounts or layout/pixel ratio changes
+    // Setup canvas backing resolution and scaling whenever canvas mounts or transform changes
     Effect::new(move |_| {
-        let s = scale();
         if let Some(lay) = layout() {
             if let Some(canvas) = canvas_ref.get() {
-                let space = lay.space;
+                let _space = lay.space;
 
-                // Set backing resolution in device pixels (fill window)
-                let pr = pixel_ratio();
-                let ww = window_width();
-                let wh = window_height();
-                let backing_w = (ww * pr).round().clamp(1.0, f64::MAX) as u32;
-                let backing_h = (wh * pr).round().clamp(1.0, f64::MAX) as u32;
-                canvas.set_width(backing_w);
-                canvas.set_height(backing_h);
+                // Set backing resolution in device pixels (provided by parent)
+                let tr = canvas_transform();
+                canvas.set_width(tr.backing_width_dev);
+                canvas.set_height(tr.backing_height_dev);
 
-                // Apply uniform scale with letterboxing/pillarboxing
-                let tx = ((ww - space.x * (s / pr)) / 2.0) * pr;
-                let ty = ((wh - space.y * (s / pr)) / 2.0) * pr;
+                // Apply uniform scale with letterboxing/pillarboxing (provided transform)
                 if let Some(ctx) = get_2d_ctx(&canvas) {
                     _ = ctx.reset_transform().ok();
-                    _ = ctx.translate(tx, ty).ok();
-                    _ = ctx.scale(s, s).ok();
+                    _ = ctx.translate(tr.translate_x_dev, tr.translate_y_dev).ok();
+                    _ = ctx.scale(tr.device_scale, tr.device_scale).ok();
                 }
             }
         }
@@ -115,12 +94,12 @@ pub fn SpectrumVisualizer(
 
                 if let Some(ctx) = canvas_ref.get().and_then(|canvas| get_2d_ctx(&canvas)) {
                     // Clear full canvas (in device pixels), independent of current transform
-                    let pr = pixel_ratio();
-                    let ww = window_width();
-                    let wh = window_height();
+                    let tr = canvas_transform();
+                    let bw = tr.backing_width_dev as f64;
+                    let bh = tr.backing_height_dev as f64;
                     ctx.save();
                     _ = ctx.reset_transform().ok();
-                    ctx.clear_rect(0.0, 0.0, ww * pr, wh * pr);
+                    ctx.clear_rect(0.0, 0.0, bw, bh);
                     ctx.restore();
 
                     let base_color = base_color.get();
@@ -213,8 +192,7 @@ pub fn SpectrumVisualizer(
     view! {
         <canvas
             node_ref=canvas_ref
-            width=window_width
-            height=window_height
+            style:touch-action="none"
             class="absolute inset-0 w-full h-full"
         ></canvas>
     }

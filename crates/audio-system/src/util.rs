@@ -26,7 +26,7 @@ pub type S = f64;
 #[cfg(feature = "hi_fi")]
 pub type SComplex = Complex64;
 
-pub type DbLin = fundsp::hacker::Pipe<
+pub type DbLin = fundsp::prelude::Pipe<
     crate::values::FineTunedValue,
     super::system::output::db_lin::DbLinConverter,
 >;

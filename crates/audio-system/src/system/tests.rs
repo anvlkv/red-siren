@@ -2,11 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common::instrument::layout::layout_test_cases;
-#[cfg(feature = "hi_fi")]
-use fundsp::hacker::prelude::*;
-#[cfg(not(feature = "hi_fi"))]
-use fundsp::hacker32::prelude::*;
 use fundsp::net::Net;
+use fundsp::prelude::*;
 use fundsp::thingbuf::ThingBuf;
 use insta_fun::prelude::*;
 

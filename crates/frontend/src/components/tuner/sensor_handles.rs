@@ -52,10 +52,9 @@ pub fn SensorHandles(
         let window_width = window_width();
         let window_height = window_height();
         let l = layout();
-        (
-            (l.space.x / window_width) * pr,
-            (l.space.y / window_height) * pr,
-        )
+        let sx = (window_width / l.space.x) * pr;
+        let sy = (window_height / l.space.y) * pr;
+        sx.min(sy)
     });
 
     let is_dark = is_dark_mode();
@@ -92,30 +91,36 @@ pub fn SensorHandles(
 
     // Setup canvas backing resolution and scaling whenever canvas mounts or layout/pixel ratio changes
     Effect::new(move |_| {
-        let (scale_x, scale_y) = scale();
+        let scale_x = scale();
         let lay = layout();
         if let Some((canvas, picking_canvas)) = canvas_ref.get().zip(picking_canvas_ref.get()) {
             let space = lay.space;
 
-            // Set backing resolution in device pixels
-            let logical_w: f64 = space.x.max(0.0);
-            let logical_h: f64 = space.y.max(0.0);
-            let backing_w = (logical_w * scale_x).round().clamp(1.0, f64::MAX) as u32;
-            let backing_h = (logical_h * scale_y).round().clamp(1.0, f64::MAX) as u32;
+            // Set backing resolution in device pixels (fill window)
+            let pr = pixel_ratio();
+            let ww = window_width();
+            let wh = window_height();
+            let backing_w = (ww * pr).round().clamp(1.0, f64::MAX) as u32;
+            let backing_h = (wh * pr).round().clamp(1.0, f64::MAX) as u32;
             canvas.set_width(backing_w);
             canvas.set_height(backing_h);
             picking_canvas.set_width(backing_w);
             picking_canvas.set_height(backing_h);
 
-            // Acquire 2d context and scale so drawing uses logical CSS pixels
+            // Apply uniform scale with letterboxing/pillarboxing
+            let s = scale_x;
+            let tx = ((ww - space.x * (s / pr)) / 2.0) * pr;
+            let ty = ((wh - space.y * (s / pr)) / 2.0) * pr;
             if let Some(ctx) = get_2d_ctx(&canvas) {
                 _ = ctx.reset_transform().ok();
-                _ = ctx.scale(scale_x, scale_y).ok();
+                _ = ctx.translate(tx, ty).ok();
+                _ = ctx.scale(s, s).ok();
             }
 
             if let Some(picking_ctx) = get_2d_ctx(&picking_canvas) {
                 _ = picking_ctx.reset_transform().ok();
-                _ = picking_ctx.scale(scale_x, scale_y).ok();
+                _ = picking_ctx.translate(tx, ty).ok();
+                _ = picking_ctx.scale(s, s).ok();
             }
         }
     });
@@ -127,7 +132,6 @@ pub fn SensorHandles(
     Effect::new(move |_| {
         let lay = layout();
         let config = config();
-        let space = lay.space;
         let radius = lay.sensor_radius;
         let highlighted_object = highlighted_object();
         let base_color = base_color();
@@ -142,9 +146,18 @@ pub fn SensorHandles(
                         .and_then(|canvas| get_2d_ctx(&canvas)),
                 )
             {
-                // Clear canvas
-                ctx.clear_rect(0.0, 0.0, space.x, space.y);
-                picking_ctx.clear_rect(0.0, 0.0, space.x, space.y);
+                // Clear full canvas (in device pixels), independent of current transform
+                let pr = pixel_ratio();
+                let ww = window_width();
+                let wh = window_height();
+                ctx.save();
+                _ = ctx.reset_transform().ok();
+                ctx.clear_rect(0.0, 0.0, ww * pr, wh * pr);
+                ctx.restore();
+                picking_ctx.save();
+                _ = picking_ctx.reset_transform().ok();
+                picking_ctx.clear_rect(0.0, 0.0, ww * pr, wh * pr);
+                picking_ctx.restore();
 
                 // draw sensors
                 for sensor in config.sensor_data.iter() {
@@ -291,21 +304,24 @@ pub fn SensorHandles(
     });
 
     let object_under_pointer = move |x: f64, y: f64| -> Option<Object> {
-        let (scale_x, scale_y) = scale();
+        let pr = pixel_ratio();
+        // Screen CSS px -> device px
+        let dx = x * pr;
+        let dy = y * pr;
+
         picking_canvas_ref
             .get()
             .and_then(|canvas| get_2d_ctx(&canvas))
             .and_then(|ctx| {
-                ctx.get_image_data(x / scale_x, y / scale_y, 1.0, 1.0)
-                    .ok()
-                    .and_then(|data| {
-                        let data = data.data();
-                        if data.len() >= 3 {
-                            Some((data[0], data[1], data[2]))
-                        } else {
-                            None
-                        }
-                    })
+                let img = ctx.get_image_data(dx, dy, 1.0, 1.0).ok();
+                img.and_then(|data| {
+                    let data = data.data();
+                    if data.len() >= 3 {
+                        Some((data[0], data[1], data[2]))
+                    } else {
+                        None
+                    }
+                })
             })
             .and_then(|pixel| {
                 let object_map = object_map.get_value();
@@ -453,7 +469,7 @@ pub fn SensorHandles(
     view! {
         <>
             <canvas
-                class="absolute inset-0 w-full h-full pointer-events-none invisible"
+                class="absolute inset-0 w-full h-full pointer-events-none"
                 width=window_width
                 height=window_height
                 node_ref=picking_canvas_ref

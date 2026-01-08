@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use fundsp::hacker32::*;
+use fundsp::prelude32::*;
 
 pub(super) enum Control {
     Pause,

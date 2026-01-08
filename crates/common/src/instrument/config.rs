@@ -150,7 +150,7 @@ impl TryFrom<Layout> for Config {
 
         // computed properties
         let total_steps = key_registry.total_keys();
-        let phase_step = std::f64::consts::FRAC_2_PI / total_steps as f64;
+        let phase_step = 1.0 / total_steps as f64;
         let l_step_nodes = layout.key_radius + layout.key_bands_gap;
 
         // track values

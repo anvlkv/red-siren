@@ -9,10 +9,7 @@ use std::collections::HashMap;
 
 use common::tuner::Config;
 use common::NodeKey;
-#[cfg(feature = "hi_fi")]
-use fundsp::hacker::prelude::*;
-#[cfg(not(feature = "hi_fi"))]
-use fundsp::hacker32::prelude::*;
+use fundsp::prelude::*;
 use u_num_it::u_num_it;
 
 use crate::system::values::FineTunedValues;

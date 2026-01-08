@@ -1,9 +1,6 @@
 use std::marker::PhantomData;
 
-#[cfg(feature = "hi_fi")]
-use fundsp::hacker::prelude::*;
-#[cfg(not(feature = "hi_fi"))]
-use fundsp::hacker32::prelude::*;
+use fundsp::prelude::*;
 
 use crate::util::hash_str;
 

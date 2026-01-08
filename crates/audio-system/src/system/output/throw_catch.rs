@@ -1,9 +1,6 @@
 use std::sync::Arc;
 
-#[cfg(feature = "hi_fi")]
-use fundsp::hacker::prelude::*;
-#[cfg(not(feature = "hi_fi"))]
-use fundsp::hacker32::prelude::*;
+use fundsp::prelude::*;
 use fundsp::thingbuf::ThingBuf;
 
 use crate::util::hash_str;

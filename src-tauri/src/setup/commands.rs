@@ -13,7 +13,11 @@ pub fn update_window_appearance(
     dark: bool,
     app: AppHandle,
     state: State<'_, WindowState>,
+    window: tauri::Window,
 ) -> Result<()> {
+    if window.label() != "main" {
+        return Ok(());
+    }
     log::debug!("Updating window appearance to dark mode: {}", dark);
 
     // Determine if override is set (narrow lock scope; drop before further work)

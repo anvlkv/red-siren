@@ -1,7 +1,4 @@
-#[cfg(feature = "hi_fi")]
-use fundsp::hacker::prelude::*;
-#[cfg(not(feature = "hi_fi"))]
-use fundsp::hacker32::prelude::*;
+use fundsp::prelude::*;
 
 use crate::util::{hash_str, S};
 
@@ -16,7 +13,7 @@ pub struct Formant {
 
 impl Formant {
     fn resonator_params(audio_sample: S, control: S, base_q: S, base_freq: S, index: S) -> [S; 3] {
-        let q = base_q + control * base_q * (1.0 / base_q);
+        let q = base_q + control * base_q;
         let center = base_freq + (base_freq * (control / index));
 
         [audio_sample, center, q]

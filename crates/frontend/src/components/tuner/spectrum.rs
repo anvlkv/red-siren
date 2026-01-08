@@ -31,12 +31,11 @@ pub fn SpectrumVisualizer(
         let window_height = window_height();
         layout()
             .map(|l| {
-                (
-                    (l.space.x / window_width) * pr,
-                    (l.space.y / window_height) * pr,
-                )
+                let sx = (window_width / l.space.x) * pr;
+                let sy = (window_height / l.space.y) * pr;
+                sx.min(sy)
             })
-            .unwrap_or((pr, pr))
+            .unwrap_or(pr)
     });
 
     // Baseline from layout (no fallback)
@@ -76,23 +75,27 @@ pub fn SpectrumVisualizer(
 
     // Setup canvas backing resolution and scaling whenever canvas mounts or layout/pixel ratio changes
     Effect::new(move |_| {
-        let (scale_x, scale_y) = scale();
+        let s = scale();
         if let Some(lay) = layout() {
             if let Some(canvas) = canvas_ref.get() {
                 let space = lay.space;
 
-                // Set backing resolution in device pixels
-                let logical_w = space.x.max(0.0);
-                let logical_h = space.y.max(0.0);
-                let backing_w = (logical_w * scale_x).round().clamp(1.0, f64::MAX) as u32;
-                let backing_h = (logical_h * scale_y).round().clamp(1.0, f64::MAX) as u32;
+                // Set backing resolution in device pixels (fill window)
+                let pr = pixel_ratio();
+                let ww = window_width();
+                let wh = window_height();
+                let backing_w = (ww * pr).round().clamp(1.0, f64::MAX) as u32;
+                let backing_h = (wh * pr).round().clamp(1.0, f64::MAX) as u32;
                 canvas.set_width(backing_w);
                 canvas.set_height(backing_h);
 
-                // Acquire 2d context and scale so drawing uses logical CSS pixels
+                // Apply uniform scale with letterboxing/pillarboxing
+                let tx = ((ww - space.x * (s / pr)) / 2.0) * pr;
+                let ty = ((wh - space.y * (s / pr)) / 2.0) * pr;
                 if let Some(ctx) = get_2d_ctx(&canvas) {
                     _ = ctx.reset_transform().ok();
-                    _ = ctx.scale(scale_x, scale_y).ok();
+                    _ = ctx.translate(tx, ty).ok();
+                    _ = ctx.scale(s, s).ok();
                 }
             }
         }
@@ -109,11 +112,16 @@ pub fn SpectrumVisualizer(
             poll_spectrum(Some(()));
             if let Some(spectrum) = spectrum_data() {
                 let Some(lay) = layout() else { return };
-                let space = lay.space;
 
                 if let Some(ctx) = canvas_ref.get().and_then(|canvas| get_2d_ctx(&canvas)) {
-                    // Clear canvas
-                    ctx.clear_rect(0.0, 0.0, space.x, space.y);
+                    // Clear full canvas (in device pixels), independent of current transform
+                    let pr = pixel_ratio();
+                    let ww = window_width();
+                    let wh = window_height();
+                    ctx.save();
+                    _ = ctx.reset_transform().ok();
+                    ctx.clear_rect(0.0, 0.0, ww * pr, wh * pr);
+                    ctx.restore();
 
                     let base_color = base_color.get();
                     let secondary_color = secondary_color.get();

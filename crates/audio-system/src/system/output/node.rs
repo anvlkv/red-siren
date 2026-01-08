@@ -1,5 +1,5 @@
 use common::instrument::NodeConfig;
-use fundsp::hacker::prelude::*;
+use fundsp::prelude::*;
 
 use super::formant::*;
 use super::siren::*;
@@ -256,7 +256,7 @@ fn source_oscillator(frequency: S, phase: S, band_control: &Shared) -> An<Source
 
     ((input >> clip_to(0.6, 1.0)) * constant(frequency as f32))
         >> split::<U2>()
-        >> (sine_phase::<S>(phase as f32) | soft_saw() | var(band_control))
+        >> (sine::<S>().phase(phase as f32) | soft_saw().phase(phase as f32) | var(band_control))
         >> super::crossfade::equal_power_crossfade()
 }
 

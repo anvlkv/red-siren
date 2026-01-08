@@ -18,10 +18,7 @@ use common::{
 };
 use common::{instrument::PlaybackQuality, tuner::Config as TunerConfig};
 use cpal::traits::{DeviceTrait, HostTrait};
-#[cfg(feature = "hi_fi")]
-use fundsp::hacker::prelude::*;
-#[cfg(not(feature = "hi_fi"))]
-use fundsp::hacker32::prelude::*;
+use fundsp::prelude::*;
 use fundsp::thingbuf::ThingBuf;
 use parking_lot::RwLock;
 
@@ -532,8 +529,29 @@ impl CpalController {
     }
 
     fn shutdown_streams(&self) -> Result<()> {
+        // Take thread handles
+        _ = self.output_thread.write().take();
+        _ = self.input_thread.write().take();
+
+        // Take DSP
+        _ = self.dsp_net_frontend.write().take();
+        _ = self.dsp_primary_node_id.write().take();
+        _ = self.gain_param.write().take();
+        _ = self.sample_rate.write().take();
+
+        // Clear snoops & controls
+        self.node_excitement_snoops.write().clear();
+        self.node_output_snoops.write().clear();
+        self.node_band_controls.write().clear();
+        self.node_key_controls.write().clear();
+        self.node_sensor_controls.write().clear();
+
+        // Take control channels
+        let control_tx = self.control_tx.write().take();
+        let input_sender = self.input_sender.write().take();
+
         // Output stream shutdown
-        if let Some(tx) = self.control_tx.write().take() {
+        if let Some(tx) = control_tx {
             let (ack_tx, ack_rx) = mpsc::channel();
             tx.send(Control::Shutdown(ack_tx))
                 .map_err(|_| ControlError::ChannelSend {
@@ -554,27 +572,12 @@ impl CpalController {
         }
 
         // Excitement stream shutdown
-        if let Some(act_tx) = self.input_sender.write().take() {
+        if let Some(act_tx) = input_sender {
             let (ack_tx, ack_rx) = mpsc::channel();
             if act_tx.send(Control::Shutdown(ack_tx)).is_ok() {
                 let _ = ack_rx.recv_timeout(Duration::from_millis(CONTROL_INVOKE_TIMEOUT_MS));
             }
         }
-
-        // Release thread handles
-        *self.output_thread.write() = None;
-        *self.input_thread.write() = None;
-
-        // Clear DSP & handles
-        self.dsp_net_frontend.write().take();
-        self.dsp_primary_node_id.write().take();
-        self.gain_param.write().take();
-        self.node_excitement_snoops.write().clear();
-        self.node_output_snoops.write().clear();
-        self.node_band_controls.write().clear();
-        self.node_key_controls.write().clear();
-        self.node_sensor_controls.write().clear();
-        self.sample_rate.write().take();
 
         Ok(())
     }
@@ -835,7 +838,12 @@ impl AudioRuntime for CpalController {
             let cap = snoop.capacity();
             out.reserve(cap + 2);
             for rev in (0..cap).rev() {
-                out.push(snoop.at(rev));
+                let s = snoop.at(rev);
+                if s.is_normal() || s == 0.0 {
+                    out.push(snoop.at(rev));
+                } else {
+                    out.push(0.0);
+                }
             }
         }
         out
@@ -845,21 +853,11 @@ impl AudioRuntime for CpalController {
         let layout = *self.last_layout.read();
         let registry = layout.registry();
 
-        let mut result = Vec::with_capacity(registry.total_keys());
-        let mut snoops = self.node_output_snoops.write();
-
-        registry.iter_keys(|node_key| {
-            if let Some(snoop) = snoops.get_mut(&node_key) {
-                snoop.update();
-                let cap = snoop.capacity();
-                let mut samples = Vec::with_capacity(cap + 2);
-                for rev in (0..cap).rev() {
-                    samples.push(snoop.at(rev));
-                }
-                result.push((node_key, samples));
-            }
-        });
-        result
+        registry
+            .all_keys()
+            .iter()
+            .map(|&node_key| (node_key, self.snapshot_output_snoop(node_key)))
+            .collect()
     }
 
     fn snapshot_excitement_snoop(&self, node_key: NodeKey) -> Vec<(f32, f32)> {
@@ -871,7 +869,14 @@ impl AudioRuntime for CpalController {
             let cap = primary.capacity();
             out.reserve(cap + 2);
             for rev in (0..cap).rev() {
-                out.push((primary.at(rev), secondary.at(rev)));
+                let p = primary.at(rev);
+                let s = secondary.at(rev);
+                // avoid denormals in output
+                if (p.is_normal() || p == 0.0) && (s.is_normal() || s == 0.0) {
+                    out.push((primary.at(rev), secondary.at(rev)));
+                } else {
+                    out.push((0.0, 0.0));
+                }
             }
         }
         out

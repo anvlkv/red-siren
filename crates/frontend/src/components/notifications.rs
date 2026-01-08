@@ -43,13 +43,13 @@ pub fn Notifications() -> impl IntoView {
 
     let is_devtools_enabled = is_devtools_enabled();
 
-    if is_devtools_enabled.get_untracked() {
-        log_open();
-    }
-
-    Effect::new(move |_| {
-        notification_open();
+    Effect::new(move || {
+        if is_devtools_enabled() {
+            log_open();
+        }
     });
+
+    notification_open();
 
     Effect::new(move |_| {
         if let Some(err) = log_error() {

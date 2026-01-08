@@ -1,10 +1,11 @@
 use std::collections::VecDeque;
+use std::iter;
 use std::sync::Arc;
 use std::time::Duration;
 
 use common::instrument::PlaybackQuality;
 use cpal::OutputStreamTimestamp;
-use fundsp::hacker::{AudioUnit, BigBlockAdapter, NetBackend};
+use fundsp::prelude::{AudioUnit, BigBlockAdapter, NetBackend};
 use fundsp::thingbuf::ThingBuf;
 
 use crate::util::S;
@@ -38,12 +39,12 @@ pub fn playback_callback(
     let sub_optimal_duration = Duration::from_secs_f64(BASE_OPTIMAL_BUFFER_MILLIS / 1_000.0);
     let sample_duration = Duration::from_secs_f64(1.0 / sample_rate as f64);
 
-    // Buffer sized to optimal target
-    let mut output_buffer = VecDeque::<(f32, f32)>::with_capacity(optimal_cap);
-
-    // Track runtime parameters
-    let mut frames_per_output_buffer = 64_usize;
     let mut lr_frame_scratch = [0.0; 2];
+    let mut i_batch_scratch = vec![0.0_f32; 512];
+    let mut l_batch_scratch = vec![0.0_f32; 512];
+    let mut r_batch_scratch = vec![0.0_f32; 512];
+    let mut output_buffer = VecDeque::<(f32, f32)>::with_capacity(optimal_cap);
+    let mut frames_per_output_buffer = 64_usize;
 
     // State used to decide catch-up
     let mut accumulated_latency = Duration::ZERO;
@@ -146,17 +147,46 @@ pub fn playback_callback(
             optimal_cap
                 .saturating_sub(current_len)
                 .min(remaining_capacity)
-        };
+        }
+        .max(num_frames);
 
-        // Produce using only tick
-        for _ in 0..fill_size {
-            #[allow(clippy::unnecessary_cast)]
-            let input = input_buffer
-                .as_ref()
-                .and_then(|ib| ib.pop())
-                .unwrap_or_default() as f32;
-            backend.tick(&[input], &mut lr_frame_scratch);
-            output_buffer.push_back((lr_frame_scratch[0], lr_frame_scratch[1]));
+        if inner_quality_indicator.is_some_and(|q| {
+            matches!(
+                q,
+                PlaybackQuality::OptimizedQuality | PlaybackQuality::Underruns
+            )
+        }) {
+            if fill_size > l_batch_scratch.len() {
+                l_batch_scratch.resize(fill_size, 0.0);
+                r_batch_scratch.resize(fill_size, 0.0);
+                i_batch_scratch.resize(fill_size, 0.0);
+            }
+            if let Some(ib) = input_buffer.as_ref() {
+                i_batch_scratch
+                    .iter_mut()
+                    .take(fill_size)
+                    .zip(iter::from_fn(|| ib.pop()))
+                    .for_each(|(v, s)| *v = s);
+            }
+            backend.process_big(
+                fill_size,
+                &[&i_batch_scratch[..fill_size]],
+                &mut [
+                    &mut l_batch_scratch[..fill_size],
+                    &mut r_batch_scratch[..fill_size],
+                ],
+            );
+            output_buffer.extend((0..fill_size).map(|i| (l_batch_scratch[i], r_batch_scratch[i])));
+        } else {
+            for _ in 0..fill_size {
+                #[allow(clippy::unnecessary_cast)]
+                let input = input_buffer
+                    .as_ref()
+                    .and_then(|ib| ib.pop())
+                    .unwrap_or_default() as f32;
+                backend.tick(&[input], &mut lr_frame_scratch);
+                output_buffer.push_back((lr_frame_scratch[0], lr_frame_scratch[1]));
+            }
         }
 
         // After catch-up production, reset accumulated latency

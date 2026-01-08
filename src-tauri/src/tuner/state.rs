@@ -1,6 +1,4 @@
 use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
 
 use audio_system::{input::analyzer::FFT_WINDOW_SIZE, rt::ExcitementSource};
 use common::{
@@ -29,8 +27,8 @@ pub struct TunerState {
     current_magnitudes: Arc<RwLock<Vec<f32>>>,
     current_excitements: Arc<RwLock<Vec<f32>>>,
     frequencies: Arc<RwLock<Vec<f32>>>,
-    spectrum_polling_thread: RwLock<Option<thread::JoinHandle<()>>>,
-    audio_probe: RwLock<bool>,
+    tuner_stream_active: RwLock<bool>,
+    probe_active: RwLock<bool>,
 }
 
 impl TunerState {
@@ -44,8 +42,8 @@ impl TunerState {
             current_magnitudes: Arc::new(RwLock::new(Vec::new())),
             current_excitements: Arc::new(RwLock::new(Vec::new())),
             frequencies: Arc::new(RwLock::new(Vec::new())),
-            spectrum_polling_thread: RwLock::new(None),
-            audio_probe: RwLock::new(false),
+            tuner_stream_active: RwLock::new(false),
+            probe_active: RwLock::new(false),
         }
     }
 
@@ -73,14 +71,15 @@ impl TunerState {
     }
 
     pub fn toggle_probe(&self) -> Result<bool> {
-        let mut probe = self.audio_probe.write();
-        *probe = !*probe;
         let instrument = self.app.state::<InstrumentEngine>();
-        if *probe {
+        let mut probe = self.probe_active.write();
+        let desired = !*probe;
+        if desired {
             instrument.start_tap_tuner_audio()?;
         } else {
             instrument.stop_tap_tuner_audio()?;
         }
+        *probe = desired;
         Ok(*probe)
     }
 
@@ -193,116 +192,91 @@ impl TunerState {
         Ok(config.clone())
     }
 
-    /// Start tuner streaming & spectrum polling.
+    /// Start tuner streaming.
     /// Idempotent: repeated calls while running are ignored.
+    ///
+    /// Hardened: if playback is still fading out when switching to tuner,
+    /// retry starting tuner-only stream for a short period before falling back
+    /// to using the existing stream without owning it.
     pub fn start_tuner_stream(&self) -> Result<()> {
-        // Check if already running
-        if self.spectrum_polling_thread.read().is_some() {
-            log::info!("Tuner stream already running, ignoring start request");
-            return Ok(());
-        }
-
         let instrument = self.app.state::<InstrumentEngine>();
 
+        log::debug!(
+            "tuner.start_tuner_stream: begin (playing={}, src={:?})",
+            instrument.playing(),
+            instrument.excitement_source()
+        );
+
+        // Ensure Mic is the excitement source for tuner use
         if !matches!(instrument.excitement_source(), ExcitementSource::Mic) {
+            log::debug!("tuner.start_tuner_stream: switching excitement source to Mic");
             instrument.set_excitement_source(ExcitementSource::Mic)?;
         }
 
+        // If not already playing, start a dedicated tuner-only stream and mark active.
         if !instrument.playing() {
+            log::debug!(
+                "tuner.start_tuner_stream: controller not playing; starting tuner-only stream now"
+            );
             instrument.start_tuner_only_stream(&self.tuner_config())?;
+            *self.tuner_stream_active.write() = true;
+            log::debug!("tuner.start_tuner_stream: started tuner-only stream (owned=true)");
+        } else {
+            // Already playing (likely in fade) — attempt short retries to take over with tuner-only.
+            log::debug!("tuner.start_tuner_stream: controller playing; attempting short retries to start tuner-only after fade-out");
+            let mut owned = false;
+            for attempt in 1..=10 {
+                std::thread::sleep(std::time::Duration::from_millis(30));
+                let still_playing = instrument.playing();
+                log::trace!(
+                    "tuner.start_tuner_stream: retry {attempt}/10 (playing={still_playing})"
+                );
+                if !still_playing {
+                    match instrument.start_tuner_only_stream(&self.tuner_config()) {
+                        Ok(()) => {
+                            owned = true;
+                            log::debug!(
+                                "tuner.start_tuner_stream: took over with tuner-only on retry {attempt}"
+                            );
+                            break;
+                        }
+                        Err(e) => {
+                            log::warn!(
+                                "tuner.start_tuner_stream: failed to start tuner-only on retry {attempt}: {e}"
+                            );
+                        }
+                    }
+                }
+            }
+            *self.tuner_stream_active.write() = owned;
+            if !owned {
+                log::warn!(
+                    "tuner.start_tuner_stream: could not take ownership; using existing stream (owned=false)"
+                );
+            }
         }
 
-        let dur = Duration::from_secs_f32(
-            1.0 / (self.tuner_config.read().sample_rate / FFT_WINDOW_SIZE as f32),
+        log::debug!(
+            "tuner.start_tuner_stream: done (owned={}, playing={}, src={:?})",
+            *self.tuner_stream_active.read(),
+            instrument.playing(),
+            instrument.excitement_source()
         );
-
-        log::debug!("Starting tuner stream with polling interval: {:?}", dur);
-
-        let handle = self.app.clone();
-        let max_hold_magnitudes = Arc::clone(&self.max_hold_magnitudes);
-        let max_hold_excitements = Arc::clone(&self.max_hold_excitements);
-        let current_magnitudes = Arc::clone(&self.current_magnitudes);
-        let current_excitements = Arc::clone(&self.current_excitements);
-        let frequencies = Arc::clone(&self.frequencies);
-
-        *self.spectrum_polling_thread.write() = Some(thread::spawn(move || loop {
-            let instrument_state = handle.state::<InstrumentEngine>();
-            while let Some(spectrum) = instrument_state.poll_spectrum() {
-                log::trace!("Received spectrum data");
-
-                {
-                    let data = spectrum.0;
-                    let num_entries = data.len();
-
-                    let mut frequencies = frequencies.write();
-                    let mut current_magnitudes = current_magnitudes.write();
-                    let mut max_hold_magnitudes = max_hold_magnitudes.write();
-
-                    if num_entries != frequencies.len()
-                        || num_entries != current_magnitudes.len()
-                        || num_entries != max_hold_magnitudes.len()
-                    {
-                        // Resize vectors
-                        *frequencies = vec![0_f32; num_entries];
-                        *current_magnitudes = vec![0_f32; num_entries];
-                        *max_hold_magnitudes = vec![0_f32; num_entries];
-                    }
-
-                    for ((((freq, mag), frequency), current_magnitude), max_magnitude) in data
-                        .iter()
-                        .zip(frequencies.iter_mut())
-                        .zip(current_magnitudes.iter_mut())
-                        .zip(max_hold_magnitudes.iter_mut())
-                    {
-                        *frequency = *freq;
-                        *current_magnitude = *mag;
-                        *max_magnitude = f32::max(*mag, *max_magnitude * HOLD_DECAY);
-                    }
-                }
-
-                {
-                    let excitements = instrument_state.poll_excitements();
-                    let num_sensors = excitements.len();
-                    let mut max_hold_excitements = max_hold_excitements.write();
-                    let mut current_excitements = current_excitements.write();
-                    if num_sensors != current_excitements.len()
-                        || num_sensors != max_hold_excitements.len()
-                    {
-                        // Resize vectors
-                        *current_excitements = vec![0_f32; num_sensors];
-                        *max_hold_excitements = vec![0_f32; num_sensors];
-                    }
-
-                    for (((_, excitement), current), max_excitement) in excitements
-                        .iter()
-                        .zip(current_excitements.iter_mut())
-                        .zip(max_hold_excitements.iter_mut())
-                    {
-                        *current = *excitement;
-                        *max_excitement = f32::max(*excitement, *max_excitement * HOLD_DECAY);
-                    }
-                }
-
-                log::trace!("Updated spectrum and excitement data");
-            }
-
-            thread::sleep(dur);
-        }));
-
         Ok(())
     }
 
-    /// Stop tuner streaming & polling.
+    /// Stop tuner streaming.
     pub fn stop_tuner_stream(&self) -> Result<()> {
         log::info!("Stopping tuner stream");
 
-        if let Some(handle) = self.spectrum_polling_thread.write().take() {
-            drop(handle);
-        }
-
         let instrument = self.app.state::<InstrumentEngine>();
-        if !instrument.playing() {
-            instrument.stop_tuner_only_stream()?;
+        // Only stop if we started a dedicated tuner-only stream.
+        let owned = *self.tuner_stream_active.read();
+        if owned {
+            if instrument.playing() {
+                instrument.stop_tuner_only_stream()?;
+            }
+            *self.tuner_stream_active.write() = false;
         }
 
         log::info!("Tuner stream stopped");
@@ -312,20 +286,77 @@ impl TunerState {
 
     pub fn spectrum_data(handle: &AppHandle) -> SpectrumData {
         let state = handle.state::<Self>();
+        let instrument_state = handle.state::<InstrumentEngine>();
 
-        let max_hold_magnitudes = state.max_hold_magnitudes.read();
-        let max_hold_excitements = state.max_hold_excitements.read();
-        let current_magnitudes = state.current_magnitudes.read();
-        let current_excitements = state.current_excitements.read();
-        let frequencies = state.frequencies.read();
-        let sample_rate = state.tuner_config.read().sample_rate;
+        // Poll a spectrum frame if available and update cached vectors
+        if let Some(spectrum) = instrument_state.poll_spectrum() {
+            let data = spectrum.0;
+            let num_entries = data.len();
+
+            {
+                let mut frequencies = state.frequencies.write();
+                let mut current_magnitudes = state.current_magnitudes.write();
+                let mut max_hold_magnitudes = state.max_hold_magnitudes.write();
+
+                if num_entries != frequencies.len()
+                    || num_entries != current_magnitudes.len()
+                    || num_entries != max_hold_magnitudes.len()
+                {
+                    *frequencies = vec![0_f32; num_entries];
+                    *current_magnitudes = vec![0_f32; num_entries];
+                    *max_hold_magnitudes = vec![0_f32; num_entries];
+                }
+
+                for ((((freq, mag), frequency), current_magnitude), max_magnitude) in data
+                    .iter()
+                    .zip(frequencies.iter_mut())
+                    .zip(current_magnitudes.iter_mut())
+                    .zip(max_hold_magnitudes.iter_mut())
+                {
+                    *frequency = *freq;
+                    *current_magnitude = *mag;
+                    *max_magnitude = f32::max(*mag, *max_magnitude * HOLD_DECAY);
+                }
+            }
+        }
+
+        // Poll excitements and update cached vectors
+        {
+            let excitements = instrument_state.poll_excitements();
+            let num_sensors = excitements.len();
+            let mut max_hold_excitements = state.max_hold_excitements.write();
+            let mut current_excitements = state.current_excitements.write();
+            if num_sensors != current_excitements.len() || num_sensors != max_hold_excitements.len()
+            {
+                *current_excitements = vec![0_f32; num_sensors];
+                *max_hold_excitements = vec![0_f32; num_sensors];
+            }
+
+            for (((_, excitement), current), max_excitement) in excitements
+                .iter()
+                .zip(current_excitements.iter_mut())
+                .zip(max_hold_excitements.iter_mut())
+            {
+                *current = *excitement;
+                *max_excitement = f32::max(*excitement, *max_excitement * HOLD_DECAY);
+            }
+        }
+
+        let sample_rate = { state.tuner_config.read().sample_rate };
+
+        // Clone into locals to drop read locks before constructing the return value
+        let current_magnitudes = state.current_magnitudes.read().clone();
+        let max_magnitudes = state.max_hold_magnitudes.read().clone();
+        let sensor_excitements = state.current_excitements.read().clone();
+        let max_excitements = state.max_hold_excitements.read().clone();
+        let frequencies = state.frequencies.read().clone();
 
         SpectrumData {
-            current_magnitudes: current_magnitudes.clone(),
-            max_magnitudes: max_hold_magnitudes.clone(),
-            sensor_excitements: current_excitements.clone(),
-            max_excitements: max_hold_excitements.clone(),
-            frequencies: frequencies.clone(),
+            current_magnitudes,
+            max_magnitudes,
+            sensor_excitements,
+            max_excitements,
+            frequencies,
             fft_size: FFT_WINDOW_SIZE,
             sample_rate,
         }

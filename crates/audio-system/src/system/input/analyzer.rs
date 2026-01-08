@@ -13,10 +13,7 @@ use common::{
     tuner::{Config, SensorData},
     NodeKey,
 };
-#[cfg(feature = "hi_fi")]
-use fundsp::hacker::prelude::*;
-#[cfg(not(feature = "hi_fi"))]
-use fundsp::hacker32::prelude::*;
+use fundsp::prelude::*;
 use fundsp::{audiounit::BigBlockAdapter, thingbuf::ThingBuf};
 use parking_lot::RwLock;
 use spectrum_analyzer::{
@@ -391,7 +388,7 @@ impl AudioUnit for FFTAnalyzer {
             });
 
         'outer: for chunk in output.channel(0) {
-            for s in chunk.as_array_ref() {
+            for s in chunk.as_array() {
                 if self.window_thb.push(*s).is_err() {
                     break 'outer;
                 }

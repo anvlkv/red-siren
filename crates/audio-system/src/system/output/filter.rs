@@ -1,7 +1,7 @@
 use std::f32;
 
 use common::instrument::{NodeConfig, K_BASE};
-use fundsp::hacker::prelude::*;
+use fundsp::prelude::*;
 
 use crate::{
     output::throw_catch::{ThrowCatchCatch, ThrowCatchThrow},

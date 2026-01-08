@@ -4,7 +4,7 @@ use common::{
     instrument::{GroupChannel, GroupConfig},
     NodeKey,
 };
-use fundsp::hacker::prelude::*;
+use fundsp::prelude::*;
 use u_num_it::u_num_it;
 
 use super::{
@@ -66,7 +66,7 @@ pub fn add_one_channel_subsystem(
         >> (pass()
             | (catch_x
                 * (constant(0.1)
-                    >> sine_phase::<S>(match channel {
+                    >> sine::<S>().phase(match channel {
                         GroupChannel::Left => 0.25,
                         GroupChannel::Right => 0.0,
                     })))

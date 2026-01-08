@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, f32, f64};
 
 use common::{instrument::GroupConfig, NodeKey};
 use fundsp::{
-    hacker::prelude::*,
+    prelude::*,
     typenum::{UInt, UTerm, B1},
 };
 
@@ -70,7 +70,7 @@ type NodesBus<K> = Pipe<
     MetroBusType<K>,
 >;
 
-type ProductionChain<K> = Pipe<Follow<S>, Stack<Resampler<NodesBus<K>>, ThrowCatchCatch>>;
+type ProductionChain<K> = Pipe<Follow<S>, Stack<Resample<NodesBus<K>>, ThrowCatchCatch>>;
 
 type OutputChain = Pipe<Stack<Pass, Delay>, Binop<FrameAdd<U1>, Pass, Pass>>;
 

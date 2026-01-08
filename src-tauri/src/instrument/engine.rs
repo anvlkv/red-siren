@@ -3,7 +3,7 @@ use parking_lot::RwLock;
 
 use audio_system::rt::{make_stream_controller, AudioRuntime, ExcitementSource};
 
-use common::error::Result;
+use common::error::{AppError, InstrumentError, Result};
 use common::instrument::{
     Config as InstrumentConfig, Layout as InstrumentLayout, PlaybackQuality, Preset,
 };
@@ -89,26 +89,49 @@ impl InstrumentEngine {
             // After the stream has started, emit reflect values based on the current preset
             {
                 let layout = self.inner.layout.read();
+                self.app
+                    .emit(common::instrument::events::LAYOUT, *layout)
+                    .map_err(|e| {
+                        AppError::Instrument(InstrumentError::Emit {
+                            event: common::instrument::events::LAYOUT.to_string(),
+                            message: e.to_string(),
+                        })
+                    })?;
+
                 let preset = self.get_preset();
                 for node_key in layout.registry().all_keys() {
                     let band = preset.get_band_value(&node_key).unwrap_or(0.0);
                     let key = preset.get_key_value(&node_key).unwrap_or(0.0);
-                    let _ = self.app.emit(
-                        common::instrument::events::BAND_CONTROL_G_K,
-                        common::instrument::commands::ReflectBandControlPayload {
-                            group: node_key.group(),
-                            key: node_key.key(),
-                            value: band,
-                        },
-                    );
-                    let _ = self.app.emit(
-                        common::instrument::events::KEY_CONTROL_G_K,
-                        common::instrument::commands::ReflectKeyControlPayload {
-                            group: node_key.group(),
-                            key: node_key.key(),
-                            value: key,
-                        },
-                    );
+                    self.app
+                        .emit(
+                            common::instrument::events::BAND_CONTROL_G_K,
+                            common::instrument::commands::ReflectBandControlPayload {
+                                group: node_key.group(),
+                                key: node_key.key(),
+                                value: band,
+                            },
+                        )
+                        .map_err(|e| {
+                            AppError::Instrument(InstrumentError::Emit {
+                                event: common::instrument::events::BAND_CONTROL_G_K.to_string(),
+                                message: e.to_string(),
+                            })
+                        })?;
+                    self.app
+                        .emit(
+                            common::instrument::events::KEY_CONTROL_G_K,
+                            common::instrument::commands::ReflectKeyControlPayload {
+                                group: node_key.group(),
+                                key: node_key.key(),
+                                value: key,
+                            },
+                        )
+                        .map_err(|e| {
+                            AppError::Instrument(InstrumentError::Emit {
+                                event: common::instrument::events::KEY_CONTROL_G_K.to_string(),
+                                message: e.to_string(),
+                            })
+                        })?;
                 }
             }
 
@@ -122,11 +145,6 @@ impl InstrumentEngine {
             return Ok(false);
         }
 
-        // Even if stop errors, proceed to mark stopped for consistency
-        log::trace!("Inner.stop_playback: calling ctrl.stop()");
-        let _ = self.inner.stream_controller.read().stop();
-        log::trace!("Inner.stop_playback: ctrl.stop() returned");
-
         {
             let mut p = self.inner.playing.write();
             if !*p {
@@ -134,6 +152,11 @@ impl InstrumentEngine {
             }
             *p = false;
         }
+
+        // Even if stop errors, proceed to mark stopped for consistency
+        log::trace!("Inner.stop_playback: calling ctrl.stop()");
+        let _ = self.inner.stream_controller.read().stop();
+        log::trace!("Inner.stop_playback: ctrl.stop() returned");
 
         Ok(true)
     }
@@ -144,10 +167,6 @@ impl InstrumentEngine {
             return Ok(false);
         }
 
-        log::trace!("Inner.pause_playback: calling ctrl.pause()");
-        self.inner.stream_controller.read().pause()?;
-        log::trace!("Inner.pause_playback: ctrl.pause() returned");
-
         {
             let mut p = self.inner.playing.write();
             if !*p {
@@ -155,6 +174,10 @@ impl InstrumentEngine {
             }
             *p = false;
         }
+
+        log::trace!("Inner.pause_playback: calling ctrl.pause()");
+        self.inner.stream_controller.read().pause()?;
+        log::trace!("Inner.pause_playback: ctrl.pause() returned");
 
         Ok(true)
     }
@@ -165,10 +188,6 @@ impl InstrumentEngine {
             return Ok(false);
         }
 
-        log::trace!("Inner.resume_playback: calling ctrl.resume()");
-        self.inner.stream_controller.read().resume()?;
-        log::trace!("Inner.resume_playback: ctrl.resume() returned");
-
         {
             let mut p = self.inner.playing.write();
             if *p {
@@ -176,6 +195,10 @@ impl InstrumentEngine {
             }
             *p = true;
         }
+
+        log::trace!("Inner.resume_playback: calling ctrl.resume()");
+        self.inner.stream_controller.read().resume()?;
+        log::trace!("Inner.resume_playback: ctrl.resume() returned");
 
         Ok(true)
     }

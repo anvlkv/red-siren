@@ -1,10 +1,7 @@
 use common::NodeKey;
 use fastrand::Rng;
 use fundsp::buffer::{BufferMut, BufferRef};
-#[cfg(feature = "hi_fi")]
-use fundsp::hacker::prelude::*;
-#[cfg(not(feature = "hi_fi"))]
-use fundsp::hacker32::prelude::*;
+use fundsp::prelude::*;
 use fundsp::signal::SignalFrame;
 use std::collections::HashMap;
 use std::sync::Arc;

@@ -235,6 +235,7 @@ pub fn instrument_layout(state: State<'_, InstrumentEngine>) -> Result<Layout> {
     Ok(state.layout())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 /// payload: `SafeArea`
 pub fn ui_safe_area_insets_apply(
@@ -245,7 +246,11 @@ pub fn ui_safe_area_insets_apply(
     state: State<'_, InstrumentEngine>,
     window_state: State<'_, crate::setup::WindowState>,
     app: AppHandle,
+    window: tauri::Window,
 ) -> Result<()> {
+    if window.label() != "main" {
+        return Ok(());
+    }
     log::debug!(
         "ui_safe_area_insets_apply called (UI override): top={}, right={}, bottom={}, left={}",
         top,

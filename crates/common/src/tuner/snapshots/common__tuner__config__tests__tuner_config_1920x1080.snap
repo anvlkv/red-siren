@@ -9,151 +9,148 @@ expression: config
         0,
         0
       ],
-      "min_frequency": 20.0,
-      "max_frequency": 31.697863,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 21.533203,
+      "max_frequency": 1594.9951,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         0,
         1
       ],
-      "min_frequency": 31.697863,
-      "max_frequency": 50.23772,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 1594.9951,
+      "max_frequency": 3168.457,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         0,
         2
       ],
-      "min_frequency": 50.23772,
-      "max_frequency": 79.621414,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 3168.457,
+      "max_frequency": 4741.919,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         0,
         3
       ],
-      "min_frequency": 79.621414,
-      "max_frequency": 126.19143,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 4741.919,
+      "max_frequency": 6315.381,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         0,
         4
       ],
-      "min_frequency": 126.19143,
-      "max_frequency": 199.99992,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 6315.381,
+      "max_frequency": 7888.843,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
+    },
+    {
+      "key": [
+        0,
+        5
+      ],
+      "min_frequency": 7888.843,
+      "max_frequency": 9462.305,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
+    },
+    {
+      "key": [
+        0,
+        6
+      ],
+      "min_frequency": 9462.305,
+      "max_frequency": 11035.767,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         1,
         0
       ],
-      "min_frequency": 199.99992,
-      "max_frequency": 316.97864,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 11035.767,
+      "max_frequency": 12609.229,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         1,
         1
       ],
-      "min_frequency": 316.97864,
-      "max_frequency": 502.37723,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 12609.229,
+      "max_frequency": 14182.69,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         1,
         2
       ],
-      "min_frequency": 502.37723,
-      "max_frequency": 796.2142,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 14182.69,
+      "max_frequency": 15756.152,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         1,
         3
       ],
-      "min_frequency": 796.2142,
-      "max_frequency": 1261.9143,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 15756.152,
+      "max_frequency": 17329.615,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         1,
         4
       ],
-      "min_frequency": 1261.9143,
-      "max_frequency": 1999.9993,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 17329.615,
+      "max_frequency": 18903.076,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
-        2,
-        0
+        1,
+        5
       ],
-      "min_frequency": 1999.9993,
-      "max_frequency": 3169.7834,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 18903.076,
+      "max_frequency": 20476.537,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
-        2,
-        1
+        1,
+        6
       ],
-      "min_frequency": 3169.7834,
-      "max_frequency": 5023.7725,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
-    },
-    {
-      "key": [
-        2,
-        2
-      ],
-      "min_frequency": 5023.7725,
-      "max_frequency": 7962.142,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
-    },
-    {
-      "key": [
-        2,
-        3
-      ],
-      "min_frequency": 7962.142,
-      "max_frequency": 12619.144,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
-    },
-    {
-      "key": [
-        2,
-        4
-      ],
-      "min_frequency": 12619.144,
-      "max_frequency": 19999.992,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 20476.537,
+      "max_frequency": 22050.0,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     }
   ],
-  "sample_rate": 44100.0
+  "sample_rate": 44100.0,
+  "fft_size": 2048,
+  "ny_threshold": 0.75,
+  "ny_wet_ratio": 0.3,
+  "frequency_range": [
+    null,
+    null
+  ]
 }

@@ -10,36 +10,36 @@ expression: layout
   "orientation": "Vertical",
   "left_string_position": [
     [
-      156.7060869459246,
+      162.74859126156875,
       0.0
     ],
     [
-      156.7060869459246,
+      162.74859126156875,
       873.0
     ]
   ],
   "right_string_position": [
     [
-      236.2939130540754,
+      230.25140873843125,
       0.0
     ],
     [
-      236.2939130540754,
+      230.25140873843125,
       873.0
     ]
   ],
-  "instrument_breadth": 79.58782610815078,
-  "key_radius": 27.582470677837613,
-  "key_band_length": 156.7060869459246,
-  "key_band_breadth": 63.164941355675225,
+  "instrument_breadth": 67.50281747686249,
+  "key_radius": 22.786832332088288,
+  "key_band_length": 162.74859126156875,
+  "key_band_breadth": 53.573664664176576,
   "safe_area_padding": {
     "top": 0.0,
     "right": 0.0,
     "bottom": 0.0,
     "left": 0.0
   },
-  "key_bands_gap": 16.887226945614866,
-  "groups_gap": 20.26467233473784,
+  "key_bands_gap": 16.0,
+  "groups_gap": 19.2,
   "num_keys_per_group": 3,
   "num_groups": 2,
   "first_group_channel": "Right",

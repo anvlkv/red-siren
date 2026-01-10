@@ -17,13 +17,13 @@ expression: tuner_layout
   "line_position": [
     [
       0.0,
-      750.0
+      715.6877856172604
     ],
     [
       1366.0,
-      750.0
+      715.6877856172604
     ]
   ],
-  "sensor_radius": 25.286636865252525,
-  "num_sensors": 10
+  "sensor_radius": 34.312214382739576,
+  "num_sensors": 6
 }

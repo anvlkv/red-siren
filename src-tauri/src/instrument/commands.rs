@@ -507,8 +507,6 @@ pub async fn instrument_edit_finetuned_values(
     node_bell_q: f32,
     node_bell_gain_db: f32,
     formant_base_q: f32,
-    input_ny_threshold: f32,
-    input_ny_wet_ratio: f32,
     state: State<'_, InstrumentEngine>,
 ) -> Result<common::commands::edit::FineTunedValuesPayload> {
     let values = common::commands::edit::FineTunedValuesPayload{
@@ -525,8 +523,6 @@ pub async fn instrument_edit_finetuned_values(
         node_bell_q,
         node_bell_gain_db,
         formant_base_q,
-        input_ny_threshold,
-        input_ny_wet_ratio,
     };
     // Update the fine-tuned values
     state.set_finetuned_values(

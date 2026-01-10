@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use tauri_use::{use_command, use_invoke, UseTauriReturn, UseTauriWithReturn};
 
-use crate::components::{Button, EditorRangeSlider, Fold};
+use crate::components::{Button, Fold, RangeSlider, SliderValue};
 
 const Q_MAX: f32 = 10.0;
 const Q_MIN: f32 = 0.001;
@@ -86,13 +86,15 @@ pub fn EditorOverlay() -> impl IntoView {
                         <fieldset class="flex flex-col gap-2">
                             <legend>"Siren Parameters"</legend>
 
-                            <EditorRangeSlider
+                            <RangeSlider
                                 label="Alpha"
-                                value=Signal::derive(move || { finetuned_values().siren_alpha })
-                                on_input=Callback::new(move |val| {
+                                value=Signal::derive(move || {
+                                    finetuned_values().siren_alpha.into()
+                                })
+                                on_input=Callback::new(move |val: SliderValue| {
                                     set_finetuned_values
                                         .update(|values| {
-                                            values.siren_alpha = val;
+                                            values.siren_alpha = val.into();
                                         });
                                 })
                                 min=0.1
@@ -105,18 +107,18 @@ pub fn EditorOverlay() -> impl IntoView {
                         <fieldset class="flex flex-col gap-2">
                             <legend>"Filter Parameters"</legend>
 
-                            <EditorRangeSlider
+                            <RangeSlider
                                 label="Morph Follow Time"
                                 value=Signal::derive(move || {
-                                    finetuned_values().filter_morph_follow_s
+                                    finetuned_values().filter_morph_follow_s.into()
                                 })
                                 min=TIME_MIN
                                 max=TIME_MAX
                                 step=TIME_STEP
-                                on_input=Callback::new(move |val| {
+                                on_input=Callback::new(move |val: SliderValue| {
                                     set_finetuned_values
                                         .update(|values| {
-                                            values.filter_morph_follow_s = val;
+                                            values.filter_morph_follow_s = val.into();
                                         });
                                 })
                             />
@@ -124,84 +126,84 @@ pub fn EditorOverlay() -> impl IntoView {
                             <div class="flex gap-2">
                                 <fieldset class="flex flex-col gap-2">
                                     <legend>"Active key"</legend>
-                                    <EditorRangeSlider
+                                    <RangeSlider
                                         label="Piercing Q"
                                         value=Signal::derive(move || {
-                                            finetuned_values().filter_q_piercing
+                                            finetuned_values().filter_q_piercing.into()
                                         })
                                         min=Q_MIN
                                         max=Q_MAX
                                         step=Q_STEP
-                                        on_input=Callback::new(move |val| {
+                                        on_input=Callback::new(move |val: SliderValue| {
                                             set_finetuned_values
                                                 .update(|values| {
-                                                    values.filter_q_piercing = val;
+                                                    values.filter_q_piercing = val.into();
                                                 });
                                         })
                                     />
 
-                                    <EditorRangeSlider
+                                    <RangeSlider
                                         label="Bright Q"
                                         value=Signal::derive(move || {
-                                            finetuned_values().filter_q_bright
+                                            finetuned_values().filter_q_bright.into()
                                         })
                                         min=Q_MIN
                                         max=Q_MAX
                                         step=Q_STEP
-                                        on_input=Callback::new(move |val| {
+                                        on_input=Callback::new(move |val: SliderValue| {
                                             set_finetuned_values
                                                 .update(|values| {
-                                                    values.filter_q_bright = val;
+                                                    values.filter_q_bright = val.into();
                                                 });
                                         })
                                     />
                                 </fieldset>
                                 <fieldset>
                                     <legend>"Plain key"</legend>
-                                    <EditorRangeSlider
+                                    <RangeSlider
                                         label="Shelf Q"
                                         value=Signal::derive(move || {
-                                            finetuned_values().filter_q_shelf
+                                            finetuned_values().filter_q_shelf.into()
                                         })
                                         min=Q_MIN
                                         max=Q_MAX
                                         step=Q_STEP
-                                        on_input=Callback::new(move |val| {
+                                        on_input=Callback::new(move |val: SliderValue| {
                                             set_finetuned_values
                                                 .update(|values| {
-                                                    values.filter_q_shelf = val;
+                                                    values.filter_q_shelf = val.into();
                                                 });
                                         })
                                     />
 
-                                    <EditorRangeSlider
+                                    <RangeSlider
                                         label="Shelf Gain dB"
                                         value=Signal::derive(move || {
-                                            finetuned_values().filter_shelf_gain_db
+                                            finetuned_values().filter_shelf_gain_db.into()
                                         })
                                         min=GAIN_MIN
                                         max=GAIN_MAX
                                         step=GAIN_STEP
-                                        on_input=Callback::new(move |val| {
+                                        on_input=Callback::new(move |val: SliderValue| {
                                             set_finetuned_values
                                                 .update(|values| {
-                                                    values.filter_shelf_gain_db = val;
+                                                    values.filter_shelf_gain_db = val.into();
                                                 });
                                         })
                                     />
 
-                                    <EditorRangeSlider
+                                    <RangeSlider
                                         label="Warm Q"
                                         value=Signal::derive(move || {
-                                            finetuned_values().filter_q_warm
+                                            finetuned_values().filter_q_warm.into()
                                         })
                                         min=Q_MIN
                                         max=Q_MAX
                                         step=Q_STEP
-                                        on_input=Callback::new(move |val| {
+                                        on_input=Callback::new(move |val: SliderValue| {
                                             set_finetuned_values
                                                 .update(|values| {
-                                                    values.filter_q_warm = val;
+                                                    values.filter_q_warm = val.into();
                                                 });
                                         })
                                     />
@@ -212,48 +214,50 @@ pub fn EditorOverlay() -> impl IntoView {
                         <fieldset class="flex flex-col gap-2">
                             <legend>"Node Parameters"</legend>
 
-                            <EditorRangeSlider
+                            <RangeSlider
                                 label="Follow Response Time"
                                 value=Signal::derive(move || {
-                                    finetuned_values().node_follow_response_time_s
+                                    finetuned_values().node_follow_response_time_s.into()
                                 })
                                 min=TIME_MIN
                                 max=TIME_MAX
                                 step=TIME_STEP
-                                on_input=Callback::new(move |val| {
+                                on_input=Callback::new(move |val: SliderValue| {
                                     set_finetuned_values
                                         .update(|values| {
-                                            values.node_follow_response_time_s = val;
+                                            values.node_follow_response_time_s = val.into();
                                         });
                                 })
                             />
 
-                            <EditorRangeSlider
+                            <RangeSlider
                                 label="Bell Q"
-                                value=Signal::derive(move || { finetuned_values().node_bell_q })
+                                value=Signal::derive(move || {
+                                    finetuned_values().node_bell_q.into()
+                                })
                                 min=Q_MIN
                                 max=Q_MAX
                                 step=Q_STEP
-                                on_input=Callback::new(move |val| {
+                                on_input=Callback::new(move |val: SliderValue| {
                                     set_finetuned_values
                                         .update(|values| {
-                                            values.node_bell_q = val;
+                                            values.node_bell_q = val.into();
                                         });
                                 })
                             />
 
-                            <EditorRangeSlider
+                            <RangeSlider
                                 label="Bell Gain dB"
                                 value=Signal::derive(move || {
-                                    finetuned_values().node_bell_gain_db
+                                    finetuned_values().node_bell_gain_db.into()
                                 })
                                 min=GAIN_MIN
                                 max=GAIN_MAX
                                 step=GAIN_STEP
-                                on_input=Callback::new(move |val| {
+                                on_input=Callback::new(move |val: SliderValue| {
                                     set_finetuned_values
                                         .update(|values| {
-                                            values.node_bell_gain_db = val;
+                                            values.node_bell_gain_db = val.into();
                                         });
                                 })
                             />
@@ -262,32 +266,32 @@ pub fn EditorOverlay() -> impl IntoView {
                         <fieldset class="flex flex-col gap-2">
                             <legend>"Group Parameters"</legend>
 
-                            <EditorRangeSlider
+                            <RangeSlider
                                 label="Group Q"
-                                value=Signal::derive(move || { finetuned_values().group_q })
+                                value=Signal::derive(move || { finetuned_values().group_q.into() })
                                 min=Q_MIN
                                 max=Q_MAX
                                 step=Q_STEP
-                                on_input=Callback::new(move |val| {
+                                on_input=Callback::new(move |val: SliderValue| {
                                     set_finetuned_values
                                         .update(|values| {
-                                            values.group_q = val;
+                                            values.group_q = val.into();
                                         });
                                 })
                             />
 
-                            <EditorRangeSlider
+                            <RangeSlider
                                 label="Group Low Shelf Gain dB"
                                 value=Signal::derive(move || {
-                                    finetuned_values().group_ls_gain_db
+                                    finetuned_values().group_ls_gain_db.into()
                                 })
                                 min=GAIN_MIN
                                 max=GAIN_MAX
                                 step=GAIN_STEP
-                                on_input=Callback::new(move |val| {
+                                on_input=Callback::new(move |val: SliderValue| {
                                     set_finetuned_values
                                         .update(|values| {
-                                            values.group_ls_gain_db = val;
+                                            values.group_ls_gain_db = val.into();
                                         });
                                 })
                             />
@@ -296,52 +300,18 @@ pub fn EditorOverlay() -> impl IntoView {
                         <fieldset class="flex flex-col gap-2">
                             <legend>"Formant Parameters"</legend>
 
-                            <EditorRangeSlider
+                            <RangeSlider
                                 label="Base Q"
-                                value=Signal::derive(move || { finetuned_values().formant_base_q })
+                                value=Signal::derive(move || {
+                                    finetuned_values().formant_base_q.into()
+                                })
                                 min=Q_MIN
                                 max=Q_MAX
                                 step=Q_STEP
-                                on_input=Callback::new(move |val| {
+                                on_input=Callback::new(move |val: SliderValue| {
                                     set_finetuned_values
                                         .update(|values| {
-                                            values.formant_base_q = val;
-                                        });
-                                })
-                            />
-                        </fieldset>
-
-                        <fieldset class="flex flex-col gap-2">
-                            <legend>"Input NY Compression"</legend>
-
-                            <EditorRangeSlider
-                                label="Threshold"
-                                value=Signal::derive(move || {
-                                    finetuned_values().input_ny_threshold
-                                })
-                                min=f32::EPSILON
-                                max=1.0
-                                step=0.00001
-                                on_input=Callback::new(move |val| {
-                                    set_finetuned_values
-                                        .update(|values| {
-                                            values.input_ny_threshold = val;
-                                        });
-                                })
-                            />
-
-                            <EditorRangeSlider
-                                label="Wet Ratio"
-                                value=Signal::derive(move || {
-                                    finetuned_values().input_ny_wet_ratio
-                                })
-                                min=0.0
-                                max=1.0
-                                step=0.01
-                                on_input=Callback::new(move |val| {
-                                    set_finetuned_values
-                                        .update(|values| {
-                                            values.input_ny_wet_ratio = val;
+                                            values.formant_base_q = val.into();
                                         });
                                 })
                             />

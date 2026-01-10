@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    f32,
     sync::{
         mpsc::{self, Sender},
         Arc,
@@ -30,6 +31,7 @@ use crate::{
         cpal::stream::{playback_callback, spawn_owned_input_stream},
         AudioRuntime, ExcitementSource,
     },
+    system::input::analyzer::FFT_WINDOW_SIZE,
     util::S,
     ExcitementControl, SensorHandles,
 };
@@ -40,7 +42,8 @@ use super::stream::{spawn_owned_output_stream, Control, ControlInvocationResult,
 const CONTROL_INVOKE_TIMEOUT_MS: u64 = 500;
 const FADE_DURATION_MS: u64 = 120;
 const FOLLOW_RESPONSE_SECS: f32 = FADE_DURATION_MS as f32 / 1000.0;
-const INPUT_BUFFER_DURATION_MS: u64 = 100;
+const INPUT_BUFFER_DURATION_MS: u64 = 20;
+const INPUT_SNOOP_SIZE: usize = FFT_WINDOW_SIZE;
 const SPECTRUM_BUFFER_CAPACITY: usize = 2;
 
 /// CPAL-backed stream controller implementing audio I/O and DSP graph
@@ -53,6 +56,7 @@ struct CpalController {
     sample_rate: RwLock<Option<f64>>,
     gain_param: RwLock<Option<Shared>>,
     processed_output_snoops: RwLock<Option<(Snoop, Snoop)>>,
+    input_snoop: RwLock<Option<Snoop>>,
     /// min and max values
     freq_range: RwLock<(f64, f64)>,
     tuner_tap_gain_param: RwLock<Option<Shared>>,
@@ -70,14 +74,17 @@ struct CpalController {
     input_thread: RwLock<Option<thread::JoinHandle<()>>>,
 
     // Per-node data taps and controls
-    node_excitement_snoops: RwLock<HashMap<NodeKey, (fundsp::snoop::Snoop, fundsp::snoop::Snoop)>>,
-    node_output_snoops: RwLock<HashMap<NodeKey, fundsp::snoop::Snoop>>,
+    node_excitement_snoops: RwLock<HashMap<NodeKey, (Snoop, Snoop)>>,
+    node_output_snoops: RwLock<HashMap<NodeKey, Snoop>>,
 
     // presets
     preset: RwLock<Preset>,
     node_band_controls: RwLock<HashMap<NodeKey, Shared>>,
     node_key_controls: RwLock<HashMap<NodeKey, Shared>>,
     node_sensor_controls: RwLock<HashMap<NodeKey, SensorHandles>>,
+    tuner_freq_range: Arc<(Shared, Shared)>,
+    tuner_ny_threshold: Arc<Shared>,
+    tuner_ny_wet_ratio: Arc<Shared>,
 
     // Spectrum data tap
     spectrum_data_thb: crate::system::input::analyzer::SpectrumBuffer,
@@ -100,6 +107,7 @@ struct CpalController {
 
 impl Default for CpalController {
     fn default() -> Self {
+        let default_tuner_cfg = TunerConfig::default();
         Self {
             dsp_net_frontend: RwLock::new(None),
             dsp_primary_node_id: RwLock::new(None),
@@ -113,6 +121,10 @@ impl Default for CpalController {
             )),
             #[cfg(feature = "editor")]
             fine_tuned_shared_values: RwLock::new(FineTunedSharedValues::default()),
+            input_snoop: RwLock::new(None),
+            tuner_freq_range: Arc::new((shared(f32::NEG_INFINITY), shared(f32::INFINITY))),
+            tuner_ny_threshold: Arc::new(shared(default_tuner_cfg.ny_threshold)),
+            tuner_ny_wet_ratio: Arc::new(shared(default_tuner_cfg.ny_wet_ratio)),
             control_tx: RwLock::new(None),
             output_thread: RwLock::new(None),
             input_sender: RwLock::new(None),
@@ -347,12 +359,10 @@ impl CpalController {
             *self.siren_excitements.write() = siren_controls_stub.clone();
         }
 
-        // Initialize fine-tuned values if in editor mode
-        #[cfg(feature = "editor")]
-        let fine_tuned_values = {
-            let shared_values_lock = self.fine_tuned_shared_values.read();
-
-            FineTunedValues::new(&shared_values_lock)
+        let snoop_be = {
+            let (snoop, be) = snoop(INPUT_SNOOP_SIZE);
+            *self.input_snoop.write() = Some(snoop);
+            Some(be)
         };
 
         let handles = crate::create_input_system(
@@ -361,9 +371,10 @@ impl CpalController {
             siren_controls_stub,
             ExcitementSource::Mic,
             &self.spectrum_data_thb,
+            snoop_be,
+            (&self.tuner_freq_range.0, &self.tuner_freq_range.1),
+            (&self.tuner_ny_threshold, &self.tuner_ny_wet_ratio),
             2,
-            #[cfg(feature = "editor")]
-            &fine_tuned_values,
         );
 
         {
@@ -453,15 +464,25 @@ impl CpalController {
             *self.siren_excitements.write() = siren_controls.clone();
         }
 
+        let snoop_be = match source {
+            ExcitementSource::Entropy => None,
+            ExcitementSource::Mic => {
+                let (snoop, be) = snoop(INPUT_SNOOP_SIZE);
+                *self.input_snoop.write() = Some(snoop);
+                Some(be)
+            }
+        };
+
         let handles = crate::create_input_system(
             tuner_config,
             &mut net,
             siren_controls,
             source,
             &self.spectrum_data_thb,
+            snoop_be,
+            (&self.tuner_freq_range.0, &self.tuner_freq_range.1),
+            (&self.tuner_ny_threshold, &self.tuner_ny_wet_ratio),
             2,
-            #[cfg(feature = "editor")]
-            &fine_tuned_values,
         );
 
         {
@@ -625,6 +646,17 @@ impl CpalController {
             Err(ControlError::NodeNotFound { key }.into())
         }
     }
+
+    fn set_tuner_input_values(&self, tuner_config: &TunerConfig) {
+        self.tuner_freq_range
+            .0
+            .set_value(tuner_config.frequency_range.0.unwrap_or(f32::NEG_INFINITY));
+        self.tuner_freq_range
+            .1
+            .set_value(tuner_config.frequency_range.1.unwrap_or(f32::INFINITY));
+        self.tuner_ny_threshold.set_value(tuner_config.ny_threshold);
+        self.tuner_ny_wet_ratio.set_value(tuner_config.ny_wet_ratio);
+    }
 }
 
 impl AudioRuntime for CpalController {
@@ -636,6 +668,8 @@ impl AudioRuntime for CpalController {
         tuner_config: &TunerConfig,
     ) -> Result<()> {
         log::trace!("CpalController.start: begin with source={:?}", source);
+
+        self.set_tuner_input_values(tuner_config);
 
         // Ensure audio session is configured (iOS)
         audio_session::ensure_configured()?;
@@ -804,6 +838,8 @@ impl AudioRuntime for CpalController {
             layout.num_groups.get(),
             layout.num_keys_per_group.get()
         );
+
+        self.set_tuner_input_values(tuner_config);
 
         // Validate NodeKey consistency between configs
         let registry = layout.registry();
@@ -989,6 +1025,8 @@ impl AudioRuntime for CpalController {
     }
 
     fn start_tuner_only(&self, tuner_config: &TunerConfig) -> common::error::Result<()> {
+        self.set_tuner_input_values(tuner_config);
+
         {
             *self.last_tuner_config.write() = tuner_config.clone();
         }
@@ -1079,6 +1117,8 @@ impl AudioRuntime for CpalController {
             }
         }
 
+        self.set_tuner_input_values(new_config);
+
         Ok(())
     }
 
@@ -1135,6 +1175,27 @@ impl AudioRuntime for CpalController {
         self.preset.read().clone()
     }
 
+    fn snapshot_input_snoop(&self) -> Vec<f32> {
+        self.input_snoop
+            .write()
+            .as_mut()
+            .map(|snoop| {
+                snoop.update();
+                let cap = snoop.capacity();
+                let mut out = Vec::with_capacity(cap + 2);
+                for rev in (0..cap).rev() {
+                    let s = snoop.at(rev);
+                    if s.is_normal() || s == 0.0 {
+                        out.push(snoop.at(rev));
+                    } else {
+                        out.push(0.0);
+                    }
+                }
+                out
+            })
+            .unwrap_or_default()
+    }
+
     #[cfg(feature = "editor")]
     fn get_finetuned_values(&self) -> Result<common::commands::edit::FineTunedValuesPayload> {
         let shared_values = self.fine_tuned_shared_values.read();
@@ -1152,8 +1213,6 @@ impl AudioRuntime for CpalController {
             node_bell_q: shared_values.node_bell_q.value(),
             node_bell_gain_db: shared_values.node_bell_gain_db.value(),
             formant_base_q: shared_values.formant_base_q.value(),
-            input_ny_threshold: shared_values.input_ny_threshold.value(),
-            input_ny_wet_ratio: shared_values.input_ny_wet_ratio.value(),
         })
     }
 
@@ -1196,12 +1255,6 @@ impl AudioRuntime for CpalController {
             shared_values
                 .formant_base_q
                 .set_value(payload.formant_base_q);
-            shared_values
-                .input_ny_threshold
-                .set_value(payload.input_ny_threshold);
-            shared_values
-                .input_ny_wet_ratio
-                .set_value(payload.input_ny_wet_ratio);
         }
 
         self.update_primary_node(&self.last_config.read(), &self.last_tuner_config.read());

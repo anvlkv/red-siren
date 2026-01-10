@@ -10,28 +10,28 @@ expression: layout
   "orientation": "Vertical",
   "left_string_position": [
     [
-      147.24732608244642,
+      153.22941496069078,
       0.0
     ],
     [
-      147.24732608244642,
+      153.22941496069078,
       800.0
     ]
   ],
   "right_string_position": [
     [
-      212.75267391755358,
+      206.77058503930922,
       0.0
     ],
     [
-      212.75267391755358,
+      206.77058503930922,
       800.0
     ]
   ],
-  "instrument_breadth": 65.50534783510717,
-  "key_radius": 21.994185648852053,
-  "key_band_length": 147.24732608244642,
-  "key_band_breadth": 51.988371297704106,
+  "instrument_breadth": 53.54117007861843,
+  "key_radius": 17.24649606294382,
+  "key_band_length": 153.22941496069078,
+  "key_band_breadth": 42.49299212588764,
   "safe_area_padding": {
     "top": 44.0,
     "right": 0.0,

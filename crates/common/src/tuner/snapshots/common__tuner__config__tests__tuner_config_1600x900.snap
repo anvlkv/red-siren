@@ -9,141 +9,108 @@ expression: config
         0,
         0
       ],
-      "min_frequency": 20.0,
-      "max_frequency": 32.757874,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 21.533203,
+      "max_frequency": 2224.38,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         0,
         1
       ],
-      "min_frequency": 32.757874,
-      "max_frequency": 53.653915,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 2224.38,
+      "max_frequency": 4427.2266,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         0,
         2
       ],
-      "min_frequency": 53.653915,
-      "max_frequency": 87.87941,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 4427.2266,
+      "max_frequency": 6630.073,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         0,
         3
       ],
-      "min_frequency": 87.87941,
-      "max_frequency": 143.93712,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 6630.073,
+      "max_frequency": 8832.92,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         0,
         4
       ],
-      "min_frequency": 143.93712,
-      "max_frequency": 235.75371,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
-    },
-    {
-      "key": [
-        0,
-        5
-      ],
-      "min_frequency": 235.75371,
-      "max_frequency": 386.1395,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
-    },
-    {
-      "key": [
-        0,
-        6
-      ],
-      "min_frequency": 386.1395,
-      "max_frequency": 632.45544,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 8832.92,
+      "max_frequency": 11035.767,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         1,
         0
       ],
-      "min_frequency": 632.45544,
-      "max_frequency": 1035.8948,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 11035.767,
+      "max_frequency": 13238.613,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         1,
         1
       ],
-      "min_frequency": 1035.8948,
-      "max_frequency": 1696.6854,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 13238.613,
+      "max_frequency": 15441.46,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         1,
         2
       ],
-      "min_frequency": 1696.6854,
-      "max_frequency": 2778.9902,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 15441.46,
+      "max_frequency": 17644.307,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         1,
         3
       ],
-      "min_frequency": 2778.9902,
-      "max_frequency": 4551.6904,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 17644.307,
+      "max_frequency": 19847.154,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         1,
         4
       ],
-      "min_frequency": 4551.6904,
-      "max_frequency": 7455.185,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
-    },
-    {
-      "key": [
-        1,
-        5
-      ],
-      "min_frequency": 7455.185,
-      "max_frequency": 12210.801,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
-    },
-    {
-      "key": [
-        1,
-        6
-      ],
-      "min_frequency": 12210.801,
-      "max_frequency": 19999.992,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 19847.154,
+      "max_frequency": 22050.0,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     }
   ],
-  "sample_rate": 44100.0
+  "sample_rate": 44100.0,
+  "fft_size": 2048,
+  "ny_threshold": 0.75,
+  "ny_wet_ratio": 0.3,
+  "frequency_range": [
+    null,
+    null
+  ]
 }

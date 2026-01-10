@@ -75,6 +75,7 @@ pub trait AudioRuntime {
     fn snapshot_excitement_snoop(&self, key: NodeKey) -> Vec<(f32, f32)>;
     fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<(f32, f32)>)>;
     fn snapshot_processed_output_spectrum(&self) -> common::error::Result<Option<ProcessedOutputSpectrumSnapshot>>;
+    fn snapshot_input_snoop(&self) -> Vec<f32>;
 
     // Band control
     fn set_band_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()>;
@@ -166,6 +167,10 @@ impl AudioRuntime for NullController {
         _tuner_config: &TunerConfig
     ) -> common::error::Result<()> {
         Ok(())
+    }
+
+    fn snapshot_input_snoop(&self) -> Vec<f32> {
+        Vec::new()
     }
 
     fn snapshot_output_snoop(&self, _key: NodeKey) -> Vec<f32> {

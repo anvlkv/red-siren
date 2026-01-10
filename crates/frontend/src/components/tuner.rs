@@ -1,9 +1,8 @@
 mod context;
-mod editor;
 mod sensor_handles;
 mod spectrum;
 
-use common::tuner::{Config, UpdateSensorPayload};
+use common::tuner::{Config, ReflectTunerConstraints, UpdateRangePayload, UpdateSensorPayload};
 use leptos::callback::Callback;
 use leptos::prelude::*;
 use leptos_use::use_device_pixel_ratio;
@@ -12,6 +11,8 @@ use tauri_use::{use_invoke, UseTauriReturn};
 pub use context::{expect_tuner_service, provide_tuner_service};
 pub use sensor_handles::SensorHandles;
 pub use spectrum::SpectrumVisualizer;
+
+use crate::components::{RangeSlider, SliderValue, UiSize};
 
 /// Canonical canvas transform shared by all tuner canvases
 #[derive(Clone, PartialEq)]
@@ -43,7 +44,7 @@ impl CanvasTransform {
 
 /// Main tuner component with spectrum visualization and sensor configuration
 #[component]
-pub fn Tuner(#[prop(into, optional)] editor: Signal<bool>) -> impl IntoView {
+pub fn Tuner() -> impl IntoView {
     let context = expect_tuner_service();
     let layout_sig = context.layout;
     let config_sig = context.config;
@@ -93,7 +94,6 @@ pub fn Tuner(#[prop(into, optional)] editor: Signal<bool>) -> impl IntoView {
         ..
     } = use_invoke::<UpdateSensorPayload, (), Config>(common::commands::tuner::UPDATE_SENSOR);
 
-    // Log errors
     Effect::new(move |_| {
         if let Some(err) = update_sensor_error() {
             log::error!("Error updating sensor: {err}");
@@ -106,16 +106,56 @@ pub fn Tuner(#[prop(into, optional)] editor: Signal<bool>) -> impl IntoView {
         }
     });
 
-    // Callback for updating sensors
     let on_update_sensor = Callback::new(move |payload: UpdateSensorPayload| {
         log::debug!("Updating sensor: {:#?}", payload);
-        // invoke update
         update_sensor_invoke(Some((payload, ())));
     });
 
+    let on_update_range = Callback::new(move |val: SliderValue| {
+        let (min, max): (f32, f32) = val.into();
+
+        let ReflectTunerConstraints {
+            frequency_limit: (min_lim, max_lim),
+            ..
+        } = context.constraints.get();
+        context.update_spectrum_range.run(UpdateRangePayload {
+            min_frequency: if min >= min_lim { Some(min) } else { None },
+            max_frequency: if max <= max_lim { Some(max) } else { None },
+        })
+    });
+
+    let range_value = Signal::derive(move || {
+        let ReflectTunerConstraints {
+            min_frequency,
+            max_frequency,
+            frequency_limit,
+            ..
+        } = context.constraints.get();
+        let min = min_frequency.unwrap_or(frequency_limit.0);
+        let max = max_frequency.unwrap_or(frequency_limit.1);
+        SliderValue::Range(min, max)
+    });
+
+    let on_update_ny_threshold = Callback::new(move |val: SliderValue| {
+        context.update_ny_threshold.run(val.into());
+    });
+
+    let ny_threshold_value =
+        Signal::derive(move || SliderValue::Single(context.constraints.get().ny_threshold));
+
+    let on_update_ny_wet_ratio = Callback::new(move |val: SliderValue| {
+        context.update_ny_wet_ratio.run(val.into());
+    });
+
+    let ny_wet_ratio_value =
+        Signal::derive(move || SliderValue::Single(context.constraints.get().wet_ratio));
+
+    let orientation = Signal::derive(move || layout_sig().unwrap_or_default().orientation);
+    let orientation_opposite = Signal::derive(move || orientation().opposite());
+
     view! {
         <div
-            class="relative overflow-hidden"
+            class="relative overflow-hidden grid"
             style:width=move || format!("{}px", layout_sig.get().unwrap_or_default().space.x)
             style:height=move || format!("{}px", layout_sig.get().unwrap_or_default().space.y)
         >
@@ -127,9 +167,30 @@ pub fn Tuner(#[prop(into, optional)] editor: Signal<bool>) -> impl IntoView {
                 canvas_transform=canvas_transform
                 on_update=on_update_sensor
             />
-            <Show when=move || editor()>
-                <editor::EditorOverlay />
-            </Show>
+            <RangeSlider
+                orientation=orientation
+                value=range_value
+                on_input=on_update_range
+                ui_size=UiSize::Lg
+                min=Signal::derive(move || context.constraints.get().frequency_limit.0 - 3.0)
+                max=Signal::derive(move || context.constraints.get().frequency_limit.1 + 3.0)
+            />
+            <RangeSlider
+                orientation=orientation_opposite
+                value=ny_threshold_value
+                on_input=on_update_ny_threshold
+                ui_size=UiSize::Md
+                min=0.0
+                max=1.0
+            />
+            <RangeSlider
+                orientation=orientation_opposite
+                value=ny_wet_ratio_value
+                on_input=on_update_ny_wet_ratio
+                ui_size=UiSize::Md
+                min=0.0
+                max=1.0
+            />
         </div>
     }
 }

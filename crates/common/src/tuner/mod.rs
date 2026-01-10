@@ -9,3 +9,4 @@ pub use config::*;
 pub use layout::*;
 pub use payloads::*;
 // pub use sensor::*;
+pub use super::events::tuner as events;

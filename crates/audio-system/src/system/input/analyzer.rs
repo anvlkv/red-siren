@@ -37,8 +37,10 @@ pub struct FFTAnalyzer {
     inner_net: BigBlockAdapter,
     window_thb: Arc<ThingBuf<f32>>,
     spectrum_thb: Arc<ThingBuf<Arc<FrequencySpectrum>>>,
-    sensor_values: Arc<Vec<Shared>>,
+    sensor_values: Arc<ThingBuf<Vec<SensorData>>>,
+    frequency_limit: Arc<ThingBuf<Option<FrequencyLimit>>>,
     next_excitements_abs: Arc<RwLock<Option<HashMap<NodeKey, SComplex>>>>,
+    sensors_slice: Vec<f32>,
 
     // Configuration and controls
     sample_rate: f32,
@@ -59,14 +61,17 @@ impl FFTAnalyzer {
         spectrum_thb: Arc<ThingBuf<Arc<FrequencySpectrum>>>,
     ) -> Self {
         let window_thb = Arc::new(ThingBuf::new(FFT_WINDOW_SIZE * 2));
-        let sensor_values = Arc::new(Vec::from_iter(config.sensor_data.iter().flat_map(|s| {
-            [
-                shared(s.min_frequency),
-                shared(s.max_frequency),
-                shared(s.min_magnitude),
-                shared(s.max_magnitude),
-            ]
-        })));
+        let sensor_values = Arc::new(ThingBuf::new(2));
+        sensor_values.push(config.sensor_data.clone()).unwrap();
+        let frequency_limit = Arc::new(ThingBuf::new(2));
+        frequency_limit
+            .push(Some(match config.frequency_range {
+                (None, None) => FrequencyLimit::All,
+                (None, Some(max)) => FrequencyLimit::Max(max),
+                (Some(min), None) => FrequencyLimit::Min(min),
+                (Some(min), Some(max)) => FrequencyLimit::Range(min, max),
+            }))
+            .unwrap();
         let last_adsr = HashMap::from_iter(
             excitement_controls
                 .keys()
@@ -74,20 +79,21 @@ impl FFTAnalyzer {
         );
         let next_excitements_abs = Arc::new(RwLock::new(None));
 
-        let sensor_data = config.sensor_data.clone();
         let (processing_handle, processing_running) = Self::init_handle(
             window_thb.clone(),
             next_excitements_abs.clone(),
             sensor_values.clone(),
+            frequency_limit.clone(),
             spectrum_thb.clone(),
-            sensor_data,
             config.sample_rate.round() as u32,
         );
 
         let analyzer = Self {
+            sensors_slice: vec![0_f32; config.sensor_data.len() * 4],
             inner_net: BigBlockAdapter::new(inner_net),
             window_thb,
             sensor_values,
+            frequency_limit,
             last_adsr,
             next_excitements_abs,
             sample_rate: config.sample_rate,
@@ -101,6 +107,60 @@ impl FFTAnalyzer {
         // Validate initial setup
         analyzer.validate_sensor_controls();
         analyzer
+    }
+
+    fn extract_audio_and_update_from_inputs(&self, input: &[f32]) -> f32 {
+        let num_sensor_inputs = self.config.sensor_data.len() * 4;
+
+        // [0] = audio, [1..1+4N) = sensors, [1+4N .. 1+4N+2) = [min, max]
+        let sensors = &input[1..1 + num_sensor_inputs];
+        let limits = &input[input.len() - 1 - 2..];
+        self.update_from_inputs(sensors, limits);
+
+        input[0]
+    }
+
+    fn update_from_inputs(&self, sensors_input: &[f32], limits_input: &[f32]) {
+        if let Some(err) = self
+            .sensor_values
+            .push(
+                self.config
+                    .sensor_data
+                    .clone()
+                    .into_iter()
+                    .zip(sensors_input.chunks_exact(4))
+                    .map(|(mut data, values)| {
+                        data.min_frequency = values[0];
+                        data.max_frequency = values[1];
+                        data.min_magnitude = values[2];
+                        data.max_magnitude = values[3];
+                        data
+                    })
+                    .collect(),
+            )
+            .err()
+        {
+            _ = self.sensor_values.pop();
+            _ = self.sensor_values.push(err.into_inner());
+        }
+        let min_freq_value = limits_input[0].min(limits_input[1]);
+        let max_freq_value = limits_input[1].max(limits_input[0]);
+
+        if let Some(err) = self
+            .frequency_limit
+            .push(Some(
+                match (min_freq_value.is_finite(), max_freq_value.is_finite()) {
+                    (true, true) => FrequencyLimit::Range(min_freq_value, max_freq_value),
+                    (true, false) => FrequencyLimit::Min(min_freq_value),
+                    (false, true) => FrequencyLimit::Max(max_freq_value),
+                    (false, false) => FrequencyLimit::All,
+                },
+            ))
+            .err()
+        {
+            _ = self.frequency_limit.pop();
+            _ = self.frequency_limit.push(err.into_inner());
+        }
     }
 
     /// Validate that sensor data NodeKeys match available excitement controls
@@ -146,9 +206,9 @@ impl FFTAnalyzer {
     #[allow(clippy::useless_conversion)]
     fn perform_fft_analysis(
         window: &[f32],
-        sensor_inputs: &[f32],
-        sample_rate: u32,
         sensor_data: &[SensorData],
+        &freq_limit: &FrequencyLimit,
+        sample_rate: u32,
         next_excitements_abs: &Arc<RwLock<Option<HashMap<NodeKey, SComplex>>>>,
         spectrum_thb: &Arc<ThingBuf<Arc<FrequencySpectrum>>>,
     ) {
@@ -164,19 +224,15 @@ impl FFTAnalyzer {
             &spectrum_analyzer::scaling::scale_20_times_log10,
             &spectrum_analyzer::scaling::scale_to_zero_to_one,
         ]);
-        let spectrum = match samples_fft_to_spectrum(
-            &windowed,
-            sample_rate,
-            FrequencyLimit::All,
-            Some(&scaling),
-        ) {
-            Ok(spectrum) => spectrum,
-            Err(e) => {
-                log::error!("FFT analysis failed: {}", e);
-                log::trace!("fft_analyzer: FFT analysis failed early-exit");
-                return;
-            }
-        };
+        let spectrum =
+            match samples_fft_to_spectrum(&windowed, sample_rate, freq_limit, Some(&scaling)) {
+                Ok(spectrum) => spectrum,
+                Err(e) => {
+                    log::error!("FFT analysis failed: {}", e);
+                    log::trace!("fft_analyzer: FFT analysis failed early-exit");
+                    return;
+                }
+            };
 
         let mut next_excitements_lock = next_excitements_abs.write();
         let excitements_abs = next_excitements_lock.insert(HashMap::new());
@@ -184,29 +240,17 @@ impl FFTAnalyzer {
         let spectrum_map = spectrum.to_map();
 
         // Process sensor excitements
-        for (i, sensor) in sensor_data.iter().enumerate() {
-            // Get sensor parameters from input channels
-            let (min_freq, max_freq, min_mag, max_mag) = {
-                let base_idx = i * 4;
-                if base_idx + 3 < sensor_inputs.len() {
-                    (
-                        sensor_inputs[base_idx],
-                        sensor_inputs[base_idx + 1],
-                        sensor_inputs[base_idx + 2],
-                        sensor_inputs[base_idx + 3],
-                    )
-                } else {
-                    (
-                        sensor.min_frequency,
-                        sensor.max_frequency,
-                        sensor.min_magnitude,
-                        sensor.max_magnitude,
-                    )
-                }
-            };
+        for sensor in sensor_data.iter() {
+            let SensorData {
+                key,
+                min_frequency,
+                max_frequency,
+                min_magnitude,
+                max_magnitude,
+            } = *sensor;
 
-            let freq_range = min_freq.floor() as u32..max_freq.ceil() as u32;
-            let mag_range = min_mag..max_mag;
+            let freq_range = min_frequency.floor() as u32..max_frequency.ceil() as u32;
+            let mag_range = min_magnitude..max_magnitude;
 
             let spectrum_range = spectrum_map.range(freq_range.clone());
 
@@ -220,13 +264,13 @@ impl FFTAnalyzer {
                 .and_then(|(&freq, &mag)| {
                     freq_range.clone().position(|f| f == freq).map(|p| {
                         (
-                            (mag - min_mag) as S / (max_mag - min_mag) as S,
+                            (mag - min_magnitude) as S / (max_magnitude - min_magnitude) as S,
                             p as S / freq_range.len() as S,
                         )
                     })
                 })
             {
-                excitements_abs.insert(sensor.key, SComplex::new(re, im));
+                excitements_abs.insert(key, SComplex::new(re, im));
             }
         }
 
@@ -245,15 +289,19 @@ impl FFTAnalyzer {
     fn init_handle(
         window_thb: Arc<ThingBuf<f32>>,
         next_excitements_abs: Arc<RwLock<Option<HashMap<NodeKey, SComplex>>>>,
-        sensor_values: Arc<Vec<Shared>>,
+        sensor_values: Arc<ThingBuf<Vec<SensorData>>>,
+        freq_limit: Arc<ThingBuf<Option<FrequencyLimit>>>,
         spectrum_thb: SpectrumBuffer,
-        sensor_data: Vec<SensorData>,
         sample_rate: u32,
     ) -> (Arc<JoinHandle<()>>, Arc<AtomicBool>) {
         let running = Arc::new(AtomicBool::new(true));
         let running_thread = running.clone();
         let join = spawn(move || {
             log::info!("FFT analyzer thread started");
+            let mut last_sensor_data: Vec<SensorData> = sensor_values.pop().unwrap_or_default();
+            let mut last_freq_limit: FrequencyLimit =
+                freq_limit.pop().flatten().unwrap_or(FrequencyLimit::All);
+
             loop {
                 if !running_thread.load(Ordering::SeqCst) {
                     log::info!("FFT analyzer thread stopped");
@@ -265,18 +313,26 @@ impl FFTAnalyzer {
                 {
                     sleep(Duration::from_micros(500));
                 } else {
+                    let sensor_data = sensor_values
+                        .pop()
+                        .unwrap_or_else(|| last_sensor_data.clone());
+
+                    let freq_limit = freq_limit.pop().flatten().unwrap_or(last_freq_limit);
+
                     let window: [f32; FFT_WINDOW_SIZE] =
                         core::array::from_fn(|_| window_thb.pop().unwrap_or_default());
-                    let sensor_inputs = sensor_values.iter().map(|s| s.value()).collect::<Vec<_>>();
 
                     Self::perform_fft_analysis(
                         &window,
-                        &sensor_inputs,
-                        sample_rate,
                         &sensor_data,
+                        &freq_limit,
+                        sample_rate,
                         &next_excitements_abs,
                         &spectrum_thb,
                     );
+
+                    last_sensor_data = sensor_data.clone();
+                    last_freq_limit = freq_limit;
                 }
             }
         });
@@ -286,13 +342,30 @@ impl FFTAnalyzer {
 
     fn restart_processing(&mut self) {
         self.processing_running.store(false, Ordering::SeqCst);
-        let sensor_data = self.config.sensor_data.clone();
+
+        if let Err(e) = self.sensor_values.push(self.config.sensor_data.clone()) {
+            self.sensor_values.pop().unwrap();
+            self.sensor_values.push(e.into_inner()).unwrap();
+        }
+        if let Err(e) = self
+            .frequency_limit
+            .push(Some(match self.config.frequency_range {
+                (None, None) => FrequencyLimit::All,
+                (None, Some(max)) => FrequencyLimit::Max(max),
+                (Some(min), None) => FrequencyLimit::Min(min),
+                (Some(min), Some(max)) => FrequencyLimit::Range(min, max),
+            }))
+        {
+            self.frequency_limit.pop().unwrap();
+            self.frequency_limit.push(e.into_inner()).unwrap();
+        }
+
         let (processing_handle, processing_running) = Self::init_handle(
             self.window_thb.clone(),
             self.next_excitements_abs.clone(),
             self.sensor_values.clone(),
+            self.frequency_limit.clone(),
             self.spectrum_thb.clone(),
-            sensor_data,
             self.config.sample_rate.round() as u32,
         );
 
@@ -331,7 +404,7 @@ impl FFTAnalyzer {
 
 impl AudioUnit for FFTAnalyzer {
     fn inputs(&self) -> usize {
-        self.inner_net.inputs() + self.config.sensor_data.len() * 4
+        self.inner_net.inputs() + self.config.sensor_data.len() * 4 + 2
     }
 
     fn outputs(&self) -> usize {
@@ -339,63 +412,87 @@ impl AudioUnit for FFTAnalyzer {
     }
 
     fn tick(&mut self, input: &[f32], output: &mut [f32]) {
+        let audio = self.extract_audio_and_update_from_inputs(input);
         // Process through inner network with all inputs
-        self.inner_net.tick(&input[0..1], output);
-
-        // Extract sensor inputs from additional channels
-        let sensor_inputs = &input[1..];
-
-        for (s_val, ctrl) in sensor_inputs.iter().zip(self.sensor_values.iter()) {
-            ctrl.set_value(*s_val);
-        }
-
-        if sensor_inputs.len() != self.sensor_values.len() {
-            log::warn!("Mismatched number of sensor inputs and controls");
-        }
+        self.inner_net.tick(&[audio], output);
 
         if self.window_thb.push(output[0]).is_err() {
-            log::trace!("failed to push one sample")
+            log::warn!("failed to push one sample")
         }
 
         self.tick_adsr();
     }
 
     fn process(&mut self, size: usize, input: &BufferRef, output: &mut BufferMut) {
-        // Extract sensor inputs from additional channels
-        let (audio_input, sensor_inputs): (BufferRef, Vec<f32>) = {
-            let buffer_ref = BufferRef::new(input.channel(0));
+        let num_sensor_inputs = self.config.sensor_data.len() * 4;
 
-            let mut values = Vec::new();
-            for ch in 1..input.channels() {
-                if size > 0 {
-                    // Take the first sample from each sensor channel
-                    let simd_val = input.at(ch, 0);
-                    let array = simd_val.to_array();
-                    values.push(array[0]);
-                }
+        // Channel layout: [ audio | sensors... | min_freq | max_freq ]
+        let audio_in = input.subset(0, 1);
+        let sensors_in = input.subset(1, num_sensor_inputs);
+        let limits_in = input.subset(input.channels() - 1 - 2, 2);
+
+        self.inner_net.process(size, &audio_in, output);
+        let processed = output.buffer_ref();
+
+        let blocks = size / SIMD_LEN;
+        let rem = size % SIMD_LEN;
+
+        // Process full SIMD blocks
+        for i in 0..blocks {
+            let audio_vec = processed.at(0, i);
+            let lim0_vec = limits_in.at(0, i);
+            let lim1_vec = limits_in.at(1, i);
+            let audio_vec = audio_vec.as_array();
+            let lim0_vec = lim0_vec.as_array();
+            let lim1_vec = lim1_vec.as_array();
+
+            for lane in 0..SIMD_LEN {
+                // Gather per-sample sensor values across channels
+                self.sensors_slice
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(ch, sample)| {
+                        *sample = sensors_in.at(ch, i).as_array()[lane];
+                    });
+
+                let limits_pair = [lim0_vec[lane], lim1_vec[lane]];
+                self.update_from_inputs(&self.sensors_slice, &limits_pair);
+
+                let _ = self.window_thb.push(audio_vec[lane]);
             }
-            (buffer_ref, values)
-        };
 
-        // Process through inner network with all inputs
-        self.inner_net.process(size, &audio_input, output);
-
-        self.sensor_values
-            .iter()
-            .zip(sensor_inputs)
-            .for_each(|(ctrl, input)| {
-                ctrl.set_value(input);
-            });
-
-        'outer: for chunk in output.channel(0) {
-            for s in chunk.as_array() {
-                if self.window_thb.push(*s).is_err() {
-                    break 'outer;
-                }
-            }
+            self.tick_adsr();
         }
 
-        self.tick_adsr();
+        // Handle tail (if any) using the last available block vectors
+        if rem > 0 {
+            // The last block index usable for .at() is blocks - 1 if blocks > 0.
+            // If there were no full blocks, use index 0; Fundsp provides a valid vector view.
+            let idx = if blocks > 0 { blocks - 1 } else { 0 };
+
+            let audio_vec = processed.at(0, idx);
+            let lim0_vec = limits_in.at(0, idx);
+            let lim1_vec = limits_in.at(1, idx);
+            let audio_vec = audio_vec.as_array();
+            let lim0_vec = lim0_vec.as_array();
+            let lim1_vec = lim1_vec.as_array();
+
+            for lane in 0..rem {
+                self.sensors_slice
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(ch, sample)| {
+                        *sample = sensors_in.at(ch, idx).as_array()[lane];
+                    });
+
+                let limits_pair = [lim0_vec[lane], lim1_vec[lane]];
+                self.update_from_inputs(&self.sensors_slice, &limits_pair);
+
+                let _ = self.window_thb.push(audio_vec[lane]);
+            }
+
+            self.tick_adsr();
+        }
     }
 
     fn set_sample_rate(&mut self, sample_rate: f64) {
@@ -460,6 +557,7 @@ mod tests {
                 min_magnitude: 0.01,
                 max_magnitude: 1.0,
             }],
+            ..Default::default()
         };
 
         // Create siren controls
@@ -473,7 +571,7 @@ mod tests {
         let analyzer = FFTAnalyzer::new(inner_net, config, siren_controls, spectrum_thb);
 
         // Test basic properties
-        assert_eq!(analyzer.inputs(), 5);
+        assert_eq!(analyzer.inputs(), 7);
         assert_eq!(analyzer.outputs(), 1);
 
         // Test initial values
@@ -495,6 +593,7 @@ mod tests {
                 min_magnitude: 0.05,
                 max_magnitude: 0.5,
             }],
+            ..Default::default()
         };
 
         let mut siren_controls = HashMap::new();

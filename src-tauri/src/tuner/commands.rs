@@ -1,5 +1,5 @@
 use common::error::Result;
-use common::tuner::{Config, Layout as TunerLayout, SpectrumData};
+use common::tuner::{Config, Layout as TunerLayout, ReflectTunerConstraints, SpectrumData};
 use common::NodeKey;
 use tauri::{AppHandle, State};
 
@@ -45,11 +45,12 @@ pub fn tuner_update_sensor(
 ) -> Result<Config> {
     let mut cfg = state.tuner_config();
     let eps = f32::EPSILON.sqrt();
+    let (min_freq, max_freq) = cfg.frequency_range_limits();
     // Update tuner config
     for key in keys {
         if let Some(old_value) = cfg.sensor_data.iter().find(|s| s.key == key).copied() {
-            let min_freq = (old_value.min_frequency + min_frequency_increment).max(cfg.min_freq());
-            let max_freq = (old_value.max_frequency + max_frequency_increment).min(cfg.max_freq());
+            let min_freq = (old_value.min_frequency + min_frequency_increment).max(min_freq);
+            let max_freq = (old_value.max_frequency + max_frequency_increment).min(max_freq);
             let min_mag = (old_value.min_magnitude + min_magnitude_increment).clamp(0.0, 1.0);
             let max_mag = (old_value.max_magnitude + max_magnitude_increment).clamp(0.0, 1.0);
             cfg = state.update_sensor_valuess(
@@ -100,4 +101,33 @@ pub fn tuner_stop_stream(state: State<'_, TunerState>) -> Result<()> {
 #[tauri::command]
 pub fn tuner_toggle_probe(state: State<'_, TunerState>) -> Result<bool> {
     state.toggle_probe()
+}
+
+#[tauri::command]
+pub fn tuner_constraints_updated(state: State<'_, TunerState>) -> Result<ReflectTunerConstraints> {
+    Ok(state.tuner_config().constraints())
+}
+
+#[tauri::command]
+pub fn tuner_update_range(
+    min_frequency: Option<f32>,
+    max_frequency: Option<f32>,
+    state: State<'_, TunerState>,
+) -> Result<()> {
+    state.update_range(min_frequency, max_frequency)
+}
+
+#[tauri::command]
+pub fn tuner_update_threshold(ny_threshold: f32, state: State<'_, TunerState>) -> Result<()> {
+    state.update_ny_threshold(ny_threshold)
+}
+
+#[tauri::command]
+pub fn tuner_update_wet_ratio(wet_ratio: f32, state: State<'_, TunerState>) -> Result<()> {
+    state.update_wet_ratio(wet_ratio)
+}
+
+#[tauri::command]
+pub fn tuner_snapshot_input_snoop(state: State<'_, TunerState>) -> Result<Vec<f32>> {
+    state.snapshot_input_snoop()
 }

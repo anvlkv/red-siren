@@ -18,12 +18,7 @@ fn duration_to_frames(d: Duration, sample_rate: u32) -> usize {
     ((d.as_secs_f64() * sample_rate as f64).ceil()) as usize
 }
 
-// /// Convert a frame count to duration at a given sample rate.
-// fn frames_to_duration(frames: u32, sample_rate: u32) -> Duration {
-//     let secs = frames as f64 / sample_rate as f64;
-//     Duration::from_secs_f64(secs)
-// }
-
+#[allow(clippy::unnecessary_cast)]
 pub fn playback_callback(
     net: NetBackend,
     input_buffer: Option<Arc<ThingBuf<S>>>,
@@ -166,7 +161,7 @@ pub fn playback_callback(
                     .iter_mut()
                     .take(fill_size)
                     .zip(iter::from_fn(|| ib.pop()))
-                    .for_each(|(v, s)| *v = s);
+                    .for_each(|(v, s)| *v = s as f32);
             }
             backend.process_big(
                 fill_size,

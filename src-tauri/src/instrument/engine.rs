@@ -367,6 +367,10 @@ impl InstrumentEngine {
         self.inner.stream_controller.read().get_key_control(key)
     }
 
+    pub fn snapshot_input_snoop(&self) -> Vec<f32> {
+        self.inner.stream_controller.read().snapshot_input_snoop()
+    }
+
     pub fn snapshot_output_snoop(&self, key: NodeKey) -> Vec<f32> {
         self.inner
             .stream_controller

@@ -8,7 +8,12 @@ use std::collections::HashMap;
 
 use crate::rt::ExcitementSource;
 use common::NodeKey;
-use fundsp::{net::Net, shared::Shared, snoop::Snoop};
+use fundsp::{
+    net::Net,
+    prelude::{var, An},
+    shared::Shared,
+    snoop::{Snoop, SnoopBackend},
+};
 use values::FineTunedValues;
 
 pub use excitement_control::ExcitementControl;
@@ -55,24 +60,33 @@ pub fn create_output_system(
 }
 
 #[must_use]
+#[allow(clippy::too_many_arguments)]
 pub fn create_input_system(
     config: &common::tuner::Config,
     net: &mut Net,
     excitements: HashMap<NodeKey, ExcitementControl>,
     source: ExcitementSource,
     spectrum_thb: &input::analyzer::SpectrumBuffer,
+    input_snoop: Option<An<SnoopBackend>>,
+    (min_freq, max_freq): (&Shared, &Shared),
+    (ny_threshold, wet_ratio): (&Shared, &Shared),
     tap_channel: usize,
-    #[cfg(feature = "editor")] values: &FineTunedValues,
 ) -> Vec<SensorHandles> {
-    #[cfg(not(feature = "editor"))]
-    let values = &FineTunedValues::new();
-
-    log::debug!("Creating input system with fine-tuned values: {values:#?}");
-
     match source {
         ExcitementSource::Mic => {
             // Use FFT analyzer for microphone input
-            input::sensors_system(config, net, excitements, values, spectrum_thb, tap_channel)
+            input::sensors_system(
+                config,
+                net,
+                excitements,
+                var(ny_threshold),
+                var(wet_ratio),
+                var(min_freq),
+                var(max_freq),
+                spectrum_thb,
+                tap_channel,
+                input_snoop,
+            )
         }
         ExcitementSource::Entropy => {
             // Use random excitor for entropy source

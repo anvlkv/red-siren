@@ -1,7 +1,8 @@
-use std::collections::HashMap;
 use std::sync::Arc;
+use std::{collections::HashMap, f32};
 
 use common::instrument::layout::layout_test_cases;
+use common::tuner::Config;
 use fundsp::net::Net;
 use fundsp::prelude::*;
 use fundsp::thingbuf::ThingBuf;
@@ -48,6 +49,12 @@ fn instrument_with_rand_src() {
             excitements.insert(h.key, h.siren_control);
         }
 
+        let cfg = Config::default();
+        let ny_threshold = shared(cfg.ny_threshold);
+        let ny_wet_ratio = shared(cfg.ny_wet_ratio);
+        let min_freq = shared(f32::NEG_INFINITY);
+        let max_freq = shared(f32::INFINITY);
+
         // Tuner default (Mic analyzer) hooked to a tap channel from the output
         let spectrum_thb = Arc::new(ThingBuf::new(10));
         let _sensor_handles = create_input_system(
@@ -56,9 +63,10 @@ fn instrument_with_rand_src() {
             excitements,
             ExcitementSource::Entropy,
             &spectrum_thb,
+            None,
+            (&min_freq, &max_freq),
+            (&ny_threshold, &ny_wet_ratio),
             2, // tap channel
-            #[cfg(feature = "editor")]
-            &values,
         );
 
         let case_title = format!("{}x{}_{:?}", layout.space.x, layout.space.y, layout.scale);
@@ -140,6 +148,12 @@ fn instrument_with_mic_src() {
         excitements.insert(h.key, h.siren_control);
     }
 
+    let cfg = Config::default();
+    let ny_threshold = shared(cfg.ny_threshold);
+    let ny_wet_ratio = shared(cfg.ny_wet_ratio);
+    let min_freq = shared(f32::NEG_INFINITY);
+    let max_freq = shared(f32::INFINITY);
+
     // Tuner default (Mic analyzer) hooked to a tap channel from the output
     let spectrum_thb = Arc::new(ThingBuf::new(10));
     let _sensor_handles = create_input_system(
@@ -148,9 +162,10 @@ fn instrument_with_mic_src() {
         excitements,
         ExcitementSource::Mic,
         &spectrum_thb,
-        2, // tap channel
-        #[cfg(feature = "editor")]
-        &values,
+        None,
+        (&min_freq, &max_freq),
+        (&ny_threshold, &ny_wet_ratio),
+        2, // tap channel,
     );
 
     let input = {

@@ -1,7 +1,10 @@
 use leptos::prelude::*;
-use tauri_use::{use_command, UseTauriWithReturn};
+use tauri_use::{use_command, use_invoke, UseTauriReturn, UseTauriWithReturn};
 
-use common::tuner::{Config, Layout, SpectrumData};
+use common::tuner::{
+    Config, Layout, ReflectTunerConstraints, SpectrumData, UpdateNyThresholdPayload,
+    UpdateRangePayload, UpdateWetRatioPayload,
+};
 
 use crate::util::tauri_resource::{use_tauri_resource, UseTauriResourceReturn};
 
@@ -22,6 +25,14 @@ pub struct TunerService {
     pub probe: Callback<()>,
     /// Whether tuner audio probe is active
     pub probe_active: Signal<bool>,
+    /// Tuner constraints (populated by listener/resource logic outside service)
+    pub constraints: Memo<ReflectTunerConstraints>,
+    /// Update spectrum range
+    pub update_spectrum_range: Callback<UpdateRangePayload>,
+    /// Update NY compression threshold
+    pub update_ny_threshold: Callback<f32>,
+    /// Update NY wet ratio
+    pub update_ny_wet_ratio: Callback<f32>,
 }
 
 /// Provide the long‑lived `TunerService`.
@@ -53,12 +64,42 @@ pub fn provide_tuner_service() {
     } = use_command::<bool>(common::commands::tuner::TOGGLE_PROBE);
 
     // Get tuner config resource
-    let UseTauriResourceReturn { data: config, .. } =
-        use_tauri_resource::<Config>(common::commands::tuner::CONFIG);
+    let UseTauriResourceReturn {
+        data: config,
+        error: config_error,
+        ..
+    } = use_tauri_resource::<Config>(common::commands::tuner::CONFIG);
 
     // Get tuner layout resource (safe-area-aware baseline, orientation, etc.)
-    let UseTauriResourceReturn { data: layout, .. } =
-        use_tauri_resource::<Layout>(common::commands::tuner::LAYOUT);
+    let UseTauriResourceReturn {
+        data: layout,
+        error: layout_error,
+        ..
+    } = use_tauri_resource::<Layout>(common::commands::tuner::LAYOUT);
+
+    let UseTauriResourceReturn {
+        data: constraints,
+        error: constraints_error,
+        ..
+    } = use_tauri_resource::<ReflectTunerConstraints>(common::events::tuner::CONSTRAINTS);
+
+    let UseTauriReturn {
+        trigger: update_spectrum_range,
+        error: update_spectrum_range_error,
+        ..
+    } = use_invoke::<UpdateRangePayload, (), ()>(common::commands::tuner::UPDATE_RANGE);
+
+    let UseTauriReturn {
+        trigger: update_ny_threshold,
+        error: update_ny_threshold_error,
+        ..
+    } = use_invoke::<UpdateNyThresholdPayload, (), ()>(common::commands::tuner::UPDATE_THRESHOLD);
+
+    let UseTauriReturn {
+        trigger: update_wet_ratio,
+        error: update_wet_ratio_error,
+        ..
+    } = use_invoke::<UpdateWetRatioPayload, (), ()>(common::commands::tuner::UPDATE_WET_RATIO);
 
     // Construct service with stable callbacks
     let service = TunerService {
@@ -70,6 +111,18 @@ pub fn provide_tuner_service() {
         stop_stream: Callback::new(move |_| trigger_stop(Some(()))),
         probe: Callback::new(move |_| trigger_toggle_probe(Some(()))),
         probe_active: Signal::derive(move || probe_active().unwrap_or_default()),
+        constraints: Memo::new(move |_| constraints().unwrap_or_default()),
+        update_spectrum_range: Callback::new(move |payload: UpdateRangePayload| {
+            update_spectrum_range(Some((payload, ())));
+        }),
+        update_ny_threshold: Callback::new(move |ny_threshold: f32| {
+            let payload = UpdateNyThresholdPayload { ny_threshold };
+            update_ny_threshold(Some((payload, ())));
+        }),
+        update_ny_wet_ratio: Callback::new(move |wet_ratio: f32| {
+            let payload = UpdateWetRatioPayload { wet_ratio };
+            update_wet_ratio(Some((payload, ())));
+        }),
     };
 
     // Centralized error logging
@@ -96,6 +149,48 @@ pub fn provide_tuner_service() {
             log::error!(
                 "Error invoking {}: {err}",
                 common::commands::tuner::TOGGLE_PROBE
+            );
+        }
+
+        if let Some(err) = config_error() {
+            log::error!(
+                "Error retrieving {}: {err}",
+                common::commands::tuner::CONFIG
+            );
+        }
+
+        if let Some(err) = layout_error() {
+            log::error!(
+                "Error retrieving {}: {err}",
+                common::commands::tuner::LAYOUT
+            );
+        }
+
+        if let Some(err) = constraints_error() {
+            log::error!(
+                "Error retrieving {}: {err}",
+                common::events::tuner::CONSTRAINTS
+            );
+        }
+
+        if let Some(err) = update_spectrum_range_error() {
+            log::error!(
+                "Error invoking {}: {err}",
+                common::commands::tuner::UPDATE_RANGE
+            );
+        }
+
+        if let Some(err) = update_ny_threshold_error() {
+            log::error!(
+                "Error invoking {}: {err}",
+                common::commands::tuner::UPDATE_THRESHOLD
+            );
+        }
+
+        if let Some(err) = update_wet_ratio_error() {
+            log::error!(
+                "Error invoking {}: {err}",
+                common::commands::tuner::UPDATE_WET_RATIO
             );
         }
     });

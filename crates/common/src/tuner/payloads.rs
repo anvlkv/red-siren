@@ -56,3 +56,36 @@ pub struct UpdateSensorPayload {
 ///
 /// Each tuple contains (frequency in Hz, magnitude in dB)
 pub struct SpectrumSnapshot(pub Vec<(f32, f32)>);
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Payload for updating the tuner's frequency range
+pub struct UpdateRangePayload {
+    pub min_frequency: Option<f32>,
+    pub max_frequency: Option<f32>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Payload for updating the NY compression threshold
+pub struct UpdateNyThresholdPayload {
+    pub ny_threshold: f32,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Payload for updating the NY wet ratio
+pub struct UpdateWetRatioPayload {
+    pub wet_ratio: f32,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+/// Reflects the current tuner constraints
+pub struct ReflectTunerConstraints {
+    pub min_frequency: Option<f32>,
+    pub max_frequency: Option<f32>,
+    pub frequency_limit: (f32, f32),
+    pub ny_threshold: f32,
+    pub wet_ratio: f32,
+}

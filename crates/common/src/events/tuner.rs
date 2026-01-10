@@ -8,3 +8,6 @@ pub const LAYOUT: &str = "tuner_layout";
 
 /// Emitted with spectrum updates
 pub const SPECTRUM_DATA: &str = "tuner_spectrum_data";
+
+/// Reflects an update to tuner constraints
+pub const CONSTRAINTS: &str = "tuner_constraints_updated";

@@ -3,9 +3,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{safe_area::SafeArea, Line};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LayoutOrientation {
     Vertical,
+    #[default]
     Horizontal,
 }
 
@@ -120,6 +121,13 @@ impl LayoutOrientation {
                 x: start.x,
                 y: start.y + (end.y - start.y) * t,
             },
+        }
+    }
+
+    pub fn opposite(&self) -> Self {
+        match self {
+            LayoutOrientation::Horizontal => LayoutOrientation::Vertical,
+            LayoutOrientation::Vertical => LayoutOrientation::Horizontal,
         }
     }
 }

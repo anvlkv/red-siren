@@ -19,6 +19,4 @@ pub struct FineTunedValuesPayload {
     pub node_bell_q: f32,
     pub node_bell_gain_db: f32,
     pub formant_base_q: f32,
-    pub input_ny_threshold: f32,
-    pub input_ny_wet_ratio: f32,
 }

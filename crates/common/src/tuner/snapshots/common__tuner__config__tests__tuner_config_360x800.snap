@@ -9,61 +9,68 @@ expression: config
         0,
         0
       ],
-      "min_frequency": 20.0,
-      "max_frequency": 63.24554,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 21.533203,
+      "max_frequency": 3692.9443,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         0,
         1
       ],
-      "min_frequency": 63.24554,
-      "max_frequency": 199.99992,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 3692.9443,
+      "max_frequency": 7364.3555,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         0,
         2
       ],
-      "min_frequency": 199.99992,
-      "max_frequency": 632.45544,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 7364.3555,
+      "max_frequency": 11035.767,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         1,
         0
       ],
-      "min_frequency": 632.45544,
-      "max_frequency": 1999.9993,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 11035.767,
+      "max_frequency": 14707.178,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         1,
         1
       ],
-      "min_frequency": 1999.9993,
-      "max_frequency": 6324.552,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 14707.178,
+      "max_frequency": 18378.588,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     },
     {
       "key": [
         1,
         2
       ],
-      "min_frequency": 6324.552,
-      "max_frequency": 19999.992,
-      "min_magnitude": -80.0,
-      "max_magnitude": -20.0
+      "min_frequency": 18378.588,
+      "max_frequency": 22050.0,
+      "min_magnitude": 0.015,
+      "max_magnitude": 0.75
     }
   ],
-  "sample_rate": 44100.0
+  "sample_rate": 44100.0,
+  "fft_size": 2048,
+  "ny_threshold": 0.75,
+  "ny_wet_ratio": 0.3,
+  "frequency_range": [
+    null,
+    null
+  ]
 }

@@ -29,7 +29,7 @@ expression: layout
     ]
   ],
   "instrument_breadth": 107.62499999999999,
-  "key_radius": 21.059044908723276,
+  "key_radius": 27.25598858886741,
   "key_band_length": 356.1875,
   "key_band_breadth": 85.41666666666666,
   "safe_area_padding": {
@@ -38,9 +38,9 @@ expression: layout
     "bottom": 20.0,
     "left": 0.0
   },
-  "key_bands_gap": 16.0,
-  "groups_gap": 19.2,
-  "num_keys_per_group": 5,
+  "key_bands_gap": 16.687339952367804,
+  "groups_gap": 20.024807942841363,
+  "num_keys_per_group": 3,
   "num_groups": 2,
   "first_group_channel": "Right",
   "scale": "Yo"

@@ -22,11 +22,6 @@ pub fn SpectrumVisualizer(
     let context = expect_tuner_service();
     let canvas_ref = NodeRef::<html::Canvas>::new();
 
-    // scale is now provided by the parent Tuner via props
-
-    // Baseline from layout (no fallback)
-    let baseline = Memo::new(move |_| layout.with(|l| l.as_ref().map(|lay| lay.line_position)));
-
     let is_dark = is_dark_mode();
 
     let base_color = Memo::new(move |_| {
@@ -61,21 +56,17 @@ pub fn SpectrumVisualizer(
 
     // Setup canvas backing resolution and scaling whenever canvas mounts or transform changes
     Effect::new(move |_| {
-        if let Some(lay) = layout() {
-            if let Some(canvas) = canvas_ref.get() {
-                let _space = lay.space;
+        if let Some(canvas) = canvas_ref.get() {
+            // Set backing resolution in device pixels (provided by parent)
+            let tr = canvas_transform();
+            canvas.set_width(tr.backing_width_dev);
+            canvas.set_height(tr.backing_height_dev);
 
-                // Set backing resolution in device pixels (provided by parent)
-                let tr = canvas_transform();
-                canvas.set_width(tr.backing_width_dev);
-                canvas.set_height(tr.backing_height_dev);
-
-                // Apply uniform scale with letterboxing/pillarboxing (provided transform)
-                if let Some(ctx) = get_2d_ctx(&canvas) {
-                    _ = ctx.reset_transform().ok();
-                    _ = ctx.translate(tr.translate_x_dev, tr.translate_y_dev).ok();
-                    _ = ctx.scale(tr.device_scale, tr.device_scale).ok();
-                }
+            // Apply uniform scale with letterboxing/pillarboxing (provided transform)
+            if let Some(ctx) = get_2d_ctx(&canvas) {
+                _ = ctx.reset_transform().ok();
+                _ = ctx.translate(tr.translate_x_dev, tr.translate_y_dev).ok();
+                _ = ctx.scale(tr.device_scale, tr.device_scale).ok();
             }
         }
     });
@@ -86,95 +77,92 @@ pub fn SpectrumVisualizer(
         trigger: poll_spectrum,
     } = use_command::<SpectrumData>(common::commands::tuner::SPECTRUM_DATA);
 
+    let UseTauriWithReturn {
+        data: input_data,
+        error: input_error,
+        trigger: poll_input,
+    } = use_command::<Vec<f32>>(common::commands::tuner::INPUT_SNOOP);
+
     _ = use_raf_fn_with_fps(
         move |_| {
             poll_spectrum(Some(()));
+            poll_input(Some(()));
             if let Some(spectrum) = spectrum_data() {
                 let Some(lay) = layout() else { return };
+                let Some(ctx) = canvas_ref.get().and_then(|canvas| get_2d_ctx(&canvas)) else {
+                    return;
+                };
+                let input_data = input_data().unwrap_or_default();
 
-                if let Some(ctx) = canvas_ref.get().and_then(|canvas| get_2d_ctx(&canvas)) {
-                    // Clear full canvas (in device pixels), independent of current transform
-                    let tr = canvas_transform();
-                    let bw = tr.backing_width_dev as f64;
-                    let bh = tr.backing_height_dev as f64;
-                    ctx.save();
-                    _ = ctx.reset_transform().ok();
-                    ctx.clear_rect(0.0, 0.0, bw, bh);
-                    ctx.restore();
+                // Clear full canvas (in device pixels), independent of current transform
+                let tr = canvas_transform();
+                let bw = tr.backing_width_dev as f64;
+                let bh = tr.backing_height_dev as f64;
+                ctx.save();
+                _ = ctx.reset_transform().ok();
+                ctx.clear_rect(0.0, 0.0, bw, bh);
+                ctx.restore();
 
-                    let base_color = base_color.get();
-                    let secondary_color = secondary_color.get();
+                let base_color = base_color.get();
+                let secondary_color = secondary_color.get();
 
-                    // Configure blend to match original SVG classes intent
-                    // We mimic mix-blend-plus-darker/lighter with globalCompositeOperation hints.
-                    // Fallback to "source-over" if unsupported.
-                    _ = ctx.set_global_composite_operation("source-over");
+                // Configure blend to match original SVG classes intent
+                // We mimic mix-blend-plus-darker/lighter with globalCompositeOperation hints.
+                // Fallback to "source-over" if unsupported.
+                _ = ctx.set_global_composite_operation("source-over");
 
-                    // Draw baseline reference line
-                    if let Some(bl) = baseline.get() {
-                        draw_baseline(&ctx, bl, &base_color);
-                    }
+                // Draw baseline reference line
+                draw_baseline(&ctx, &lay, &input_data, &base_color);
 
-                    // Draw max-hold sensor excitement outline bars (lower opacity strokes)
-                    if let Some(bl) = baseline.get() {
-                        draw_excitement_bars(
-                            &ctx,
-                            &lay,
-                            bl,
-                            &spectrum.max_excitements,
-                            &base_color,
-                            &secondary_color,
-                            0.40,
-                            true,
-                        );
-                    }
+                // Draw max-hold sensor excitement outline bars (lower opacity strokes)
+                draw_excitement_bars(
+                    &ctx,
+                    &lay,
+                    &spectrum.max_excitements,
+                    &base_color,
+                    &secondary_color,
+                    0.40,
+                    true,
+                );
 
-                    // Draw sensor excitement bars (filled, higher opacity)
-                    if let Some(bl) = baseline.get() {
-                        draw_excitement_bars(
-                            &ctx,
-                            &lay,
-                            bl,
-                            &spectrum.sensor_excitements,
-                            &base_color,
-                            &secondary_color,
-                            0.30,
-                            false,
-                        );
-                    }
+                // Draw sensor excitement bars (filled, higher opacity)
+                draw_excitement_bars(
+                    &ctx,
+                    &lay,
+                    &spectrum.sensor_excitements,
+                    &base_color,
+                    &secondary_color,
+                    0.30,
+                    false,
+                );
 
-                    // Draw spectrum layers
-                    let cfg = Config {
-                        sensor_data: vec![],
-                        sample_rate: spectrum.sample_rate,
-                        fft_size: spectrum.fft_size,
-                    };
+                // Draw spectrum layers
+                let cfg = context.config.get().unwrap_or_default();
 
-                    if !spectrum.max_magnitudes.is_empty() && !spectrum.frequencies.is_empty() {
-                        draw_spectrum_area(
-                            &ctx,
-                            &cfg,
-                            &lay,
-                            &spectrum.max_magnitudes,
-                            &spectrum.frequencies,
-                            0.30, // alpha to match "fill-gray/30 ... stroke-.../50"
-                            &base_color,
-                            &secondary_color,
-                        );
-                    }
+                if !spectrum.max_magnitudes.is_empty() && !spectrum.frequencies.is_empty() {
+                    draw_spectrum_area(
+                        &ctx,
+                        &cfg,
+                        &lay,
+                        &spectrum.max_magnitudes,
+                        &spectrum.frequencies,
+                        0.30, // alpha to match "fill-gray/30 ... stroke-.../50"
+                        &base_color,
+                        &secondary_color,
+                    );
+                }
 
-                    if !spectrum.current_magnitudes.is_empty() && !spectrum.frequencies.is_empty() {
-                        draw_spectrum_area(
-                            &ctx,
-                            &cfg,
-                            &lay,
-                            &spectrum.current_magnitudes,
-                            &spectrum.frequencies,
-                            0.60, // alpha to match "fill-gray/40 ... stroke-.../60"
-                            &base_color,
-                            &secondary_color,
-                        );
-                    }
+                if !spectrum.current_magnitudes.is_empty() && !spectrum.frequencies.is_empty() {
+                    draw_spectrum_area(
+                        &ctx,
+                        &cfg,
+                        &lay,
+                        &spectrum.current_magnitudes,
+                        &spectrum.frequencies,
+                        0.60, // alpha to match "fill-gray/40 ... stroke-.../60"
+                        &base_color,
+                        &secondary_color,
+                    );
                 }
 
                 context.spectrum.set(Some(spectrum));
@@ -187,6 +175,10 @@ pub fn SpectrumVisualizer(
         if let Some(err) = spectrum_error() {
             log::error!("Error listening to spectrum data: {err}");
         }
+
+        if let Some(err) = input_error() {
+            log::error!("Error listening to input snoop data: {err}");
+        }
     });
 
     view! {
@@ -198,13 +190,38 @@ pub fn SpectrumVisualizer(
     }
 }
 
-fn draw_baseline(ctx: &CanvasRenderingContext2d, baseline: common::Line, base_color: &str) {
+fn draw_baseline(
+    ctx: &CanvasRenderingContext2d,
+    layout: &TunerLayout,
+    input_data: &[f32],
+    base_color: &str,
+) {
     ctx.save();
     ctx.set_stroke_style_str(base_color);
     ctx.set_line_width(1.0);
 
+    let baseline = layout.line_position; // -1.0
+    let input_level = layout
+        .orientation
+        .safe_breadth(layout.space, layout.safe_area_padding); // 1.0
+    let mid_level = input_level / 2.0;
+
     ctx.begin_path();
     ctx.move_to(baseline.0.x, baseline.0.y);
+    for val in input_data {
+        match layout.orientation {
+            LayoutOrientation::Vertical => {
+                let x = baseline.0.x + (val.abs() as f64 * mid_level);
+                let y = baseline.0.y;
+                ctx.line_to(x, y);
+            }
+            LayoutOrientation::Horizontal => {
+                let x = baseline.0.x;
+                let y = baseline.0.y - (val.abs() as f64 * mid_level);
+                ctx.line_to(x, y);
+            }
+        }
+    }
     ctx.line_to(baseline.1.x, baseline.1.y);
     ctx.stroke();
     ctx.restore();
@@ -214,13 +231,13 @@ fn draw_baseline(ctx: &CanvasRenderingContext2d, baseline: common::Line, base_co
 fn draw_excitement_bars(
     ctx: &CanvasRenderingContext2d,
     layout: &TunerLayout,
-    baseline: common::Line,
     excitements: &[f32],
     base_color: &str,
     secondary_color: &str,
     alpha: f64,
     is_stroke: bool,
 ) {
+    let baseline = layout.line_position;
     ctx.save();
     if is_stroke {
         ctx.set_stroke_style_str(secondary_color);

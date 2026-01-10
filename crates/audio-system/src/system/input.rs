@@ -12,7 +12,6 @@ use common::NodeKey;
 use fundsp::prelude::*;
 use u_num_it::u_num_it;
 
-use crate::system::values::FineTunedValues;
 use crate::ExcitementControl;
 
 use super::SensorHandles;
@@ -20,13 +19,18 @@ use super::SensorHandles;
 pub(crate) use analyzer::FFTAnalyzer;
 pub(crate) use random_excitor::RandomExcitor;
 
+#[allow(clippy::too_many_arguments)]
 pub fn sensors_system(
     config: &Config,
     net: &mut Net,
     excitements: HashMap<NodeKey, ExcitementControl>,
-    values: &FineTunedValues,
+    ny_threshold: An<Var>,
+    ny_wet_ratio: An<Var>,
+    min_freq: An<Var>,
+    max_freq: An<Var>,
     spectrum_thb: &analyzer::SpectrumBuffer,
     tap_channel: usize,
+    input_snoop: Option<An<SnoopBackend>>,
 ) -> Vec<SensorHandles> {
     log::info!(
         "Creating sensors system with {} sensor configs and {} excitement controls",
@@ -85,7 +89,7 @@ pub fn sensors_system(
     let sensor_inputs = sensor_shared.len();
 
     let analyzer = FFTAnalyzer::new(
-        Box::new(preamp::create_sensors_preamp(values)),
+        Box::new(preamp::create_sensors_preamp(ny_threshold, ny_wet_ratio)),
         config.clone(),
         excitements,
         spectrum_thb.clone(),
@@ -106,7 +110,7 @@ pub fn sensors_system(
 
                 let stacks = stacki::<SensorInputs, _, _>(|i| var(sensor_shared[i as usize]));
 
-                net.push(Box::new(pass() | stacks))
+                net.push(Box::new(pass() | stacks | min_freq | max_freq))
             }
             _ => {
                 panic!("unexpected number of sesnsors")
@@ -116,7 +120,14 @@ pub fn sensors_system(
 
     net.pipe_all(input_id, analyzer_id);
 
-    net.connect_input(0, input_id, 0);
+    if let Some(snp) = input_snoop {
+        let snp_id = net.push(Box::new(snp));
+        net.connect_input(0, snp_id, 0);
+        net.pipe_all(snp_id, input_id);
+    } else {
+        net.connect_input(0, input_id, 0);
+    }
+
     net.connect_output(analyzer_id, 0, tap_channel);
 
     log::info!("Sensors system created successfully with analyzer node id: {analyzer_id:?}, input node id: {input_id:?}",);

@@ -6,7 +6,7 @@ use crate::{
     util::{
         layout_context::{expect_layout_context, LayoutContextReturn},
         secondary_window::is_secondary_window,
-        setup_context::{is_devtools_enabled, is_mic_premission_granted},
+        setup_context::is_mic_premission_granted,
     },
 };
 use common::RouteId;
@@ -84,9 +84,6 @@ pub fn Tune() -> impl IntoView {
         }
     });
 
-    // Derive editor flag from setup context
-    let editor = is_devtools_enabled();
-
     // Get navigation function
     let navigate = use_navigate();
 
@@ -104,7 +101,7 @@ pub fn Tune() -> impl IntoView {
 
     view! {
         <div class="relative w-full h-full">
-            <Tuner editor />
+            <Tuner />
             <CompactMenu items=menu_items placement hide_home=is_secondary_window title>
                 <Button
                     on:click=move |_| on_reset.run(())

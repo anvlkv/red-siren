@@ -1,6 +1,5 @@
 use fundsp::prelude::*;
 
-use crate::system::values::{FineTunedValue, FineTunedValues};
 use crate::util::S;
 
 /*
@@ -39,12 +38,12 @@ pub type PreampType = Pipe<
             >,
             Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>,
         >,
-        Stack<Stack<Pass, FineTunedValue>, FineTunedValue>,
+        Stack<Stack<Pass, Var>, Var>,
     >,
     super::new_york::NewYork<S>,
 >;
 
-pub fn create_sensors_preamp(values: &FineTunedValues) -> An<PreampType> {
+pub fn create_sensors_preamp(ny_threshold: An<Var>, ny_wet_ratio: An<Var>) -> An<PreampType> {
     // Calibration points from the tuner input gain calibration table
     // Converting dB to linear amplitude: gain = 10^(dB/20)
 
@@ -92,23 +91,23 @@ pub fn create_sensors_preamp(values: &FineTunedValues) -> An<PreampType> {
             & bell_hz(freq_10khz, q_10khz, gain_10khz_linear)
             & pass())
         >> mul(0.5)
-        >> (pass() | values.input_ny_threshold.clone() | values.input_ny_wet_ratio.clone())
+        >> (pass() | ny_threshold | ny_wet_ratio)
         >> super::new_york::new_york::<S>()
 }
 
 #[cfg(test)]
 mod tests {
+    use common::tuner::Config;
+
     use super::*;
 
     #[test]
     fn test_preamp_creation() {
-        #[cfg(feature = "editor")]
-        let shared = crate::values::FineTunedSharedValues::default();
-        let values = crate::system::values::FineTunedValues::new(
-            #[cfg(feature = "editor")]
-            &shared,
-        );
-        let mut preamp = create_sensors_preamp(&values);
+        let cfg = Config::default();
+        let threshold = shared(cfg.ny_threshold);
+        let wet_ratio = shared(cfg.ny_wet_ratio);
+
+        let mut preamp = create_sensors_preamp(var(&threshold), var(&wet_ratio));
 
         // Test that preamp has correct I/O configuration
         assert_eq!(preamp.inputs(), 1);

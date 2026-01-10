@@ -2,14 +2,34 @@ use mint::Point2;
 use serde::{Deserialize, Serialize};
 
 use crate::tuner::layout::Layout;
+use crate::tuner::ReflectTunerConstraints;
 use crate::{NodeKey, NodeKeyRegistry};
 
+const DEFAULT_INPUT_NY_THRESHOLD: f32 = 0.75;
+const DEFAULT_INPUT_NY_WET_RATIO: f32 = 0.3;
+
 /// Represents the full tuner data set (layout + sensors + FFT mapping).
-#[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub sensor_data: Vec<SensorData>,
     pub sample_rate: f32,
     pub fft_size: usize,
+    pub ny_threshold: f32,
+    pub ny_wet_ratio: f32,
+    pub frequency_range: (Option<f32>, Option<f32>),
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            sensor_data: vec![],
+            sample_rate: 44100.0,
+            fft_size: 2048,
+            ny_threshold: DEFAULT_INPUT_NY_THRESHOLD,
+            ny_wet_ratio: DEFAULT_INPUT_NY_WET_RATIO,
+            frequency_range: (None, None),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Copy, Default, Serialize, Deserialize)]
@@ -22,6 +42,49 @@ pub struct SensorData {
 }
 
 impl Config {
+    pub fn new_from_previous(
+        tuner_layout: Layout,
+        sample_rate: f32,
+        fft_size: usize,
+        registry: NodeKeyRegistry,
+        previous: &Config,
+    ) -> Self {
+        let mut cfg = Self::new(tuner_layout, sample_rate, fft_size, registry);
+
+        cfg.ny_threshold = previous.ny_threshold;
+        cfg.ny_wet_ratio = previous.ny_wet_ratio;
+
+        cfg.frequency_range = (
+            previous
+                .frequency_range
+                .0
+                .filter(|r| cfg.min_freq_limit() < *r),
+            previous
+                .frequency_range
+                .1
+                .filter(|r| cfg.max_freq_limit() > *r),
+        );
+
+        let (min_lim, max_lim) = cfg.frequency_range_limits();
+
+        // Attempt to preserve previous sensor settings where possible
+        for sensor in cfg.sensor_data.iter_mut() {
+            if let Some(old_value) = previous
+                .sensor_data
+                .iter()
+                .find(|s| s.key == sensor.key)
+                .copied()
+            {
+                sensor.min_frequency = old_value.min_frequency.clamp(min_lim, max_lim);
+                sensor.max_frequency = old_value.max_frequency.clamp(min_lim, max_lim);
+                sensor.min_magnitude = old_value.min_magnitude;
+                sensor.max_magnitude = old_value.max_magnitude;
+            }
+        }
+
+        cfg
+    }
+
     pub fn new(
         tuner_layout: Layout,
         sample_rate: f32,
@@ -44,9 +107,10 @@ impl Config {
             sensor_data: vec![],
             sample_rate,
             fft_size,
+            ..Default::default()
         };
 
-        // Generate logarithmically spaced frequency ranges
+        // Generate default frequency ranges
         let sensor_data = cfg.generate_default_sensors(&registry);
 
         Self { sensor_data, ..cfg }
@@ -59,9 +123,10 @@ impl Config {
         mag_norm: f32,
     ) -> mint::Point2<f64> {
         let mag_norm = mag_norm.clamp(0.0, 1.0) as f64;
-        let freq_clamped = frequency.clamp(self.min_freq(), self.max_freq()) as f64;
-        let freq_range = (self.max_freq() as f64) - (self.min_freq() as f64);
-        let freq_ratio = ((freq_clamped - (self.min_freq() as f64)) / freq_range).clamp(0.0, 1.0);
+        let (min_freq, max_freq) = self.frequency_range_limits();
+        let freq_clamped = frequency.clamp(min_freq, max_freq) as f64;
+        let freq_range = (max_freq as f64) - (min_freq as f64);
+        let freq_ratio = ((freq_clamped - (min_freq as f64)) / freq_range).clamp(0.0, 1.0);
 
         // Anchor to baseline with sensor-radius margins and full perpendicular range
         let (start, end) = layout.line_position;
@@ -99,7 +164,8 @@ impl Config {
         layout: &Layout,
         point: mint::Point2<f64>,
     ) -> (f32, f32) {
-        let freq_range = (self.max_freq() as f64) - (self.min_freq() as f64);
+        let (min_freq, max_freq) = self.frequency_range_limits();
+        let freq_range = (max_freq as f64) - (min_freq as f64);
         let (start, end) = layout.line_position;
         let r = layout.sensor_radius;
         let inset = r + 0.5;
@@ -131,18 +197,57 @@ impl Config {
             }
         };
 
-        let frequency = ((freq_ratio * freq_range) + (self.min_freq() as f64))
-            .clamp(self.min_freq() as f64, self.max_freq() as f64);
+        let frequency =
+            ((freq_ratio * freq_range) + (min_freq as f64)).clamp(min_freq as f64, max_freq as f64);
 
         (frequency as f32, mag_norm as f32)
     }
 
-    pub fn min_freq(&self) -> f32 {
+    pub fn min_freq_limit(&self) -> f32 {
         self.sample_rate / (self.fft_size as f32)
     }
 
-    pub fn max_freq(&self) -> f32 {
+    pub fn max_freq_limit(&self) -> f32 {
         self.sample_rate / 2.0
+    }
+
+    pub fn frequency_range_limits(&self) -> (f32, f32) {
+        (
+            self.frequency_range
+                .0
+                .unwrap_or_else(|| self.min_freq_limit()),
+            self.frequency_range
+                .1
+                .unwrap_or_else(|| self.max_freq_limit()),
+        )
+    }
+
+    pub fn update_frequency_range(
+        &mut self,
+        min_frequency: Option<f32>,
+        max_frequency: Option<f32>,
+    ) {
+        self.frequency_range.0 =
+            min_frequency.filter(|&min_frequency| self.min_freq_limit() < min_frequency);
+        self.frequency_range.1 =
+            max_frequency.filter(|&max_frequency| self.max_freq_limit() > max_frequency);
+
+        let (min_lim, max_lim) = self.frequency_range_limits();
+
+        for sensor in self.sensor_data.iter_mut() {
+            sensor.min_frequency = sensor.min_frequency.clamp(min_lim, max_lim);
+            sensor.max_frequency = sensor.max_frequency.clamp(min_lim, max_lim);
+        }
+    }
+
+    pub fn constraints(&self) -> ReflectTunerConstraints {
+        ReflectTunerConstraints {
+            min_frequency: self.frequency_range.0,
+            max_frequency: self.frequency_range.1,
+            frequency_limit: (self.min_freq_limit(), self.max_freq_limit()),
+            ny_threshold: self.ny_threshold,
+            wet_ratio: self.ny_wet_ratio,
+        }
     }
 
     /// Generate default sensors with linear (even) frequency spacing across [min_freq, max_freq].
@@ -150,8 +255,8 @@ impl Config {
         let total_keys = registry.total_keys();
         let mut sensors = Vec::with_capacity(total_keys);
 
-        let min_freq = self.min_freq();
-        let max_freq = self.max_freq();
+        let min_freq = self.min_freq_limit();
+        let max_freq = self.max_freq_limit();
         let total = total_keys as f32;
         let step = if total_keys > 0 {
             (max_freq - min_freq) / total

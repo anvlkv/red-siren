@@ -20,8 +20,6 @@ pub struct FineTunedValues {
     pub node_bell_q: An<FineTunedValue>,
     pub node_bell_gain_db: An<FineTunedValue>,
     pub formant_base_q: An<FineTunedValue>,
-    pub input_ny_threshold: An<FineTunedValue>,
-    pub input_ny_wet_ratio: An<FineTunedValue>,
 }
 
 #[cfg(feature = "editor")]
@@ -39,8 +37,6 @@ pub struct FineTunedSharedValues {
     pub node_bell_q: Shared,
     pub node_bell_gain_db: Shared,
     pub formant_base_q: Shared,
-    pub input_ny_threshold: Shared,
-    pub input_ny_wet_ratio: Shared,
 }
 
 const SIREN_ALPHA: f32 = 100.0 / 7.5;
@@ -56,8 +52,6 @@ const FILTER_Q_BRIGHT: f32 = 1.4;
 const FILTER_Q_SHELF: f32 = 3.996;
 const FILTER_SHELF_GAIN_DB: f32 = 3.8;
 const FILTER_Q_WARM: f32 = 8.095;
-const INPUT_NY_THRESHOLD: f32 = 0.75;
-const INPUT_NY_WET_RATIO: f32 = 0.3;
 
 #[cfg(feature = "editor")]
 impl Default for FineTunedSharedValues {
@@ -76,8 +70,6 @@ impl Default for FineTunedSharedValues {
             node_bell_q: shared(NODE_BELL_Q),
             node_bell_gain_db: shared(NODE_BELL_GAIN_DB),
             formant_base_q: shared(FORMANT_BASE_Q),
-            input_ny_threshold: shared(INPUT_NY_THRESHOLD),
-            input_ny_wet_ratio: shared(INPUT_NY_WET_RATIO),
         }
     }
 }
@@ -100,8 +92,6 @@ impl FineTunedValues {
             node_bell_q: var(&shared_values.node_bell_q),
             node_bell_gain_db: var(&shared_values.node_bell_gain_db),
             formant_base_q: var(&shared_values.formant_base_q),
-            input_ny_threshold: var(&shared_values.input_ny_threshold),
-            input_ny_wet_ratio: var(&shared_values.input_ny_wet_ratio),
         }
     }
 
@@ -121,8 +111,6 @@ impl FineTunedValues {
             node_bell_q: constant(NODE_BELL_Q),
             node_bell_gain_db: constant(NODE_BELL_GAIN_DB),
             formant_base_q: constant(FORMANT_BASE_Q),
-            input_ny_threshold: constant(INPUT_NY_THRESHOLD),
-            input_ny_wet_ratio: constant(INPUT_NY_WET_RATIO),
         }
     }
 }
@@ -146,8 +134,6 @@ impl std::fmt::Debug for FineTunedValues {
             .field("node_bell_q", &self.node_bell_q.value())
             .field("node_bell_gain_db", &self.node_bell_gain_db.value())
             .field("formant_base_q", &self.formant_base_q.value())
-            .field("input_ny_threshold", &self.input_ny_threshold.value())
-            .field("input_ny_wet_ratio", &self.input_ny_wet_ratio.value())
             .finish()
     }
 }

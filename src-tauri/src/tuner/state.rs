@@ -67,6 +67,9 @@ impl TunerState {
 
         super::setup::save_tuner_config(&self.app, config.clone())?;
 
+        self.app
+            .emit(common::events::tuner::CONSTRAINTS, config.constraints())?;
+
         Ok(())
     }
 
@@ -105,47 +108,21 @@ impl TunerState {
         let wrong_count = current_config.sensor_data.len() != registry.total_keys();
 
         if is_empty || has_invalid_keys || wrong_count {
-            // Preserve old sensor frequency settings if possible
-            let old_sensor_settings = {
-                current_config
-                    .sensor_data
-                    .iter()
-                    .map(|s| {
-                        (
-                            s.key,
-                            (
-                                s.min_frequency,
-                                s.max_frequency,
-                                s.min_magnitude,
-                                s.max_magnitude,
-                            ),
-                        )
-                    })
-                    .collect::<std::collections::HashMap<NodeKey, (f32, f32, f32, f32)>>()
-            };
-
-            drop(current_config); // Release read lock before acquiring write lock
-
             let instrument_state = self.app.state::<InstrumentEngine>();
             let sample_rate = instrument_state.sample_rate() as f32;
 
-            let mut new_config: Config =
-                Config::new(layout, sample_rate, audio_system::FFT_WINDOW_SIZE, registry);
-
-            // Restore preserved settings where possible
-            for sensor in &mut new_config.sensor_data {
-                if let Some((min_freq, max_freq, min_mag, max_mag)) =
-                    old_sensor_settings.get(&sensor.key)
-                {
-                    sensor.min_frequency = *min_freq;
-                    sensor.max_frequency = *max_freq;
-                    sensor.min_magnitude = *min_mag;
-                    sensor.max_magnitude = *max_mag;
-                }
-            }
+            let new_config: Config = Config::new_from_previous(
+                layout,
+                sample_rate,
+                audio_system::FFT_WINDOW_SIZE,
+                registry,
+                &current_config,
+            );
 
             let instrument = self.app.state::<InstrumentEngine>();
             instrument.update_tuner_config(&new_config)?;
+
+            drop(current_config); // Release read lock before acquiring write lock
 
             *self.tuner_config.write() = new_config.clone();
 
@@ -170,9 +147,11 @@ impl TunerState {
     ) -> Result<Config> {
         let mut config = self.tuner_config.write();
 
+        let (min_lim, max_lim) = config.frequency_range_limits();
+
         if let Some(sensor) = config.sensor_data.iter_mut().find(|s| s.key == key) {
-            sensor.min_frequency = min_frequency;
-            sensor.max_frequency = max_frequency;
+            sensor.min_frequency = min_frequency.clamp(min_lim, max_lim);
+            sensor.max_frequency = max_frequency.clamp(min_lim, max_lim);
             sensor.min_magnitude = min_magnitude;
             sensor.max_magnitude = max_magnitude;
         } else {
@@ -190,6 +169,54 @@ impl TunerState {
         super::setup::save_tuner_config(&self.app, config.clone())?;
 
         Ok(config.clone())
+    }
+
+    pub fn update_range(
+        &self,
+        min_frequency: Option<f32>,
+        max_frequency: Option<f32>,
+    ) -> Result<()> {
+        let mut config = self.tuner_config.write();
+        config.update_frequency_range(min_frequency, max_frequency);
+
+        let instrument = self.app.state::<InstrumentEngine>();
+        instrument.update_tuner_config(&config)?;
+
+        self.app
+            .emit(common::events::tuner::CONFIG, config.clone())?;
+
+        self.app
+            .emit(common::events::tuner::CONSTRAINTS, config.constraints())?;
+
+        super::setup::save_tuner_config(&self.app, config.clone())?;
+
+        Ok(())
+    }
+
+    pub fn update_ny_threshold(&self, ny_threshold: f32) -> Result<()> {
+        let mut config = self.tuner_config.write();
+        config.ny_threshold = ny_threshold;
+        let instrument = self.app.state::<InstrumentEngine>();
+        instrument.update_tuner_config(&config)?;
+        self.app
+            .emit(common::events::tuner::CONSTRAINTS, config.constraints())?;
+
+        super::setup::save_tuner_config(&self.app, config.clone())?;
+
+        Ok(())
+    }
+
+    pub fn update_wet_ratio(&self, wet_ratio: f32) -> Result<()> {
+        let mut config = self.tuner_config.write();
+        config.ny_wet_ratio = wet_ratio;
+        let instrument = self.app.state::<InstrumentEngine>();
+        instrument.update_tuner_config(&config)?;
+        self.app
+            .emit(common::events::tuner::CONSTRAINTS, config.constraints())?;
+
+        super::setup::save_tuner_config(&self.app, config.clone())?;
+
+        Ok(())
     }
 
     /// Start tuner streaming.
@@ -262,6 +289,24 @@ impl TunerState {
             instrument.playing(),
             instrument.excitement_source()
         );
+
+        self.app
+            .emit(common::instrument::events::LAYOUT, instrument.layout())
+            .map_err(|e| TunerError::Emit {
+                event: common::instrument::events::LAYOUT.to_string(),
+                message: e.to_string(),
+            })?;
+
+        self.app
+            .emit(
+                common::tuner::events::LAYOUT,
+                self.tuner_layout().unwrap_or_default(),
+            )
+            .map_err(|e| TunerError::Emit {
+                event: common::tuner::events::LAYOUT.to_string(),
+                message: e.to_string(),
+            })?;
+
         Ok(())
     }
 
@@ -360,5 +405,10 @@ impl TunerState {
             fft_size: FFT_WINDOW_SIZE,
             sample_rate,
         }
+    }
+
+    pub fn snapshot_input_snoop(&self) -> Result<Vec<f32>> {
+        let instrument = self.app.state::<InstrumentEngine>();
+        Ok(instrument.snapshot_input_snoop())
     }
 }

@@ -5,7 +5,7 @@ use std::{
         mpsc::{self, Sender},
         Arc,
     },
-    thread::{self, sleep},
+    thread,
     time::Duration,
 };
 
@@ -102,7 +102,7 @@ struct CpalController {
 
     // operation
     tuner_only_mode: Arc<RwLock<bool>>,
-    quality_indicator: Arc<RwLock<PlaybackQuality>>,
+    quality_indicator: Arc<std::sync::atomic::AtomicU8>,
 }
 
 impl Default for CpalController {
@@ -144,7 +144,9 @@ impl Default for CpalController {
             output_device: RwLock::new(None),
             input_device: RwLock::new(None),
             tuner_only_mode: Arc::new(RwLock::new(false)),
-            quality_indicator: Arc::new(RwLock::new(PlaybackQuality::default())),
+            quality_indicator: Arc::new(std::sync::atomic::AtomicU8::new(
+                PlaybackQuality::default() as u8,
+            )),
         }
     }
 }
@@ -211,9 +213,143 @@ impl CpalController {
 
         let input_device_name = input_device.id().unwrap();
         log::debug!("input device: {}", input_device_name);
-        let input_default_cfg = input_device
-            .default_input_config()
-            .map_err(|_| InstrumentError::InputConfigUnavailable)?;
+        // Feature-driven selection of input config; fallback to device default.
+        let input_default_cfg = {
+            // Try to choose from supported configs first
+            if let Ok(mut ranges) = input_device.supported_input_configs() {
+                // Scoring function per feature
+                #[allow(unused_mut)]
+                let mut pick = ranges.next();
+                for r in ranges {
+                    let better = if cfg!(feature = "hi_fi") {
+                        // Prefer highest max sample rate; tie-break by larger buffer size max if available
+                        let a = pick.as_ref().unwrap();
+                        let b = &r;
+                        let a_sr: u32 = a.max_sample_rate();
+                        let b_sr: u32 = b.max_sample_rate();
+                        if b_sr > a_sr {
+                            true
+                        } else if b_sr < a_sr {
+                            false
+                        } else {
+                            // Same max SR, prefer smaller buffers for hi_fi; Unknown doesn't beat Range
+                            match (a.buffer_size(), b.buffer_size()) {
+                                (
+                                    &cpal::SupportedBufferSize::Range { max: amax, .. },
+                                    &cpal::SupportedBufferSize::Range { max: bmax, .. },
+                                ) => bmax < amax,
+                                (
+                                    &cpal::SupportedBufferSize::Unknown,
+                                    &cpal::SupportedBufferSize::Range { .. },
+                                ) => false,
+                                _ => false,
+                            }
+                        }
+                    } else if cfg!(feature = "lo_fi") {
+                        // Prefer lowest min sample rate; tie-break by smaller buffer size min if available
+                        let a = pick.as_ref().unwrap();
+                        let b = &r;
+                        let a_sr: u32 = a.min_sample_rate();
+                        let b_sr: u32 = b.min_sample_rate();
+                        if b_sr < a_sr {
+                            true
+                        } else if b_sr > a_sr {
+                            false
+                        } else {
+                            match (a.buffer_size(), b.buffer_size()) {
+                                (
+                                    &cpal::SupportedBufferSize::Range { min: amin, .. },
+                                    &cpal::SupportedBufferSize::Range { min: bmin, .. },
+                                ) => bmin > amin,
+                                (
+                                    &cpal::SupportedBufferSize::Range { .. },
+                                    &cpal::SupportedBufferSize::Unknown,
+                                ) => true,
+                                (
+                                    &cpal::SupportedBufferSize::Unknown,
+                                    &cpal::SupportedBufferSize::Range { .. },
+                                ) => false,
+                                _ => false,
+                            }
+                        }
+                    } else {
+                        // Medium quality: target 48000, fallback to 44100; prefer range that contains target
+                        let target = 48_000u32;
+                        let fallback = 44_100u32;
+                        let a = pick.as_ref().unwrap();
+                        let b = &r;
+                        let a_contains =
+                            a.min_sample_rate() <= target && target <= a.max_sample_rate();
+                        let b_contains =
+                            b.min_sample_rate() <= target && target <= b.max_sample_rate();
+                        if b_contains && !a_contains {
+                            true
+                        } else if a_contains && !b_contains {
+                            false
+                        } else if a_contains && b_contains {
+                            // Both contain target; prefer buffer range whose median closer to ~512 frames if available
+                            let score = |bs: &cpal::SupportedBufferSize| -> i64 {
+                                match bs {
+                                    cpal::SupportedBufferSize::Range { min, max } => {
+                                        let mid = (min + max) / 2;
+                                        (mid as i64 - 512).abs()
+                                    }
+                                    cpal::SupportedBufferSize::Unknown => i64::MAX / 2,
+                                }
+                            };
+                            score(b.buffer_size()) < score(a.buffer_size())
+                        } else {
+                            // Neither contains target; prefer one closer to fallback
+                            let dist_b = {
+                                let min = b.min_sample_rate();
+                                let max = b.max_sample_rate();
+                                min.saturating_sub(fallback) + fallback.saturating_sub(max)
+                            };
+                            let dist_a = {
+                                let min = a.min_sample_rate();
+                                let max = a.max_sample_rate();
+                                min.saturating_sub(fallback) + fallback.saturating_sub(max)
+                            };
+                            dist_b < dist_a
+                        }
+                    };
+                    if better {
+                        pick = Some(r);
+                    }
+                }
+
+                if let Some(best_range) = pick {
+                    // Choose concrete sample rate from the selected range according to feature
+                    let chosen_sr = if cfg!(feature = "hi_fi") {
+                        best_range.max_sample_rate()
+                    } else if cfg!(feature = "lo_fi") {
+                        best_range.min_sample_rate()
+                    } else {
+                        let target: u32 = 44_100;
+                        if best_range.min_sample_rate() <= target
+                            && target <= best_range.max_sample_rate()
+                        {
+                            target
+                        } else {
+                            48_000
+                        }
+                    };
+                    // Build SupportedInputConfig from range
+                    Some(best_range.with_sample_rate(chosen_sr))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        }
+        .unwrap_or_else(|| {
+            // Fallback to device default if selection failed
+            input_device
+                .default_input_config()
+                .map_err(|_| InstrumentError::InputConfigUnavailable)
+                .expect("input default config")
+        });
 
         // Get sample rate from InputStreamManager or use output rate
         let input_sr = input_default_cfg.sample_rate() as f64;
@@ -256,15 +392,138 @@ impl CpalController {
             .output_device()
             .ok_or(InstrumentError::DeviceUnavailable)?;
 
-        let output_default_cfg = output_device
-            .default_output_config()
-            .map_err(|_| InstrumentError::OutputConfigUnavailable)?;
+        // Feature-driven selection of output config; fallback to device default.
+        let output_default_cfg = {
+            if let Ok(mut ranges) = output_device.supported_output_configs() {
+                let mut pick = ranges.next();
+                for r in ranges {
+                    let better = if cfg!(feature = "hi_fi") {
+                        let a = pick.as_ref().unwrap();
+                        let b = &r;
+                        let a_sr: u32 = a.max_sample_rate();
+                        let b_sr: u32 = b.max_sample_rate();
+                        if b_sr > a_sr {
+                            true
+                        } else if b_sr < a_sr {
+                            false
+                        } else {
+                            match (a.buffer_size(), b.buffer_size()) {
+                                (
+                                    &cpal::SupportedBufferSize::Range { max: amax, .. },
+                                    &cpal::SupportedBufferSize::Range { max: bmax, .. },
+                                ) => bmax < amax,
+                                (
+                                    &cpal::SupportedBufferSize::Unknown,
+                                    &cpal::SupportedBufferSize::Range { .. },
+                                ) => false,
+                                _ => false,
+                            }
+                        }
+                    } else if cfg!(feature = "lo_fi") {
+                        let a = pick.as_ref().unwrap();
+                        let b = &r;
+                        let a_sr: u32 = a.min_sample_rate();
+                        let b_sr: u32 = b.min_sample_rate();
+                        if b_sr < a_sr {
+                            true
+                        } else if b_sr > a_sr {
+                            false
+                        } else {
+                            match (a.buffer_size(), b.buffer_size()) {
+                                (
+                                    &cpal::SupportedBufferSize::Range { min: amin, .. },
+                                    &cpal::SupportedBufferSize::Range { min: bmin, .. },
+                                ) => bmin > amin,
+                                (
+                                    &cpal::SupportedBufferSize::Range { .. },
+                                    &cpal::SupportedBufferSize::Unknown,
+                                ) => true,
+                                (
+                                    &cpal::SupportedBufferSize::Unknown,
+                                    &cpal::SupportedBufferSize::Range { .. },
+                                ) => false,
+                                _ => false,
+                            }
+                        }
+                    } else {
+                        let target = 48_000u32;
+                        let fallback = 44_100u32;
+                        let a = pick.as_ref().unwrap();
+                        let b = &r;
+                        let a_contains =
+                            a.min_sample_rate() <= target && target <= a.max_sample_rate();
+                        let b_contains =
+                            b.min_sample_rate() <= target && target <= b.max_sample_rate();
+                        if b_contains && !a_contains {
+                            true
+                        } else if a_contains && !b_contains {
+                            false
+                        } else if a_contains && b_contains {
+                            let score = |bs: &cpal::SupportedBufferSize| -> i64 {
+                                match bs {
+                                    cpal::SupportedBufferSize::Range { min, max } => {
+                                        let mid = (min + max) / 2;
+                                        (mid as i64 - 512).abs()
+                                    }
+                                    cpal::SupportedBufferSize::Unknown => i64::MAX / 2,
+                                }
+                            };
+                            score(b.buffer_size()) < score(a.buffer_size())
+                        } else {
+                            let dist_b = {
+                                let min = b.min_sample_rate();
+                                let max = b.max_sample_rate();
+                                min.saturating_sub(fallback) + fallback.saturating_sub(max)
+                            };
+                            let dist_a = {
+                                let min = a.min_sample_rate();
+                                let max = a.max_sample_rate();
+                                min.saturating_sub(fallback) + fallback.saturating_sub(max)
+                            };
+                            dist_b < dist_a
+                        }
+                    };
+                    if better {
+                        pick = Some(r);
+                    }
+                }
+
+                if let Some(best_range) = pick {
+                    let chosen_sr = if cfg!(feature = "hi_fi") {
+                        best_range.max_sample_rate()
+                    } else if cfg!(feature = "lo_fi") {
+                        best_range.min_sample_rate()
+                    } else {
+                        let target: u32 = 44_100;
+                        if best_range.min_sample_rate() <= target
+                            && target <= best_range.max_sample_rate()
+                        {
+                            target
+                        } else {
+                            48_000
+                        }
+                    };
+                    Some(best_range.with_sample_rate(chosen_sr))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        }
+        .unwrap_or_else(|| {
+            output_device
+                .default_output_config()
+                .map_err(|_| InstrumentError::OutputConfigUnavailable)
+                .expect("output default config")
+        });
 
         let stream_cfg: cpal::StreamConfig = output_default_cfg.clone().into();
 
         let output_channels = std::cmp::Ord::min(output_default_cfg.channels(), 2) as usize;
 
-        let quality_indicator = self.quality_indicator.clone();
+        let quality_indicator: std::sync::Arc<std::sync::atomic::AtomicU8> =
+            self.quality_indicator.clone();
         let sr = self.sample_rate.read().map(|sr| sr as u32).unwrap_or(44100);
         let no_reset = self.tuner_only_mode.clone();
         // Spawn output stream owner.
@@ -428,32 +687,38 @@ impl CpalController {
         let mut siren_controls = HashMap::<NodeKey, ExcitementControl>::new();
 
         // Store node handle artifacts (excitement/output snoops, control vars).
-        {
-            let mut excitement_snoops = self.node_excitement_snoops.write();
-            let mut output_snoops = self.node_output_snoops.write();
-            let mut stored_band_controls = self.node_band_controls.write();
-            let mut stored_key_controls = self.node_key_controls.write();
-            let mut stored_preset = self.preset.write();
+        // Build maps off-lock, snapshot preset (read)
+        let preset_snapshot = { self.preset.read().clone() };
 
-            excitement_snoops.clear();
-            output_snoops.clear();
-            stored_band_controls.clear();
-            stored_key_controls.clear();
+        let mut new_excitement_snoops = HashMap::new();
+        let mut new_output_snoops = HashMap::new();
+        let mut new_band_controls = HashMap::new();
+        let mut new_key_controls = HashMap::new();
 
-            for handle in node_handles {
-                excitement_snoops.insert(
-                    handle.key,
-                    (handle.excitement_snoop, handle.secondary_excitement_snoop),
-                );
-                output_snoops.insert(handle.key, handle.output_snoop);
-                siren_controls.insert(handle.key, handle.siren_control);
-                let entry = stored_preset.entry(&handle.key);
-                handle.band_control.set_value(entry.band_value);
-                handle.key_control.set_value(entry.key_value_as_f32());
-                stored_band_controls.insert(handle.key, handle.band_control);
-                stored_key_controls.insert(handle.key, handle.key_control);
+        for handle in node_handles {
+            new_excitement_snoops.insert(
+                handle.key,
+                (handle.excitement_snoop, handle.secondary_excitement_snoop),
+            );
+            new_output_snoops.insert(handle.key, handle.output_snoop);
+            siren_controls.insert(handle.key, handle.siren_control);
+
+            if let Some(val) = preset_snapshot.get_band_value(&handle.key) {
+                handle.band_control.set_value(val);
             }
+            if let Some(val) = preset_snapshot.get_key_value(&handle.key) {
+                handle.key_control.set_value(val);
+            }
+
+            new_band_controls.insert(handle.key, handle.band_control);
+            new_key_controls.insert(handle.key, handle.key_control);
         }
+
+        // Commit maps in short write sections
+        *self.node_excitement_snoops.write() = new_excitement_snoops;
+        *self.node_output_snoops.write() = new_output_snoops;
+        *self.node_band_controls.write() = new_band_controls;
+        *self.node_key_controls.write() = new_key_controls;
 
         log::info!(
             "Created {} siren controls for input system",
@@ -520,18 +785,28 @@ impl CpalController {
             self.create_instrument_network(config, tuner_config, source)
         };
 
-        let mut guard = self.dsp_net_frontend.write();
-        let Some(net) = guard.as_mut() else {
-            log::warn!("No DSP network frontend to update");
-            return;
-        };
-
+        // Fade audio out BEFORE locking the frontend
         self.fade_out();
-        net.replace(primary_id, Box::new(new_node));
-        net.reset();
-        net.check();
-        net.commit();
+
+        // Minimize lock lifetime: only hold while mutating the net
+        {
+            let mut guard = self.dsp_net_frontend.write();
+            let Some(net) = guard.as_mut() else {
+                log::warn!("No DSP network frontend to update");
+                // Fade back in even if we couldn't update
+                self.fade_in();
+                return;
+            };
+
+            net.replace(primary_id, Box::new(new_node));
+            net.reset();
+            net.check();
+            net.commit();
+        }
+
         log::info!("Primary DSP node updated successfully");
+
+        // Fade back in AFTER lock is released
         self.fade_in();
     }
 
@@ -933,55 +1208,53 @@ impl AudioRuntime for CpalController {
     fn snapshot_processed_output_spectrum(
         &self,
     ) -> Result<Option<crate::rt::ProcessedOutputSpectrumSnapshot>> {
-        self.processed_output_snoops
-            .write()
-            .as_mut()
-            .zip(self.sample_rate.read().as_ref())
-            .map(|((l, r), &sample_rate)| {
-                let mut l_window = [0.0; OUTPUT_ANALYZER_FFT_WINDOW_SIZE];
-                let mut r_window = [0.0; OUTPUT_ANALYZER_FFT_WINDOW_SIZE];
-                let mut len = 0;
+        // Snapshot sample rate and frequency range using short-lived locks
+        let sample_rate = match self.sample_rate.read().as_ref() {
+            Some(sr) => *sr,
+            None => return Ok(None),
+        };
+        let (min_hz, max_hz) = *self.freq_range.read();
 
+        // Local windows to fill without holding locks during heavy processing
+        let mut l_window = [0.0; OUTPUT_ANALYZER_FFT_WINDOW_SIZE];
+        let mut r_window = [0.0; OUTPUT_ANALYZER_FFT_WINDOW_SIZE];
+
+        // Pull available buffers quickly; avoid sleeping while holding locks
+        let filled = {
+            if let Some((l, r)) = self.processed_output_snoops.write().as_mut() {
+                let mut len = 0;
                 while len < OUTPUT_ANALYZER_FFT_WINDOW_SIZE {
                     if let Some((l_buffer, r_buffer)) = l.get().zip(r.get()) {
                         let remaining = OUTPUT_ANALYZER_FFT_WINDOW_SIZE - len;
                         let num_samples = std::cmp::Ord::min(l_buffer.size(), remaining);
-                        l_window[len..]
-                            .iter_mut()
-                            .take(num_samples)
-                            .enumerate()
-                            .for_each(|(i, f)| {
-                                *f = l_buffer.at(i);
-                            });
-                        r_window[len..]
-                            .iter_mut()
-                            .take(num_samples)
-                            .enumerate()
-                            .for_each(|(i, f)| {
-                                *f = r_buffer.at(i);
-                            });
+                        for i in 0..num_samples {
+                            l_window[len + i] = l_buffer.at(i);
+                            r_window[len + i] = r_buffer.at(i);
+                        }
                         len += num_samples;
                     } else {
-                        sleep(Duration::from_secs_f64(
-                            (1.0 / sample_rate) * MAX_BUFFER_SIZE as f64,
-                        ));
+                        // Not enough data available right now; bail out early
+                        break;
                     }
                 }
+                len
+            } else {
+                0
+            }
+        };
 
-                let (min_hz, max_hz) = *self.freq_range.read();
+        // If buffers were not ready, let caller try again later
+        if filled < OUTPUT_ANALYZER_FFT_WINDOW_SIZE {
+            return Ok(None);
+        }
 
-                output_analyzer::analyze(l_window, sample_rate, min_hz as f32, max_hz as f32)
-                    .and_then(|left_spectrum| {
-                        output_analyzer::analyze(
-                            r_window,
-                            sample_rate,
-                            min_hz as f32,
-                            max_hz as f32,
-                        )
-                        .map(|right_spectrum| (left_spectrum, right_spectrum))
-                    })
-            })
-            .transpose()
+        // Perform analysis without holding any locks
+        let left_spectrum =
+            output_analyzer::analyze(l_window, sample_rate, min_hz as f32, max_hz as f32)?;
+        let right_spectrum =
+            output_analyzer::analyze(r_window, sample_rate, min_hz as f32, max_hz as f32)?;
+
+        Ok(Some((left_spectrum, right_spectrum)))
     }
 
     fn set_band_control(&self, key: NodeKey, value: f32) -> Result<()> {
@@ -1127,7 +1400,16 @@ impl AudioRuntime for CpalController {
     }
 
     fn quality_indicator(&self) -> PlaybackQuality {
-        *self.quality_indicator.read()
+        match self
+            .quality_indicator
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            0 => PlaybackQuality::HighQuality,
+            1 => PlaybackQuality::OptimizedQuality,
+            2 => PlaybackQuality::Underruns,
+            3 => PlaybackQuality::Resetting,
+            _ => PlaybackQuality::default(),
+        }
     }
 
     fn set_preset(&self, preset: Preset) -> common::error::Result<()> {

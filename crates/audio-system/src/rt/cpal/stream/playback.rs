@@ -22,7 +22,7 @@ fn duration_to_frames(d: Duration, sample_rate: u32) -> usize {
 pub fn playback_callback(
     net: NetBackend,
     input_buffer: Option<Arc<ThingBuf<S>>>,
-    quality_indicator: Arc<parking_lot::RwLock<PlaybackQuality>>,
+    quality_indicator: Arc<std::sync::atomic::AtomicU8>,
     no_reset_on_silence: Arc<parking_lot::RwLock<bool>>,
     sample_rate: u32,
 ) -> Box<super::GenType> {
@@ -132,7 +132,7 @@ pub fn playback_callback(
         let current_len = output_buffer.len();
         let remaining_capacity = optimal_cap.saturating_sub(current_len);
 
-        let fill_size = if accumulated_latency > sub_optimal_duration {
+        let fill_size = if accumulated_latency > sub_optimal_duration || cfg!(feature = "lo_fi") {
             let latency_frames = duration_to_frames(accumulated_latency, sample_rate);
             let catch_up = latency_frames.saturating_add(optimal_cap);
             _ = inner_quality_indicator.get_or_insert(PlaybackQuality::OptimizedQuality);
@@ -190,7 +190,7 @@ pub fn playback_callback(
         }
 
         if let Some(q) = inner_quality_indicator {
-            *quality_indicator.write() = q;
+            quality_indicator.store(q as u8, std::sync::atomic::Ordering::Relaxed);
         }
     }) as Box<super::GenType>
 }

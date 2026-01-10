@@ -145,30 +145,37 @@ impl TunerState {
         min_magnitude: f32,
         max_magnitude: f32,
     ) -> Result<Config> {
-        let mut config = self.tuner_config.write();
+        // Update under a short-lived write lock, then snapshot
+        let updated = {
+            let mut config = self.tuner_config.write();
 
-        let (min_lim, max_lim) = config.frequency_range_limits();
+            let (min_lim, max_lim) = config.frequency_range_limits();
 
-        if let Some(sensor) = config.sensor_data.iter_mut().find(|s| s.key == key) {
-            sensor.min_frequency = min_frequency.clamp(min_lim, max_lim);
-            sensor.max_frequency = max_frequency.clamp(min_lim, max_lim);
-            sensor.min_magnitude = min_magnitude;
-            sensor.max_magnitude = max_magnitude;
-        } else {
-            return Err(
-                TunerError::MissingParameter(format!("sensor for node key: {:?}", key)).into(),
-            );
-        }
+            if let Some(sensor) = config.sensor_data.iter_mut().find(|s| s.key == key) {
+                sensor.min_frequency = min_frequency.clamp(min_lim, max_lim);
+                sensor.max_frequency = max_frequency.clamp(min_lim, max_lim);
+                sensor.min_magnitude = min_magnitude;
+                sensor.max_magnitude = max_magnitude;
+                config.clone()
+            } else {
+                return Err(TunerError::MissingParameter(format!(
+                    "sensor for node key: {:?}",
+                    key
+                ))
+                .into());
+            }
+        };
 
+        // External operations without holding the lock
         let instrument = self.app.state::<InstrumentEngine>();
-        instrument.update_tuner_config(&config)?;
+        instrument.update_tuner_config(&updated)?;
 
         self.app
-            .emit(common::events::tuner::CONFIG, config.clone())?;
+            .emit(common::events::tuner::CONFIG, updated.clone())?;
 
-        super::setup::save_tuner_config(&self.app, config.clone())?;
+        super::setup::save_tuner_config(&self.app, updated.clone())?;
 
-        Ok(config.clone())
+        Ok(updated)
     }
 
     pub fn update_range(
@@ -176,45 +183,61 @@ impl TunerState {
         min_frequency: Option<f32>,
         max_frequency: Option<f32>,
     ) -> Result<()> {
-        let mut config = self.tuner_config.write();
-        config.update_frequency_range(min_frequency, max_frequency);
+        // Apply update under lock and snapshot
+        let updated = {
+            let mut config = self.tuner_config.write();
+            config.update_frequency_range(min_frequency, max_frequency);
+            config.clone()
+        };
 
         let instrument = self.app.state::<InstrumentEngine>();
-        instrument.update_tuner_config(&config)?;
+        instrument.update_tuner_config(&updated)?;
 
         self.app
-            .emit(common::events::tuner::CONFIG, config.clone())?;
+            .emit(common::events::tuner::CONFIG, updated.clone())?;
 
         self.app
-            .emit(common::events::tuner::CONSTRAINTS, config.constraints())?;
+            .emit(common::events::tuner::CONSTRAINTS, updated.constraints())?;
 
-        super::setup::save_tuner_config(&self.app, config.clone())?;
+        super::setup::save_tuner_config(&self.app, updated.clone())?;
 
         Ok(())
     }
 
     pub fn update_ny_threshold(&self, ny_threshold: f32) -> Result<()> {
-        let mut config = self.tuner_config.write();
-        config.ny_threshold = ny_threshold;
-        let instrument = self.app.state::<InstrumentEngine>();
-        instrument.update_tuner_config(&config)?;
-        self.app
-            .emit(common::events::tuner::CONSTRAINTS, config.constraints())?;
+        // Update under lock and snapshot
+        let updated = {
+            let mut config = self.tuner_config.write();
+            config.ny_threshold = ny_threshold;
+            config.clone()
+        };
 
-        super::setup::save_tuner_config(&self.app, config.clone())?;
+        let instrument = self.app.state::<InstrumentEngine>();
+        instrument.update_tuner_config(&updated)?;
+
+        self.app
+            .emit(common::events::tuner::CONSTRAINTS, updated.constraints())?;
+
+        super::setup::save_tuner_config(&self.app, updated.clone())?;
 
         Ok(())
     }
 
     pub fn update_wet_ratio(&self, wet_ratio: f32) -> Result<()> {
-        let mut config = self.tuner_config.write();
-        config.ny_wet_ratio = wet_ratio;
-        let instrument = self.app.state::<InstrumentEngine>();
-        instrument.update_tuner_config(&config)?;
-        self.app
-            .emit(common::events::tuner::CONSTRAINTS, config.constraints())?;
+        // Update under lock and snapshot
+        let updated = {
+            let mut config = self.tuner_config.write();
+            config.ny_wet_ratio = wet_ratio;
+            config.clone()
+        };
 
-        super::setup::save_tuner_config(&self.app, config.clone())?;
+        let instrument = self.app.state::<InstrumentEngine>();
+        instrument.update_tuner_config(&updated)?;
+
+        self.app
+            .emit(common::events::tuner::CONSTRAINTS, updated.constraints())?;
+
+        super::setup::save_tuner_config(&self.app, updated.clone())?;
 
         Ok(())
     }

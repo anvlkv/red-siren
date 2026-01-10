@@ -33,6 +33,7 @@ default = []
 cargo-clippy = []
 editor = []
 hi_fi = []
+lo_fi = []
 # Native CPAL runtime
 rt_cpal = ["dep:cpal", "dep:dasp_sample"]
 # Messaging runtime

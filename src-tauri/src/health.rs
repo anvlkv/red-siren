@@ -123,15 +123,17 @@ pub async fn health_setup_state(
     app: AppHandle,
     state: State<'_, Mutex<SetupState>>,
 ) -> common::error::Result<common::commands::health::SetupStatePayload> {
-    let state_lock = state.lock();
-
-    let payload = common::commands::health::SetupStatePayload {
-        gui_ready: state_lock.gui_ready,
-        mic_permission: state_lock.mic_permission,
-        devtools: cfg!(feature="devtools")
+    // Snapshot payload while holding the lock, then drop lock before emitting
+    let payload = {
+        let state_lock = state.lock();
+        common::commands::health::SetupStatePayload {
+            gui_ready: state_lock.gui_ready,
+            mic_permission: state_lock.mic_permission,
+            devtools: cfg!(feature="devtools")
+        }
     };
 
-    // Also emit the current state
+    // Emit the current state
     app.emit(common::events::health::SETUP_STATE, payload.clone())
         .map_err(|e| HealthError::Emit {
             event: common::events::health::SETUP_STATE.to_string(),

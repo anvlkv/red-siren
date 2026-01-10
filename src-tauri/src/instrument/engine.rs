@@ -88,9 +88,10 @@ impl InstrumentEngine {
 
             // After the stream has started, emit reflect values based on the current preset
             {
-                let layout = self.inner.layout.read();
+                // Snapshot layout to avoid holding a read lock during emits
+                let layout_snapshot = *self.inner.layout.read();
                 self.app
-                    .emit(common::instrument::events::LAYOUT, *layout)
+                    .emit(common::instrument::events::LAYOUT, layout_snapshot)
                     .map_err(|e| {
                         AppError::Instrument(InstrumentError::Emit {
                             event: common::instrument::events::LAYOUT.to_string(),
@@ -99,7 +100,7 @@ impl InstrumentEngine {
                     })?;
 
                 let preset = self.get_preset();
-                for node_key in layout.registry().all_keys() {
+                for node_key in layout_snapshot.registry().all_keys() {
                     let band = preset.get_band_value(&node_key).unwrap_or(0.0);
                     let key = preset.get_key_value(&node_key).unwrap_or(0.0);
                     self.app
@@ -224,9 +225,10 @@ impl InstrumentEngine {
             ctrl.on_excitement_source_changed(src)?;
 
             // Also trigger layout change to ensure proper system recreation with new tuner config
-            let layout = self.inner.layout.read();
-            let config = self.inner.config.read();
-            ctrl.on_layout_changed(&layout, &config, &tuner_config)?;
+            // Snapshot state to avoid holding read locks during controller calls
+            let layout_snapshot = *self.inner.layout.read();
+            let config_snapshot = InstrumentConfig::try_from(layout_snapshot)?;
+            ctrl.on_layout_changed(&layout_snapshot, &config_snapshot, &tuner_config)?;
             log::info!("Recreated audio systems after excitement source change");
         } else {
             log::trace!("Inner.set_excitement_source: no-op (already {:?})", src);
@@ -263,12 +265,14 @@ impl InstrumentEngine {
             *cfg = new_cfg;
         }
 
-        let layout = self.inner.layout.read();
-        let config = self.inner.config.read();
-        self.inner
-            .stream_controller
-            .read()
-            .on_layout_changed(&layout, &config, &tuner_config)?;
+        // Snapshot state to avoid holding read locks during controller calls
+        let layout_snapshot = *self.inner.layout.read();
+        let config_snapshot = InstrumentConfig::try_from(layout_snapshot)?;
+        self.inner.stream_controller.read().on_layout_changed(
+            &layout_snapshot,
+            &config_snapshot,
+            &tuner_config,
+        )?;
         log::info!("Recreated audio systems after dark mode change");
 
         Ok(())
@@ -294,12 +298,14 @@ impl InstrumentEngine {
             *cfg = new_cfg;
         }
 
-        let layout = self.inner.layout.read();
-        let config = self.inner.config.read();
-        self.inner
-            .stream_controller
-            .read()
-            .on_layout_changed(&layout, &config, &tuner_config)?;
+        // Snapshot state to avoid holding read locks during controller calls
+        let layout_snapshot = *self.inner.layout.read();
+        let config_snapshot = InstrumentConfig::try_from(layout_snapshot)?;
+        self.inner.stream_controller.read().on_layout_changed(
+            &layout_snapshot,
+            &config_snapshot,
+            &tuner_config,
+        )?;
         log::info!("Recreated audio systems after size change");
 
         Ok(())
@@ -334,12 +340,14 @@ impl InstrumentEngine {
             *cfg = new_cfg;
         }
 
-        let layout = self.inner.layout.read();
-        let config = self.inner.config.read();
-        self.inner
-            .stream_controller
-            .read()
-            .on_layout_changed(&layout, &config, &tuner_config)?;
+        // Snapshot state to avoid holding read locks during controller calls
+        let layout_snapshot = *self.inner.layout.read();
+        let config_snapshot = InstrumentConfig::try_from(layout_snapshot)?;
+        self.inner.stream_controller.read().on_layout_changed(
+            &layout_snapshot,
+            &config_snapshot,
+            &tuner_config,
+        )?;
         log::info!("Recreated audio systems after safe area change");
 
         Ok(())

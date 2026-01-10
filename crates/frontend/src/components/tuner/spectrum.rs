@@ -112,7 +112,7 @@ pub fn SpectrumVisualizer(
                 _ = ctx.set_global_composite_operation("source-over");
 
                 // Draw baseline reference line
-                draw_baseline(&ctx, &lay, &input_data, &base_color);
+                draw_input_line(&ctx, &lay, &input_data, &base_color);
 
                 // Draw max-hold sensor excitement outline bars (lower opacity strokes)
                 draw_excitement_bars(
@@ -190,7 +190,7 @@ pub fn SpectrumVisualizer(
     }
 }
 
-fn draw_baseline(
+fn draw_input_line(
     ctx: &CanvasRenderingContext2d,
     layout: &TunerLayout,
     input_data: &[f32],
@@ -200,29 +200,49 @@ fn draw_baseline(
     ctx.set_stroke_style_str(base_color);
     ctx.set_line_width(1.0);
 
-    let baseline = layout.line_position; // -1.0
+    let baseline = layout.line_position;
     let input_level = layout
         .orientation
-        .safe_breadth(layout.space, layout.safe_area_padding); // 1.0
+        .safe_breadth(layout.space, layout.safe_area_padding);
     let mid_level = input_level / 2.0;
 
+    let n = input_data.len();
+    if n == 0 {
+        ctx.restore();
+        return;
+    }
+
+    // Vector along the baseline from start to end
+    let dx = baseline.1.x - baseline.0.x;
+    let dy = baseline.1.y - baseline.0.y;
+
     ctx.begin_path();
-    ctx.move_to(baseline.0.x, baseline.0.y);
-    for val in input_data {
-        match layout.orientation {
-            LayoutOrientation::Vertical => {
-                let x = baseline.0.x + (val.abs() as f64 * mid_level);
-                let y = baseline.0.y;
-                ctx.line_to(x, y);
-            }
-            LayoutOrientation::Horizontal => {
-                let x = baseline.0.x;
-                let y = baseline.0.y - (val.abs() as f64 * mid_level);
-                ctx.line_to(x, y);
-            }
+
+    for (i, &val) in input_data.iter().enumerate() {
+        // Interpolate along the baseline
+        let t = if n == 1 {
+            0.0
+        } else {
+            i as f64 / (n - 1) as f64
+        };
+        let bx = baseline.0.x + dx * t;
+        let by = baseline.0.y + dy * t;
+
+        // Perpendicular deflection based on orientation (signed amplitude in range -1..1)
+        let amp = (val as f64) * mid_level;
+
+        let (x, y) = match layout.orientation {
+            LayoutOrientation::Vertical => (bx + amp, by),
+            LayoutOrientation::Horizontal => (bx, by - amp),
+        };
+
+        if i == 0 {
+            ctx.move_to(x, y);
+        } else {
+            ctx.line_to(x, y);
         }
     }
-    ctx.line_to(baseline.1.x, baseline.1.y);
+
     ctx.stroke();
     ctx.restore();
 }

@@ -15,7 +15,7 @@
   "bundle": {
     "iOS": {
       "template": "src-tauri/project.yml",
-      "bundleVersion": "7",
+      "bundleVersion": "8",
       "developmentTeam": "M59X77GZ2V",
       "minimumSystemVersion": "15.6",
       "frameworks": [

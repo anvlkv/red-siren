@@ -96,24 +96,26 @@ pub fn SensorHandles(
             // Apply uniform scale with letterboxing/pillarboxing using provided transform
             if let Some(ctx) = get_2d_ctx(&canvas) {
                 _ = ctx.reset_transform().ok();
-                _ = ctx.translate(tr.translate_x_dev, tr.translate_y_dev).ok();
-                _ = ctx.scale(tr.device_scale, tr.device_scale).ok();
+                let tx_world = tr.translate_x_margin_dev / tr.device_scale_x;
+                let ty_world = tr.translate_y_margin_dev / tr.device_scale_y;
+                _ = ctx.translate(tx_world, ty_world).ok();
+                _ = ctx.scale(tr.device_scale_x, tr.device_scale_y).ok();
             }
 
             if let Some(picking_ctx) = get_2d_ctx(&picking_canvas) {
                 _ = picking_ctx.reset_transform().ok();
-                _ = picking_ctx
-                    .translate(tr.translate_x_dev, tr.translate_y_dev)
-                    .ok();
-                _ = picking_ctx.scale(tr.device_scale, tr.device_scale).ok();
+                let tx_world = tr.translate_x_margin_dev / tr.device_scale_x;
+                let ty_world = tr.translate_y_margin_dev / tr.device_scale_y;
+                _ = picking_ctx.translate(tx_world, ty_world).ok();
+                _ = picking_ctx.scale(tr.device_scale_x, tr.device_scale_y).ok();
             }
 
             if let Some(cursor_ctx) = get_2d_ctx(&cursor_canvas) {
                 _ = cursor_ctx.reset_transform().ok();
-                _ = cursor_ctx
-                    .translate(tr.translate_x_dev, tr.translate_y_dev)
-                    .ok();
-                _ = cursor_ctx.scale(tr.device_scale, tr.device_scale).ok();
+                let tx_world = tr.translate_x_margin_dev / tr.device_scale_x;
+                let ty_world = tr.translate_y_margin_dev / tr.device_scale_y;
+                _ = cursor_ctx.translate(tx_world, ty_world).ok();
+                _ = cursor_ctx.scale(tr.device_scale_x, tr.device_scale_y).ok();
             }
         }
     });

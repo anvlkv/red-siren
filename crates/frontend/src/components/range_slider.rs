@@ -1,6 +1,6 @@
 use super::UiSize;
 use common::orientation::LayoutOrientation;
-use leptos::{ev, prelude::*};
+use leptos::{ev, html, prelude::*};
 use leptos_use::{
     use_document, use_element_bounding_with_options, use_event_listener, UseElementBoundingOptions,
     UseElementBoundingReturn,
@@ -11,6 +11,22 @@ use leptos_use::{
 pub enum SliderValue {
     Single(f32),
     Range(f32, f32),
+}
+
+impl SliderValue {
+    pub fn to_f32(self) -> f32 {
+        match self {
+            SliderValue::Single(v) => v,
+            SliderValue::Range(v1, _) => v1,
+        }
+    }
+
+    pub fn to_tuple(self) -> (f32, f32) {
+        match self {
+            SliderValue::Single(v) => (v, v),
+            SliderValue::Range(v1, v2) => (v1, v2),
+        }
+    }
 }
 
 impl From<f32> for SliderValue {
@@ -28,28 +44,18 @@ impl From<(f32, f32)> for SliderValue {
 #[allow(clippy::from_over_into)]
 impl Into<f32> for SliderValue {
     fn into(self) -> f32 {
-        match self {
-            SliderValue::Single(v) => v,
-            SliderValue::Range(v, _) => v,
-        }
+        self.to_f32()
     }
 }
 
 #[allow(clippy::from_over_into)]
 impl Into<(f32, f32)> for SliderValue {
     fn into(self) -> (f32, f32) {
-        match self {
-            SliderValue::Single(v) => (v, v),
-            SliderValue::Range(v1, v2) => (v1, v2),
-        }
+        self.to_tuple()
     }
 }
 
 /// Internal helpers
-fn clamp(v: f32, min: f32, max: f32) -> f32 {
-    v.min(max).max(min)
-}
-
 fn snap_to_step(v: f32, min: f32, step: f32) -> f32 {
     if step <= 0.0 {
         return v;
@@ -85,6 +91,7 @@ pub fn RangeSlider(
     #[prop(optional)] ui_size: UiSize,
     #[prop(optional, into)] min_label: Signal<String>,
     #[prop(optional, into)] max_label: Signal<String>,
+    #[prop(optional)] node_ref: NodeRef<html::Label>,
 ) -> impl IntoView {
     // Validate min/max (fail-fast)
     Effect::new(move |_| {
@@ -108,10 +115,10 @@ pub fn RangeSlider(
 
     // Normalize incoming value into ordered (lo, hi), snapped and clamped
     let lo_val = Signal::derive(move || match value() {
-        SliderValue::Single(v) => clamp(snap_to_step(v, min_v(), step_v()), min_v(), max_v()),
+        SliderValue::Single(v) => snap_to_step(v, min_v(), step_v()).clamp(min_v(), max_v()),
         SliderValue::Range(v1, v2) => {
-            let mut lo = clamp(snap_to_step(v1, min_v(), step_v()), min_v(), max_v());
-            let mut hi = clamp(snap_to_step(v2, min_v(), step_v()), min_v(), max_v());
+            let mut lo = snap_to_step(v1, min_v(), step_v()).clamp(min_v(), max_v());
+            let mut hi = snap_to_step(v2, min_v(), step_v()).clamp(min_v(), max_v());
             if lo > hi {
                 std::mem::swap(&mut lo, &mut hi);
             }
@@ -119,10 +126,10 @@ pub fn RangeSlider(
         }
     });
     let hi_val = Signal::derive(move || match value() {
-        SliderValue::Single(v) => clamp(snap_to_step(v, min_v(), step_v()), min_v(), max_v()),
+        SliderValue::Single(v) => snap_to_step(v, min_v(), step_v()).clamp(min_v(), max_v()),
         SliderValue::Range(v1, v2) => {
-            let mut lo = clamp(snap_to_step(v1, min_v(), step_v()), min_v(), max_v());
-            let mut hi = clamp(snap_to_step(v2, min_v(), step_v()), min_v(), max_v());
+            let mut lo = snap_to_step(v1, min_v(), step_v()).clamp(min_v(), max_v());
+            let mut hi = snap_to_step(v2, min_v(), step_v()).clamp(min_v(), max_v());
             if lo > hi {
                 std::mem::swap(&mut lo, &mut hi);
             }
@@ -183,12 +190,12 @@ pub fn RangeSlider(
         if orientation() == LayoutOrientation::Horizontal {
             let rel = (((x as f64 - l) / w.max(1.0)).clamp(0.0, 1.0)) as f32;
             let v = minf + rel * span;
-            clamp(snap_to_step(v, minf, step_v()), minf, maxf)
+            snap_to_step(v, minf, step_v()).clamp(minf, maxf)
         } else {
             // Vertical goes bottom-up
             let rel = (1.0 - ((y as f64 - t) / h.max(1.0)).clamp(0.0, 1.0)) as f32;
             let v = minf + rel * span;
-            clamp(snap_to_step(v, minf, step_v()), minf, maxf)
+            snap_to_step(v, minf, step_v()).clamp(minf, maxf)
         }
     };
 
@@ -255,12 +262,16 @@ pub fn RangeSlider(
             }
         } else if delta != 0.0 {
             if matches!(value(), SliderValue::Single(_)) {
-                lo = clamp(snap_to_step(lo + delta, minf, step), minf, maxf);
+                lo = snap_to_step(lo + delta, minf, step).clamp(minf, maxf);
                 hi = lo;
             } else if which == 0 {
-                lo = clamp(snap_to_step(lo + delta, minf, step), minf, maxf).min(hi);
+                lo = snap_to_step(lo + delta, minf, step)
+                    .clamp(minf, maxf)
+                    .min(hi);
             } else {
-                hi = clamp(snap_to_step(hi + delta, minf, step), minf, maxf).max(lo);
+                hi = snap_to_step(hi + delta, minf, step)
+                    .clamp(minf, maxf)
+                    .max(lo);
             }
         } else {
             return;
@@ -306,9 +317,10 @@ pub fn RangeSlider(
 
     // UI
     view! {
-        <label class=move || {
-            format!("flex flex-col gap-1 p-3 select-none {}", class())
-        }>
+        <label
+            class=move || { format!("flex flex-col gap-1 p-3 select-none {}", class()) }
+            node_ref=node_ref
+        >
             {move || {
                 if !label().is_empty() {
                     view! { <span class="text-xs text-muted-foreground">{label()}</span> }
@@ -394,11 +406,12 @@ pub fn RangeSlider(
                 ></div>
 
                 // Axis labels
-                {
+                {move || {
                     let min_label_text = min_label();
                     let max_label_text = max_label();
                     let has_min_label = !min_label_text.is_empty();
                     let has_max_label = !max_label_text.is_empty();
+
                     view! {
                         <span
                             class="absolute left-0 -bottom-3 text-[10px] text-muted-foreground"
@@ -433,7 +446,7 @@ pub fn RangeSlider(
                             {max_label_text}
                         </span>
                     }
-                }
+                }}
 
                 // Thumbs (custom, draggable, keyboard-accessible)
                 {move || match value() {

@@ -15,10 +15,10 @@ pub fn run() {
      * ---------- Plugins ----------
      */
 
-    #[cfg(all(not(debug_assertions), not(feature = "devtools")))]
-    {
-        builder = builder.plugin(tauri_plugin_prevent_default::init());
-    }
+    // #[cfg(all(not(debug_assertions), not(feature = "devtools")))]
+    // {
+    //     builder = builder.plugin(tauri_plugin_prevent_default::init());
+    // }
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     {
         builder = builder.plugin(
@@ -108,7 +108,6 @@ pub fn run() {
         let config = app.config();
         log::debug!("App starting with config: {config:#?}");
 
-        // Setup supporting modules (best-effort; log and continue)
         if let Err(e) = setup::app_setup(app) {
             log::error!("setup::app_setup failed: {}", e);
         }
@@ -121,13 +120,11 @@ pub fn run() {
         if let Err(e) = tuner::setup(app) {
             log::error!("tuner::setup failed: {}", e);
         }
-
-        // Setup instrument last (best-effort)
         if let Err(e) = instrument::setup(app) {
             log::error!("instrument::setup failed: {}", e);
         }
 
-        // Wire AppBus coordinator after states are ready (best-effort)
+        // Setup AppBus last
         if let Err(e) = app_bus::AppBus::setup(app) {
             log::error!("AppBus::setup failed: {}", e);
         }

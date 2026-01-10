@@ -65,8 +65,11 @@ pub fn SpectrumVisualizer(
             // Apply uniform scale with letterboxing/pillarboxing (provided transform)
             if let Some(ctx) = get_2d_ctx(&canvas) {
                 _ = ctx.reset_transform().ok();
-                _ = ctx.translate(tr.translate_x_dev, tr.translate_y_dev).ok();
-                _ = ctx.scale(tr.device_scale, tr.device_scale).ok();
+                // Apply margin-aware translate in world units, then per-axis scale
+                let tx_world = tr.translate_x_margin_dev / tr.device_scale_x;
+                let ty_world = tr.translate_y_margin_dev / tr.device_scale_y;
+                _ = ctx.translate(tx_world, ty_world).ok();
+                _ = ctx.scale(tr.device_scale_x, tr.device_scale_y).ok();
             }
         }
     });
@@ -112,12 +115,13 @@ pub fn SpectrumVisualizer(
                 _ = ctx.set_global_composite_operation("source-over");
 
                 // Draw baseline reference line
-                draw_input_line(&ctx, &lay, &input_data, &base_color);
+                draw_input_line(&ctx, &lay, &tr, &input_data, &base_color);
 
                 // Draw max-hold sensor excitement outline bars (lower opacity strokes)
                 draw_excitement_bars(
                     &ctx,
                     &lay,
+                    &tr,
                     &spectrum.max_excitements,
                     &base_color,
                     &secondary_color,
@@ -129,6 +133,7 @@ pub fn SpectrumVisualizer(
                 draw_excitement_bars(
                     &ctx,
                     &lay,
+                    &tr,
                     &spectrum.sensor_excitements,
                     &base_color,
                     &secondary_color,
@@ -143,6 +148,7 @@ pub fn SpectrumVisualizer(
                     draw_spectrum_area(
                         &ctx,
                         &cfg,
+                        &tr,
                         &lay,
                         &spectrum.max_magnitudes,
                         &spectrum.frequencies,
@@ -156,6 +162,7 @@ pub fn SpectrumVisualizer(
                     draw_spectrum_area(
                         &ctx,
                         &cfg,
+                        &tr,
                         &lay,
                         &spectrum.current_magnitudes,
                         &spectrum.frequencies,
@@ -193,6 +200,7 @@ pub fn SpectrumVisualizer(
 fn draw_input_line(
     ctx: &CanvasRenderingContext2d,
     layout: &TunerLayout,
+    tr: &super::CanvasTransform,
     input_data: &[f32],
     base_color: &str,
 ) {
@@ -244,13 +252,89 @@ fn draw_input_line(
     }
 
     ctx.stroke();
-    ctx.restore();
+
+    // Extend the input line under overlay margins so overlays have content underneath.
+    // Convert overlay margins to world units using the same transform applied to the canvas.
+    let left_world = tr.translate_x_margin_dev / tr.device_scale_x;
+    let right_world = (tr.margin_right_css * tr.device_pixel_ratio) / tr.device_scale_x;
+    let top_world = tr.translate_y_margin_dev / tr.device_scale_y;
+    let bottom_world = (tr.margin_bottom_css * tr.device_pixel_ratio) / tr.device_scale_y;
+
+    // First and last computed points of the input line
+    let first_t = 0.0;
+    let last_t = 1.0;
+    let bx0 = baseline.0.x + dx * first_t;
+    let by0 = baseline.0.y + dy * first_t;
+    let bx1 = baseline.0.x + dx * last_t;
+    let by1 = baseline.0.y + dy * last_t;
+    let amp0 = (input_data[0] as f64) * mid_level;
+    let amp1 = (input_data[n - 1] as f64) * mid_level;
+
+    match layout.orientation {
+        LayoutOrientation::Horizontal => {
+            // Compute first/last points with vertical deflection
+            let p0 = (bx0, by0 - amp0);
+            let p1 = (bx1, by1 - amp1);
+
+            // Left bar: extend first sample into negative X by left_world
+            if left_world > 0.0 {
+                ctx.begin_path();
+                ctx.move_to(0.0, by0);
+                ctx.line_to(0.0, p0.1);
+                ctx.line_to(-left_world, p0.1);
+                ctx.line_to(-left_world, by0);
+                ctx.close_path();
+                ctx.fill();
+                ctx.stroke();
+            }
+            // Right bar: extend last sample beyond space.x by right_world
+            if right_world > 0.0 {
+                ctx.begin_path();
+                ctx.move_to(layout.space.x, by1);
+                ctx.line_to(layout.space.x, p1.1);
+                ctx.line_to(layout.space.x + right_world, p1.1);
+                ctx.line_to(layout.space.x + right_world, by1);
+                ctx.close_path();
+                ctx.fill();
+                ctx.stroke();
+            }
+        }
+        LayoutOrientation::Vertical => {
+            // Compute first/last points with horizontal deflection
+            let p0 = (bx0 + amp0, by0);
+            let p1 = (bx1 + amp1, by1);
+
+            // Top bar: extend first sample upward (negative Y) by top_world
+            if top_world > 0.0 {
+                ctx.begin_path();
+                ctx.move_to(bx0, 0.0);
+                ctx.line_to(p0.0, 0.0);
+                ctx.line_to(p0.0, -top_world);
+                ctx.line_to(bx0, -top_world);
+                ctx.close_path();
+                ctx.fill();
+                ctx.stroke();
+            }
+            // Bottom bar: extend last sample beyond space.y by bottom_world
+            if bottom_world > 0.0 {
+                ctx.begin_path();
+                ctx.move_to(bx1, layout.space.y);
+                ctx.line_to(p1.0, layout.space.y);
+                ctx.line_to(p1.0, layout.space.y + bottom_world);
+                ctx.line_to(bx1, layout.space.y + bottom_world);
+                ctx.close_path();
+                ctx.fill();
+                ctx.stroke();
+            }
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
 fn draw_excitement_bars(
     ctx: &CanvasRenderingContext2d,
     layout: &TunerLayout,
+    tr: &super::CanvasTransform,
     excitements: &[f32],
     base_color: &str,
     secondary_color: &str,
@@ -316,6 +400,98 @@ fn draw_excitement_bars(
         }
     }
 
+    // Extend first/last bars under overlay margins so overlays have content underneath,
+    // using CanvasTransform to convert overlay margins to world units.
+    let left_world = tr.translate_x_margin_dev / tr.device_scale_x;
+    let right_world = (tr.margin_right_css * tr.device_pixel_ratio) / tr.device_scale_x;
+    let top_world = tr.translate_y_margin_dev / tr.device_scale_y;
+    let bottom_world = (tr.margin_bottom_css * tr.device_pixel_ratio) / tr.device_scale_y;
+
+    // Compute first/last levels matching the scaling above
+    let first_lvl = if !excitements.is_empty() {
+        let max_act = excitements
+            .iter()
+            .copied()
+            .fold(0.0f32, |acc, v| acc.max(v.abs()));
+        let scale2 = if max_act > 1.0 { 1.0 / max_act } else { 1.0 } as f64;
+        (excitements[0] as f64 * scale2).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let last_lvl = if !excitements.is_empty() {
+        let max_act = excitements
+            .iter()
+            .copied()
+            .fold(0.0f32, |acc, v| acc.max(v.abs()));
+        let scale2 = if max_act > 1.0 { 1.0 / max_act } else { 1.0 } as f64;
+        (excitements[excitements.len() - 1] as f64 * scale2).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+
+    match layout.orientation {
+        LayoutOrientation::Horizontal => {
+            // First bar at the left overlay
+            if left_world > 0.0 {
+                let avail_up = baseline.0.y;
+                let h = first_lvl * avail_up;
+                let y = baseline.0.y - h;
+                ctx.begin_path();
+                ctx.move_to(0.0, baseline.0.y);
+                ctx.line_to(0.0, y);
+                ctx.line_to(-left_world, y);
+                ctx.line_to(-left_world, baseline.0.y);
+                ctx.close_path();
+                ctx.fill();
+                ctx.stroke();
+            }
+            // Last bar at the right overlay
+            if right_world > 0.0 {
+                let avail_up = baseline.0.y;
+                let h = last_lvl * avail_up;
+                let y = baseline.0.y - h;
+                ctx.begin_path();
+                ctx.move_to(layout.space.x, baseline.0.y);
+                ctx.line_to(layout.space.x, y);
+                ctx.line_to(layout.space.x + right_world, y);
+                ctx.line_to(layout.space.x + right_world, baseline.0.y);
+                ctx.close_path();
+                ctx.fill();
+                ctx.stroke();
+            }
+        }
+        LayoutOrientation::Vertical => {
+            // First bar at the top overlay
+            if top_world > 0.0 {
+                let avail_right = layout.space.x - baseline.0.x;
+                let w = first_lvl * avail_right;
+                let x = baseline.0.x + w;
+                ctx.begin_path();
+                ctx.move_to(baseline.0.x, 0.0);
+                ctx.line_to(x, 0.0);
+                ctx.line_to(x, -top_world);
+                ctx.line_to(baseline.0.x, -top_world);
+                ctx.close_path();
+                ctx.fill();
+                ctx.stroke();
+            }
+            // Last bar at the bottom overlay
+            if bottom_world > 0.0 {
+                let avail_right = layout.space.x - baseline.0.x;
+                let w = last_lvl * avail_right;
+                let x = baseline.0.x + w;
+                ctx.begin_path();
+                ctx.move_to(baseline.1.x, layout.space.y);
+                ctx.line_to(x, layout.space.y);
+                ctx.line_to(x, layout.space.y + bottom_world);
+                ctx.line_to(baseline.1.x, layout.space.y + bottom_world);
+                ctx.close_path();
+                ctx.fill();
+                ctx.stroke();
+            }
+        }
+    }
+
     ctx.restore();
 }
 
@@ -323,6 +499,7 @@ fn draw_excitement_bars(
 fn draw_spectrum_area(
     ctx: &CanvasRenderingContext2d,
     cfg: &Config,
+    tr: &super::CanvasTransform,
     layout: &TunerLayout,
     magnitudes: &[f32],
     frequencies: &[f32],
@@ -348,17 +525,21 @@ fn draw_spectrum_area(
     // Start from appropriate edge based on orientation, at baseline
     match layout.orientation {
         LayoutOrientation::Horizontal => {
-            ctx.move_to(0.0, baseline.0.y);
             if let Some((mag, freq)) = magnitudes.first().zip(frequencies.first()) {
                 let p = cfg.frequency_magnitude_to_space(layout, *freq, *mag);
-                ctx.line_to(0.0, p.y);
+                ctx.move_to(p.x, baseline.0.y);
+                ctx.line_to(p.x, p.y);
+            } else {
+                ctx.move_to(0.0, baseline.0.y);
             }
         }
         LayoutOrientation::Vertical => {
-            ctx.move_to(baseline.0.x, 0.0);
             if let Some((mag, freq)) = magnitudes.first().zip(frequencies.first()) {
                 let p = cfg.frequency_magnitude_to_space(layout, *freq, *mag);
-                ctx.line_to(p.x, 0.0);
+                ctx.move_to(baseline.0.x, p.y);
+                ctx.line_to(p.x, p.y);
+            } else {
+                ctx.move_to(baseline.0.x, 0.0);
             }
         }
     }
@@ -375,25 +556,100 @@ fn draw_spectrum_area(
     match layout.orientation {
         LayoutOrientation::Horizontal => {
             if let Some((mag, freq)) = magnitudes.last().zip(frequencies.last()) {
-                let p = cfg.frequency_magnitude_to_space(layout, *freq, *mag);
-                ctx.line_to(layout.space.x, p.y);
+                let p_last = cfg.frequency_magnitude_to_space(layout, *freq, *mag);
+                ctx.line_to(p_last.x, baseline.0.y);
             }
-            ctx.line_to(layout.space.x, baseline.0.y);
-            ctx.line_to(0.0, baseline.0.y);
+            if let Some((mag, freq)) = magnitudes.first().zip(frequencies.first()) {
+                let p_first = cfg.frequency_magnitude_to_space(layout, *freq, *mag);
+                ctx.line_to(p_first.x, baseline.0.y);
+            }
         }
         LayoutOrientation::Vertical => {
             if let Some((mag, freq)) = magnitudes.last().zip(frequencies.last()) {
-                let p = cfg.frequency_magnitude_to_space(layout, *freq, *mag);
-                ctx.line_to(p.x, layout.space.y);
+                let p_last = cfg.frequency_magnitude_to_space(layout, *freq, *mag);
+                ctx.line_to(baseline.0.x, p_last.y);
             }
-            ctx.line_to(baseline.0.x, layout.space.y);
-            ctx.line_to(baseline.0.x, 0.0);
+            if let Some((mag, freq)) = magnitudes.first().zip(frequencies.first()) {
+                let p_first = cfg.frequency_magnitude_to_space(layout, *freq, *mag);
+                ctx.line_to(baseline.0.x, p_first.y);
+            }
         }
     }
 
     ctx.close_path();
     ctx.fill();
     ctx.stroke();
+
+    // Extend constant-edge quads into overlay margins so bars have content underneath.
+    // Use margin translations in device px converted to world units via per-axis device scales.
+    let left_world = tr.translate_x_margin_dev / tr.device_scale_x;
+    let right_world = (tr.margin_right_css * tr.device_pixel_ratio) / tr.device_scale_x;
+    let top_world = tr.translate_y_margin_dev / tr.device_scale_y;
+    let bottom_world = (tr.margin_bottom_css * tr.device_pixel_ratio) / tr.device_scale_y;
+
+    match layout.orientation {
+        LayoutOrientation::Horizontal => {
+            // Left bar: extend first sample into negative X by left_world
+            if left_world > 0.0 {
+                if let Some((mag, freq)) = magnitudes.first().zip(frequencies.first()) {
+                    let p_first = cfg.frequency_magnitude_to_space(layout, *freq, *mag);
+                    ctx.begin_path();
+                    ctx.move_to(0.0, baseline.0.y);
+                    ctx.line_to(0.0, p_first.y);
+                    ctx.line_to(-left_world, p_first.y);
+                    ctx.line_to(-left_world, baseline.0.y);
+                    ctx.close_path();
+                    ctx.fill();
+                    ctx.stroke();
+                }
+            }
+            // Right bar: extend last sample beyond space.x by right_world
+            if right_world > 0.0 {
+                if let Some((mag, freq)) = magnitudes.last().zip(frequencies.last()) {
+                    let p_last = cfg.frequency_magnitude_to_space(layout, *freq, *mag);
+                    ctx.begin_path();
+                    ctx.move_to(layout.space.x, baseline.0.y);
+                    ctx.line_to(layout.space.x, p_last.y);
+                    ctx.line_to(layout.space.x + right_world, p_last.y);
+                    ctx.line_to(layout.space.x + right_world, baseline.0.y);
+                    ctx.close_path();
+                    ctx.fill();
+                    ctx.stroke();
+                }
+            }
+        }
+        LayoutOrientation::Vertical => {
+            // Top bar: extend first sample upward (negative Y) by top_world
+            if top_world > 0.0 {
+                if let Some((mag, freq)) = magnitudes.first().zip(frequencies.first()) {
+                    let p_first = cfg.frequency_magnitude_to_space(layout, *freq, *mag);
+                    ctx.begin_path();
+                    ctx.move_to(baseline.0.x, 0.0);
+                    ctx.line_to(p_first.x, 0.0);
+                    ctx.line_to(p_first.x, -top_world);
+                    ctx.line_to(baseline.0.x, -top_world);
+                    ctx.close_path();
+                    ctx.fill();
+                    ctx.stroke();
+                }
+            }
+            // Bottom bar: extend last sample beyond space.y by bottom_world
+            if bottom_world > 0.0 {
+                if let Some((mag, freq)) = magnitudes.last().zip(frequencies.last()) {
+                    let p_last = cfg.frequency_magnitude_to_space(layout, *freq, *mag);
+                    ctx.begin_path();
+                    ctx.move_to(baseline.1.x, layout.space.y);
+                    ctx.line_to(p_last.x, layout.space.y);
+                    ctx.line_to(p_last.x, layout.space.y + bottom_world);
+                    ctx.line_to(baseline.1.x, layout.space.y + bottom_world);
+                    ctx.close_path();
+                    ctx.fill();
+                    ctx.stroke();
+                }
+            }
+        }
+    }
+
     ctx.restore();
 }
 

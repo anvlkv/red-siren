@@ -9,19 +9,12 @@ use cpal::OutputStreamTimestamp;
 use fundsp::prelude::{AudioUnit, BigBlockAdapter, NetBackend};
 use fundsp::thingbuf::ThingBuf;
 
-const BASE_OPTIMAL_BUFFER_MILLIS: f64 = 20.0;
 const MAX_SILENCE_SECS: f64 = 0.5;
-
-/// Convert a duration to frame count at a given sample rate.
-fn duration_to_frames(d: Duration, sample_rate: u32) -> usize {
-    ((d.as_secs_f64() * sample_rate as f64).ceil()) as usize
-}
 
 // Decision logic types and helper
 struct Decision {
     fill_size: usize,
     mode: Mode,
-    need_catch_up: bool,
 }
 
 enum Mode {
@@ -75,11 +68,7 @@ fn decide(
         Mode::ProcessBig
     };
 
-    Decision {
-        fill_size,
-        mode,
-        need_catch_up,
-    }
+    Decision { fill_size, mode }
 }
 
 pub fn playback_callback(
@@ -130,7 +119,7 @@ pub fn playback_callback(
     }
 
     Box::new(move |_: OutputStreamTimestamp, frames: &mut [&mut [f32]]| {
-        let mut inner_quality_indicator = Option::<PlaybackQuality>::None;
+        // quality indicator handling is engine-owned; callback remains read-only
         let (l_frames, r_frames) = frames.split_at_mut(1);
         let num_frames = l_frames[0].len();
         if num_frames != frames_per_output_buffer {
@@ -188,7 +177,7 @@ pub fn playback_callback(
             log::warn!("Resetting network. Accumulated silence: {accumulated_silence:?}");
             backend.reset();
             accumulated_silence = Duration::ZERO;
-            _ = inner_quality_indicator.get_or_insert(PlaybackQuality::Resetting);
+            // quality indicator: resetting state noted; engine will reflect via atomic
         }
 
         // Update latency from this callback's underruns
@@ -196,7 +185,7 @@ pub fn playback_callback(
             let added =
                 Duration::from_secs_f64(local_underruns as f64 * sample_duration.as_secs_f64());
             accumulated_latency = accumulated_latency.saturating_add(added);
-            _ = inner_quality_indicator.get_or_insert(PlaybackQuality::Underruns);
+            // quality indicator: underruns noted; engine will reflect via atomic
         }
 
         // Decide fill and mode using telemetry-driven logic
@@ -209,11 +198,7 @@ pub fn playback_callback(
             let t = telemetry.lock();
             (t.ema_compute_slack_ns, t.net_latency_frames)
         };
-        let Decision {
-            fill_size,
-            mode,
-            need_catch_up,
-        } = decide(
+        let Decision { fill_size, mode } = decide(
             num_frames,
             sample_rate,
             optimal_cap,
@@ -289,44 +274,6 @@ pub fn playback_callback(
             }
         }
 
-        if inner_quality_indicator.is_some_and(|q| {
-            matches!(
-                q,
-                PlaybackQuality::OptimizedQuality | PlaybackQuality::Underruns
-            )
-        }) {
-            if fill_size > l_batch_scratch.len() {
-                l_batch_scratch.resize(fill_size, 0.0);
-                r_batch_scratch.resize(fill_size, 0.0);
-                i_batch_scratch.resize(fill_size, 0.0);
-            }
-            if let Some(ib) = input_buffer.as_ref() {
-                i_batch_scratch
-                    .iter_mut()
-                    .take(fill_size)
-                    .zip(iter::from_fn(|| ib.pop()))
-                    .for_each(|(v, s)| *v = s);
-            }
-            backend.process_big(
-                fill_size,
-                &[&i_batch_scratch[..fill_size]],
-                &mut [
-                    &mut l_batch_scratch[..fill_size],
-                    &mut r_batch_scratch[..fill_size],
-                ],
-            );
-            output_buffer.extend((0..fill_size).map(|i| (l_batch_scratch[i], r_batch_scratch[i])));
-        } else {
-            for _ in 0..fill_size {
-                let input = input_buffer
-                    .as_ref()
-                    .and_then(|ib| ib.pop())
-                    .unwrap_or_default();
-                backend.tick(&[input], &mut lr_frame_scratch);
-                output_buffer.push_back((lr_frame_scratch[0], lr_frame_scratch[1]));
-            }
-        }
-
         // After catch-up production, reset accumulated latency
         if accumulated_latency > sub_optimal_duration {
             accumulated_latency = Duration::ZERO;
@@ -336,7 +283,6 @@ pub fn playback_callback(
         let expected_period = Duration::from_secs_f64(num_frames as f64 / sample_rate as f64);
 
         // Telemetry: precise render timing and underrun note
-        let expected_period = Duration::from_secs_f64(num_frames as f64 / sample_rate as f64);
         let elapsed = start.elapsed();
         {
             let mut t = telemetry.lock();
@@ -346,8 +292,7 @@ pub fn playback_callback(
             t.note_underruns(local_underruns);
         }
 
-        // Indicator equals current gate value (read from atomic) each callback
-        let gate_val = quality.load(std::sync::atomic::Ordering::Relaxed);
-        quality.store(gate_val, std::sync::atomic::Ordering::Relaxed);
+        // Indicator equals current gate value (read-only in callback; engine writes on gate changes)
+        let _gate_val = quality.load(std::sync::atomic::Ordering::Relaxed);
     }) as Box<super::GenType>
 }

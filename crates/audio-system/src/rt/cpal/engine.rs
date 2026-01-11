@@ -105,6 +105,12 @@ struct CpalController {
     quality_indicator: Arc<std::sync::atomic::AtomicI8>,
     quality_gate: RwLock<PlaybackQualityGate>,
     auto_quality: Arc<RwLock<bool>>,
+
+    // Gate management and telemetry (engine-thread access)
+    gate_manager: RwLock<super::gate_manager::GateManager>,
+    output_telemetry: RwLock<
+        Option<std::sync::Arc<parking_lot::Mutex<super::stream::telemetry::PlaybackTelemetry>>>,
+    >,
 }
 
 impl Default for CpalController {
@@ -151,11 +157,69 @@ impl Default for CpalController {
             )),
             quality_gate: RwLock::new(PlaybackQualityGate::default()),
             auto_quality: Arc::new(RwLock::new(true)),
+            gate_manager: RwLock::new(super::gate_manager::GateManager::new(
+                PlaybackQualityGate::default(),
+            )),
+            output_telemetry: RwLock::new(None),
         }
     }
 }
 
 impl CpalController {
+    fn evaluate_gate_and_maybe_restart(&self) -> bool {
+        // Auto quality must be enabled
+        if !*self.auto_quality.read() {
+            return false;
+        }
+
+        // Access telemetry from the output stream
+        let telemetry_arc_opt = self.output_telemetry.read().clone();
+        let telemetry_arc = match telemetry_arc_opt {
+            Some(t) => t,
+            None => return false,
+        };
+        let t = telemetry_arc.lock();
+        let ema_slack = t.ema_compute_slack_ns;
+        let recent_underruns = t.local_underruns > 0;
+        drop(t);
+
+        // Evaluate recommendation
+        let now = std::time::Instant::now();
+        let current_gate = *self.quality_gate.read();
+        let mut gm = self.gate_manager.write();
+
+        if let Some(new_gate) =
+            gm.evaluate_recommendation(current_gate, ema_slack, recent_underruns, now)
+        {
+            // Fade out and shutdown current streams before restart.
+            self.fade_out();
+            if let Err(e) = self.shutdown_streams() {
+                log::error!("shutdown_streams failed during gate restart: {e}");
+                return false;
+            }
+
+            // Update gate and indicator to the new value.
+            {
+                let mut g = self.quality_gate.write();
+                *g = new_gate;
+            }
+            self.quality_indicator
+                .store(new_gate as i8, std::sync::atomic::Ordering::Relaxed);
+
+            // Delegate full rebuild to existing start() path using stored last_* state.
+            if let Err(e) = self.restart_with_current_state_and_gate() {
+                log::error!("restart_with_current_state_and_gate failed: {e}");
+                return false;
+            }
+
+            // Reset GateManager timers after successful restart.
+            gm.reset_timers(now);
+
+            return true;
+        }
+
+        false
+    }
     fn output_device(&self) -> Option<cpal::Device> {
         { self.output_device.read().clone() }.or_else(|| {
             let host = cpal::default_host();
@@ -285,6 +349,9 @@ impl CpalController {
                 ..Default::default()
             },
         ));
+        {
+            *self.output_telemetry.write() = Some(telemetry.clone());
+        }
         // Spawn output stream owner.
         let (tx, handle) = spawn_owned_output_stream(
             output_device,
@@ -296,13 +363,13 @@ impl CpalController {
                 let buffer_target_frames = self.quality_gate.read().buffer_size(None);
                 move || {
                     playback_callback(
-                        backend,
-                        input_buffer,
-                        quality,
-                        no_reset,
+                        backend.clone(),
+                        input_buffer.clone(),
+                        quality.clone(),
+                        no_reset.clone(),
                         sr,
                         buffer_target_frames as usize,
-                        telemetry,
+                        telemetry.clone(),
                     )
                 }
             },
@@ -313,6 +380,8 @@ impl CpalController {
             *self.control_tx.write() = Some(tx);
             *self.output_thread.write() = Some(handle);
         }
+
+        // Gate management evaluation is invoked from AudioRuntime::start via a periodic loop.
 
         Ok(())
     }
@@ -742,6 +811,28 @@ impl CpalController {
     }
 }
 
+impl CpalController {
+    fn restart_with_current_state_and_gate(&self) -> Result<()> {
+        // Smoothly transition: fade out, shutdown, then restart using last known state.
+        self.fade_out();
+        self.shutdown_streams()?;
+
+        // Recreate streams using the stored last_* state.
+        let layout = *self.last_layout.read();
+        let config = self.last_config.read().clone();
+        let source = *self.last_source.read();
+        let tuner_config = self.last_tuner_config.read().clone();
+
+        // Delegate to existing start flow which handles device/config selection and wiring.
+        self.start(&layout, &config, source, &tuner_config)?;
+
+        // Fade back in after successful restart.
+        self.fade_in();
+
+        Ok(())
+    }
+}
+
 impl AudioRuntime for CpalController {
     fn start(
         &self,
@@ -818,6 +909,16 @@ impl AudioRuntime for CpalController {
         // Store references
         {
             *self.dsp_net_frontend.write() = Some(front);
+        }
+
+        // Periodic gate evaluation loop runs on engine thread.
+        // Break when output control channel is cleared (stop requested) or on any error surfaced elsewhere.
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            let _ = self.evaluate_gate_and_maybe_restart();
+            if self.control_tx.read().is_none() {
+                break;
+            }
         }
 
         Ok(())

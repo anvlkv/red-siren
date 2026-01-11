@@ -409,4 +409,59 @@ quality.store(current_gate as i8, std::sync::atomic::Ordering::Relaxed);
 - `OutputStreamTimestamp.playback` remains a secondary signal; computed expected period and measured render time are primary inputs.
 - Prefer `tick` for best temporal fidelity and quality; batch modes are reserved for recovery.
 
+## Implementation Status (in-progress)
+
+Phase 1 — Telemetry
+- Added `rt/cpal/stream/telemetry.rs` with:
+  - `PlaybackTelemetry` fields: `sample_rate`, `last_callback_frames`, `queue_depth_frames`, `ema_render_ns_per_frame`, `ema_compute_slack_ns`, `net_latency_frames`, `estimated_latency_ms`, `local_underruns`, `total_underruns`.
+  - Helpers: `ema`, `note_render`, `recompute_slack`, `recompute_latency`, `frames_from_ns`, `note_underruns`.
+  - Tuning consts centralized: steady occupancy (80%), catch-up ratio (90%), gate thresholds and cooldown.
+- Callback integration:
+  - Updates telemetry each callback: queue depth, sample rate, net latency frames.
+  - Measures production elapsed precisely around mode-selected production; calls `note_render`, `recompute_slack`, and `recompute_latency`.
+- Engine wiring:
+  - Creates shared `Arc<Mutex<PlaybackTelemetry>>` and passes it to the callback.
+  - Stores telemetry handle in the controller for engine-thread access.
+
+Phase 2 — Producer (mode selection)
+- Buffer target is gate-derived:
+  - `buffer_target_frames = PlaybackQualityGate::buffer_size(...)` (currently called with `None`; future: pass `SupportedStreamConfigRange` if available).
+  - Steady-depth uses 80% of target.
+- Decision logic implemented (`decide(...)`):
+  - Catch-up triggers on any underruns, negative slack EMA, or estimated latency > 90% of buffer duration.
+  - Mode selection prefers `tick` for ≤4 frames; batch uses `process_big` for all batch sizes to match adapter signature.
+- Production paths:
+  - Tick loops per-frame.
+  - Batch uses `process_big` with resized scratch buffers.
+- Playback cleanup:
+  - Removed legacy constants/helpers (`BASE_OPTIMAL_BUFFER_MILLIS`, `duration_to_frames`).
+  - Removed redundant second production pass; telemetry updates occur once per callback.
+  - Callback reads `quality` atomic but does not write it.
+
+Phase 3 — Quality Indicator Equals Gate
+- Engine owns writing `quality_indicator` on gate changes; callback reflects it read-only.
+
+Phase 4 — Gate Management (engine)
+- `GateManager` implemented with thresholds, stability windows, and cooldowns.
+- Engine-thread periodic evaluation added:
+  - A loop in `AudioRuntime::start` calls `evaluate_gate_and_maybe_restart()` every ~300 ms.
+  - On recommendation (and `auto_quality` ON), controller:
+    - Fades out and shuts down streams.
+    - Updates `quality_gate` and `quality_indicator`.
+    - Restarts via existing `start(...)` flow using last stored layout/config/source/tuner_config.
+    - Fades in and resets GateManager timers.
+- Removed owner-side `ReconfigureGate` control path; reconfiguration uses shutdown-and-restart.
+
+Phase 5 — Timestamp Reliability Guard
+- Expected period uses the callback frame count and sample rate.
+- `OutputStreamTimestamp` guard is planned post-gate loop stabilization.
+
+Known technical deltas and TODOs
+- Batch `process` path is not used; `process_big` is used for all batch sizes to satisfy adapter type requirements. Optional future: add proper `BufferRef/BufferMut` wrappers to support `process` for ≤64 frames.
+- Minor clippy/warnings to tidy:
+  - Remove any remaining unused variables and duplicate computations.
+  - Optionally fold callback parameters into a small config struct if “too many arguments” appears.
+- Gate indicator invariant:
+  - Ensure engine writes `quality.store(current_gate as i8, Relaxed)` only on gate changes; callback remains read-only.
+
 ---

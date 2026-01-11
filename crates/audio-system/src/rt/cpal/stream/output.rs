@@ -66,19 +66,27 @@ where
         let next = make_next();
 
         // Build CPAL stream on this thread.
-        let stream = match run_output(&device, &stream_cfg, &default_cfg, channels, next) {
-            Ok(s) => s,
-            Err(e) => {
+        let mut stream_opt: Option<Stream> =
+            match run_output(&device, &stream_cfg, &default_cfg, channels, next) {
+                Ok(s) => Some(s),
+                Err(e) => {
+                    let _ = init_tx.send(Err(InstrumentError::StartFailed {
+                        detail: Some(e.to_string()),
+                    }));
+                    return;
+                }
+            };
+
+        if let Some(ref s) = stream_opt {
+            if let Err(e) = s.play() {
                 let _ = init_tx.send(Err(InstrumentError::StartFailed {
                     detail: Some(e.to_string()),
                 }));
                 return;
             }
-        };
-
-        if let Err(e) = stream.play() {
+        } else {
             let _ = init_tx.send(Err(InstrumentError::StartFailed {
-                detail: Some(e.to_string()),
+                detail: Some("no stream available".into()),
             }));
             return;
         }
@@ -90,21 +98,21 @@ where
         while let Ok(msg) = rx.recv() {
             match msg {
                 Control::Pause(ret) => {
-                    _ = match stream.pause() {
+                    _ = match stream_opt.as_ref().unwrap().pause() {
                         Ok(_) => ret.send(ControlInvocationResult::Ok(())),
                         Err(e) => ret.send(ControlInvocationResult::Err(e.to_string())),
                     }
                     .inspect_err(|e| log::error!("error sending pause ack: {e}"));
                 }
                 Control::Resume(ret) => {
-                    _ = match stream.play() {
+                    _ = match stream_opt.as_ref().unwrap().play() {
                         Ok(_) => ret.send(ControlInvocationResult::Ok(())),
                         Err(e) => ret.send(ControlInvocationResult::Err(e.to_string())),
                     }
                     .inspect_err(|e| log::error!("error sending resume ack: {e}"));
                 }
                 Control::Shutdown(ret) => {
-                    drop(stream);
+                    let _ = stream_opt.take();
                     let _ = ret.send(ControlInvocationResult::Ok(()));
                     break;
                 }

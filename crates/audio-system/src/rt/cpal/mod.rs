@@ -1,5 +1,6 @@
 mod audio_session;
 mod engine;
+pub mod gate_manager;
 mod mic_permission;
 pub mod stream;
 

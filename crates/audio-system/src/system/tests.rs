@@ -35,7 +35,7 @@ fn instrument_with_rand_src() {
         #[cfg(feature = "editor")]
         let values = FineTunedValues::new(&FineTunedSharedValues::default());
 
-        let node_handles = create_output_system(
+        let node_handles = create_output_system::<f32>(
             &instrument_config,
             &mut net,
             2, // stereo
@@ -57,7 +57,7 @@ fn instrument_with_rand_src() {
 
         // Tuner default (Mic analyzer) hooked to a tap channel from the output
         let spectrum_thb = Arc::new(ThingBuf::new(10));
-        let _sensor_handles = create_input_system(
+        let _sensor_handles = create_input_system::<f32>(
             &tuner_config,
             &mut net,
             excitements,
@@ -134,7 +134,7 @@ fn instrument_with_mic_src() {
     let values = FineTunedValues::new(&FineTunedSharedValues::default());
 
     // Output system
-    let node_handles = create_output_system(
+    let node_handles = create_output_system::<f32>(
         &instrument_config,
         &mut net,
         2, // stereo
@@ -156,7 +156,7 @@ fn instrument_with_mic_src() {
 
     // Tuner default (Mic analyzer) hooked to a tap channel from the output
     let spectrum_thb = Arc::new(ThingBuf::new(10));
-    let _sensor_handles = create_input_system(
+    let _sensor_handles = create_input_system::<f32>(
         &tuner_config,
         &mut net,
         excitements,

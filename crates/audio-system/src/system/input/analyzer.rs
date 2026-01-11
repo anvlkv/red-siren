@@ -15,16 +15,14 @@ use common::{
 };
 use fundsp::prelude::*;
 use fundsp::{audiounit::BigBlockAdapter, thingbuf::ThingBuf};
+use num_complex::Complex;
 use parking_lot::RwLock;
 use spectrum_analyzer::{
     samples_fft_to_spectrum, windows::hann_window, FrequencyLimit, FrequencySpectrum,
 };
 
 use super::adsr::Adsr;
-use crate::{
-    util::{hash_str, SComplex, S},
-    ExcitementControl,
-};
+use crate::{util::hash_str, ExcitementControl};
 
 const ANALYZER_ID: u64 = hash_str(concat!(module_path!(), "::FFTAnalyzer"));
 pub const FFT_WINDOW_SIZE: usize = 8192; // Power of 2 for FFT, good balance of frequency resolution vs latency
@@ -33,27 +31,27 @@ pub type SpectrumBuffer = Arc<ThingBuf<Arc<FrequencySpectrum>>>;
 
 /// Custom AudioUnit that performs FFT analysis and excites sirens
 #[derive(Clone)]
-pub struct FFTAnalyzer {
+pub struct FFTAnalyzer<S: Real + Float + 'static> {
     inner_net: BigBlockAdapter,
     window_thb: Arc<ThingBuf<f32>>,
     spectrum_thb: SpectrumBuffer,
     sensor_values: Arc<ThingBuf<Vec<SensorData>>>,
     frequency_limit: Arc<ThingBuf<Option<FrequencyLimit>>>,
-    next_excitements_abs: Arc<RwLock<HashMap<NodeKey, SComplex>>>,
+    next_excitements_abs: Arc<RwLock<HashMap<NodeKey, Complex<S>>>>,
     sensors_slice: Vec<f32>,
 
     // Configuration and controls
     sample_rate: f32,
     config: Config,
     excitement_controls: HashMap<NodeKey, ExcitementControl>,
-    adsr_s: HashMap<NodeKey, (Adsr, SComplex)>,
+    adsr_s: HashMap<NodeKey, (Adsr<S>, Complex<S>)>,
 
     // processing thread
     processing_handle: Arc<JoinHandle<()>>,
     processing_running: Arc<AtomicBool>,
 }
 
-impl FFTAnalyzer {
+impl<S: Real + Float + 'static> FFTAnalyzer<S> {
     pub fn new(
         inner_net: Box<dyn AudioUnit>,
         config: Config,
@@ -72,11 +70,15 @@ impl FFTAnalyzer {
                 (Some(min), Some(max)) => FrequencyLimit::Range(min, max),
             }))
             .unwrap();
-        let last_adsr = HashMap::from_iter(
-            excitement_controls
-                .keys()
-                .map(|k| (*k, (Adsr::new(DEFAULT_SR), SComplex::ZERO))),
-        );
+        let last_adsr = HashMap::from_iter(excitement_controls.keys().map(|k| {
+            (
+                *k,
+                (
+                    Adsr::new(DEFAULT_SR),
+                    Complex::<S>::new(S::zero(), S::zero()),
+                ),
+            )
+        }));
         let next_excitements_abs = Arc::new(RwLock::new(HashMap::with_capacity(
             config.sensor_data.len(),
         )));
@@ -211,7 +213,7 @@ impl FFTAnalyzer {
         sensor_data: &[SensorData],
         &freq_limit: &FrequencyLimit,
         sample_rate: u32,
-        next_excitements_abs: &Arc<RwLock<HashMap<NodeKey, SComplex>>>,
+        next_excitements_abs: &Arc<RwLock<HashMap<NodeKey, Complex<S>>>>,
         spectrum_thb: &SpectrumBuffer,
     ) {
         log::trace!(
@@ -265,13 +267,15 @@ impl FFTAnalyzer {
                     .and_then(|(&freq, &mag)| {
                         freq_range.clone().position(|f| f == freq).map(|p| {
                             (
-                                (mag - min_magnitude) as S / (max_magnitude - min_magnitude) as S,
-                                p as S / freq_range.len() as S,
+                                S::from_f32(
+                                    (mag - min_magnitude) / (max_magnitude - min_magnitude),
+                                ),
+                                S::from_f32(p as f32 / freq_range.len() as f32),
                             )
                         })
                     })
                 {
-                    _ = next_excitements.insert(key, SComplex::new(re, im));
+                    _ = next_excitements.insert(key, Complex::<S>::new(re, im));
                 } else {
                     _ = next_excitements.remove(&key);
                 }
@@ -287,7 +291,7 @@ impl FFTAnalyzer {
 
     fn init_handle(
         window_thb: Arc<ThingBuf<f32>>,
-        next_excitements_abs: Arc<RwLock<HashMap<NodeKey, SComplex>>>,
+        next_excitements_abs: Arc<RwLock<HashMap<NodeKey, Complex<S>>>>,
         sensor_values: Arc<ThingBuf<Vec<SensorData>>>,
         freq_limit: Arc<ThingBuf<Option<FrequencyLimit>>>,
         spectrum_thb: SpectrumBuffer,
@@ -379,7 +383,6 @@ impl FFTAnalyzer {
         self.processing_running = processing_running;
     }
 
-    #[allow(clippy::unnecessary_cast)]
     fn tick_adsr(&mut self) {
         self.excitement_controls.iter().for_each(|(key, control)| {
             if let Some((adsr, _)) = self.adsr_s.get_mut(key) {
@@ -409,7 +412,7 @@ impl FFTAnalyzer {
     }
 }
 
-impl AudioUnit for FFTAnalyzer {
+impl<S: Real + Float + 'static> AudioUnit for FFTAnalyzer<S> {
     fn inputs(&self) -> usize {
         self.inner_net.inputs() + self.num_sensor_input() + 2
     }
@@ -573,14 +576,14 @@ mod tests {
         let spectrum_thb = Arc::new(ThingBuf::new(10));
 
         // Create analyzer
-        let analyzer = FFTAnalyzer::new(inner_net, config, siren_controls, spectrum_thb);
+        let analyzer = FFTAnalyzer::<f32>::new(inner_net, config, siren_controls, spectrum_thb);
 
         // Test basic properties
         assert_eq!(analyzer.inputs(), 7);
         assert_eq!(analyzer.outputs(), 1);
 
         // Test initial values
-        assert_eq!(control.value().re, 0.0);
+        assert_eq!(control.value::<f32>().re, 0.0);
     }
 
     #[test]
@@ -607,10 +610,10 @@ mod tests {
 
         let spectrum_thb = Arc::new(ThingBuf::new(10));
 
-        let mut analyzer = FFTAnalyzer::new(inner_net, config, siren_controls, spectrum_thb);
+        let mut analyzer = FFTAnalyzer::<f32>::new(inner_net, config, siren_controls, spectrum_thb);
 
         // Reset should clear everything
         analyzer.reset();
-        assert_eq!(control.value().re, 0.0);
+        assert_eq!(control.value::<f32>().re, 0.0);
     }
 }

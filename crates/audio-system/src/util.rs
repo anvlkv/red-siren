@@ -1,8 +1,3 @@
-#[cfg(not(feature = "hi_fi"))]
-use fundsp::math::Complex32;
-#[cfg(feature = "hi_fi")]
-use fundsp::math::Complex64;
-
 pub const fn hash_str(s: &str) -> u64 {
     // FNV-1a hash algorithm (const-friendly)
     let mut hash = 0xcbf29ce484222325u64;
@@ -15,16 +10,6 @@ pub const fn hash_str(s: &str) -> u64 {
     }
     hash
 }
-
-#[cfg(not(feature = "hi_fi"))]
-pub type S = f32;
-#[cfg(not(feature = "hi_fi"))]
-pub type SComplex = Complex32;
-
-#[cfg(feature = "hi_fi")]
-pub type S = f64;
-#[cfg(feature = "hi_fi")]
-pub type SComplex = Complex64;
 
 pub type DbLin = fundsp::prelude::Pipe<
     crate::values::FineTunedValue,

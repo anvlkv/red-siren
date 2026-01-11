@@ -15,9 +15,8 @@ use super::{
 };
 
 use crate::system::values::FineTunedValues;
-use crate::util::S;
 
-pub fn add_one_channel_subsystem(
+pub fn add_one_channel_subsystem<S: Real + Float + 'static>(
     channel_groups: &[GroupConfig],
     (group_handles, filter_handles): (Vec<HashMap<NodeKey, InnerHandles>>, Vec<FilterHandles>),
     nodes_count_per_group: usize,
@@ -40,7 +39,7 @@ pub fn add_one_channel_subsystem(
                         U => {
                             type KNum = NumType;
 
-                            let id = add_channel_system::<GNum, KNum>(
+                            let id = add_channel_system::<GNum, KNum, S>(
                                 channel_groups,
                                 group_handles,
                                 net,
@@ -84,7 +83,7 @@ pub fn add_one_channel_subsystem(
         match channel_filters_count {
             U => {
                 type FNum = NumType;
-                id = add_channel_filter::<FNum>(filter_handles, cross_id, net, values);
+                id = add_channel_filter::<FNum, S>(filter_handles, cross_id, net, values);
             }
             _ => {
                 panic!("unexpected number of filters");
@@ -95,15 +94,16 @@ pub fn add_one_channel_subsystem(
     id
 }
 
-fn add_channel_system<G, K>(
+fn add_channel_system<G, K, S>(
     groups: &[GroupConfig],
     handles: Vec<HashMap<NodeKey, InnerHandles>>,
     net: &mut Net,
     values: &FineTunedValues,
 ) -> NodeId
 where
-    G: Size<S> + Size<NodeType>,
-    K: Size<S> + Size<NodeType>,
+    G: Size<S> + Size<NodeType<S>>,
+    K: Size<S> + Size<NodeType<S>>,
+    S: Real + Float + 'static,
 {
     let total_nodes: usize = groups.iter().map(|g| g.nodes.len()).sum();
     log::info!(
@@ -119,21 +119,21 @@ where
         let values = values.clone();
         move |i| {
             let group_handles = mem::take(&mut group_handles_cell.borrow_mut()[i as usize]);
-            super::group::create_group_node::<K>(&groups[i as usize], group_handles, &values)
+            super::group::create_group_node::<K, S>(&groups[i as usize], group_handles, &values)
         }
     });
     net.push(Box::new(node))
 }
 
-#[allow(clippy::unnecessary_cast)]
-fn add_channel_filter<F>(
+fn add_channel_filter<F, S>(
     filter_handles: Vec<FilterHandles>,
     src_id: NodeId,
     net: &mut Net,
     values: &FineTunedValues,
 ) -> NodeId
 where
-    F: Size<S> + Size<FilterType>,
+    F: Size<S> + Size<FilterType<S>>,
+    S: Real + Float + 'static,
 {
     log::info!(
         "Creating channel filter with {} filters",
@@ -170,7 +170,7 @@ where
         }) | constant(F::USIZE as f32))
         >> super::div::div::<S>();
 
-    let gain: S = ((1.0 / F::USIZE as S) + 1.0).powi(F::I32);
+    let gain = S::from_f64(((1.0 / F::USIZE as f64) + 1.0).powi(F::I32));
 
     let panner_node = (pass()
         | ((band_controls_value + (ab_controls_value.clone() >> mul(-1.5))) >> mul(0.25)))
@@ -180,7 +180,9 @@ where
         >> split::<U2>()
         >> pipei::<F, _, _>({
             let values = values.clone();
-            move |i| super::filter::create_filter(filter_handles[i as usize].clone(), &values, gain)
+            move |i| {
+                super::filter::create_filter::<S>(filter_handles[i as usize].clone(), &values, gain)
+            }
         })
         >> (pass() + pass());
 
@@ -244,7 +246,7 @@ mod tests {
                     n.band_control.set_value(0.1);
                 });
 
-                let id = add_one_channel_subsystem(
+                let id = add_one_channel_subsystem::<f32>(
                     &groups,
                     (group_handles, filter_handles),
                     layout.num_keys_per_group.get() as usize,
@@ -312,7 +314,7 @@ mod tests {
 
             let mut left_net = Net::new(0, 1);
 
-            let id = add_one_channel_subsystem(
+            let id = add_one_channel_subsystem::<f32>(
                 &left_groups,
                 (left_group_handles, left_filter_handles),
                 nodes_count_per_group,
@@ -343,7 +345,7 @@ mod tests {
 
             let mut right_net = Net::new(0, 1);
 
-            let id = add_one_channel_subsystem(
+            let id = add_one_channel_subsystem::<f32>(
                 &right_groups,
                 (right_group_handles, right_filter_handles),
                 nodes_count_per_group,
@@ -410,7 +412,7 @@ mod tests {
 
             let mut left_net = Net::new(0, 1);
 
-            let id = add_one_channel_subsystem(
+            let id = add_one_channel_subsystem::<f32>(
                 &left_groups,
                 (left_group_handles, right_filter_handles),
                 nodes_count_per_group,
@@ -441,7 +443,7 @@ mod tests {
 
             let mut right_net = Net::new(0, 1);
 
-            let id = add_one_channel_subsystem(
+            let id = add_one_channel_subsystem::<f32>(
                 &right_groups,
                 (right_group_handles, left_filter_handles),
                 nodes_count_per_group,

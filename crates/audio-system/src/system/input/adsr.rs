@@ -1,17 +1,23 @@
-use crate::util::{SComplex, S};
+use std::f32;
+
+use fundsp::{
+    math::{abs, clamp},
+    Float, Real,
+};
+use num_complex::Complex;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Adsr {
+pub struct Adsr<S: Real + Float> {
     value: S,
     secondary_value: S,
     shape: S,
-    phase: AdsrPhase,
+    phase: AdsrPhase<S>,
     scheme: Scheme,
     sample_rate: u64,
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
-enum AdsrPhase {
+enum AdsrPhase<S: Real + Float> {
     #[default]
     /// phase 0. No activity; envelope is 0.
     Idle,
@@ -33,7 +39,7 @@ struct Scheme {
     release: u64,
 }
 
-impl AdsrPhase {
+impl<S: Real + Float> AdsrPhase<S> {
     fn remaining_steps(&self) -> u64 {
         match *self {
             Self::Idle => 0,
@@ -102,12 +108,12 @@ impl AdsrPhase {
     }
 }
 
-impl Adsr {
+impl<S: Real + Float> Adsr<S> {
     pub fn new(sample_rate: f64) -> Self {
         Self {
-            value: 0.0,
-            secondary_value: 0.0,
-            shape: 0.0,
+            value: S::zero(),
+            secondary_value: S::zero(),
+            shape: S::zero(),
             phase: AdsrPhase::Idle,
             scheme: Scheme::default(),
             sample_rate: sample_rate as u64,
@@ -125,7 +131,7 @@ impl Adsr {
         self.phase.update_sample_rate(d, &self.scheme, &old_scheme);
     }
 
-    pub fn update(&mut self, prev: SComplex, next: SComplex) {
+    pub fn update(&mut self, prev: Complex<S>, next: Complex<S>) {
         self.secondary_value = next.im;
 
         // Normalize and compute dynamics
@@ -135,14 +141,14 @@ impl Adsr {
 
         let current_value = self.value;
         let current_target = self.target_value();
-        let current_delta = (current_target - current_value).clamp(-1.0, 1.0);
+        let current_delta = clamp(current_target - current_value, S::one().neg(), S::one());
 
         // Meta: "new demand" minus "current debt"
-        let meta = (delta - current_delta).clamp(-1.0, 1.0);
+        let meta = clamp(delta - current_delta, S::one().neg(), S::one());
 
         // Base distances for each potential motion
-        let distance_up = (target - current_value).max(0.0);
-        let distance_down = (current_value - target).max(0.0);
+        let distance_up = (target - current_value).max(S::zero());
+        let distance_down = (current_value - target).max(S::zero());
         let distance_to_zero = current_value;
 
         // Weight distances by meta pressure:
@@ -152,15 +158,20 @@ impl Adsr {
         //
         // We use sample_rate directly to make the steps sensitive to how often we tick.
         // Larger weighted distance → more steps → smaller per-tick increment (smoother movement).
-        let sr = self.sample_rate as S;
+        let sr = S::from_f32(self.sample_rate as f32);
+
+        let epsilon = S::from_f32(f32::EPSILON);
 
         // Helper: compute steps from a weighted distance (no fixed constants).
         let steps_from = |weighted_distance: S| -> u64 {
-            if weighted_distance <= S::EPSILON {
+            if weighted_distance <= epsilon {
                 0
             } else {
                 // Scale by sample rate to keep behavior consistent with time.
-                (weighted_distance * sr * (1.0 - delta_im)).ceil() as u64
+                (weighted_distance * sr * (S::one() - delta_im))
+                    .ceil()
+                    .to_i64()
+                    .unsigned_abs()
             }
         };
 
@@ -169,17 +180,17 @@ impl Adsr {
         // - positive meta: keep more of the attack (higher sustain proportion)
         // - negative meta: reduce sustain proportion
         // - clamp into [0,1]
-        self.shape = (0.5 + meta * delta_im).abs().clamp(0.0, 1.0);
+        self.shape = clamp(abs(S::from_f32(0.5) + meta * delta_im), S::zero(), S::one());
 
         // Proposed scheme derived purely from current distances and meta (no consts).
         // Note: we avoid division-by-zero by letting steps be zero when distances are zero.
-        let proposed_attack_steps = steps_from(distance_up * meta.max(0.0));
-        let proposed_decay_steps = steps_from(distance_down * (-meta).max(0.0));
-        let proposed_release_steps = steps_from(distance_to_zero * (-meta).max(0.0));
+        let proposed_attack_steps = steps_from(distance_up * meta.max(S::zero()));
+        let proposed_decay_steps = steps_from(distance_down * (-meta).max(S::zero()));
+        let proposed_release_steps = steps_from(distance_to_zero * (-meta).max(S::zero()));
 
         // Sustain: if target ~ current_value and meta ~ 0, hold. Otherwise, sustain budget is zero.
         let proposed_sustain_steps =
-            if meta.abs() < S::EPSILON && (current_target - current_value).abs() < S::EPSILON {
+            if meta.abs() < epsilon && (current_target - current_value).abs() < epsilon {
                 // Hold is intentional when no pressure and no debt
                 u64::MAX
             } else {
@@ -195,8 +206,8 @@ impl Adsr {
             release: proposed_release_steps,
         };
 
-        self.phase = if target <= S::EPSILON {
-            if current_value <= S::EPSILON {
+        self.phase = if target <= epsilon {
+            if current_value <= epsilon {
                 AdsrPhase::Idle
             } else {
                 // If already releasing, carry proportional remaining steps
@@ -218,7 +229,7 @@ impl Adsr {
                     },
                 }
             }
-        } else if meta > S::EPSILON {
+        } else if meta > epsilon {
             // Upward pressure: Attack
             match self.phase {
                 AdsrPhase::Attack { steps, .. } if old_scheme.atack > 0 => {
@@ -240,7 +251,7 @@ impl Adsr {
                     target,
                 },
             }
-        } else if meta < -S::EPSILON {
+        } else if meta < -epsilon {
             // Downward pressure: Decay (toward new target), or Release if target ~ 0
             match self.phase {
                 AdsrPhase::Decay { steps, .. } if old_scheme.decay > 0 => {
@@ -265,7 +276,7 @@ impl Adsr {
                 }
                 _ => {
                     // If current target is approx 0, prefer Release
-                    if target <= S::EPSILON {
+                    if target <= epsilon {
                         AdsrPhase::Release {
                             steps: self.scheme.release,
                         }
@@ -279,7 +290,7 @@ impl Adsr {
             }
         } else {
             // No pressure: Sustain if aligned, otherwise keep phase with a minimal step budget.
-            if (current_target - current_value).abs() <= S::EPSILON {
+            if (current_target - current_value).abs() <= epsilon {
                 AdsrPhase::Sustain {
                     steps: self.scheme.sustain,
                 }
@@ -325,9 +336,9 @@ impl Adsr {
         let target = self.target_value();
         let steps = self.phase.remaining_steps();
         let increment = if steps > 0 {
-            (target - self.value) / (steps as S)
+            (target - self.value) / S::from_f32(steps as f32)
         } else {
-            0.0
+            S::zero()
         };
 
         let primary = if let Some(next_phase) = self.phase.tick() {
@@ -347,7 +358,7 @@ impl Adsr {
 
     fn target_value(&self) -> S {
         match self.phase {
-            AdsrPhase::Idle | AdsrPhase::Release { .. } => 0.0,
+            AdsrPhase::Idle | AdsrPhase::Release { .. } => S::zero(),
             AdsrPhase::Sustain { .. } => self.value,
             AdsrPhase::Attack { target, .. } => target,
             AdsrPhase::Decay { target, .. } => target,
@@ -359,12 +370,14 @@ impl Adsr {
 mod tests {
     use super::*;
 
+    type S = f32;
+
     const SR: f64 = 48_000.0;
     const EPS: S = 1.0e-6;
 
     #[test]
     fn tick_idle_returns_zero() {
-        let mut env = Adsr::new(SR);
+        let mut env = Adsr::<S>::new(SR);
         let (v, _) = env.tick();
         assert!(
             (v - 0.0).abs() <= EPS,
@@ -375,9 +388,9 @@ mod tests {
 
     #[test]
     fn attack_reaches_target_one() {
-        let mut env = Adsr::new(SR);
+        let mut env = Adsr::<S>::new(SR);
         // Demand an upward move to 1.0
-        env.update(SComplex::ZERO, SComplex::ONE);
+        env.update(Complex::<S>::ZERO, Complex::<S>::ONE);
 
         // Attack steps are approximately sample_rate when meta=1 and distance_up=1.
         // Tick slightly more than SR to ensure completion and phase transition.
@@ -392,15 +405,15 @@ mod tests {
 
     #[test]
     fn release_reaches_zero() {
-        let mut env = Adsr::new(SR);
+        let mut env = Adsr::<S>::new(SR);
         // Go up first
-        env.update(SComplex::ZERO, SComplex::ONE);
+        env.update(Complex::<S>::ZERO, Complex::<S>::ONE);
         let mut v = 0.0;
         for _ in 0..(SR as usize + 10) {
             v = env.tick().0;
         }
         // Now request release to zero
-        env.update(SComplex::new(v, v), SComplex::ZERO);
+        env.update(Complex::<S>::new(v, v), Complex::<S>::ZERO);
         for _ in 0..(SR as usize + 10) {
             v = env.tick().0;
         }

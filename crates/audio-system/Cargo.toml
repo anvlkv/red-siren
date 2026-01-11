@@ -13,6 +13,7 @@ fastrand = { workspace = true }
 fundsp = { workspace = true, default-features = false, features = ["std"] }
 js-sys = { workspace = true, optional = true }
 log = { workspace = true }
+num-complex = "0.4.6"
 parking_lot = "0.12"
 spectrum-analyzer = "1.7.0"
 u-num-it = "0.3.4"
@@ -32,8 +33,6 @@ objc = "0.2"
 default = []
 cargo-clippy = []
 editor = []
-hi_fi = []
-lo_fi = []
 # Native CPAL runtime
 rt_cpal = ["dep:cpal", "dep:dasp_sample"]
 # Messaging runtime

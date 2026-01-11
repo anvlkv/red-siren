@@ -27,12 +27,12 @@ use parking_lot::RwLock;
 use crate::system::values::{FineTunedSharedValues, FineTunedValues};
 use crate::{
     output_analyzer::{self, OUTPUT_ANALYZER_FFT_WINDOW_SIZE},
+    quality::{PlaybackQualityGate, SampleType},
     rt::{
         cpal::stream::{playback_callback, spawn_owned_input_stream},
         AudioRuntime, ExcitementSource,
     },
     system::input::analyzer::FFT_WINDOW_SIZE,
-    util::S,
     ExcitementControl, SensorHandles,
 };
 
@@ -102,7 +102,8 @@ struct CpalController {
 
     // operation
     tuner_only_mode: Arc<RwLock<bool>>,
-    quality_indicator: Arc<std::sync::atomic::AtomicU8>,
+    quality_indicator: Arc<std::sync::atomic::AtomicI8>,
+    quality_gate: RwLock<PlaybackQualityGate>,
 }
 
 impl Default for CpalController {
@@ -144,9 +145,10 @@ impl Default for CpalController {
             output_device: RwLock::new(None),
             input_device: RwLock::new(None),
             tuner_only_mode: Arc::new(RwLock::new(false)),
-            quality_indicator: Arc::new(std::sync::atomic::AtomicU8::new(
-                PlaybackQuality::default() as u8,
+            quality_indicator: Arc::new(std::sync::atomic::AtomicI8::new(
+                PlaybackQualityGate::default() as i8,
             )),
+            quality_gate: RwLock::new(PlaybackQualityGate::default()),
         }
     }
 }
@@ -206,7 +208,7 @@ impl CpalController {
             })
     }
 
-    fn start_input_stream(&self) -> Result<Arc<ThingBuf<S>>> {
+    fn start_input_stream(&self) -> Result<Arc<ThingBuf<f32>>> {
         let input_device = self
             .input_device()
             .ok_or(InstrumentError::DeviceUnavailable)?;
@@ -214,142 +216,11 @@ impl CpalController {
         let input_device_name = input_device.id().unwrap();
         log::debug!("input device: {}", input_device_name);
         // Feature-driven selection of input config; fallback to device default.
-        let input_default_cfg = {
-            // Try to choose from supported configs first
-            if let Ok(mut ranges) = input_device.supported_input_configs() {
-                // Scoring function per feature
-                #[allow(unused_mut)]
-                let mut pick = ranges.next();
-                for r in ranges {
-                    let better = if cfg!(feature = "hi_fi") {
-                        // Prefer highest max sample rate; tie-break by larger buffer size max if available
-                        let a = pick.as_ref().unwrap();
-                        let b = &r;
-                        let a_sr: u32 = a.max_sample_rate();
-                        let b_sr: u32 = b.max_sample_rate();
-                        if b_sr > a_sr {
-                            true
-                        } else if b_sr < a_sr {
-                            false
-                        } else {
-                            // Same max SR, prefer smaller buffers for hi_fi; Unknown doesn't beat Range
-                            match (a.buffer_size(), b.buffer_size()) {
-                                (
-                                    &cpal::SupportedBufferSize::Range { max: amax, .. },
-                                    &cpal::SupportedBufferSize::Range { max: bmax, .. },
-                                ) => bmax < amax,
-                                (
-                                    &cpal::SupportedBufferSize::Unknown,
-                                    &cpal::SupportedBufferSize::Range { .. },
-                                ) => false,
-                                _ => false,
-                            }
-                        }
-                    } else if cfg!(feature = "lo_fi") {
-                        // Prefer lowest min sample rate; tie-break by smaller buffer size min if available
-                        let a = pick.as_ref().unwrap();
-                        let b = &r;
-                        let a_sr: u32 = a.min_sample_rate();
-                        let b_sr: u32 = b.min_sample_rate();
-                        if b_sr < a_sr {
-                            true
-                        } else if b_sr > a_sr {
-                            false
-                        } else {
-                            match (a.buffer_size(), b.buffer_size()) {
-                                (
-                                    &cpal::SupportedBufferSize::Range { min: amin, .. },
-                                    &cpal::SupportedBufferSize::Range { min: bmin, .. },
-                                ) => bmin > amin,
-                                (
-                                    &cpal::SupportedBufferSize::Range { .. },
-                                    &cpal::SupportedBufferSize::Unknown,
-                                ) => true,
-                                (
-                                    &cpal::SupportedBufferSize::Unknown,
-                                    &cpal::SupportedBufferSize::Range { .. },
-                                ) => false,
-                                _ => false,
-                            }
-                        }
-                    } else {
-                        // Medium quality: target 48000, fallback to 44100; prefer range that contains target
-                        let target = 48_000u32;
-                        let fallback = 44_100u32;
-                        let a = pick.as_ref().unwrap();
-                        let b = &r;
-                        let a_contains =
-                            a.min_sample_rate() <= target && target <= a.max_sample_rate();
-                        let b_contains =
-                            b.min_sample_rate() <= target && target <= b.max_sample_rate();
-                        if b_contains && !a_contains {
-                            true
-                        } else if a_contains && !b_contains {
-                            false
-                        } else if a_contains && b_contains {
-                            // Both contain target; prefer buffer range whose median closer to ~512 frames if available
-                            let score = |bs: &cpal::SupportedBufferSize| -> i64 {
-                                match bs {
-                                    cpal::SupportedBufferSize::Range { min, max } => {
-                                        let mid = (min + max) / 2;
-                                        (mid as i64 - 512).abs()
-                                    }
-                                    cpal::SupportedBufferSize::Unknown => i64::MAX / 2,
-                                }
-                            };
-                            score(b.buffer_size()) < score(a.buffer_size())
-                        } else {
-                            // Neither contains target; prefer one closer to fallback
-                            let dist_b = {
-                                let min = b.min_sample_rate();
-                                let max = b.max_sample_rate();
-                                min.saturating_sub(fallback) + fallback.saturating_sub(max)
-                            };
-                            let dist_a = {
-                                let min = a.min_sample_rate();
-                                let max = a.max_sample_rate();
-                                min.saturating_sub(fallback) + fallback.saturating_sub(max)
-                            };
-                            dist_b < dist_a
-                        }
-                    };
-                    if better {
-                        pick = Some(r);
-                    }
-                }
-
-                if let Some(best_range) = pick {
-                    // Choose concrete sample rate from the selected range according to feature
-                    let chosen_sr = if cfg!(feature = "hi_fi") {
-                        best_range.max_sample_rate()
-                    } else if cfg!(feature = "lo_fi") {
-                        best_range.min_sample_rate()
-                    } else {
-                        let target: u32 = 44_100;
-                        if best_range.min_sample_rate() <= target
-                            && target <= best_range.max_sample_rate()
-                        {
-                            target
-                        } else {
-                            48_000
-                        }
-                    };
-                    // Build SupportedInputConfig from range
-                    Some(best_range.with_sample_rate(chosen_sr))
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        }
-        .unwrap_or_else(|| {
-            // Fallback to device default if selection failed
-            input_device
-                .default_input_config()
-                .map_err(|_| InstrumentError::InputConfigUnavailable)
-                .expect("input default config")
-        });
+        let input_default_cfg = self
+            .quality_gate
+            .read()
+            .select_input_config(&input_device)
+            .ok_or(InstrumentError::InputConfigUnavailable)?;
 
         // Get sample rate from InputStreamManager or use output rate
         let input_sr = input_default_cfg.sample_rate() as f64;
@@ -358,7 +229,7 @@ impl CpalController {
         let cap_samples = (samples_per_ms * INPUT_BUFFER_DURATION_MS as f64).ceil() as usize;
         let capacity = cap_samples.next_power_of_two();
 
-        let thb = Arc::new(ThingBuf::<S>::new(capacity));
+        let thb = Arc::new(ThingBuf::<f32>::new(capacity));
 
         let stream_cfg = input_default_cfg.config();
 
@@ -366,7 +237,7 @@ impl CpalController {
 
         let (input_sx, input_handle) =
             spawn_owned_input_stream(input_device, input_default_cfg, stream_cfg, move || {
-                Box::new(move |sample: &S| {
+                Box::new(move |sample: &f32| {
                     if prod.push(*sample).is_err() {
                         _ = prod.pop();
                         _ = prod.push(*sample);
@@ -385,145 +256,24 @@ impl CpalController {
 
     fn start_output_stream(
         &self,
-        input_buffer: Option<Arc<ThingBuf<S>>>,
+        input_buffer: Option<Arc<ThingBuf<f32>>>,
         backend: NetBackend,
     ) -> Result<()> {
         let output_device = self
             .output_device()
             .ok_or(InstrumentError::DeviceUnavailable)?;
 
-        // Feature-driven selection of output config; fallback to device default.
-        let output_default_cfg = {
-            if let Ok(mut ranges) = output_device.supported_output_configs() {
-                let mut pick = ranges.next();
-                for r in ranges {
-                    let better = if cfg!(feature = "hi_fi") {
-                        let a = pick.as_ref().unwrap();
-                        let b = &r;
-                        let a_sr: u32 = a.max_sample_rate();
-                        let b_sr: u32 = b.max_sample_rate();
-                        if b_sr > a_sr {
-                            true
-                        } else if b_sr < a_sr {
-                            false
-                        } else {
-                            match (a.buffer_size(), b.buffer_size()) {
-                                (
-                                    &cpal::SupportedBufferSize::Range { max: amax, .. },
-                                    &cpal::SupportedBufferSize::Range { max: bmax, .. },
-                                ) => bmax < amax,
-                                (
-                                    &cpal::SupportedBufferSize::Unknown,
-                                    &cpal::SupportedBufferSize::Range { .. },
-                                ) => false,
-                                _ => false,
-                            }
-                        }
-                    } else if cfg!(feature = "lo_fi") {
-                        let a = pick.as_ref().unwrap();
-                        let b = &r;
-                        let a_sr: u32 = a.min_sample_rate();
-                        let b_sr: u32 = b.min_sample_rate();
-                        if b_sr < a_sr {
-                            true
-                        } else if b_sr > a_sr {
-                            false
-                        } else {
-                            match (a.buffer_size(), b.buffer_size()) {
-                                (
-                                    &cpal::SupportedBufferSize::Range { min: amin, .. },
-                                    &cpal::SupportedBufferSize::Range { min: bmin, .. },
-                                ) => bmin > amin,
-                                (
-                                    &cpal::SupportedBufferSize::Range { .. },
-                                    &cpal::SupportedBufferSize::Unknown,
-                                ) => true,
-                                (
-                                    &cpal::SupportedBufferSize::Unknown,
-                                    &cpal::SupportedBufferSize::Range { .. },
-                                ) => false,
-                                _ => false,
-                            }
-                        }
-                    } else {
-                        let target = 48_000u32;
-                        let fallback = 44_100u32;
-                        let a = pick.as_ref().unwrap();
-                        let b = &r;
-                        let a_contains =
-                            a.min_sample_rate() <= target && target <= a.max_sample_rate();
-                        let b_contains =
-                            b.min_sample_rate() <= target && target <= b.max_sample_rate();
-                        if b_contains && !a_contains {
-                            true
-                        } else if a_contains && !b_contains {
-                            false
-                        } else if a_contains && b_contains {
-                            let score = |bs: &cpal::SupportedBufferSize| -> i64 {
-                                match bs {
-                                    cpal::SupportedBufferSize::Range { min, max } => {
-                                        let mid = (min + max) / 2;
-                                        (mid as i64 - 512).abs()
-                                    }
-                                    cpal::SupportedBufferSize::Unknown => i64::MAX / 2,
-                                }
-                            };
-                            score(b.buffer_size()) < score(a.buffer_size())
-                        } else {
-                            let dist_b = {
-                                let min = b.min_sample_rate();
-                                let max = b.max_sample_rate();
-                                min.saturating_sub(fallback) + fallback.saturating_sub(max)
-                            };
-                            let dist_a = {
-                                let min = a.min_sample_rate();
-                                let max = a.max_sample_rate();
-                                min.saturating_sub(fallback) + fallback.saturating_sub(max)
-                            };
-                            dist_b < dist_a
-                        }
-                    };
-                    if better {
-                        pick = Some(r);
-                    }
-                }
-
-                if let Some(best_range) = pick {
-                    let chosen_sr = if cfg!(feature = "hi_fi") {
-                        best_range.max_sample_rate()
-                    } else if cfg!(feature = "lo_fi") {
-                        best_range.min_sample_rate()
-                    } else {
-                        let target: u32 = 44_100;
-                        if best_range.min_sample_rate() <= target
-                            && target <= best_range.max_sample_rate()
-                        {
-                            target
-                        } else {
-                            48_000
-                        }
-                    };
-                    Some(best_range.with_sample_rate(chosen_sr))
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        }
-        .unwrap_or_else(|| {
-            output_device
-                .default_output_config()
-                .map_err(|_| InstrumentError::OutputConfigUnavailable)
-                .expect("output default config")
-        });
+        let output_default_cfg = self
+            .quality_gate
+            .read()
+            .select_output_config(&output_device)
+            .ok_or(InstrumentError::OutputConfigUnavailable)?;
 
         let stream_cfg: cpal::StreamConfig = output_default_cfg.clone().into();
 
         let output_channels = std::cmp::Ord::min(output_default_cfg.channels(), 2) as usize;
 
-        let quality_indicator: std::sync::Arc<std::sync::atomic::AtomicU8> =
-            self.quality_indicator.clone();
+        let quality: std::sync::Arc<std::sync::atomic::AtomicI8> = self.quality_indicator.clone();
         let sr = self.sample_rate.read().map(|sr| sr as u32).unwrap_or(44100);
         let no_reset = self.tuner_only_mode.clone();
         // Spawn output stream owner.
@@ -532,7 +282,7 @@ impl CpalController {
             output_default_cfg,
             stream_cfg,
             output_channels,
-            move || playback_callback(backend, input_buffer, quality_indicator, no_reset, sr),
+            move || playback_callback(backend, input_buffer, quality, no_reset, sr),
         )?;
 
         // Persist output thread / control handles.
@@ -624,17 +374,30 @@ impl CpalController {
             Some(be)
         };
 
-        let handles = crate::create_input_system(
-            tuner_config,
-            &mut net,
-            siren_controls_stub,
-            ExcitementSource::Mic,
-            &self.spectrum_data_thb,
-            snoop_be,
-            (&self.tuner_freq_range.0, &self.tuner_freq_range.1),
-            (&self.tuner_ny_threshold, &self.tuner_ny_wet_ratio),
-            2,
-        );
+        let handles = match self.quality_gate.read().sample_type() {
+            SampleType::F32 => crate::create_input_system::<f32>(
+                tuner_config,
+                &mut net,
+                siren_controls_stub,
+                ExcitementSource::Mic,
+                &self.spectrum_data_thb,
+                snoop_be,
+                (&self.tuner_freq_range.0, &self.tuner_freq_range.1),
+                (&self.tuner_ny_threshold, &self.tuner_ny_wet_ratio),
+                2,
+            ),
+            SampleType::F64 => crate::create_input_system::<f64>(
+                tuner_config,
+                &mut net,
+                siren_controls_stub,
+                ExcitementSource::Mic,
+                &self.spectrum_data_thb,
+                snoop_be,
+                (&self.tuner_freq_range.0, &self.tuner_freq_range.1),
+                (&self.tuner_ny_threshold, &self.tuner_ny_wet_ratio),
+                2,
+            ),
+        };
 
         {
             log::trace!("Storing {} sensor controls", handles.len());
@@ -676,13 +439,22 @@ impl CpalController {
         };
 
         // Build output system graph & retrieve handles.
-        let node_handles = crate::create_output_system(
-            config,
-            &mut net,
-            2,
-            #[cfg(feature = "editor")]
-            &fine_tuned_values,
-        );
+        let node_handles = match self.quality_gate.read().sample_type() {
+            SampleType::F32 => crate::create_output_system::<f32>(
+                config,
+                &mut net,
+                2,
+                #[cfg(feature = "editor")]
+                &fine_tuned_values,
+            ),
+            SampleType::F64 => crate::create_output_system::<f64>(
+                config,
+                &mut net,
+                2,
+                #[cfg(feature = "editor")]
+                &fine_tuned_values,
+            ),
+        };
 
         let mut siren_controls = HashMap::<NodeKey, ExcitementControl>::new();
 
@@ -738,17 +510,30 @@ impl CpalController {
             }
         };
 
-        let handles = crate::create_input_system(
-            tuner_config,
-            &mut net,
-            siren_controls,
-            source,
-            &self.spectrum_data_thb,
-            snoop_be,
-            (&self.tuner_freq_range.0, &self.tuner_freq_range.1),
-            (&self.tuner_ny_threshold, &self.tuner_ny_wet_ratio),
-            2,
-        );
+        let handles = match self.quality_gate.read().sample_type() {
+            SampleType::F32 => crate::create_input_system::<f32>(
+                tuner_config,
+                &mut net,
+                siren_controls,
+                source,
+                &self.spectrum_data_thb,
+                snoop_be,
+                (&self.tuner_freq_range.0, &self.tuner_freq_range.1),
+                (&self.tuner_ny_threshold, &self.tuner_ny_wet_ratio),
+                2,
+            ),
+            SampleType::F64 => crate::create_input_system::<f64>(
+                tuner_config,
+                &mut net,
+                siren_controls,
+                source,
+                &self.spectrum_data_thb,
+                snoop_be,
+                (&self.tuner_freq_range.0, &self.tuner_freq_range.1),
+                (&self.tuner_ny_threshold, &self.tuner_ny_wet_ratio),
+                2,
+            ),
+        };
 
         {
             *self.node_sensor_controls.write() =
@@ -1284,13 +1069,12 @@ impl AudioRuntime for CpalController {
         })
     }
 
-    #[allow(clippy::unnecessary_cast)]
     fn poll_tuner_excitements(&self) -> Vec<(NodeKey, f32)> {
         let mut data = self
             .siren_excitements
             .read()
             .iter()
-            .map(|(k, v)| (*k, v.value().re as f32))
+            .map(|(k, v)| (*k, v.value::<f32>().re))
             .collect::<Vec<_>>();
         data.sort_by_key(|(k, _)| *k);
 

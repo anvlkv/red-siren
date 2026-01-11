@@ -13,6 +13,7 @@ use fundsp::{
     prelude::{var, An},
     shared::Shared,
     snoop::{Snoop, SnoopBackend},
+    Float, Real,
 };
 use values::FineTunedValues;
 
@@ -38,7 +39,7 @@ pub struct SensorHandles {
 
 /// Create output subsystem for live playback.
 #[must_use]
-pub fn create_output_system(
+pub fn create_output_system<S: Real + Float + 'static>(
     config: &common::instrument::Config,
     net: &mut Net,
     num_channels: usize,
@@ -50,9 +51,9 @@ pub fn create_output_system(
     log::debug!("Creating output system with fine-tuned values: {values:#?}");
 
     match num_channels {
-        1 => output::mono_system(config, net, values),
-        2 => output::stereo_system(config, net, values),
-        3.. => output::multi_channel_system(config, net, num_channels, values),
+        1 => output::mono_system::<S>(config, net, values),
+        2 => output::stereo_system::<S>(config, net, values),
+        3.. => output::multi_channel_system::<S>(config, net, num_channels, values),
         0 => {
             panic!("Number of output channels cannot be zero");
         }
@@ -61,7 +62,7 @@ pub fn create_output_system(
 
 #[must_use]
 #[allow(clippy::too_many_arguments)]
-pub fn create_input_system(
+pub fn create_input_system<S: Real + Float + 'static>(
     config: &common::tuner::Config,
     net: &mut Net,
     excitements: HashMap<NodeKey, ExcitementControl>,
@@ -75,7 +76,7 @@ pub fn create_input_system(
     match source {
         ExcitementSource::Mic => {
             // Use FFT analyzer for microphone input
-            input::sensors_system(
+            input::sensors_system::<S>(
                 config,
                 net,
                 excitements,
@@ -90,7 +91,7 @@ pub fn create_input_system(
         }
         ExcitementSource::Entropy => {
             // Use random excitor for entropy source
-            input::randomized_system(config, net, excitements);
+            input::randomized_system::<S>(config, net, excitements);
 
             vec![]
         }

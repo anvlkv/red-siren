@@ -3,17 +3,14 @@ use std::{cell::RefCell, collections::HashMap};
 use common::{instrument::GroupConfig, NodeKey};
 use fundsp::prelude::*;
 
-use crate::{
-    output::{abs::Abs, div::Div, InnerHandles},
-    util::S,
-};
+use crate::output::{abs::Abs, div::Div, InnerHandles};
 
 #[allow(clippy::excessive_precision)]
-const METRO_FREQ_REDUCTION: S = 750.750750;
+const METRO_FREQ_REDUCTION: f64 = 750.750750;
 
 type ControlledFreq = Binop<FrameMul<U1>, Constant<U1>, Binop<FrameSub<U1>, Constant<U1>, Var>>;
 
-type MetroMod = Pipe<
+type MetroMod<S> = Pipe<
     Pipe<
         Binop<FrameMul<U1>, Pipe<Stack<ControlledFreq, Constant<U1>>, Div<S>>, Constant<U1>>,
         Binop<FrameSub<U1>, WaveSynth<U1>, Constant<U1>>,
@@ -24,23 +21,23 @@ type MetroMod = Pipe<
 type PanControl =
     Pipe<Binop<FrameSub<U1>, Constant<U1>, Binop<FrameMul<U1>, Var, Constant<U1>>>, Shaper<ClipTo>>;
 
-pub type MetroType = Pipe<
+pub type MetroType<S> = Pipe<
     Pipe<Stack<Pass, PanControl>, Panner<U2>>,
-    Binop<FrameAdd<U1>, Binop<FrameMul<U1>, Pass, MetroMod>, Pass>,
+    Binop<FrameAdd<U1>, Binop<FrameMul<U1>, Pass, MetroMod<S>>, Pass>,
 >;
 
-#[allow(clippy::unnecessary_cast)]
-fn create_metro(
+fn create_metro<S: Real + Float + 'static>(
     key_control: &Shared,
     band_control: &Shared,
     node_freq: S,
     divisions: u32,
     index: u32,
-) -> An<MetroType> {
+) -> An<MetroType<S>> {
     let controlled_freq: An<ControlledFreq> =
-        constant((node_freq / METRO_FREQ_REDUCTION) as f32) * (constant(1.1) - var(band_control));
+        constant((node_freq / S::from_f64(METRO_FREQ_REDUCTION)).to_f32())
+            * (constant(1.1) - var(band_control));
 
-    let metro_mod: An<MetroMod> = (((controlled_freq | constant(divisions as f32))
+    let metro_mod: An<MetroMod<S>> = (((controlled_freq | constant(divisions as f32))
         >> super::div::div::<S>())
         * constant((index + 1) as f32))
         >> (square() - constant(1.0))
@@ -52,19 +49,20 @@ fn create_metro(
     (pass() | pan_control) >> panner() >> ((pass() * metro_mod) + pass())
 }
 
-pub type MetroBusType<K> = Binop<FrameMul<U1>, MultiBus<K, MetroType>, Constant<U1>>;
+pub type MetroBusType<K, S> = Binop<FrameMul<U1>, MultiBus<K, MetroType<S>>, Constant<U1>>;
 
-pub fn metro_busi<K>(
+pub fn metro_busi<K, S>(
     config: &GroupConfig,
     group_handles: &HashMap<NodeKey, InnerHandles>,
-) -> An<MetroBusType<K>>
+) -> An<MetroBusType<K, S>>
 where
-    K: Size<S> + Size<MetroType>,
+    K: Size<S> + Size<MetroType<S>>,
+    S: Real + Float + 'static,
 {
     let nodes = config.nodes.clone();
     let controls = RefCell::new(group_handles.clone());
 
-    let buss: An<MultiBus<K, MetroType>> = busi::<K, _, _>(move |i| {
+    let buss: An<MultiBus<K, MetroType<S>>> = busi::<K, _, _>(move |i| {
         let i = i as usize;
         let mut handles = controls.borrow_mut();
         let base_freq = nodes[i].frequency;
@@ -77,7 +75,7 @@ where
         create_metro(
             &key_control,
             &band_control,
-            base_freq as S,
+            S::from_f64(base_freq),
             nodes[i].divisions,
             i as u32,
         )

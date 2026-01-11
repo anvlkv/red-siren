@@ -21,8 +21,8 @@ fn duration_to_frames(d: Duration, sample_rate: u32) -> usize {
 #[allow(clippy::unnecessary_cast)]
 pub fn playback_callback(
     net: NetBackend,
-    input_buffer: Option<Arc<ThingBuf<S>>>,
-    quality_indicator: Arc<std::sync::atomic::AtomicU8>,
+    input_buffer: Option<Arc<ThingBuf<f32>>>,
+    quality: Arc<std::sync::atomic::AtomicI8>,
     no_reset_on_silence: Arc<parking_lot::RwLock<bool>>,
     sample_rate: u32,
 ) -> Box<super::GenType> {
@@ -52,11 +52,10 @@ pub fn playback_callback(
             .unwrap_or(optimal_cap);
 
         for _ in 0..warmup_fill {
-            #[allow(clippy::unnecessary_cast)]
             let input = input_buffer
                 .as_ref()
                 .and_then(|ib| ib.pop())
-                .unwrap_or_default() as f32;
+                .unwrap_or_default();
             backend.tick(&[input], &mut lr_frame_scratch);
             output_buffer.push_back((lr_frame_scratch[0], lr_frame_scratch[1]));
         }
@@ -132,7 +131,7 @@ pub fn playback_callback(
         let current_len = output_buffer.len();
         let remaining_capacity = optimal_cap.saturating_sub(current_len);
 
-        let fill_size = if accumulated_latency > sub_optimal_duration || cfg!(feature = "lo_fi") {
+        let fill_size = if accumulated_latency > sub_optimal_duration {
             let latency_frames = duration_to_frames(accumulated_latency, sample_rate);
             let catch_up = latency_frames.saturating_add(optimal_cap);
             _ = inner_quality_indicator.get_or_insert(PlaybackQuality::OptimizedQuality);
@@ -161,7 +160,7 @@ pub fn playback_callback(
                     .iter_mut()
                     .take(fill_size)
                     .zip(iter::from_fn(|| ib.pop()))
-                    .for_each(|(v, s)| *v = s as f32);
+                    .for_each(|(v, s)| *v = s);
             }
             backend.process_big(
                 fill_size,
@@ -174,11 +173,10 @@ pub fn playback_callback(
             output_buffer.extend((0..fill_size).map(|i| (l_batch_scratch[i], r_batch_scratch[i])));
         } else {
             for _ in 0..fill_size {
-                #[allow(clippy::unnecessary_cast)]
                 let input = input_buffer
                     .as_ref()
                     .and_then(|ib| ib.pop())
-                    .unwrap_or_default() as f32;
+                    .unwrap_or_default();
                 backend.tick(&[input], &mut lr_frame_scratch);
                 output_buffer.push_back((lr_frame_scratch[0], lr_frame_scratch[1]));
             }

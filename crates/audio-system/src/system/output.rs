@@ -22,9 +22,7 @@ use common::{
 use fundsp::prelude::*;
 
 use super::NodeHandles;
-use crate::{
-    output::filter::FilterHandles, system::values::FineTunedValues, util::S, ExcitementControl,
-};
+use crate::{output::filter::FilterHandles, system::values::FineTunedValues, ExcitementControl};
 
 #[derive(Clone)]
 pub(super) struct InnerHandles {
@@ -59,7 +57,11 @@ impl Default for InnerHandles {
     }
 }
 
-pub fn mono_system(config: &Config, net: &mut Net, values: &FineTunedValues) -> Vec<NodeHandles> {
+pub fn mono_system<S: Real + Float + 'static>(
+    config: &Config,
+    net: &mut Net,
+    values: &FineTunedValues,
+) -> Vec<NodeHandles> {
     let nodes_count_per_group = config.num_nodes_per_group();
     let groups = config.0.as_slice();
 
@@ -69,7 +71,7 @@ pub fn mono_system(config: &Config, net: &mut Net, values: &FineTunedValues) -> 
 
     let (throw_x, catch_x) = throw_catch::throw_catch(7);
 
-    let id = add_one_channel_subsystem(
+    let id = add_one_channel_subsystem::<S>(
         groups,
         (group_handles, filter_handles),
         nodes_count_per_group,
@@ -91,8 +93,11 @@ pub fn mono_system(config: &Config, net: &mut Net, values: &FineTunedValues) -> 
     node_handles
 }
 
-#[allow(clippy::unnecessary_cast)]
-pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -> Vec<NodeHandles> {
+pub fn stereo_system<S: Real + Float + 'static>(
+    config: &Config,
+    net: &mut Net,
+    values: &FineTunedValues,
+) -> Vec<NodeHandles> {
     log::info!(
         "Creating stereo output system with {} total groups",
         config.num_groups()
@@ -112,7 +117,7 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
     let (left_filter_handles, right_filter_handles) =
         split_filter_handles_lr(filter_handles, config);
 
-    let left_id = add_one_channel_subsystem(
+    let left_id = add_one_channel_subsystem::<S>(
         left_groups.as_slice(),
         (left_group_handles, right_filter_handles),
         nodes_count_per_group,
@@ -121,7 +126,7 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
         net,
         values,
     );
-    let right_id = add_one_channel_subsystem(
+    let right_id = add_one_channel_subsystem::<S>(
         right_groups.as_slice(),
         (right_group_handles, left_filter_handles),
         nodes_count_per_group,
@@ -175,7 +180,7 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
         }, Routing::Reverse))
         // Final grouping: [Left mapper frame] | [Right mapper frame]
         >> (mapper.clone() | mapper.clone())
-        >> (dcblock_hz::<S>(min_hz as S * 0.1) | dcblock_hz::<S>(min_hz as S * 0.1));
+        >> (dcblock_hz::<S>(S::from_f64(min_hz) * S::from_f64(0.1)) | dcblock_hz::<S>(S::from_f64(min_hz) * S::from_f64(0.1)));
 
     let join_id = net.push(Box::new(system_join));
 
@@ -187,13 +192,13 @@ pub fn stereo_system(config: &Config, net: &mut Net, values: &FineTunedValues) -
     node_handles
 }
 
-pub fn multi_channel_system(
+pub fn multi_channel_system<S: Real + Float + 'static>(
     config: &Config,
     net: &mut Net,
     _num_channels: usize,
     values: &FineTunedValues,
 ) -> Vec<NodeHandles> {
-    stereo_system(config, net, values)
+    stereo_system::<S>(config, net, values)
 }
 
 pub(super) type Handles = (

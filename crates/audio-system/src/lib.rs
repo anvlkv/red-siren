@@ -1,3 +1,4 @@
+mod quality;
 pub mod rt;
 mod system;
 mod util;

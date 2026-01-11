@@ -1,33 +1,39 @@
-use common::NodeKey;
-use fastrand::Rng;
-use fundsp::buffer::{BufferMut, BufferRef};
-use fundsp::prelude::*;
-use fundsp::signal::SignalFrame;
 use std::collections::HashMap;
+use std::f32;
 use std::sync::Arc;
 
+use common::NodeKey;
+use fastrand::Rng;
+use fundsp::{
+    buffer::{BufferMut, BufferRef},
+    math::clamp,
+    prelude::*,
+    signal::SignalFrame,
+};
+use num_complex::Complex;
+
 use crate::system::input::adsr::Adsr;
-use crate::util::{hash_str, SComplex, S};
+use crate::util::hash_str;
 use crate::ExcitementControl;
 
 /// Random excitor node ID for debugging
 const RANDOM_EXCITOR_ID: u64 = hash_str(concat!(module_path!(), "::RandomExcitor"));
 
 /// Upper bound for random hold duration in seconds used to schedule new targets
-const MAX_DURATION_BASE_S: S = 17.5;
-const MIN_HOLD_SECS: S = 0.1;
-const DURATION_POWER: S = 3.0; // 2.0 for more responsive, 4.0 for more sustained
-const SILENCE_THRESH: S = 1.0e-9;
+const MAX_DURATION_BASE_S: f64 = 17.5;
+const MIN_HOLD_SECS: f64 = 0.1;
+const DURATION_POWER: f64 = 3.0; // 2.0 for more responsive, 4.0 for more sustained
+const SILENCE_THRESH: f64 = 1.0e-9;
 const SILENCE_HYST_FRAMES: u64 = 64;
 
 /// Random excitor that generates excitement values via Adsr envelopes
 #[derive(Clone)]
-pub struct RandomExcitor {
+pub struct RandomExcitor<S: Real + Float> {
     /// Excitement controls mapped by sensor key
     excitement_controls: HashMap<NodeKey, ExcitementControl>,
 
     /// Per-key envelopes
-    envelopes: HashMap<NodeKey, (Adsr, SComplex)>,
+    envelopes: HashMap<NodeKey, (Adsr<S>, Complex<S>)>,
 
     /// Per-key frames remaining until next target refresh
     remaining_frames: HashMap<NodeKey, u64>,
@@ -42,7 +48,7 @@ pub struct RandomExcitor {
     sample_rate: f64,
 }
 
-impl RandomExcitor {
+impl<S: Real + Float> RandomExcitor<S> {
     /// Create a new random excitor with the given excitement controls
     pub fn new(excitement_controls: HashMap<NodeKey, ExcitementControl>) -> Self {
         let mut envelopes = HashMap::with_capacity(excitement_controls.len());
@@ -52,11 +58,17 @@ impl RandomExcitor {
         let sample_rate = 44100.0;
 
         for (key, control) in &excitement_controls {
-            let mut env = (Adsr::new(sample_rate), SComplex::ZERO);
+            let mut env = (
+                Adsr::new(sample_rate),
+                Complex::<S>::new(S::zero(), S::zero()),
+            );
             // Initialize control and envelope to zero
             control.reset();
             // Kick envelope into Idle aligned with zero target
-            env.0.update(SComplex::ZERO, SComplex::ZERO);
+            env.0.update(
+                Complex::<S>::new(S::zero(), S::zero()),
+                Complex::<S>::new(S::zero(), S::zero()),
+            );
             envelopes.insert(*key, env);
             remaining_frames.insert(*key, 0);
         }
@@ -90,22 +102,18 @@ impl RandomExcitor {
 
     /// Compute frames count from seconds at current sample rate
     fn frames_from_secs(&self, secs: S) -> u64 {
-        (secs.max(0.0) * self.sample_rate as S).ceil() as u64
+        (secs.max(S::zero()) * S::from_f64(self.sample_rate))
+            .ceil()
+            .to_i64() as u64
     }
 
     /// Generate a new random target excitement and suggested hold duration (seconds)
-    fn generate_random_target(&self, key: NodeKey) -> (SComplex, S) {
+    fn generate_random_target(&self, key: NodeKey) -> (Complex<S>, S) {
         let mut rng = self.rng.lock();
 
         let mut r = {
             let mut rng = rng.fork();
-            move || {
-                #[cfg(feature = "hi_fi")]
-                let val = rng.f64();
-                #[cfg(not(feature = "hi_fi"))]
-                let val = rng.f32();
-                val
-            }
+            move || S::from_f64(rng.f64())
         };
 
         // Use multiple random samples to create a distribution
@@ -113,31 +121,36 @@ impl RandomExcitor {
         let r2 = r();
         let r3 = r();
 
-        let avg = (r1 + r2 + r3) / 3.0;
+        let avg = (r1 + r2 + r3) / S::from_f32(3.0);
 
         // Suggested duration uses configurable power to shape distribution, scaled by MAX_DURATION_BASE_S
-        let mut duration_secs = avg.powf(DURATION_POWER).clamp(0.0, 1.0) * MAX_DURATION_BASE_S;
+        let mut duration_secs = clamp(avg.pow(S::from_f64(DURATION_POWER)), S::zero(), S::one())
+            * S::from_f64(MAX_DURATION_BASE_S);
         // Clamp to min/max to avoid overly twitchy or excessively long holds
-        duration_secs = duration_secs.clamp(MIN_HOLD_SECS, MAX_DURATION_BASE_S);
+        duration_secs = clamp(
+            duration_secs,
+            S::from_f64(MIN_HOLD_SECS),
+            S::from_f64(MAX_DURATION_BASE_S),
+        );
 
         let idx = key.idx();
         let d = rng.usize(1..std::cmp::max(idx, 2)); // avoid empty range
         let im = rng
-            .choice([avg.powi(3), r1, r2, r3, avg])
-            .unwrap_or(S::EPSILON);
+            .choice([avg.pow(S::from_f32(3.0)), r1, r2, r3, avg])
+            .unwrap();
 
         let mut value = if d.is_multiple_of(3) && d.is_multiple_of(5) {
-            SComplex::new(avg.sqrt(), im)
+            Complex::<S>::new(avg.sqrt(), im)
         } else if d.is_multiple_of(5) {
-            SComplex::new(r2.powi(3), im)
+            Complex::<S>::new(r2.pow(S::from_f32(3.0)), im)
         } else if d.is_multiple_of(3) {
-            SComplex::new(r3.powi(5), im)
+            Complex::<S>::new(r3.pow(S::from_f32(5.0)), im)
         } else {
-            SComplex::ZERO
+            Complex::<S>::new(S::zero(), S::zero())
         };
 
-        if !value.is_normal() {
-            value = SComplex::ZERO;
+        if Complex32::new(value.re.to_f32(), value.im.to_f32()).is_normal() {
+            value = Complex::<S>::new(S::zero(), S::zero());
         }
 
         (value, duration_secs)
@@ -182,7 +195,6 @@ impl RandomExcitor {
     }
 
     /// Advance one audio frame: tick envelopes and push values to controls; decrement hold counters
-    #[allow(clippy::unnecessary_cast)]
     fn advance_frame(&mut self) {
         for (key, control) in &self.excitement_controls {
             if let Some((env, _)) = self.envelopes.get_mut(key) {
@@ -191,7 +203,7 @@ impl RandomExcitor {
 
                 // Update per-key silence hysteresis counter
                 if let Some(s) = self.silent_frames.get_mut(key) {
-                    if v.0 <= SILENCE_THRESH {
+                    if v.0 <= S::from_f64(SILENCE_THRESH) {
                         *s = s.saturating_add(1);
                     } else {
                         *s = 0;
@@ -206,7 +218,7 @@ impl RandomExcitor {
     }
 }
 
-impl AudioUnit for RandomExcitor {
+impl<S: Real + Float> AudioUnit for RandomExcitor<S> {
     fn inputs(&self) -> usize {
         1 // Takes input but doesn't use it
     }
@@ -241,8 +253,14 @@ impl AudioUnit for RandomExcitor {
         }
         for env in self.envelopes.values_mut() {
             // Reinitialize to Idle/zero
-            *env = (Adsr::new(self.sample_rate), SComplex::ZERO);
-            env.0.update(SComplex::ZERO, SComplex::ZERO);
+            *env = (
+                Adsr::new(self.sample_rate),
+                Complex::<S>::new(S::zero(), S::zero()),
+            );
+            env.0.update(
+                Complex::<S>::new(S::zero(), S::zero()),
+                Complex::<S>::new(S::zero(), S::zero()),
+            );
         }
         for frames_left in self.remaining_frames.values_mut() {
             *frames_left = 0;
@@ -280,9 +298,9 @@ mod tests {
         let control = ExcitementControl::default();
         controls.insert(key, control.clone());
 
-        let excitor = RandomExcitor::new_seeded(42, controls);
+        let excitor = RandomExcitor::<f32>::new_seeded(42, controls);
         assert_eq!(excitor.excitement_controls.len(), 1);
-        assert_eq!(control.value().re, 0.0);
+        assert_eq!(control.value::<f32>().re, 0.0);
     }
 
     #[test]
@@ -294,7 +312,7 @@ mod tests {
             controls.insert(key, control);
         }
 
-        let mut excitor = RandomExcitor::new_seeded(7, controls.clone());
+        let mut excitor = RandomExcitor::<f32>::new_seeded(7, controls.clone());
         excitor.set_sample_rate(48000.0);
 
         // Run a few ticks to allow envelopes to produce values

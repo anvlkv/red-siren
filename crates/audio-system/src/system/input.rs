@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use common::tuner::Config;
 use common::NodeKey;
-use fundsp::prelude::*;
+use fundsp::{prelude::*, Float, Real};
 use u_num_it::u_num_it;
 
 use crate::ExcitementControl;
@@ -20,7 +20,7 @@ pub(crate) use analyzer::FFTAnalyzer;
 pub(crate) use random_excitor::RandomExcitor;
 
 #[allow(clippy::too_many_arguments)]
-pub fn sensors_system(
+pub fn sensors_system<S: Real + Float + 'static>(
     config: &Config,
     net: &mut Net,
     excitements: HashMap<NodeKey, ExcitementControl>,
@@ -88,8 +88,11 @@ pub fn sensors_system(
 
     let sensor_inputs = sensor_shared.len();
 
-    let analyzer = FFTAnalyzer::new(
-        Box::new(preamp::create_sensors_preamp(ny_threshold, ny_wet_ratio)),
+    let analyzer = FFTAnalyzer::<S>::new(
+        Box::new(preamp::create_sensors_preamp::<S>(
+            ny_threshold,
+            ny_wet_ratio,
+        )),
         config.clone(),
         excitements,
         spectrum_thb.clone(),
@@ -154,7 +157,7 @@ fn create_sensor_handles(config: &Config) -> Vec<SensorHandles> {
 
 /// Create a random excitement system that bypasses FFT analysis
 /// Used when excitement source is Entropy/Random
-pub fn randomized_system(
+pub fn randomized_system<S: Real + Float + 'static>(
     _config: &Config,
     net: &mut Net,
     excitements: HashMap<NodeKey, ExcitementControl>,
@@ -165,7 +168,7 @@ pub fn randomized_system(
     );
 
     // Create RandomExcitor node
-    let random_excitor = RandomExcitor::new(excitements);
+    let random_excitor = RandomExcitor::<S>::new(excitements);
 
     // Add to network
     let id = net.push(Box::new(random_excitor));

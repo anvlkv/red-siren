@@ -1,6 +1,5 @@
 use fundsp::prelude::*;
-
-use crate::util::{SComplex, S};
+use num_complex::Complex;
 
 #[derive(Clone)]
 pub struct ExcitementControl {
@@ -8,7 +7,6 @@ pub struct ExcitementControl {
     pub secondary: Shared,
 }
 
-#[allow(clippy::unnecessary_cast)]
 impl ExcitementControl {
     pub fn new(primary: Shared, secondary: Shared) -> Self {
         Self { primary, secondary }
@@ -18,21 +16,21 @@ impl ExcitementControl {
         Self::new(primary, shared(0.0))
     }
 
-    pub fn value(&self) -> SComplex {
-        SComplex::new(self.primary_value(), self.secondary_value())
+    pub fn value<S: Real + Float>(&self) -> Complex<S> {
+        Complex::new(self.primary_value(), self.secondary_value())
     }
 
-    pub fn primary_value(&self) -> S {
-        self.primary.value() as S
+    pub fn primary_value<S: Real + Float>(&self) -> S {
+        S::from_f32(self.primary.value())
     }
 
-    pub fn secondary_value(&self) -> S {
-        self.secondary.value() as S
+    pub fn secondary_value<S: Real + Float>(&self) -> S {
+        S::from_f32(self.secondary.value())
     }
 
-    pub fn set_value(&self, (re, im): (S, S)) {
-        self.primary.set_value(re as f32);
-        self.secondary.set_value(im as f32);
+    pub fn set_value<S: Real + Float>(&self, (re, im): (S, S)) {
+        self.primary.set_value(re.to_f32());
+        self.secondary.set_value(im.to_f32());
     }
 
     pub fn reset(&self) {

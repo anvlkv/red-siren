@@ -1,7 +1,5 @@
 use fundsp::prelude::*;
 
-use crate::util::S;
-
 /*
 Tuner input gain calibration
 
@@ -20,7 +18,7 @@ Calibration table (Hz -> dB):
 Frequencies outside table range are clamped to nearest endpoint.
 */
 
-pub type PreampType = Pipe<
+pub type PreampType<S> = Pipe<
     Pipe<
         Pipe<
             Pipe<
@@ -43,25 +41,28 @@ pub type PreampType = Pipe<
     super::new_york::NewYork<S>,
 >;
 
-pub fn create_sensors_preamp(ny_threshold: An<Var>, ny_wet_ratio: An<Var>) -> An<PreampType> {
+pub fn create_sensors_preamp<S>(ny_threshold: An<Var>, ny_wet_ratio: An<Var>) -> An<PreampType<S>>
+where
+    S: Real + Float,
+{
     // Calibration points from the tuner input gain calibration table
     // Converting dB to linear amplitude: gain = 10^(dB/20)
 
     // Frequency calibration points and their gains
-    let freq_20hz = 20.0;
-    let gain_20hz_db = -2.7;
+    let freq_20hz = S::from_f32(20.0);
+    let gain_20hz_db = S::from_f32(-2.7);
     let gain_20hz_linear = db_amp(gain_20hz_db);
 
-    let freq_100hz = 100.0;
-    let gain_100hz_db = 0.7;
+    let freq_100hz = S::from_f32(100.0);
+    let gain_100hz_db = S::from_f32(0.7);
     let gain_100hz_linear = db_amp(gain_100hz_db);
 
-    let freq_1khz = 1000.0;
-    let gain_1khz_db = 0.5;
+    let freq_1khz = S::from_f32(1000.0);
+    let gain_1khz_db = S::from_f32(0.5);
     let gain_1khz_linear = db_amp(gain_1khz_db);
 
-    let freq_10khz = 10000.0;
-    let gain_10khz_db = 3.5;
+    let freq_10khz = S::from_f32(10000.0);
+    let gain_10khz_db = S::from_f32(3.5);
     let gain_10khz_linear = db_amp(gain_10khz_db);
 
     // Calculate Q factors for non-overlapping bands
@@ -77,18 +78,18 @@ pub fn create_sensors_preamp(ny_threshold: An<Var>, ny_wet_ratio: An<Var>) -> An
     // For better frequency selectivity with our wide spacing, we use Q ≈ 1.5-2.0
     // This provides focused correction while avoiding overlap between bands.
 
-    let q_20hz = 1.5; // Lower Q for bass frequencies (wider band)
-    let q_100hz = 1.8; // Slightly higher Q
-    let q_1khz = 2.0; // Standard Q for midrange
-    let q_10khz = 2.0; // Consistent Q for high frequencies
+    let q_20hz = S::from_f32(1.5); // Lower Q for bass frequencies (wider band)
+    let q_100hz = S::from_f32(1.8); // Slightly higher Q
+    let q_1khz = S::from_f32(2.0); // Standard Q for midrange
+    let q_10khz = S::from_f32(2.0); // Consistent Q for high frequencies
 
     // Create cascaded bell filters for frequency-selective amplification
     // Each bell filter applies gain at its center frequency with specified Q
-    dcblock()
-        >> (bell_hz(freq_20hz, q_20hz, gain_20hz_linear)
-            & bell_hz(freq_100hz, q_100hz, gain_100hz_linear)
-            & bell_hz(freq_1khz, q_1khz, gain_1khz_linear)
-            & bell_hz(freq_10khz, q_10khz, gain_10khz_linear)
+    dcblock::<S>()
+        >> (bell_hz::<S>(freq_20hz, q_20hz, gain_20hz_linear)
+            & bell_hz::<S>(freq_100hz, q_100hz, gain_100hz_linear)
+            & bell_hz::<S>(freq_1khz, q_1khz, gain_1khz_linear)
+            & bell_hz::<S>(freq_10khz, q_10khz, gain_10khz_linear)
             & pass())
         >> mul(0.5)
         >> (pass() | ny_threshold | ny_wet_ratio)
@@ -107,7 +108,7 @@ mod tests {
         let threshold = shared(cfg.ny_threshold);
         let wet_ratio = shared(cfg.ny_wet_ratio);
 
-        let mut preamp = create_sensors_preamp(var(&threshold), var(&wet_ratio));
+        let mut preamp = create_sensors_preamp::<f32>(var(&threshold), var(&wet_ratio));
 
         // Test that preamp has correct I/O configuration
         assert_eq!(preamp.inputs(), 1);

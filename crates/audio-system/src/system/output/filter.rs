@@ -6,7 +6,7 @@ use fundsp::prelude::*;
 use crate::{
     output::throw_catch::{ThrowCatchCatch, ThrowCatchThrow},
     system::values::FineTunedValue,
-    util::{DbLin, S},
+    util::DbLin,
     values::FineTunedValues,
 };
 
@@ -19,27 +19,27 @@ pub struct FilterHandles {
 }
 
 // Smoothed controls.
-type Control = Pipe<Var, Follow<S>>;
-type ClampedControl = Pipe<
-    Pipe<Pipe<Control, Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>>, Shaper<ClipTo>>,
+type Control<S> = Pipe<Var, Follow<S>>;
+type ClampedControl<S> = Pipe<
+    Pipe<Pipe<Control<S>, Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>>, Shaper<ClipTo>>,
     Binop<FrameSub<U1>, Constant<U1>, Pass>,
 >;
-type InvertedControl =
+type InvertedControl<S> =
     Pipe<Binop<FrameSub<U1>, Constant<U1>, Pipe<Var, Follow<S>>>, Shaper<ClipTo>>;
-type QControl = Pipe<
+type QControl<S> = Pipe<
     Pipe<
-        Pipe<Pipe<Control, Binop<FrameSub<U1>, ClampedControl, Pass>>, super::abs::Abs>,
+        Pipe<Pipe<Control<S>, Binop<FrameSub<U1>, ClampedControl<S>, Pass>>, super::abs::Abs>,
         Shaper<ClipTo>,
     >,
     Binop<FrameMul<U1>, Pass, FineTunedValue>,
 >;
 
-type FairGain = Pipe<
+type FairGain<S> = Pipe<
     Pipe<
         Pipe<
             Pipe<
                 Unop<Unop<Var, FrameMulScalar<U1>>, FrameNegAddScalar<U1>>,
-                Binop<FrameAdd<U1>, Constant<U1>, Binop<FrameMul<U1>, Pass, ClampedControl>>,
+                Binop<FrameAdd<U1>, Constant<U1>, Binop<FrameMul<U1>, Pass, ClampedControl<S>>>,
             >,
             Binop<FrameMul<U1>, MultiPass<U1>, Constant<U1>>,
         >,
@@ -50,34 +50,35 @@ type FairGain = Pipe<
 
 // Frequency branches
 
-type PassBranch<M> = Pipe<
-    Stack<Stack<Pass, Binop<FrameMul<U1>, Constant<U1>, InvertedControl>>, QControl>,
+type PassBranch<M, S> = Pipe<
+    Stack<Stack<Pass, Binop<FrameMul<U1>, Constant<U1>, InvertedControl<S>>>, QControl<S>>,
     Svf<S, M>,
 >;
 
 // High frequency branch
-type HpBranch = PassBranch<HighpassMode<S>>;
+type HpBranch<S> = PassBranch<HighpassMode<S>, S>;
 // Band frequency branch
-type BpBranch = PassBranch<BandpassMode<S>>;
+type BpBranch<S> = PassBranch<BandpassMode<S>, S>;
 // Low frequency branch
-type LpBranch = PassBranch<LowpassMode<S>>;
+type LpBranch<S> = PassBranch<LowpassMode<S>, S>;
 
 // Controlled split between A/B treatment branches
-type PannerControlled = Pipe<Pipe<Stack<Pass, ClampedControl>, Panner<U2>>, Reverse<U2>>;
-type PannerBranches = Stack<Stack<PannerControlled, PannerControlled>, PannerControlled>;
+type PannerControlled<S> = Pipe<Pipe<Stack<Pass, ClampedControl<S>>, Panner<U2>>, Reverse<U2>>;
+type PannerBranches<S> =
+    Stack<Stack<PannerControlled<S>, PannerControlled<S>>, PannerControlled<S>>;
 // Frequency branches
-type FreqBranches = Pipe<
-    Pipe<Stack<Stack<HpBranch, BpBranch>, LpBranch>, MultiSplit<U3, U2>>,
+type FreqBranches<S> = Pipe<
+    Pipe<Stack<Stack<HpBranch<S>, BpBranch<S>>, LpBranch<S>>, MultiSplit<U3, U2>>,
     Stack<
         Stack<Stack<Stack<Stack<Pass, ThrowCatchThrow>, Pass>, ThrowCatchThrow>, Pass>,
         ThrowCatchThrow,
     >,
 >;
 type ShelfInput = Stack<Stack<Stack<Pass, Constant<U1>>, Pass>, Pass>;
-type FreqCatch = Pipe<
+type FreqCatch<S> = Pipe<
     Pipe<
         Binop<FrameAdd<U1>, Binop<FrameAdd<U1>, ThrowCatchCatch, ThrowCatchCatch>, ThrowCatchCatch>,
-        Stack<Stack<Pass, QControl>, FairGain>,
+        Stack<Stack<Pass, QControl<S>>, FairGain<S>>,
     >,
     Bus<
         Bus<Pipe<ShelfInput, Svf<S, HighshelfMode<S>>>, Pipe<ShelfInput, Svf<S, HighshelfMode<S>>>>,
@@ -86,65 +87,70 @@ type FreqCatch = Pipe<
 >;
 
 // Parameter input to A/B branches
-type BranchInput = Stack<Stack<Pass, Constant<U1>>, QControl>;
+type BranchInput<S> = Stack<Stack<Pass, Constant<U1>>, QControl<S>>;
 
 // A branches
-type APassBranch = Pipe<
-    Pipe<BranchInput, Stack<Stack<Stack<Pass, Pass>, Pass>, DbLin>>,
+type APassBranch<S> = Pipe<
+    Pipe<BranchInput<S>, Stack<Stack<Stack<Pass, Pass>, Pass>, DbLin>>,
     DirtyBiquad<S, BellBiquad<S>, Softsign>,
 >;
 
 // B branches
 //
 // High frequency branch B
-type HpBranchB = Pipe<
-    Pipe<BranchInput, DirtyBiquad<S, ResonatorBiquad<S>, Crush>>,
-    Binop<FrameMul<U1>, Pass, FairGain>,
+type HpBranchB<S> = Pipe<
+    Pipe<BranchInput<S>, DirtyBiquad<S, ResonatorBiquad<S>, Crush>>,
+    Binop<FrameMul<U1>, Pass, FairGain<S>>,
 >;
 // Band frequency branch B
-type BpBranchB = Pipe<
-    Pipe<BranchInput, FbBiquad<S, ResonatorBiquad<S>, SoftCrush>>,
-    Binop<FrameMul<U1>, Pass, FairGain>,
+type BpBranchB<S> = Pipe<
+    Pipe<BranchInput<S>, FbBiquad<S, ResonatorBiquad<S>, SoftCrush>>,
+    Binop<FrameMul<U1>, Pass, FairGain<S>>,
 >;
 // Low frequency branch B
-type LpBranchB = Pipe<
-    Pipe<BranchInput, DirtyBiquad<S, ResonatorBiquad<S>, SoftCrush>>,
-    Binop<FrameMul<U1>, Pass, FairGain>,
+type LpBranchB<S> = Pipe<
+    Pipe<BranchInput<S>, DirtyBiquad<S, ResonatorBiquad<S>, SoftCrush>>,
+    Binop<FrameMul<U1>, Pass, FairGain<S>>,
 >;
 
 // A/B treatment
-type AbTreatment = Stack<
-    Stack<Stack<Stack<Stack<APassBranch, HpBranchB>, APassBranch>, BpBranchB>, APassBranch>,
-    LpBranchB,
+type AbTreatment<S> = Stack<
+    Stack<
+        Stack<Stack<Stack<APassBranch<S>, HpBranchB<S>>, APassBranch<S>>, BpBranchB<S>>,
+        APassBranch<S>,
+    >,
+    LpBranchB<S>,
 >;
 
 // Treated signal
-type WetChain = Pipe<
-    Pipe<Pipe<Pipe<Split<U3>, FreqBranches>, PannerBranches>, AbTreatment>,
+type WetChain<S> = Pipe<
+    Pipe<Pipe<Pipe<Split<U3>, FreqBranches<S>>, PannerBranches<S>>, AbTreatment<S>>,
     Binop<FrameAdd<U1>, Binop<FrameAdd<U1>, Join<U2>, Join<U2>>, Join<U2>>,
 >;
 
 // Mix of wet and dry signals
-pub type FilterType = Pipe<
+pub type FilterType<S> = Pipe<
     Pipe<
         Pipe<
             Pipe<
                 MultiPass<U2>,
-                Stack<Binop<FrameMul<U1>, Pass, FairGain>, Binop<FrameMul<U1>, Pass, FairGain>>,
+                Stack<
+                    Binop<FrameMul<U1>, Pass, FairGain<S>>,
+                    Binop<FrameMul<U1>, Pass, FairGain<S>>,
+                >,
             >,
-            Stack<WetChain, Pass>,
+            Stack<WetChain<S>, Pass>,
         >,
-        Stack<Pass, Binop<FrameAdd<U1>, Pass, FreqCatch>>,
+        Stack<Pass, Binop<FrameAdd<U1>, Pass, FreqCatch<S>>>,
     >,
     MultiPass<U2>,
 >;
 
-#[allow(clippy::unnecessary_cast)]
-pub fn create_filter(
+pub fn create_filter<S: Real + Float + 'static>(
     handles: FilterHandles,
     finetuned_values: &FineTunedValues,
     gain: S,
-) -> An<FilterType> {
+) -> An<FilterType<S>> {
     let FilterHandles {
         control_a_b,
         control,
@@ -170,25 +176,25 @@ pub fn create_filter(
     let filter_shelf_gain_lin: An<DbLin> =
         (filter_shelf_gain_db) >> super::db_lin::db_lin_converter();
 
-    let control_a_b: An<ClampedControl> = var(&control_a_b)
-        >> follow::<S>(follow_time as S)
+    let control_a_b: An<ClampedControl<S>> = var(&control_a_b)
+        >> follow::<S>(S::from_f32(follow_time))
         >> mul(2.0)
-        >> clip_to(S::EPSILON.sqrt() as f32, (2.0 - S::EPSILON.sqrt()) as f32)
+        >> clip_to(f32::EPSILON.sqrt(), 2.0 - f32::EPSILON.sqrt())
         >> (constant(1.0) - pass());
 
-    let fair_gain = |v: f32| -> An<FairGain> {
+    let fair_gain = |v: f32| -> An<FairGain<S>> {
         (1.0 - var(&secondary_xct) * 2.0)
             >> (constant(v.clamp(-1.0, 1.0)) + (pass() * control_a_b.clone()))
             >> mul(0.5)
             >> super::abs::abs()
-            >> mul(gain as f32)
+            >> mul(gain.to_f32())
     };
 
-    let control: An<Control> = var(&control) >> follow::<S>(follow_time as S);
+    let control: An<Control<S>> = var(&control) >> follow::<S>(S::from_f32(follow_time));
 
     let safe_clip = clip_to(0.001, 0.999);
 
-    let make_q_controlled = |q_value: An<FineTunedValue>| -> An<QControl> {
+    let make_q_controlled = |q_value: An<FineTunedValue>| -> An<QControl<S>> {
         control.clone()
             >> (control_a_b.clone() - pass())
             >> super::abs::abs()
@@ -196,89 +202,92 @@ pub fn create_filter(
             >> (pass() * q_value)
     };
 
-    let q_piercing_controlled: An<QControl> = make_q_controlled(filter_q_piercing);
-    let q_bright_controlled: An<QControl> = make_q_controlled(filter_q_bright);
-    let q_shelf_controlled: An<QControl> = make_q_controlled(filter_q_shelf);
-    let q_warm_controlled: An<QControl> = make_q_controlled(filter_q_warm);
+    let q_piercing_controlled: An<QControl<S>> = make_q_controlled(filter_q_piercing);
+    let q_bright_controlled: An<QControl<S>> = make_q_controlled(filter_q_bright);
+    let q_shelf_controlled: An<QControl<S>> = make_q_controlled(filter_q_shelf);
+    let q_warm_controlled: An<QControl<S>> = make_q_controlled(filter_q_warm);
 
-    let inverted_control: An<InvertedControl> =
+    let inverted_control: An<InvertedControl<S>> =
         (constant(1.0) - control.clone()) >> safe_clip.clone();
 
-    let hp_branch: An<HpBranch> = (pass()
+    let hp_branch: An<HpBranch<S>> = (pass()
         | (constant(config.formant_hz(5) as f32) * inverted_control.clone())
         | q_piercing_controlled.clone())
-        >> highpass();
+        >> highpass::<S>();
 
-    let bp_branch: An<BpBranch> = (pass()
+    let bp_branch: An<BpBranch<S>> = (pass()
         | (constant(config.formant_hz(4) as f32) * inverted_control.clone())
         | q_bright_controlled.clone())
-        >> bandpass();
+        >> bandpass::<S>();
 
-    let lp_branch: An<LpBranch> = (pass()
+    let lp_branch: An<LpBranch<S>> = (pass()
         | (constant(config.formant_hz(3) as f32) * inverted_control.clone())
         | q_warm_controlled.clone())
-        >> lowpass();
+        >> lowpass::<S>();
 
-    let shape: f32 = (1.0 / ((config.cents as S + S::EPSILON.sqrt()) / 1200.0))
-        .clamp(S::EPSILON.sqrt(), 1.0) as f32;
+    let shape: f32 = S::from_f64(
+        (1.0 / ((config.cents + f64::EPSILON.sqrt()) / 1200.0)).clamp(f64::EPSILON.sqrt(), 1.0),
+    )
+    .to_f32();
 
-    let hp_input: An<BranchInput> =
+    let hp_input: An<BranchInput<S>> =
         pass() | constant(config.frequency as f32) | q_piercing_controlled.clone();
-    let a_hp_branch: An<APassBranch> = hp_input.clone()
+    let a_hp_branch: An<APassBranch<S>> = hp_input.clone()
         >> (pass() | pass() | pass() | filter_shelf_gain_lin.clone())
         >> dbell(Softsign(shape));
-    let b_hp_branch: An<HpBranchB> =
+    let b_hp_branch: An<HpBranchB<S>> =
         hp_input >> dresonator(Crush(shape)) >> (pass() * fair_gain(-0.2));
 
     let mid_f = (config.formant_hz(3) + config.formant_hz(5)) / 2.0;
-    let bp_input: An<BranchInput> = pass() | constant(mid_f as f32) | q_bright_controlled.clone();
+    let bp_input: An<BranchInput<S>> =
+        pass() | constant(mid_f as f32) | q_bright_controlled.clone();
 
-    let a_bp_branch: An<APassBranch> = bp_input.clone()
+    let a_bp_branch: An<APassBranch<S>> = bp_input.clone()
         >> (pass() | pass() | pass() | filter_shelf_gain_lin.clone())
         >> dbell(Softsign(shape));
-    let b_bp_branch: An<BpBranchB> =
+    let b_bp_branch: An<BpBranchB<S>> =
         bp_input >> fresonator(SoftCrush(shape)) >> (pass() * fair_gain(0.1));
 
-    let mass = config.cents.clamp(f64::EPSILON.sqrt(), 1200.0).powf(1.05) as S;
-    let hr_bpm = (K_BASE as S) * mass.powf(-0.25);
-    let hr_hz = hr_bpm / 60.0;
-    let lp_input: An<BranchInput> = pass() | constant(hr_hz as f32) | q_warm_controlled.clone();
-    let a_lp_branch: An<APassBranch> = lp_input.clone()
+    let mass = S::from_f64(config.cents.clamp(f64::EPSILON.sqrt(), 1200.0).powf(1.05));
+    let hr_bpm = S::from_f32(K_BASE) * mass.pow(S::from_f32(-0.25));
+    let hr_hz = hr_bpm / S::from_f32(60.0);
+    let lp_input: An<BranchInput<S>> =
+        pass() | constant(hr_hz.to_f32()) | q_warm_controlled.clone();
+    let a_lp_branch: An<APassBranch<S>> = lp_input.clone()
         >> (pass() | pass() | pass() | filter_shelf_gain_lin.clone())
         >> dbell(Softsign(shape));
-    let b_lp_branch: An<LpBranchB> =
+    let b_lp_branch: An<LpBranchB<S>> =
         lp_input >> dresonator(SoftCrush(shape)) >> (pass() * fair_gain(-0.1));
 
     let (hp_throw, hp_catch) = super::throw_catch::throw_catch(2);
     let (bp_throw, bp_catch) = super::throw_catch::throw_catch(2);
     let (lp_throw, lp_catch) = super::throw_catch::throw_catch(2);
 
-    let freq_branches: An<FreqBranches> = (hp_branch | bp_branch | lp_branch)
+    let freq_branches: An<FreqBranches<S>> = (hp_branch | bp_branch | lp_branch)
         >> multisplit::<U3, U2>()
         >> (pass() | hp_throw | pass() | bp_throw | pass() | lp_throw);
 
     // bypass ab_treatment
     let hs1_input: An<ShelfInput> = pass() | constant(config.frequency as f32) | pass() | pass();
     let hs2_input: An<ShelfInput> = pass() | constant(mid_f as f32) | pass() | pass();
-    let ls_input: An<ShelfInput> =
-        pass() | constant(config.formant_hz(2) as f32 as f32) | pass() | pass();
+    let ls_input: An<ShelfInput> = pass() | constant(config.formant_hz(2) as f32) | pass() | pass();
 
-    let freq_catch: An<FreqCatch> = (hp_catch + bp_catch + lp_catch)
+    let freq_catch: An<FreqCatch<S>> = (hp_catch + bp_catch + lp_catch)
         >> (pass() | q_shelf_controlled.clone() | fair_gain(-0.3))
         >> ((hs1_input >> highshelf::<S>())
             & (hs2_input >> highshelf::<S>())
             & (ls_input >> lowshelf::<S>()));
 
-    let panner_branch: An<PannerControlled> =
+    let panner_branch: An<PannerControlled<S>> =
         (pass() | control_a_b.clone()) >> panner() >> reverse::<U2>();
 
-    let panner_branches: An<PannerBranches> =
+    let panner_branches: An<PannerBranches<S>> =
         panner_branch.clone() | panner_branch.clone() | panner_branch;
 
-    let ab_treatment: An<AbTreatment> =
+    let ab_treatment: An<AbTreatment<S>> =
         a_hp_branch | b_hp_branch | a_bp_branch | b_bp_branch | a_lp_branch | b_lp_branch;
 
-    let wet_chain: An<WetChain> = split::<U3>()
+    let wet_chain: An<WetChain<S>> = split::<U3>()
         >> freq_branches
         >> panner_branches
         >> ab_treatment

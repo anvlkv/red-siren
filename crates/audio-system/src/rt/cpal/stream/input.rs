@@ -10,14 +10,12 @@ use cpal::{
     SampleFormat, Stream, StreamConfig, SupportedStreamConfig,
 };
 
-use crate::util::S;
-
 use super::{Control, ControlInvocationResult, STREAM_TIMEOUT_S};
 
 /// Producer callback type used by the input stream owner thread.
 /// It receives a slice of f64 mono samples (already down-mixed) and
 /// returns the number of samples successfully pushed into its buffer.
-pub type ProdType = dyn FnMut(&S) + Send;
+pub type ProdType = dyn FnMut(&f32) + Send;
 
 /// Spawn a dedicated owner thread that:
 /// - Builds and owns the CPAL input stream (kept on that thread).
@@ -168,10 +166,10 @@ fn run_input(
 /// Convert & down-mix frames to mono and feed producer.
 fn write_data<T>(input: &[T], channels: usize, produce_sample: &mut ProdType)
 where
-    T: cpal::SizedSample + dasp_sample::ToSample<S>,
+    T: cpal::SizedSample + dasp_sample::ToSample<f32>,
 {
     for frame in input.chunks(channels) {
-        let sample = (0..channels).map(|i| frame[i].to_sample()).sum::<S>() / channels as S;
+        let sample = (0..channels).map(|i| frame[i].to_sample()).sum::<f32>() / channels as f32;
         produce_sample(&sample);
     }
 }

@@ -8,6 +8,10 @@ use fundsp::{
 
 use super::InnerHandles;
 
+use crate::output::{
+    node::create_node,
+    throw_catch::{ThrowCatchCatch, ThrowCatchThrow},
+};
 use crate::{
     output::{
         metro::{metro_busi, MetroBusType},
@@ -16,15 +20,8 @@ use crate::{
     system::values::{FineTunedValue, FineTunedValues},
     util::DbLin,
 };
-use crate::{
-    output::{
-        node::create_node,
-        throw_catch::{ThrowCatchCatch, ThrowCatchThrow},
-    },
-    util::S,
-};
 
-type ShelfType = Pipe<
+type ShelfType<S> = Pipe<
     Stack<Stack<Stack<Pass, Constant<UInt<UTerm, B1>>>, FineTunedValue>, DbLin>,
     Svf<S, HighshelfMode<S>>,
 >;
@@ -44,7 +41,7 @@ type BandSum<K> = Pipe<
     >,
 >;
 
-type ResamplerSpeed<K> = Pipe<
+type ResamplerSpeed<K, S> = Pipe<
     Pipe<
         Pipe<
             Constant<U1>,
@@ -62,28 +59,29 @@ type ResamplerSpeed<K> = Pipe<
     super::div::Div<S>,
 >;
 
-type NodesBus<K> = Pipe<
+type NodesBus<K, S> = Pipe<
     Pipe<
-        Pipe<Pipe<Pipe<MultiBus<K, NodeType>, ShelfType>, ButterLowpass<S, U1>>, Split<U2>>,
+        Pipe<Pipe<Pipe<MultiBus<K, NodeType<S>>, ShelfType<S>>, ButterLowpass<S, U1>>, Split<U2>>,
         Stack<Pass, ThrowCatchThrow>,
     >,
-    MetroBusType<K>,
+    MetroBusType<K, S>,
 >;
 
-type ProductionChain<K> = Pipe<Follow<S>, Stack<Resample<NodesBus<K>>, ThrowCatchCatch>>;
+type ProductionChain<K, S> = Pipe<Follow<S>, Stack<Resample<NodesBus<K, S>>, ThrowCatchCatch>>;
 
 type OutputChain = Pipe<Stack<Pass, Delay>, Binop<FrameAdd<U1>, Pass, Pass>>;
 
-pub type GroupType<K> = Pipe<Pipe<ResamplerSpeed<K>, ProductionChain<K>>, OutputChain>;
+pub type GroupType<K, S> = Pipe<Pipe<ResamplerSpeed<K, S>, ProductionChain<K, S>>, OutputChain>;
 
-#[allow(clippy::unnecessary_cast)]
-pub fn create_group_node<K>(
+
+pub fn create_group_node<K, S>(
     config: &GroupConfig,
     group_handles: HashMap<NodeKey, InnerHandles>,
     values: &FineTunedValues,
-) -> An<GroupType<K>>
+) -> An<GroupType<K, S>>
 where
-    K: Size<S> + Size<NodeType>,
+    K: Size<S> + Size<NodeType<S>>,
+    S: Real + Float + 'static,
 {
     let nodes = config.nodes.clone();
     debug_assert_eq!(
@@ -109,38 +107,46 @@ where
             .collect::<Vec<_>>(),
     );
 
-    let metro = metro_busi::<K>(config, &group_handles);
+    let metro = metro_busi::<K, S>(config, &group_handles);
 
     let handles_cell = RefCell::new(group_handles);
     let values_clone = values.clone();
-    let f_min = config
-        .nodes
-        .iter()
-        .map(|n| n.frequency)
-        .fold(f64::MAX, |acc, x| acc.min(x)) as S;
-    let f_max = config
-        .nodes
-        .iter()
-        .map(|n| n.frequency)
-        .fold(f64::EPSILON.sqrt(), |acc, x| acc.max(x)) as S;
+    let f_min = S::from_f64(
+        config
+            .nodes
+            .iter()
+            .map(|n| n.frequency)
+            .fold(f64::MAX, |acc, x| acc.min(x)),
+    );
+    let f_max = S::from_f64(
+        config
+            .nodes
+            .iter()
+            .map(|n| n.frequency)
+            .fold(f64::EPSILON.sqrt(), |acc, x| acc.max(x)),
+    );
 
     log::debug!("Group Node: f_min = {}, f_max = {}", f_min, f_max);
 
     let gain: An<DbLin> = values.group_ls_gain_db.clone() >> super::db_lin::db_lin_converter();
 
-    let shelf: An<ShelfType> =
-        (pass() | constant((f_min * 0.75) as f32) | values.group_q.clone() | gain.clone())
-            >> highshelf::<S>();
+    let shelf: An<ShelfType<S>> = (pass()
+        | constant((f_min * S::from_f32(0.75)).to_f32())
+        | values.group_q.clone()
+        | gain.clone())
+        >> highshelf::<S>();
 
-    let butter = butterpass_hz(f_max * 1.5);
+    let butter = butterpass_hz(f_max * S::from_f32(1.5));
 
-    let coef = (1.0 / K::USIZE as S).powf(
-        config
-            .nodes
-            .first()
-            .map(|n| n.key.group() as S + 2.0)
-            .unwrap_or_default(),
-    ) / K::USIZE as S;
+    let coef = S::from_f64(
+        (1.0 / K::USIZE as f64).powf(
+            config
+                .nodes
+                .first()
+                .map(|n| n.key.group() as f64 + 2.0)
+                .unwrap_or_default(),
+        ) / K::USIZE as f64,
+    );
 
     log::info!("created group with speed coefficient: [{coef}]");
 
@@ -149,19 +155,19 @@ where
             let mut bands = bands_cell.borrow_mut();
             pass()
                 + ((constant(1.0) - (var(&bands.pop().unwrap()) * constant(2.0)))
-                    >> mul(-coef as f32))
+                    >> mul(-coef.to_f32()))
         });
-    let resampler_speed: An<ResamplerSpeed<K>> = constant(K::USIZE as f32)
+    let resampler_speed: An<ResamplerSpeed<K, S>> = constant(K::USIZE as f32)
         >> pipei::<K, _, _>(move |_| {
             let mut excitements = excitements_cell.borrow_mut();
-            pass() + (var(&excitements.pop().unwrap().primary) >> mul(coef as f32))
+            pass() + (var(&excitements.pop().unwrap().primary) >> mul(coef.to_f32()))
         })
         >> ((pass() + bands_sum) | constant(K::USIZE as f32))
         >> super::div::div::<S>();
 
     let (throw, catch) = super::throw_catch::throw_catch(K::USIZE);
 
-    let nodes_bus: An<NodesBus<K>> = busi::<K, _, _>(move |i| {
+    let nodes_bus: An<NodesBus<K, S>> = busi::<K, _, _>(move |i| {
         let key = nodes[i as usize].key;
         let mut handles = handles_cell.borrow_mut();
         let handle = handles
@@ -169,7 +175,7 @@ where
             .ok_or_else(|| format!("missing handle for node key: [{key:?}]"))
             .unwrap();
 
-        create_node(&nodes[i as usize], handle, &values_clone)
+        create_node::<S>(&nodes[i as usize], handle, &values_clone)
     }) >> shelf
         >> butter
         >> split::<U2>()
@@ -182,8 +188,8 @@ where
     #[cfg(not(feature = "editor"))]
     let follow_time = values.node_follow_response_time_s.value()[0];
 
-    let production_chain: An<ProductionChain<K>> =
-        follow::<S>(follow_time as S) >> (resample(nodes_bus) | catch);
+    let production_chain: An<ProductionChain<K, S>> =
+        follow::<S>(S::from_f32(follow_time)) >> (resample(nodes_bus) | catch);
 
     let group_d_cents = config.distance_cents();
     let group_delay = (1.0 / 1200.0) * group_d_cents;
@@ -200,6 +206,9 @@ mod tests {
     use insta_fun::prelude::*;
     use test_log::test;
     use u_num_it::u_num_it;
+
+    type S = f32;
+
     #[test]
     fn test_config_cases_groups() {
         #[cfg(feature = "editor")]
@@ -243,7 +252,7 @@ mod tests {
                     1..=11,
                     match i_max {
                         U => {
-                            net.push(Box::new(create_group_node::<NumType>(
+                            net.push(Box::new(create_group_node::<NumType, f32>(
                                 &group,
                                 group_handles,
                                 &values,

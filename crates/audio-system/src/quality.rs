@@ -111,7 +111,7 @@ impl PlaybackQualityGate {
             .or_else(|| device.default_input_config().ok())
     }
 
-    fn sample_rate(&self, cfg: Option<&cpal::SupportedStreamConfigRange>) -> cpal::SampleRate {
+    pub fn sample_rate(&self, cfg: Option<&cpal::SupportedStreamConfigRange>) -> cpal::SampleRate {
         match self {
             PlaybackQualityGate::Ultra => cfg.map_or(ULTRA_SAMPLE_RATE, |c| {
                 ULTRA_SAMPLE_RATE.clamp(c.min_sample_rate(), c.max_sample_rate())
@@ -128,7 +128,7 @@ impl PlaybackQualityGate {
         }
     }
 
-    fn buffer_size(&self, cfg: Option<&cpal::SupportedStreamConfigRange>) -> cpal::FrameCount {
+    pub fn buffer_size(&self, cfg: Option<&cpal::SupportedStreamConfigRange>) -> cpal::FrameCount {
         let sr_ms = self.sample_rate(cfg) as f64 / 1000.0;
         let ultra_buffer = (ULTRA_BUFFER_MS as f64 * sr_ms).round() as u32;
         let hi_buffer = (HI_BUFFER_MS as f64 * sr_ms).round() as u32;

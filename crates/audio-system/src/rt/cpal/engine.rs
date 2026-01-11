@@ -104,6 +104,7 @@ struct CpalController {
     tuner_only_mode: Arc<RwLock<bool>>,
     quality_indicator: Arc<std::sync::atomic::AtomicI8>,
     quality_gate: RwLock<PlaybackQualityGate>,
+    auto_quality: Arc<RwLock<bool>>,
 }
 
 impl Default for CpalController {
@@ -149,6 +150,7 @@ impl Default for CpalController {
                 PlaybackQualityGate::default() as i8,
             )),
             quality_gate: RwLock::new(PlaybackQualityGate::default()),
+            auto_quality: Arc::new(RwLock::new(true)),
         }
     }
 }
@@ -276,13 +278,34 @@ impl CpalController {
         let quality: std::sync::Arc<std::sync::atomic::AtomicI8> = self.quality_indicator.clone();
         let sr = self.sample_rate.read().map(|sr| sr as u32).unwrap_or(44100);
         let no_reset = self.tuner_only_mode.clone();
+        // Create shared telemetry handle and seed sample rate.
+        let telemetry = std::sync::Arc::new(parking_lot::Mutex::new(
+            crate::rt::cpal::stream::telemetry::PlaybackTelemetry {
+                sample_rate: sr,
+                ..Default::default()
+            },
+        ));
         // Spawn output stream owner.
         let (tx, handle) = spawn_owned_output_stream(
             output_device,
             output_default_cfg,
             stream_cfg,
             output_channels,
-            move || playback_callback(backend, input_buffer, quality, no_reset, sr),
+            {
+                let telemetry = telemetry.clone();
+                let buffer_target_frames = self.quality_gate.read().buffer_size(None);
+                move || {
+                    playback_callback(
+                        backend,
+                        input_buffer,
+                        quality,
+                        no_reset,
+                        sr,
+                        buffer_target_frames as usize,
+                        telemetry,
+                    )
+                }
+            },
         )?;
 
         // Persist output thread / control handles.

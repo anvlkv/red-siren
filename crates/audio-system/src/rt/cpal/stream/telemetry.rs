@@ -9,14 +9,14 @@ pub const STEADY_OCCUPANCY_RATIO: f64 = 0.80; // Target 80% of buffer capacity
 pub const CATCH_UP_LATENCY_RATIO: f64 = 0.90; // Enter catch-up when estimated latency >= 90% of buffer duration
 
 pub const EMA_RENDER_ALPHA: f64 = 0.20; // Render time EMA smoothing
-pub const EMA_SLACK_ALPHA: f64 = 0.30;  // Slack EMA smoothing
+pub const EMA_SLACK_ALPHA: f64 = 0.30; // Slack EMA smoothing
 
 // Gate management policy thresholds (engine-side consumption)
 pub const DEGRADE_THRESHOLD_MS: f64 = -3.0; // Slack less than -3 ms triggers degrade
-pub const DEGRADE_SUSTAIN_MS: u64 = 1000;   // Trouble must persist for at least 1 second
-pub const UPGRADE_THRESHOLD_MS: f64 = 2.0;  // Slack greater than +2 ms enables upgrade
-pub const UPGRADE_STABLE_MS: u64 = 20_000;  // Stability must persist for at least 20 seconds
-pub const CHANGE_COOLDOWN_MS: u64 = 5_000;  // Minimum cooldown between changes
+pub const DEGRADE_SUSTAIN_MS: u64 = 1000; // Trouble must persist for at least 1 second
+pub const UPGRADE_THRESHOLD_MS: f64 = 2.0; // Slack greater than +2 ms enables upgrade
+pub const UPGRADE_STABLE_MS: u64 = 20_000; // Stability must persist for at least 20 seconds
+pub const CHANGE_COOLDOWN_MS: u64 = 5_000; // Minimum cooldown between changes
 
 /// Playback telemetry shared between the audio callback and engine.
 ///
@@ -27,7 +27,7 @@ pub const CHANGE_COOLDOWN_MS: u64 = 5_000;  // Minimum cooldown between changes
 /// - Latency is estimated from queue depth and net latency (in frames), converted to ms.
 /// - Slack compares expected callback period against measured render time; negative indicates falling behind.
 /// - EMAs smooth jitter for more stable decisions; raw metrics are too noisy for direct gating.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct PlaybackTelemetry {
     // Device/sample context
     pub sample_rate: u32,
@@ -84,8 +84,7 @@ impl PlaybackTelemetry {
         let expected_ns = expected_period.as_nanos() as f64;
         let render_ns = self.ema_render_ns_per_frame * self.last_callback_frames as f64;
         let slack = expected_ns - render_ns;
-        self.ema_compute_slack_ns =
-            Self::ema(self.ema_compute_slack_ns, slack, EMA_SLACK_ALPHA);
+        self.ema_compute_slack_ns = Self::ema(self.ema_compute_slack_ns, slack, EMA_SLACK_ALPHA);
     }
 
     /// Recompute latency estimate from queue depth and net latency (both in frames).
@@ -119,8 +118,6 @@ impl PlaybackTelemetry {
     #[inline]
     pub fn note_underruns(&mut self, local: u32) {
         self.local_underruns = local;
-        self.total_underruns = self
-            .total_underruns
-            .saturating_add(local as u64);
+        self.total_underruns = self.total_underruns.saturating_add(local as u64);
     }
 }

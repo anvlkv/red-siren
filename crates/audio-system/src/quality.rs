@@ -51,6 +51,17 @@ impl PlaybackQualityGate {
     }
 }
 
+impl Into<common::instrument::data::PlaybackQuality> for PlaybackQualityGate {
+    fn into(self) -> common::instrument::data::PlaybackQuality {
+        match self {
+            Self::Ultra => common::instrument::data::PlaybackQuality::Ultra,
+            Self::HiFi => common::instrument::data::PlaybackQuality::HiFi,
+            Self::Medium => common::instrument::data::PlaybackQuality::Medium,
+            Self::LoFi => common::instrument::data::PlaybackQuality::LoFi,
+        }
+    }
+}
+
 #[cfg(feature = "rt_cpal")]
 impl From<cpal::SupportedStreamConfig> for PlaybackQualityGate {
     fn from(value: cpal::SupportedStreamConfig) -> PlaybackQualityGate {

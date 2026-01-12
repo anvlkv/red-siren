@@ -51,44 +51,44 @@ const SPECTRUM_BUFFER_CAPACITY: usize = 2;
 /// `rt_cpal` feature is enabled.
 struct CpalController {
     // DSP frontend and node references
-    dsp_net_frontend: RwLock<Option<Net>>,
-    dsp_primary_node_id: RwLock<Option<NodeId>>,
+    
+    
     sample_rate: RwLock<Option<f64>>,
-    gain_param: RwLock<Option<Shared>>,
-    processed_output_snoops: RwLock<Option<(Snoop, Snoop)>>,
-    input_snoop: RwLock<Option<Snoop>>,
+    
+    
+    
     /// min and max values
-    freq_range: RwLock<(f64, f64)>,
-    tuner_tap_gain_param: RwLock<Option<Shared>>,
+    output_freq_range: RwLock<(f64, f64)>,
+    
 
     // Fine-tuned values for editor mode
     #[cfg(feature = "editor")]
     fine_tuned_shared_values: RwLock<FineTunedSharedValues>,
 
     // Stream control
-    control_tx: RwLock<Option<Sender<Control>>>,
+    output_control_tx: RwLock<Option<Sender<Control>>>,
     output_thread: RwLock<Option<thread::JoinHandle<()>>>,
 
     // Excitement system (input/noise)
-    input_sender: RwLock<Option<Sender<Control>>>,
+    input_control_tx: RwLock<Option<Sender<Control>>>,
     input_thread: RwLock<Option<thread::JoinHandle<()>>>,
 
     // Per-node data taps and controls
-    node_excitement_snoops: RwLock<HashMap<NodeKey, (Snoop, Snoop)>>,
-    node_output_snoops: RwLock<HashMap<NodeKey, Snoop>>,
+    
+    
 
     // presets
-    preset: RwLock<Preset>,
-    node_band_controls: RwLock<HashMap<NodeKey, Shared>>,
-    node_key_controls: RwLock<HashMap<NodeKey, Shared>>,
-    node_sensor_controls: RwLock<HashMap<NodeKey, SensorHandles>>,
-    tuner_freq_range: Arc<(Shared, Shared)>,
-    tuner_ny_threshold: Arc<Shared>,
-    tuner_ny_wet_ratio: Arc<Shared>,
+    
+    
+    
+    
+    
+    
+    
 
     // Spectrum data tap
-    spectrum_data_thb: crate::system::input::analyzer::SpectrumBuffer,
-    siren_excitements: RwLock<HashMap<NodeKey, ExcitementControl>>,
+    
+    
 
     // Last known state for restarts
     last_layout: RwLock<InstrumentLayout>,
@@ -102,15 +102,7 @@ struct CpalController {
 
     // operation
     tuner_only_mode: Arc<RwLock<bool>>,
-    quality_indicator: Arc<std::sync::atomic::AtomicI8>,
     quality_gate: RwLock<PlaybackQualityGate>,
-    auto_quality: Arc<RwLock<bool>>,
-
-    // Gate management and telemetry (engine-thread access)
-    gate_manager: RwLock<super::gate_manager::GateManager>,
-    output_telemetry: RwLock<
-        Option<std::sync::Arc<parking_lot::Mutex<super::stream::telemetry::PlaybackTelemetry>>>,
-    >,
 }
 
 impl Default for CpalController {
@@ -152,15 +144,8 @@ impl Default for CpalController {
             output_device: RwLock::new(None),
             input_device: RwLock::new(None),
             tuner_only_mode: Arc::new(RwLock::new(false)),
-            quality_indicator: Arc::new(std::sync::atomic::AtomicI8::new(
-                PlaybackQualityGate::default() as i8,
-            )),
+
             quality_gate: RwLock::new(PlaybackQualityGate::default()),
-            auto_quality: Arc::new(RwLock::new(true)),
-            gate_manager: RwLock::new(super::gate_manager::GateManager::new(
-                PlaybackQualityGate::default(),
-            )),
-            output_telemetry: RwLock::new(None),
         }
     }
 }
@@ -178,10 +163,12 @@ impl CpalController {
             Some(t) => t,
             None => return false,
         };
-        let t = telemetry_arc.lock();
-        let ema_slack = t.ema_compute_slack_ns;
-        let recent_underruns = t.local_underruns > 0;
-        drop(t);
+        let (ema_slack, recent_underruns) = if let Some(t) = telemetry_arc.try_lock() {
+            (t.ema_compute_slack_ns, t.local_underruns > 0)
+        } else {
+            // Skip evaluation this tick if telemetry is busy to avoid blocking RT callback
+            return false;
+        };
 
         // Evaluate recommendation
         let now = std::time::Instant::now();
@@ -340,7 +327,10 @@ impl CpalController {
         let output_channels = std::cmp::Ord::min(output_default_cfg.channels(), 2) as usize;
 
         let quality: std::sync::Arc<std::sync::atomic::AtomicI8> = self.quality_indicator.clone();
-        let sr = self.sample_rate.read().map(|sr| sr as u32).unwrap_or(44100);
+        let sr = {
+            *self.sample_rate.write() = Some(stream_cfg.sample_rate as f64);
+            stream_cfg.sample_rate
+        };
         let no_reset = self.tuner_only_mode.clone();
         // Create shared telemetry handle and seed sample rate.
         let telemetry = std::sync::Arc::new(parking_lot::Mutex::new(
@@ -362,15 +352,15 @@ impl CpalController {
                 let telemetry = telemetry.clone();
                 let buffer_target_frames = self.quality_gate.read().buffer_size(None);
                 move || {
-                    playback_callback(
-                        backend.clone(),
-                        input_buffer.clone(),
-                        quality.clone(),
-                        no_reset.clone(),
-                        sr,
-                        buffer_target_frames as usize,
-                        telemetry.clone(),
-                    )
+                    let cfg = super::stream::playback::PlaybackCallbackConfig {
+                        input_buffer: input_buffer.clone(),
+                        quality: quality.clone(),
+                        no_reset_on_silence: no_reset.clone(),
+                        sample_rate: sr,
+                        buffer_target_frames: buffer_target_frames as usize,
+                        telemetry: telemetry.clone(),
+                    };
+                    playback_callback(backend, cfg)
                 }
             },
         )?;
@@ -702,6 +692,14 @@ impl CpalController {
     }
 
     fn shutdown_streams(&self) -> Result<()> {
+        // Stop gate evaluation worker and clear reset channel
+        self.gate_eval_running
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        if let Some(handle) = self.gate_eval_thread.write().take() {
+            let _ = handle.join();
+        }
+        _ = self.gate_reset_tx.write().take();
+
         // Take thread handles
         _ = self.output_thread.write().take();
         _ = self.input_thread.write().take();
@@ -911,13 +909,40 @@ impl AudioRuntime for CpalController {
             *self.dsp_net_frontend.write() = Some(front);
         }
 
-        // Periodic gate evaluation loop runs on engine thread.
-        // Break when output control channel is cleared (stop requested) or on any error surfaced elsewhere.
-        loop {
-            std::thread::sleep(std::time::Duration::from_millis(300));
-            let _ = self.evaluate_gate_and_maybe_restart();
-            if self.control_tx.read().is_none() {
-                break;
+        // Spawn gate evaluation worker thread (non-blocking; uses only Arcs)
+        {
+            let telemetry_opt = self.output_telemetry.read().clone();
+            if let Some(telemetry) = telemetry_opt {
+                let auto_quality = self.auto_quality.clone();
+                let quality_indicator = self.quality_indicator.clone();
+                let start_gate = *self.quality_gate.read();
+                thread::spawn(move || {
+                    let mut gm = super::gate_manager::GateManager::new(start_gate);
+                    let mut current_gate = start_gate;
+                    loop {
+                        thread::sleep(Duration::from_millis(300));
+                        if !*auto_quality.read() {
+                            continue;
+                        }
+                        if let Some(t) = telemetry.try_lock() {
+                            let ema_slack = t.ema_compute_slack_ns;
+                            let recent_underruns = t.local_underruns > 0;
+                            drop(t);
+                            let now = std::time::Instant::now();
+                            if let Some(new_gate) = gm.evaluate_recommendation(
+                                current_gate,
+                                ema_slack,
+                                recent_underruns,
+                                now,
+                            ) {
+                                current_gate = new_gate;
+                                quality_indicator
+                                    .store(new_gate as i8, std::sync::atomic::Ordering::Relaxed);
+                                // TODO: send reset signal via a channel (gate reset tx) owned by engine
+                            }
+                        }
+                    }
+                });
             }
         }
 
@@ -1308,16 +1333,7 @@ impl AudioRuntime for CpalController {
     }
 
     fn quality_indicator(&self) -> PlaybackQuality {
-        match self
-            .quality_indicator
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
-            0 => PlaybackQuality::HighQuality,
-            1 => PlaybackQuality::OptimizedQuality,
-            2 => PlaybackQuality::Underruns,
-            3 => PlaybackQuality::Resetting,
-            _ => PlaybackQuality::default(),
-        }
+        (*self.quality_gate.read()).into()
     }
 
     fn set_preset(&self, preset: Preset) -> common::error::Result<()> {

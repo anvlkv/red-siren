@@ -12,8 +12,8 @@ use common::{
 use parking_lot::RwLock;
 use tauri::{AppHandle, Emitter, Manager};
 
-// Import InstrumentEngine from parent module
-use crate::instrument::InstrumentEngine;
+// Import InstrumentState from parent module
+use crate::instrument::InstrumentState;
 
 const HOLD_DECAY: f32 = 0.95;
 
@@ -56,7 +56,7 @@ impl TunerState {
     }
 
     pub fn reset(&self, config: &Config, layout: &TunerLayout) -> Result<()> {
-        let instrument = self.app.state::<InstrumentEngine>();
+        let instrument = self.app.state::<InstrumentState>();
         instrument.update_tuner_config(config)?;
 
         *self.tuner_config.write() = config.clone();
@@ -74,7 +74,7 @@ impl TunerState {
     }
 
     pub fn toggle_probe(&self) -> Result<bool> {
-        let instrument = self.app.state::<InstrumentEngine>();
+        let instrument = self.app.state::<InstrumentState>();
         let mut probe = self.probe_active.write();
         let desired = !*probe;
         if desired {
@@ -108,7 +108,7 @@ impl TunerState {
         let wrong_count = current_config.sensor_data.len() != registry.total_keys();
 
         if is_empty || has_invalid_keys || wrong_count {
-            let instrument_state = self.app.state::<InstrumentEngine>();
+            let instrument_state = self.app.state::<InstrumentState>();
             let sample_rate = instrument_state.sample_rate() as f32;
 
             let new_config: Config = Config::new_from_previous(
@@ -119,7 +119,7 @@ impl TunerState {
                 &current_config,
             );
 
-            let instrument = self.app.state::<InstrumentEngine>();
+            let instrument = self.app.state::<InstrumentState>();
             instrument.update_tuner_config(&new_config)?;
 
             drop(current_config); // Release read lock before acquiring write lock
@@ -167,7 +167,7 @@ impl TunerState {
         };
 
         // External operations without holding the lock
-        let instrument = self.app.state::<InstrumentEngine>();
+        let instrument = self.app.state::<InstrumentState>();
         instrument.update_tuner_config(&updated)?;
 
         self.app
@@ -190,7 +190,7 @@ impl TunerState {
             config.clone()
         };
 
-        let instrument = self.app.state::<InstrumentEngine>();
+        let instrument = self.app.state::<InstrumentState>();
         instrument.update_tuner_config(&updated)?;
 
         self.app
@@ -212,7 +212,7 @@ impl TunerState {
             config.clone()
         };
 
-        let instrument = self.app.state::<InstrumentEngine>();
+        let instrument = self.app.state::<InstrumentState>();
         instrument.update_tuner_config(&updated)?;
 
         self.app
@@ -231,7 +231,7 @@ impl TunerState {
             config.clone()
         };
 
-        let instrument = self.app.state::<InstrumentEngine>();
+        let instrument = self.app.state::<InstrumentState>();
         instrument.update_tuner_config(&updated)?;
 
         self.app
@@ -249,7 +249,7 @@ impl TunerState {
     /// retry starting tuner-only stream for a short period before falling back
     /// to using the existing stream without owning it.
     pub fn start_tuner_stream(&self) -> Result<()> {
-        let instrument = self.app.state::<InstrumentEngine>();
+        let instrument = self.app.state::<InstrumentState>();
 
         log::debug!(
             "tuner.start_tuner_stream: begin (playing={}, src={:?})",
@@ -337,7 +337,7 @@ impl TunerState {
     pub fn stop_tuner_stream(&self) -> Result<()> {
         log::info!("Stopping tuner stream");
 
-        let instrument = self.app.state::<InstrumentEngine>();
+        let instrument = self.app.state::<InstrumentState>();
         // Only stop if we started a dedicated tuner-only stream.
         let owned = *self.tuner_stream_active.read();
         if owned {
@@ -354,7 +354,7 @@ impl TunerState {
 
     pub fn spectrum_data(handle: &AppHandle) -> SpectrumData {
         let state = handle.state::<Self>();
-        let instrument_state = handle.state::<InstrumentEngine>();
+        let instrument_state = handle.state::<InstrumentState>();
 
         // Poll a spectrum frame if available and update cached vectors
         if let Some(spectrum) = instrument_state.poll_spectrum() {
@@ -431,7 +431,7 @@ impl TunerState {
     }
 
     pub fn snapshot_input_snoop(&self) -> Result<Vec<f32>> {
-        let instrument = self.app.state::<InstrumentEngine>();
+        let instrument = self.app.state::<InstrumentState>();
         Ok(instrument.snapshot_input_snoop())
     }
 }

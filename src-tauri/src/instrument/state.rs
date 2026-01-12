@@ -1,6 +1,7 @@
 use common::NodeKey;
 use parking_lot::RwLock;
 
+// use audio_system::quality::PlaybackQualityGate;
 use audio_system::rt::{make_stream_controller, AudioRuntime, ExcitementSource};
 
 use common::error::{AppError, InstrumentError, Result};
@@ -12,7 +13,7 @@ use mint::Vector2;
 use tauri::{AppHandle, Emitter, Manager};
 
 /// Public wrapper so higher layers (commands) only hold one handle.
-pub struct InstrumentEngine {
+pub struct InstrumentState {
     app: AppHandle,
     inner: Inner,
 }
@@ -27,11 +28,13 @@ pub(super) struct Inner {
 
     // Runtime stream controller (lazy; concrete backend chosen by audio_system::rt)
     stream_controller: RwLock<Box<dyn AudioRuntime + Send + Sync>>,
+    // Dedicated listener thread for gate-reset events from audio runtime evaluator
+    gate_reset_listener: RwLock<Option<std::thread::JoinHandle<()>>>,
 }
 
-impl InstrumentEngine {
+impl InstrumentState {
     pub fn new(app: &AppHandle) -> Result<Self> {
-        Ok(InstrumentEngine {
+        Ok(InstrumentState {
             app: app.clone(),
             inner: Inner {
                 playing: RwLock::new(false),
@@ -39,6 +42,7 @@ impl InstrumentEngine {
                 layout: RwLock::new(InstrumentLayout::default()),
                 config: RwLock::new(InstrumentConfig::default()),
                 stream_controller: RwLock::new(make_stream_controller()?),
+                gate_reset_listener: RwLock::new(None),
             },
         })
     }
@@ -59,7 +63,7 @@ impl InstrumentEngine {
         let tuner_state = self.app.state::<crate::tuner::TunerState>();
         let tuner_config = tuner_state.tuner_config();
         {
-            log::trace!("InstrumentEngine.start_playback()");
+            log::trace!("InstrumentState.start_playback()");
             if *self.inner.playing.read() {
                 return Ok(false);
             }
@@ -141,7 +145,7 @@ impl InstrumentEngine {
     }
 
     pub fn stop_playback(&self) -> common::error::Result<bool> {
-        log::trace!("InstrumentEngine.stop_playback()");
+        log::trace!("InstrumentState.stop_playback()");
         if !*self.inner.playing.read() {
             return Ok(false);
         }
@@ -163,7 +167,7 @@ impl InstrumentEngine {
     }
 
     pub fn pause_playback(&self) -> common::error::Result<bool> {
-        log::trace!("InstrumentEngine.pause_playback()");
+        log::trace!("InstrumentState.pause_playback()");
         if !*self.inner.playing.read() {
             return Ok(false);
         }
@@ -184,7 +188,7 @@ impl InstrumentEngine {
     }
 
     pub fn resume_playback(&self) -> common::error::Result<bool> {
-        log::trace!("InstrumentEngine.resume_playback()");
+        log::trace!("InstrumentState.resume_playback()");
         if *self.inner.playing.read() {
             return Ok(false);
         }
@@ -207,7 +211,7 @@ impl InstrumentEngine {
     pub fn set_excitement_source(&self, src: ExcitementSource) -> common::error::Result<bool> {
         let tuner_state = self.app.state::<crate::tuner::TunerState>();
         let tuner_config = tuner_state.tuner_config();
-        log::trace!("InstrumentEngine.set_excitement_source({:?})", src);
+        log::trace!("InstrumentState.set_excitement_source({:?})", src);
         let changed = {
             let mut current = self.inner.excitement_source.write();
             if *current != src {

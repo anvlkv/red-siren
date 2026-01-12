@@ -1,5 +1,5 @@
 mod commands;
-mod engine;
+mod state;
 
 use common::{error::Result, instrument::Preset};
 use tauri::{App, AppHandle, Emitter, Manager, async_runtime::spawn};
@@ -8,17 +8,17 @@ use crate::persistence::persistence::{load_json_or_default, save_json};
 
 
 pub use commands::*;
-pub use engine::InstrumentEngine;
+pub use state::InstrumentState;
 
 
 pub(super) const PRESETS_STORE_NAME: &str = "presets.json";
 pub(super) const PRESETS_STORE_KEY: &str = "presets";
 
 pub fn setup(app: &mut App) -> Result<()> {
-    let is_new = app.manage(engine::InstrumentEngine::new(app.handle())?);
+    let is_new = app.manage(state::InstrumentState::new(app.handle())?);
 
     if is_new {
-        log::debug!("Instrument engine initialized and managed state created");
+        log::debug!("Instrument state initialized and managed state created");
         let presets: Preset = load_json_or_default(app.handle(), PRESETS_STORE_NAME, PRESETS_STORE_KEY)?;
 
         let windows = app.webview_windows();
@@ -27,7 +27,7 @@ pub fn setup(app: &mut App) -> Result<()> {
             match window.inner_size() {
                 Ok(size) => {
                     spawn(async move {
-                        let state = base_handle_new.state::<engine::InstrumentEngine>();
+                        let state = base_handle_new.state::<state::InstrumentState>();
                         match state.set_size(size.width as f64, size.height as f64) {
                             Ok(_) => {
                                 log::debug!(
@@ -59,7 +59,7 @@ pub fn setup(app: &mut App) -> Result<()> {
                 Err(e) => {
                     log::warn!("Main window size unavailable at setup (proceeding without initial layout): {e}");
                     spawn(async move {
-                        let state = base_handle_new.state::<engine::InstrumentEngine>();
+                        let state = base_handle_new.state::<state::InstrumentState>();
                         if let Err(e) = state.set_preset(presets.clone()) {
                             log::error!("error setting initial instrument presets: {e}");
                         } else {
@@ -71,7 +71,7 @@ pub fn setup(app: &mut App) -> Result<()> {
         } else {
             log::warn!("Main window not yet available at setup; proceeding without initial layout");
             spawn(async move {
-                let state = base_handle_new.state::<engine::InstrumentEngine>();
+                let state = base_handle_new.state::<state::InstrumentState>();
                 if let Err(e) = state.set_preset(presets.clone()) {
                     log::error!("error setting initial instrument presets: {e}");
                 } else {
@@ -83,9 +83,7 @@ pub fn setup(app: &mut App) -> Result<()> {
         log::debug!("Instrument engine state already exists; skipping initialization");
     }
 
-    // Window appearance updates are coordinated by AppBus; instrument listeners trimmed.
 
-    // Window size updates are coordinated by AppBus; instrument listeners trimmed.
 
     Ok(())
 }

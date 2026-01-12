@@ -68,68 +68,63 @@ impl GateManager {
 
         // Track trouble sustainment window
         let trouble = slack_ms < DEGRADE_THRESHOLD_MS || recent_underruns;
-        if trouble {
-            match self.trouble_since {
-                Some(_) => { /* already tracking */ }
-                None => {
-                    // Start trouble clock
-                    self.trouble_since = Some(now);
-                }
-            }
-        } else {
+        if trouble && self.trouble_since.is_none() {
+            // Start trouble clock
+            self.trouble_since = Some(now);
+        } else if !trouble {
             // Clear trouble tracking when conditions improve
             self.trouble_since = None;
         }
 
         // Track stability window for upgrades
         let stable = slack_ms >= UPGRADE_THRESHOLD_MS && !recent_underruns;
-        if stable {
-            if self.stable_since.is_none() {
-                self.stable_since = Some(now);
-            }
-        } else {
+        if stable && self.stable_since.is_none() {
+            self.stable_since = Some(now);
+        } else if !stable {
             self.stable_since = None;
         }
 
         // Degrade quickly on sustained trouble (or immediately on persistent underruns) if cooldown allows
-        if can_change {
-            let sustained_trouble = match self.trouble_since {
-                Some(since) => {
-                    now.duration_since(since) >= Duration::from_millis(DEGRADE_SUSTAIN_MS)
-                }
-                None => false,
-            };
-
-            if sustained_trouble {
-                let new_gate = current_gate.lower();
-                if new_gate != current_gate {
-                    self.last_change = now;
-                    self.stable_since = None;
-                    self.trouble_since = None;
-                    self.recommended_gate = new_gate;
-                    return Some(new_gate);
-                }
+        if can_change
+            && matches!(
+                self.trouble_since,
+                Some(since) if now.duration_since(since) >= Duration::from_millis(DEGRADE_SUSTAIN_MS)
+            )
+        {
+            let new_gate = current_gate.lower();
+            if new_gate != current_gate {
+                self.last_change = now;
+                self.stable_since = None;
+                self.trouble_since = None;
+                self.recommended_gate = new_gate;
+                return Some(new_gate);
             }
         }
 
         // Upgrade slowly on stable conditions if cooldown allows
-        if can_change {
-            if let Some(since) = self.stable_since {
-                if now.duration_since(since) >= Duration::from_millis(UPGRADE_STABLE_MS) {
-                    let new_gate = current_gate.higher();
-                    if new_gate != current_gate {
-                        self.last_change = now;
-                        self.stable_since = None;
-                        self.trouble_since = None;
-                        self.recommended_gate = new_gate;
-                        return Some(new_gate);
-                    }
+        if let Some(new_gate) = self
+            .stable_since
+            .as_ref()
+            .filter(|&since| {
+                can_change && now.duration_since(*since) >= Duration::from_millis(UPGRADE_STABLE_MS)
+            })
+            .and_then(|_| {
+                let new_gate = current_gate.higher();
+                if new_gate != current_gate {
+                    Some(new_gate)
+                } else {
+                    None
                 }
-            }
+            })
+        {
+            self.last_change = now;
+            self.stable_since = None;
+            self.trouble_since = None;
+            self.recommended_gate = new_gate;
+            Some(new_gate)
+        } else {
+            None
         }
-
-        // No change recommended
-        None
     }
 
     /// Manually set a new cooldown duration in milliseconds.

@@ -403,7 +403,7 @@ quality.store(current_gate as i8, std::sync::atomic::Ordering::Relaxed);
 
 ## Notes
 
-- The callback does not transition the gate persistently; it only reports the current gate as the indicator. This keeps configuration changes centralized in the engine.
+- The callback does not transition the gate persistently; it only reports the current gate as the indicator. Configuration changes are centralized in the engine, which owns gate transitions and writes the indicator atomic on changes.
 - Automatic gate switching occurs only when the auto flag is ON. When auto is OFF, the engine still tracks and stores a recommended gate for UI/UX, but does not apply it.
 - Keep overhead minimal: the audio thread performs only simple atomic writes and brief lock reads/writes; evaluation and reconfiguration run off the audio thread.
 - `OutputStreamTimestamp.playback` remains a secondary signal; computed expected period and measured render time are primary inputs.
@@ -452,12 +452,12 @@ Phase 4 — Gate Management (engine)
     - Fades in and resets GateManager timers.
 - Removed owner-side `ReconfigureGate` control path; reconfiguration uses shutdown-and-restart.
 
-Phase 5 — Timestamp Reliability Guard
-- Expected period uses the callback frame count and sample rate.
-- `OutputStreamTimestamp` guard is planned post-gate loop stabilization.
+Phase 5 — Timestamp Reliability Guard (implemented)
+- The callback measures render time per invocation and computes slack against the computed expected period (from frame count and sample rate).
+- A lightweight guard marks device timestamps unreliable when repeated underruns or buffer-duration overshoot occurs; when unreliable, computed period is preferred for slack/latency decisions.
 
 Known technical deltas and TODOs
-- Batch `process` path is not used; `process_big` is used for all batch sizes to satisfy adapter type requirements. Optional future: add proper `BufferRef/BufferMut` wrappers to support `process` for ≤64 frames.
+- Small-batch `process` path is implemented using Fundsp `BufferRef/BufferMut` for ≤64 samples; larger batches continue to use `process_big`. This restores the intended production granularity without custom scratch slices.
 - Minor clippy/warnings to tidy:
   - Remove any remaining unused variables and duplicate computations.
   - Optionally fold callback parameters into a small config struct if “too many arguments” appears.

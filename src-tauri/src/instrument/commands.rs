@@ -13,11 +13,12 @@ use common::instrument::{
 use common::NodeKey;
 use tauri::{AppHandle, Emitter, State};
 
-use crate::{health::HealthSetupState, instrument::engine::InstrumentEngine};
+use crate::{health::HealthSetupState};
+use super::state::InstrumentState;
 
 #[tauri::command]
 /// Creates instrument engine and starts streaming
-pub fn instrument_playback_start(state: State<'_, InstrumentEngine>, app: AppHandle) -> Result<()> {
+pub fn instrument_playback_start(state: State<'_, InstrumentState>, app: AppHandle) -> Result<()> {
     log::debug!("instrument_playback_start called");
 
     match state.start_playback()? {
@@ -38,14 +39,14 @@ pub fn instrument_playback_start(state: State<'_, InstrumentEngine>, app: AppHan
     })?;
     log::info!("Emitted playback state: playing");
 
-    // Reflect will be emitted after the stream has started (InstrumentEngine.start_playback)
+    // Reflect will be emitted after the stream has started (InstrumentState.start_playback)
 
     Ok(())
 }
 
 #[tauri::command]
 /// Stops stream and destroys instrument engine
-pub fn instrument_playback_stop(state: State<'_, InstrumentEngine>, app: AppHandle) -> Result<()> {
+pub fn instrument_playback_stop(state: State<'_, InstrumentState>, app: AppHandle) -> Result<()> {
     log::debug!("instrument_playback_stop called");
 
     match state.stop_playback()? {
@@ -71,7 +72,7 @@ pub fn instrument_playback_stop(state: State<'_, InstrumentEngine>, app: AppHand
 #[tauri::command]
 /// Returns true if playback is active
 pub fn instrument_playback_state(
-    state: State<'_, InstrumentEngine>,
+    state: State<'_, InstrumentState>,
 ) -> Result<PlaybackStatePayload> {
     log::debug!("instrument_playback_state called");
 
@@ -84,7 +85,7 @@ pub fn instrument_playback_state(
 #[tauri::command]
 /// Returns current instrument excitement source (mic or entropy)
 pub fn instrument_excitement_source(
-    state: State<'_, InstrumentEngine>,
+    state: State<'_, InstrumentState>,
 ) -> Result<ExcitementSourcePayload> {
     log::debug!("instrument_excitement_source called");
     let source = state.excitement_source();
@@ -98,7 +99,7 @@ pub fn instrument_excitement_source(
 /// Returns current instrument excitement source (mic or entropy)
 pub fn instrument_set_excitement_source(
     source: u8,
-    state: State<'_, InstrumentEngine>,
+    state: State<'_, InstrumentState>,
     health: State<'_, HealthSetupState>,
     app: AppHandle,
 ) -> Result<()> {
@@ -177,7 +178,7 @@ pub fn instrument_set_excitement_source(
 
 #[tauri::command]
 /// Pauses playback, maintaining state
-pub fn instrument_playback_pause(state: State<'_, InstrumentEngine>, app: AppHandle) -> Result<()> {
+pub fn instrument_playback_pause(state: State<'_, InstrumentState>, app: AppHandle) -> Result<()> {
     log::debug!("instrument_playback_pause called");
 
     match state.pause_playback()? {
@@ -203,7 +204,7 @@ pub fn instrument_playback_pause(state: State<'_, InstrumentEngine>, app: AppHan
 #[tauri::command]
 /// Resumes playback from paused state
 pub fn instrument_playback_resume(
-    state: State<'_, InstrumentEngine>,
+    state: State<'_, InstrumentState>,
     app: AppHandle,
 ) -> Result<()> {
     log::debug!("instrument_playback_resume called");
@@ -230,7 +231,7 @@ pub fn instrument_playback_resume(
 
 #[tauri::command]
 /// Returns current instrument layout (invoke/event: instrument_layout)
-pub fn instrument_layout(state: State<'_, InstrumentEngine>) -> Result<Layout> {
+pub fn instrument_layout(state: State<'_, InstrumentState>) -> Result<Layout> {
     log::debug!("instrument_layout called");
     Ok(state.layout())
 }
@@ -243,7 +244,7 @@ pub fn ui_safe_area_insets_apply(
     right: f64,
     bottom: f64,
     left: f64,
-    state: State<'_, InstrumentEngine>,
+    state: State<'_, InstrumentState>,
     window_state: State<'_, crate::setup::WindowState>,
     app: AppHandle,
     window: tauri::Window,
@@ -338,7 +339,7 @@ pub fn ui_safe_area_insets_apply(
 pub fn instrument_string_snoop_data(
     group: usize,
     key: usize,
-    state: tauri::State<'_, crate::instrument::engine::InstrumentEngine>,
+    state: tauri::State<'_, InstrumentState>,
 ) -> common::error::Result<common::instrument::data::StringSnoopDataResponse> {
     let samples = state.snapshot_output_snoop(NodeKey::new(group as u8, key as u8));
     Ok(common::instrument::data::StringSnoopDataResponse { samples })
@@ -346,7 +347,7 @@ pub fn instrument_string_snoop_data(
 
 #[tauri::command]
 pub fn instrument_all_string_snoops(
-    state: tauri::State<'_, crate::instrument::engine::InstrumentEngine>,
+    state: tauri::State<'_, InstrumentState>,
 ) -> common::error::Result<common::instrument::data::StringSnoopBatchPayload> {
 
     let entries = state
@@ -376,7 +377,7 @@ pub fn instrument_all_string_snoops(
 pub fn instrument_excitement_snoop_data(
     group: usize,
     key: usize,
-    state: tauri::State<'_, crate::instrument::engine::InstrumentEngine>,
+    state: tauri::State<'_, InstrumentState>,
 ) -> common::error::Result<common::instrument::data::ExcitementSnoopDataResponse> {
     let samples = state.snapshot_excitement_snoop(NodeKey::new(group as u8, key as u8));
     Ok(common::instrument::data::ExcitementSnoopDataResponse { samples })
@@ -384,7 +385,7 @@ pub fn instrument_excitement_snoop_data(
 
 #[tauri::command]
 pub fn instrument_all_excitement_snoops(
-    state: tauri::State<'_, crate::instrument::engine::InstrumentEngine>,
+    state: tauri::State<'_, InstrumentState>,
 ) -> common::error::Result<common::instrument::data::ExcitementSnoopBatchPayload> {
 
     let entries = state
@@ -415,7 +416,7 @@ pub fn instrument_all_excitement_snoops(
 pub fn instrument_update_band_control(
     keys: Vec<NodeKey>,
     increment: f32,
-    state: State<'_, InstrumentEngine>,
+    state: State<'_, InstrumentState>,
     app: AppHandle,
 ) -> Result<()> {
     for node_key in keys {
@@ -450,7 +451,7 @@ pub fn instrument_update_band_control(
 pub fn instrument_update_key_control(
     keys: Vec<NodeKey>,
     value: f32,
-    state: State<'_, InstrumentEngine>,
+    state: State<'_, InstrumentState>,
     app: AppHandle,
 ) -> Result<()> {
     for node_key in keys {
@@ -476,12 +477,12 @@ pub fn instrument_update_key_control(
 }
 
 #[tauri::command]
-pub fn instrument_quality_indicator(state: State<'_, InstrumentEngine>) -> PlaybackQuality {
+pub fn instrument_quality_indicator(state: State<'_, InstrumentState>) -> PlaybackQuality {
     state.quality_indicator()
 }
 
 #[tauri::command]
-pub fn snapshot_processed_output_spectrum(state: State<'_, InstrumentEngine>) -> Option<SpectrumPayload> {
+pub fn snapshot_processed_output_spectrum(state: State<'_, InstrumentState>) -> Option<SpectrumPayload> {
     let data = state.snapshot_processed_output_spectrum();
 
     data.map(|data| SpectrumPayload {
@@ -507,7 +508,7 @@ pub async fn instrument_edit_finetuned_values(
     node_bell_q: f32,
     node_bell_gain_db: f32,
     formant_base_q: f32,
-    state: State<'_, InstrumentEngine>,
+    state: State<'_, InstrumentState>,
 ) -> Result<common::commands::edit::FineTunedValuesPayload> {
     let values = common::commands::edit::FineTunedValuesPayload{
         siren_alpha,
@@ -537,7 +538,7 @@ pub async fn instrument_edit_finetuned_values(
 #[cfg(feature="devtools")]
 #[tauri::command]
 pub async fn instrument_get_finetuned_values(
-    state: State<'_, InstrumentEngine>,
+    state: State<'_, InstrumentState>,
 ) -> Result<common::commands::edit::FineTunedValuesPayload> {
     state.get_finetuned_values()
 }

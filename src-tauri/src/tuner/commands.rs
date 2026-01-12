@@ -3,7 +3,7 @@ use common::tuner::{Config, Layout as TunerLayout, ReflectTunerConstraints, Spec
 use common::NodeKey;
 use tauri::{AppHandle, State};
 
-use crate::instrument::InstrumentEngine;
+use crate::instrument::InstrumentState;
 
 use super::TunerState;
 
@@ -15,7 +15,7 @@ pub fn tuner_config(state: State<'_, TunerState>) -> Result<Config> {
 #[tauri::command]
 pub fn tuner_layout(
     state: State<'_, TunerState>,
-    instrument: State<'_, InstrumentEngine>,
+    instrument: State<'_, InstrumentState>,
 ) -> Result<TunerLayout> {
     if let Some(l) = state.tuner_layout() {
         return Ok(l);
@@ -69,7 +69,7 @@ pub fn tuner_update_sensor(
 #[tauri::command]
 pub fn tuner_reset_config(
     state: State<'_, TunerState>,
-    instrument: State<'_, InstrumentEngine>,
+    instrument: State<'_, InstrumentState>,
 ) -> Result<()> {
     let inst_layout = instrument.layout();
     let sample_rate = instrument.sample_rate() as f32;

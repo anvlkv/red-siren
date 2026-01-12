@@ -16,7 +16,7 @@ use common::{
     },
 };
 
-use crate::instrument::{save_preset, InstrumentEngine};
+use crate::instrument::{save_preset, InstrumentState};
 use crate::setup::WindowState;
 
 /// Central coordinator for cross-module app lifecycle and window-related events.
@@ -99,7 +99,7 @@ impl AppBus {
             if let Ok(ss) = serde_json::from_str::<SetupStatePayload>(payload) {
                 if ss.gui_ready {
                     thread::spawn(move || {
-                        let state = handle.state::<InstrumentEngine>();
+                        let state = handle.state::<InstrumentState>();
                         let layout = state.layout();
                         if let Err(e) = handle.emit(LAYOUT, layout) {
                             log::error!(
@@ -155,7 +155,7 @@ impl AppBus {
             let handle = handle.clone();
             let presets_guard = Arc::clone(&presets_guard);
             thread::spawn(move || {
-                let instrument = handle.state::<InstrumentEngine>();
+                let instrument = handle.state::<InstrumentState>();
                 let win_state = handle.state::<WindowState>();
                 let is_dark = win_state.lock().dark;
 
@@ -188,7 +188,7 @@ impl AppBus {
             let handle = handle.clone();
             let presets_guard = Arc::clone(&presets_guard);
             thread::spawn(move || {
-                let instrument = handle.state::<InstrumentEngine>();
+                let instrument = handle.state::<InstrumentState>();
                 let win_state = handle.state::<WindowState>();
                 let window_state = win_state.lock();
                 let width = window_state.width;
@@ -226,7 +226,7 @@ impl AppBus {
 /// Why:
 /// - UI needs per-key updated control values after layout changes (size/appearance).
 /// - Keep emit errors contained; do not panic on failures.
-fn emit_reflect_events(handle: &AppHandle, instrument: &InstrumentEngine) {
+fn emit_reflect_events(handle: &AppHandle, instrument: &InstrumentState) {
     let new_layout = instrument.layout();
     for node_key in new_layout.registry().all_keys() {
         let band_value = match instrument.get_band_control(node_key) {
@@ -281,7 +281,7 @@ fn emit_reflect_events(handle: &AppHandle, instrument: &InstrumentEngine) {
 /// - Debounce to a minimal interval to avoid excessive writes while keeping state reasonably fresh.
 fn maybe_debounced_save_preset(
     handle: &AppHandle,
-    instrument: &InstrumentEngine,
+    instrument: &InstrumentState,
     guard: &Arc<Mutex<Debounce>>,
 ) {
     let mut g = guard.lock();

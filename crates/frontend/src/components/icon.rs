@@ -24,6 +24,8 @@ const OK_ICON: &str = include_str!("./icon/ok.svg");
 const WARNING_ICON: &str = include_str!("./icon/warning.svg");
 const CUBE_ICON: &str = include_str!("./icon/cube.svg");
 const BATCH_ICON: &str = include_str!("./icon/batch.svg");
+const SQUARES_ICON: &str = include_str!("./icon/squares.svg");
+const DIAMOND_ICON: &str = include_str!("./icon/diamond.svg");
 
 #[component]
 pub fn Icon(
@@ -65,6 +67,8 @@ pub fn Icon(
             "warning" => WARNING_ICON,
             "batch" => BATCH_ICON,
             "cube" => CUBE_ICON,
+            "squares" => SQUARES_ICON,
+            "diamond" => DIAMOND_ICON,
             i => panic!("No such icon: [{i}]"),
         };
         decorate_svg(raw, size(), name)

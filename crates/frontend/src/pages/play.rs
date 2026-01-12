@@ -143,25 +143,25 @@ pub fn Play() -> impl IntoView {
         }
     });
 
-    with_tooltip(
-        icon_ref,
-        Signal::derive(move || {
-            match quality_indicator_data() {
-                PlaybackQuality::HighQuality => "High Quality",
-                PlaybackQuality::OptimizedQuality => "Optimized",
-                PlaybackQuality::Resetting => "Restarting...",
-                PlaybackQuality::Underruns => "Overload!",
-            }
-            .to_string()
-        }),
-        Signal::derive(move || Some(placement().opposite())),
-    );
+    // with_tooltip(
+    //     icon_ref,
+    //     Signal::derive(move || {
+    //         match quality_indicator_data() {
+    //             PlaybackQuality::HighQuality => "High Quality",
+    //             PlaybackQuality::OptimizedQuality => "Optimized",
+    //             PlaybackQuality::Resetting => "Restarting...",
+    //             PlaybackQuality::Underruns => "Overload!",
+    //         }
+    //         .to_string()
+    //     }),
+    //     Signal::derive(move || Some(placement().opposite())),
+    // );
 
     let process_icon = Signal::derive(move || match quality_indicator_data() {
-        PlaybackQuality::HighQuality => "cube",
-        PlaybackQuality::OptimizedQuality => "batch",
-        PlaybackQuality::Resetting => "reset",
-        PlaybackQuality::Underruns => "skull",
+        PlaybackQuality::Ultra => "diamond",
+        PlaybackQuality::HiFi => "cube",
+        PlaybackQuality::Medium => "batch",
+        PlaybackQuality::LoFi => "squares",
     });
 
     view! {

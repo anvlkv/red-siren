@@ -40,10 +40,8 @@ use super::audio_session;
 use super::stream::{spawn_owned_output_stream, Control, ControlInvocationResult, ProdType};
 
 const CONTROL_INVOKE_TIMEOUT_MS: u64 = 500;
-const FADE_DURATION_MS: u64 = 120;
-const FOLLOW_RESPONSE_SECS: f32 = FADE_DURATION_MS as f32 / 1000.0;
+
 const INPUT_BUFFER_DURATION_MS: u64 = 20;
-const INPUT_SNOOP_SIZE: usize = FFT_WINDOW_SIZE;
 const SPECTRUM_BUFFER_CAPACITY: usize = 2;
 
 /// CPAL-backed stream controller implementing audio I/O and DSP graph
@@ -51,15 +49,10 @@ const SPECTRUM_BUFFER_CAPACITY: usize = 2;
 /// `rt_cpal` feature is enabled.
 struct CpalController {
     // DSP frontend and node references
-    
-    
     sample_rate: RwLock<Option<f64>>,
-    
-    
-    
+
     /// min and max values
     output_freq_range: RwLock<(f64, f64)>,
-    
 
     // Fine-tuned values for editor mode
     #[cfg(feature = "editor")]
@@ -74,21 +67,10 @@ struct CpalController {
     input_thread: RwLock<Option<thread::JoinHandle<()>>>,
 
     // Per-node data taps and controls
-    
-    
 
     // presets
-    
-    
-    
-    
-    
-    
-    
 
     // Spectrum data tap
-    
-    
 
     // Last known state for restarts
     last_layout: RwLock<InstrumentLayout>,
@@ -105,50 +87,46 @@ struct CpalController {
     quality_gate: RwLock<PlaybackQualityGate>,
 }
 
-impl Default for CpalController {
-    fn default() -> Self {
-        let default_tuner_cfg = TunerConfig::default();
-        Self {
-            dsp_net_frontend: RwLock::new(None),
-            dsp_primary_node_id: RwLock::new(None),
-            sample_rate: RwLock::new(None),
-            gain_param: RwLock::new(None),
-            processed_output_snoops: RwLock::new(None),
-            tuner_tap_gain_param: RwLock::new(None),
-            freq_range: RwLock::new((
-                common::instrument::consts::SOFT_MIN_FREQ_HZ,
-                common::instrument::consts::SOFT_MAX_FREQ_HZ,
-            )),
-            #[cfg(feature = "editor")]
-            fine_tuned_shared_values: RwLock::new(FineTunedSharedValues::default()),
-            input_snoop: RwLock::new(None),
-            tuner_freq_range: Arc::new((shared(f32::NEG_INFINITY), shared(f32::INFINITY))),
-            tuner_ny_threshold: Arc::new(shared(default_tuner_cfg.ny_threshold)),
-            tuner_ny_wet_ratio: Arc::new(shared(default_tuner_cfg.ny_wet_ratio)),
-            control_tx: RwLock::new(None),
-            output_thread: RwLock::new(None),
-            input_sender: RwLock::new(None),
-            input_thread: RwLock::new(None),
-            node_excitement_snoops: RwLock::new(HashMap::new()),
-            node_output_snoops: RwLock::new(HashMap::new()),
-            preset: RwLock::new(Preset::default()),
-            node_band_controls: RwLock::new(HashMap::new()),
-            node_key_controls: RwLock::new(HashMap::new()),
-            node_sensor_controls: RwLock::new(HashMap::new()),
-            spectrum_data_thb: Arc::new(ThingBuf::new(SPECTRUM_BUFFER_CAPACITY)),
-            siren_excitements: RwLock::new(HashMap::new()),
-            last_layout: RwLock::new(InstrumentLayout::default()),
-            last_config: RwLock::new(InstrumentConfig::default()),
-            last_source: RwLock::new(ExcitementSource::default()),
-            last_tuner_config: RwLock::new(TunerConfig::default()),
-            output_device: RwLock::new(None),
-            input_device: RwLock::new(None),
-            tuner_only_mode: Arc::new(RwLock::new(false)),
+// impl Default for CpalController {
+//     fn default() -> Self {
+//         let default_tuner_cfg = TunerConfig::default();
+//         Self {
+//             dsp_net_frontend: RwLock::new(None),
+//             dsp_primary_node_id: RwLock::new(None),
+//             sample_rate: RwLock::new(None),
+//             gain_param: RwLock::new(None),
+//             processed_output_snoops: RwLock::new(None),
+//             tuner_tap_gain_param: RwLock::new(None),
+//             freq_range: RwLock::new((
+//                 common::instrument::consts::SOFT_MIN_FREQ_HZ,
+//                 common::instrument::consts::SOFT_MAX_FREQ_HZ,
+//             )),
+//             #[cfg(feature = "editor")]
+//             fine_tuned_shared_values: RwLock::new(FineTunedSharedValues::default()),
+//             input_snoop: RwLock::new(None),
+//             tuner_freq_range: Arc::new((shared(f32::NEG_INFINITY), shared(f32::INFINITY))),
+//             tuner_ny_threshold: Arc::new(shared(default_tuner_cfg.ny_threshold)),
+//             tuner_ny_wet_ratio: Arc::new(shared(default_tuner_cfg.ny_wet_ratio)),
+//             control_tx: RwLock::new(None),
+//             output_thread: RwLock::new(None),
+//             input_sender: RwLock::new(None),
+//             input_thread: RwLock::new(None),
+//             node_excitement_snoops: RwLock::new(HashMap::new()),
+//             node_output_snoops: RwLock::new(HashMap::new()),
+//             preset: RwLock::new(Preset::default()),
+//             node_band_controls: RwLock::new(HashMap::new()),
+//             node_key_controls: RwLock::new(HashMap::new()),
+//             node_sensor_controls: RwLock::new(HashMap::new()),
+//             spectrum_data_thb: Arc::new(ThingBuf::new(SPECTRUM_BUFFER_CAPACITY)),
+//             siren_excitements: RwLock::new(HashMap::new()),
+//             output_device: RwLock::new(None),
+//             input_device: RwLock::new(None),
+//             tuner_only_mode: Arc::new(RwLock::new(false)),
 
-            quality_gate: RwLock::new(PlaybackQualityGate::default()),
-        }
-    }
-}
+//             quality_gate: RwLock::new(PlaybackQualityGate::default()),
+//         }
+//     }
+// }
 
 impl CpalController {
     fn evaluate_gate_and_maybe_restart(&self) -> bool {
@@ -207,6 +185,7 @@ impl CpalController {
 
         false
     }
+
     fn output_device(&self) -> Option<cpal::Device> {
         { self.output_device.read().clone() }.or_else(|| {
             let host = cpal::default_host();
@@ -285,6 +264,8 @@ impl CpalController {
         let thb = Arc::new(ThingBuf::<f32>::new(capacity));
 
         let stream_cfg = input_default_cfg.config();
+
+        // stream_cfg.buffer_size
 
         let prod = thb.clone();
 
@@ -374,321 +355,6 @@ impl CpalController {
         // Gate management evaluation is invoked from AudioRuntime::start via a periodic loop.
 
         Ok(())
-    }
-
-    fn create_main_network(&self, output_channels: usize, subnet: Net) -> Net {
-        denormal::prevent_denormals();
-
-        let mut net = Net::new(1, output_channels);
-
-        let main_node_id = net.push(Box::new(subnet));
-
-        let (processed_output_snoop_l, processed_output_snoop_backend_l) =
-            snoop(OUTPUT_ANALYZER_FFT_WINDOW_SIZE);
-        let (processed_output_snoop_r, processed_output_snoop_backend_r) =
-            snoop(OUTPUT_ANALYZER_FFT_WINDOW_SIZE);
-        // Insert smoothed gain after main node for fade in/out.
-        let gain_param = shared(1.0f32);
-        let tuner_tap_gain = shared(0.0f32);
-        let processed_output_snoops_id = net.push(Box::new(
-            processed_output_snoop_backend_l | processed_output_snoop_backend_r,
-        ));
-        let gain_id = if output_channels == 2 {
-            net.push(Box::new(
-                (pass() | pass() | (pass() >> delay(0.25)))
-                    >> (((var(&gain_param) >> follow(FOLLOW_RESPONSE_SECS)) * pass())
-                        | ((var(&gain_param) >> follow(FOLLOW_RESPONSE_SECS)) * pass())
-                        | ((pass() * var(&tuner_tap_gain)) >> split::<U2>()))
-                    >> (pass() | reverse::<U2>() | pass())
-                    >> (join::<U2>() | join::<U2>()),
-            ))
-        } else {
-            net.push(Box::new(
-                (join::<U2>() | (pass() >> delay(0.25)))
-                    >> (((var(&gain_param) >> follow(FOLLOW_RESPONSE_SECS)) * pass())
-                        | (pass() * var(&tuner_tap_gain)))
-                    >> join::<U2>(),
-            ))
-        };
-        net.pipe_all(main_node_id, processed_output_snoops_id);
-        net.pipe_all(processed_output_snoops_id, gain_id);
-        net.pipe_input(main_node_id);
-        net.pipe_output(gain_id);
-
-        net.set_sample_rate(self.sample_rate());
-        net.allocate();
-        net.check();
-
-        {
-            *self.gain_param.write() = Some(gain_param);
-            *self.processed_output_snoops.write() =
-                Some((processed_output_snoop_l, processed_output_snoop_r));
-            *self.tuner_tap_gain_param.write() = Some(tuner_tap_gain);
-            *self.dsp_primary_node_id.write() = Some(main_node_id);
-            log::trace!("stored primary node id and gain params");
-        }
-
-        net
-    }
-
-    fn create_tuner_only_network(&self, tuner_config: &TunerConfig) -> Net {
-        log::info!("Creating tuner only network.",);
-
-        let mut net = Net::new(1, 3);
-
-        let stub = net.push(Box::new(constant(0.0) | constant(0.0)));
-        net.pipe_output(stub);
-
-        let siren_controls_stub = HashMap::<NodeKey, ExcitementControl>::from_iter(
-            tuner_config
-                .sensor_data
-                .iter()
-                .map(|s| (s.key, ExcitementControl::default())),
-        );
-
-        {
-            *self.siren_excitements.write() = siren_controls_stub.clone();
-        }
-
-        let snoop_be = {
-            let (snoop, be) = snoop(INPUT_SNOOP_SIZE);
-            *self.input_snoop.write() = Some(snoop);
-            Some(be)
-        };
-
-        let handles = match self.quality_gate.read().sample_type() {
-            SampleType::F32 => crate::create_input_system::<f32>(
-                tuner_config,
-                &mut net,
-                siren_controls_stub,
-                ExcitementSource::Mic,
-                &self.spectrum_data_thb,
-                snoop_be,
-                (&self.tuner_freq_range.0, &self.tuner_freq_range.1),
-                (&self.tuner_ny_threshold, &self.tuner_ny_wet_ratio),
-                2,
-            ),
-            SampleType::F64 => crate::create_input_system::<f64>(
-                tuner_config,
-                &mut net,
-                siren_controls_stub,
-                ExcitementSource::Mic,
-                &self.spectrum_data_thb,
-                snoop_be,
-                (&self.tuner_freq_range.0, &self.tuner_freq_range.1),
-                (&self.tuner_ny_threshold, &self.tuner_ny_wet_ratio),
-                2,
-            ),
-        };
-
-        {
-            log::trace!("Storing {} sensor controls", handles.len());
-            *self.node_sensor_controls.write() =
-                HashMap::from_iter(handles.into_iter().map(|h| (h.key, h)));
-            log::trace!("setting tuner_only_mode to true");
-            *self.tuner_only_mode.write() = true;
-            log::trace!("stored sensor controls");
-        }
-
-        net.set_sample_rate(self.sample_rate());
-        net.allocate();
-        net.check();
-
-        log::debug!("created network: {}", net.display());
-        net
-    }
-
-    fn create_instrument_network(
-        &self,
-        config: &InstrumentConfig,
-        tuner_config: &TunerConfig,
-        source: ExcitementSource,
-    ) -> Net {
-        log::info!(
-            "Creating network with {} groups, {} keys per group",
-            config.num_groups(),
-            config.0.first().map(|g| g.nodes.len()).unwrap_or(0)
-        );
-
-        let mut net = Net::new(1, 3);
-
-        // Initialize fine-tuned values if in editor mode
-        #[cfg(feature = "editor")]
-        let fine_tuned_values = {
-            let shared_values_lock = self.fine_tuned_shared_values.read();
-
-            FineTunedValues::new(&shared_values_lock)
-        };
-
-        // Build output system graph & retrieve handles.
-        let node_handles = match self.quality_gate.read().sample_type() {
-            SampleType::F32 => crate::create_output_system::<f32>(
-                config,
-                &mut net,
-                2,
-                #[cfg(feature = "editor")]
-                &fine_tuned_values,
-            ),
-            SampleType::F64 => crate::create_output_system::<f64>(
-                config,
-                &mut net,
-                2,
-                #[cfg(feature = "editor")]
-                &fine_tuned_values,
-            ),
-        };
-
-        let mut siren_controls = HashMap::<NodeKey, ExcitementControl>::new();
-
-        // Store node handle artifacts (excitement/output snoops, control vars).
-        // Build maps off-lock, snapshot preset (read)
-        let preset_snapshot = { self.preset.read().clone() };
-
-        let mut new_excitement_snoops = HashMap::new();
-        let mut new_output_snoops = HashMap::new();
-        let mut new_band_controls = HashMap::new();
-        let mut new_key_controls = HashMap::new();
-
-        for handle in node_handles {
-            new_excitement_snoops.insert(
-                handle.key,
-                (handle.excitement_snoop, handle.secondary_excitement_snoop),
-            );
-            new_output_snoops.insert(handle.key, handle.output_snoop);
-            siren_controls.insert(handle.key, handle.siren_control);
-
-            if let Some(val) = preset_snapshot.get_band_value(&handle.key) {
-                handle.band_control.set_value(val);
-            }
-            if let Some(val) = preset_snapshot.get_key_value(&handle.key) {
-                handle.key_control.set_value(val);
-            }
-
-            new_band_controls.insert(handle.key, handle.band_control);
-            new_key_controls.insert(handle.key, handle.key_control);
-        }
-
-        // Commit maps in short write sections
-        *self.node_excitement_snoops.write() = new_excitement_snoops;
-        *self.node_output_snoops.write() = new_output_snoops;
-        *self.node_band_controls.write() = new_band_controls;
-        *self.node_key_controls.write() = new_key_controls;
-
-        log::info!(
-            "Created {} siren controls for input system",
-            siren_controls.len()
-        );
-
-        {
-            *self.siren_excitements.write() = siren_controls.clone();
-        }
-
-        let snoop_be = match source {
-            ExcitementSource::Entropy => None,
-            ExcitementSource::Mic => {
-                let (snoop, be) = snoop(INPUT_SNOOP_SIZE);
-                *self.input_snoop.write() = Some(snoop);
-                Some(be)
-            }
-        };
-
-        let handles = match self.quality_gate.read().sample_type() {
-            SampleType::F32 => crate::create_input_system::<f32>(
-                tuner_config,
-                &mut net,
-                siren_controls,
-                source,
-                &self.spectrum_data_thb,
-                snoop_be,
-                (&self.tuner_freq_range.0, &self.tuner_freq_range.1),
-                (&self.tuner_ny_threshold, &self.tuner_ny_wet_ratio),
-                2,
-            ),
-            SampleType::F64 => crate::create_input_system::<f64>(
-                tuner_config,
-                &mut net,
-                siren_controls,
-                source,
-                &self.spectrum_data_thb,
-                snoop_be,
-                (&self.tuner_freq_range.0, &self.tuner_freq_range.1),
-                (&self.tuner_ny_threshold, &self.tuner_ny_wet_ratio),
-                2,
-            ),
-        };
-
-        {
-            *self.node_sensor_controls.write() =
-                HashMap::from_iter(handles.into_iter().map(|h| (h.key, h)));
-            *self.tuner_only_mode.write() = false;
-            log::trace!("stored sensor controls");
-
-            *self.freq_range.write() = (config.min_frequency_hz(), config.max_frequency_hz());
-        }
-
-        net.set_sample_rate(self.sample_rate());
-        net.allocate();
-        net.check();
-
-        log::debug!("created network: {}", net.display());
-        net
-    }
-
-    fn update_primary_node(&self, config: &InstrumentConfig, tuner_config: &TunerConfig) {
-        let primary_id = match *self.dsp_primary_node_id.read() {
-            Some(id) => id,
-            None => {
-                log::warn!("No primary node id to update");
-                return;
-            }
-        };
-
-        log::info!("Updating primary DSP node due to state change");
-
-        let new_node = if *self.tuner_only_mode.read() {
-            self.create_tuner_only_network(tuner_config)
-        } else {
-            let source = *self.last_source.read();
-            self.create_instrument_network(config, tuner_config, source)
-        };
-
-        // Fade audio out BEFORE locking the frontend
-        self.fade_out();
-
-        // Minimize lock lifetime: only hold while mutating the net
-        {
-            let mut guard = self.dsp_net_frontend.write();
-            let Some(net) = guard.as_mut() else {
-                log::warn!("No DSP network frontend to update");
-                // Fade back in even if we couldn't update
-                self.fade_in();
-                return;
-            };
-
-            net.replace(primary_id, Box::new(new_node));
-            net.reset();
-            net.check();
-            net.commit();
-        }
-
-        log::info!("Primary DSP node updated successfully");
-
-        // Fade back in AFTER lock is released
-        self.fade_in();
-    }
-
-    fn fade_out(&self) {
-        if let Some(p) = self.gain_param.read().as_ref().cloned() {
-            p.set(0.0);
-        }
-        thread::sleep(Duration::from_millis(FADE_DURATION_MS));
-    }
-
-    fn fade_in(&self) {
-        if let Some(p) = self.gain_param.read().as_ref().cloned() {
-            p.set(1.0);
-        }
-        thread::sleep(Duration::from_millis(FADE_DURATION_MS));
     }
 
     fn shutdown_streams(&self) -> Result<()> {

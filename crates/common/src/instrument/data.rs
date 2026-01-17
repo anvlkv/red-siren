@@ -65,12 +65,18 @@ pub struct ExcitementSnoopBatchPayload {
     pub snoops: Vec<ExcitementSnoopEntry>,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PlaybackQuality {
+    Auto(i8),
     LoFi,
-    #[default]
     Medium,
     HiFi,
     Ultra,
+}
+
+impl Default for PlaybackQuality {
+    fn default() -> Self {
+        Self::Auto(0)
+    }
 }

@@ -1,143 +1,121 @@
-use std::time::{Duration, Instant};
-
-use crate::quality::PlaybackQualityGate;
-use crate::rt::cpal::stream::telemetry::{
-    CHANGE_COOLDOWN_MS, DEGRADE_SUSTAIN_MS, DEGRADE_THRESHOLD_MS, UPGRADE_STABLE_MS,
-    UPGRADE_THRESHOLD_MS,
+use std::{
+    ops::DerefMut,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread::{self, JoinHandle},
 };
 
-/// GateManager evaluates telemetry-derived signals to recommend raising or lowering
-/// the `PlaybackQualityGate`, with cooldowns to prevent flapping.
-///
-/// Why:
-/// - Centralize upgrade/downgrade policy off the audio thread.
-/// - Degrade quickly on sustained trouble; upgrade slowly on proven stability.
-/// - Keep overhead minimal (simple time checks and scalar comparisons).
-pub struct GateManager {
-    /// Last time a gate change was applied (used for cooldown).
-    last_change: Instant,
-    /// Minimum duration to wait between changes.
-    cooldown: Duration,
-    /// Start time of the last stability period (for upgrade timing).
-    stable_since: Option<Instant>,
-    /// Start time when sustained trouble began (for degrade timing).
-    trouble_since: Option<Instant>,
-    /// Latest recommended gate, updated when evaluation suggests a change.
-    pub recommended_gate: PlaybackQualityGate,
+use common::instrument::PlaybackQuality;
+use fundsp::{thingbuf::ThingBuf, DEFAULT_SR};
+use parking_lot::{Mutex, RwLock};
+
+use crate::quality::{PlaybackQualityGate, SampleType};
+
+use super::telemetry::*;
+
+pub struct QualityGateManager {
+    channel: Arc<ThingBuf<Message>>,
+    verdict_channel: Arc<ThingBuf<PlaybackQualityGate>>,
+    telemetry: Arc<Mutex<PlaybackTelemetry>>,
+    quality_setting: Arc<RwLock<PlaybackQuality>>,
+    proposed_quality_gate: Arc<RwLock<PlaybackQualityGate>>,
+    job_running: Arc<AtomicBool>,
+    job: Option<JoinHandle<()>>,
 }
 
-impl GateManager {
-    /// Create a new manager with initial gate and default cooldown.
-    pub fn new(initial_gate: PlaybackQualityGate) -> Self {
-        Self {
-            last_change: Instant::now(),
-            cooldown: Duration::from_millis(CHANGE_COOLDOWN_MS),
-            stable_since: None,
-            trouble_since: None,
-            recommended_gate: initial_gate,
-        }
-    }
-
-    /// Evaluate whether to recommend a gate change based on slack and underruns.
-    ///
-    /// Inputs:
-    /// - `current_gate`: the active gate in the engine.
-    /// - `ema_compute_slack_ns`: smoothed slack (expected period - render time), in nanoseconds.
-    /// - `recent_underruns`: whether we observed underruns in recent callbacks.
-    /// - `now`: current time for cooldown/stability accounting.
-    ///
-    /// Returns:
-    /// - `Some(new_gate)` when a change is recommended.
-    /// - `None` when staying with `current_gate` is advised.
-    ///
-    /// Policy:
-    /// - Degrade fast if sustained trouble:
-    ///   - Slack < -3 ms for > 1 s, or repeated underruns.
-    /// - Upgrade slow on stability:
-    ///   - Slack ≥ +2 ms and zero underruns sustained for ≥ 20 s.
-    /// - Apply a 5 s cooldown between changes to avoid flapping.
-    pub fn evaluate_recommendation(
-        &mut self,
-        current_gate: PlaybackQualityGate,
-        ema_compute_slack_ns: f64,
-        recent_underruns: bool,
-        now: Instant,
-    ) -> Option<PlaybackQualityGate> {
-        let slack_ms = ema_compute_slack_ns / 1_000_000.0;
-        let can_change = now.duration_since(self.last_change) >= self.cooldown;
-
-        // Track trouble sustainment window
-        let trouble = slack_ms < DEGRADE_THRESHOLD_MS || recent_underruns;
-        if trouble && self.trouble_since.is_none() {
-            // Start trouble clock
-            self.trouble_since = Some(now);
-        } else if !trouble {
-            // Clear trouble tracking when conditions improve
-            self.trouble_since = None;
-        }
-
-        // Track stability window for upgrades
-        let stable = slack_ms >= UPGRADE_THRESHOLD_MS && !recent_underruns;
-        if stable && self.stable_since.is_none() {
-            self.stable_since = Some(now);
-        } else if !stable {
-            self.stable_since = None;
-        }
-
-        // Degrade quickly on sustained trouble (or immediately on persistent underruns) if cooldown allows
-        if can_change
-            && matches!(
-                self.trouble_since,
-                Some(since) if now.duration_since(since) >= Duration::from_millis(DEGRADE_SUSTAIN_MS)
-            )
-        {
-            let new_gate = current_gate.lower();
-            if new_gate != current_gate {
-                self.last_change = now;
-                self.stable_since = None;
-                self.trouble_since = None;
-                self.recommended_gate = new_gate;
-                return Some(new_gate);
-            }
-        }
-
-        // Upgrade slowly on stable conditions if cooldown allows
-        if let Some(new_gate) = self
-            .stable_since
-            .as_ref()
-            .filter(|&since| {
-                can_change && now.duration_since(*since) >= Duration::from_millis(UPGRADE_STABLE_MS)
-            })
-            .and_then(|_| {
-                let new_gate = current_gate.higher();
-                if new_gate != current_gate {
-                    Some(new_gate)
-                } else {
-                    None
+impl QualityGateManager {
+    pub fn new(
+        channel: Arc<ThingBuf<Message>>,
+        verdict_channel: Arc<ThingBuf<PlaybackQualityGate>>,
+    ) -> Self {
+        let proposed_quality_gate = PlaybackQualityGate::default();
+        let telemetry = Arc::new(Mutex::new(PlaybackTelemetry::new(
+            DEFAULT_SR as u32,
+            proposed_quality_gate.sample_type(),
+            proposed_quality_gate,
+            None,
+        )));
+        let quality_setting = Arc::new(RwLock::new(PlaybackQuality::default()));
+        let proposed_quality_gate = Arc::new(RwLock::new(proposed_quality_gate));
+        let job_running = Arc::new(AtomicBool::new(true));
+        let job = thread::spawn({
+            let telemetry = telemetry.clone();
+            let quality_setting = quality_setting.clone();
+            let proposed_quality_gate = proposed_quality_gate.clone();
+            let job_running = job_running.clone();
+            let channel = channel.clone();
+            let verdict_channel = verdict_channel.clone();
+            move || loop {
+                if !job_running.load(Ordering::SeqCst) {
+                    break;
                 }
-            })
-        {
-            self.last_change = now;
-            self.stable_since = None;
-            self.trouble_since = None;
-            self.recommended_gate = new_gate;
-            Some(new_gate)
-        } else {
-            None
+
+                if let Some(msg) = channel.pop() {
+                    let mut tel = telemetry.lock();
+                    if let Some(change) = tel.accept_message(msg) {
+                        *proposed_quality_gate.write() = change;
+                        let mut qs = quality_setting.write();
+                        match qs.deref_mut() {
+                            PlaybackQuality::Auto(val) => {
+                                *val = change as i8;
+                                if let Err(e) =
+                                    verdict_channel.push(PlaybackQualityGate::from(*val))
+                                {
+                                    _ = verdict_channel.pop().unwrap();
+                                    verdict_channel.push(e.into_inner()).unwrap();
+                                }
+                            }
+                            _ => {}
+                        }
+                    } else {
+                        thread::yield_now();
+                    }
+                }
+            }
+        });
+
+        Self {
+            channel,
+            verdict_channel,
+            telemetry,
+            quality_setting,
+            proposed_quality_gate,
+            job_running,
+            job: Some(job),
         }
     }
 
-    /// Manually set a new cooldown duration in milliseconds.
-    ///
-    /// Why: Allows runtime tuning without recompiling, if needed later.
-    pub fn set_cooldown_ms(&mut self, ms: u64) {
-        self.cooldown = Duration::from_millis(ms);
+    pub fn proposed_quality(&self) -> PlaybackQuality {
+        (*self.proposed_quality_gate.read()).into()
     }
 
-    /// Reset internal timing trackers (useful after external forced reconfigurations).
-    pub fn reset_timers(&mut self, now: Instant) {
-        self.last_change = now;
-        self.stable_since = None;
-        self.trouble_since = None;
+    pub fn current_quality(&self) -> PlaybackQuality {
+        *self.quality_setting.read()
+    }
+
+    pub fn update_settings(
+        &self,
+        sample_rate: u32,
+        sample_type: SampleType,
+        quality: PlaybackQuality,
+        buffer_size: Option<usize>,
+    ) {
+        let q_gate = PlaybackQualityGate::from(quality);
+        let mut telemetry = self.telemetry.lock();
+        telemetry.update(sample_rate, sample_type, q_gate, buffer_size);
+        *self.quality_setting.write() = quality;
+        if let Err(e) = self.verdict_channel.push(q_gate) {
+            _ = self.verdict_channel.pop().unwrap();
+            self.verdict_channel.push(e.into_inner()).unwrap();
+        }
+    }
+}
+
+impl Drop for QualityGateManager {
+    fn drop(&mut self) {
+        self.job_running.store(false, Ordering::SeqCst);
+        self.job.take().and_then(|job| job.join().ok()).unwrap();
     }
 }

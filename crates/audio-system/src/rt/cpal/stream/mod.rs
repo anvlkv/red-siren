@@ -29,12 +29,10 @@ use std::sync::mpsc::Sender;
 pub mod input;
 pub mod output;
 pub mod playback;
-pub mod telemetry;
 
 pub use input::*;
 pub use output::*;
 pub use playback::*;
-pub use telemetry::*;
 
 /// Maximum seconds CPAL waits inside build/playback callbacks before timing out.
 pub const STREAM_TIMEOUT_S: u64 = 10;

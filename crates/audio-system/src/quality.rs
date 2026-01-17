@@ -1,3 +1,5 @@
+use common::instrument::PlaybackQuality;
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
 pub enum PlaybackQualityGate {
     Ultra = 2,
@@ -7,8 +9,9 @@ pub enum PlaybackQualityGate {
     LoFi = -1,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
 pub enum SampleType {
+    #[default]
     F32,
     F64,
 }
@@ -51,13 +54,36 @@ impl PlaybackQualityGate {
     }
 }
 
-impl Into<common::instrument::data::PlaybackQuality> for PlaybackQualityGate {
-    fn into(self) -> common::instrument::data::PlaybackQuality {
+impl Into<PlaybackQuality> for PlaybackQualityGate {
+    fn into(self) -> PlaybackQuality {
         match self {
-            Self::Ultra => common::instrument::data::PlaybackQuality::Ultra,
-            Self::HiFi => common::instrument::data::PlaybackQuality::HiFi,
-            Self::Medium => common::instrument::data::PlaybackQuality::Medium,
-            Self::LoFi => common::instrument::data::PlaybackQuality::LoFi,
+            Self::Ultra => PlaybackQuality::Ultra,
+            Self::HiFi => PlaybackQuality::HiFi,
+            Self::Medium => PlaybackQuality::Medium,
+            Self::LoFi => PlaybackQuality::LoFi,
+        }
+    }
+}
+
+impl From<PlaybackQuality> for PlaybackQualityGate {
+    fn from(value: PlaybackQuality) -> Self {
+        match value {
+            PlaybackQuality::Auto(mode) => Self::from(mode),
+            PlaybackQuality::LoFi => Self::LoFi,
+            PlaybackQuality::Medium => Self::Medium,
+            PlaybackQuality::HiFi => Self::HiFi,
+            PlaybackQuality::Ultra => Self::Ultra,
+        }
+    }
+}
+
+impl From<i8> for PlaybackQualityGate {
+    fn from(value: i8) -> Self {
+        match value {
+            ..=-1 => Self::LoFi,
+            0 => Self::Medium,
+            1 => Self::HiFi,
+            2.. => Self::Ultra,
         }
     }
 }

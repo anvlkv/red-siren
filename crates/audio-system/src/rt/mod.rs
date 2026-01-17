@@ -5,6 +5,7 @@ pub mod cpal;
 pub mod web;
 
 mod rt_subsystem;
+mod telemetry;
 
 use std::collections::BTreeMap;
 
@@ -22,6 +23,15 @@ pub enum ExcitementSource {
     Entropy,
     /// Live microphone input (if permission & capture available).
     Mic,
+}
+
+/// Buffer processing mode
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ProcessingMode {
+    #[default]
+    Tick,
+    Process,
+    ProcessBig,
 }
 
 impl From<u8> for ExcitementSource {

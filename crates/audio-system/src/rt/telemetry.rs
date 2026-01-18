@@ -56,7 +56,12 @@ impl PlaybackTelemetry {
         quality: PlaybackQualityGate,
         buffer_size: Option<usize>,
     ) -> Self {
-        let initial_buffer_size = buffer_size.unwrap_or_else(|| quality.buffer_size(None) as usize);
+        let initial_buffer_size = buffer_size.unwrap_or_else(|| {
+            quality.buffer_size(
+                #[cfg(feature = "rt_cpal")]
+                None,
+            ) as usize
+        });
         let history_len =
             Self::history_size(sample_rate, initial_buffer_size, Self::HISTORY_DURATION_S);
 
@@ -159,7 +164,12 @@ impl PlaybackTelemetry {
         quality: PlaybackQualityGate,
         buffer_size: Option<usize>,
     ) {
-        let initial_buffer_size = buffer_size.unwrap_or_else(|| quality.buffer_size(None) as usize);
+        let initial_buffer_size = buffer_size.unwrap_or_else(|| {
+            quality.buffer_size(
+                #[cfg(feature = "rt_cpal")]
+                None,
+            ) as usize
+        });
         let history_len =
             Self::history_size(sample_rate, initial_buffer_size, Self::HISTORY_DURATION_S);
 

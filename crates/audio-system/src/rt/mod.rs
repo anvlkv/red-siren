@@ -28,6 +28,7 @@ pub enum ExcitementSource {
 /// Buffer processing mode
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ProcessingMode {
+    None,
     #[default]
     Tick,
     Process,

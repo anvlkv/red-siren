@@ -1,16 +1,17 @@
 use std::collections::VecDeque;
-use std::iter;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
+use crate::quality::{PlaybackQualityGate, SampleType};
 use crate::rt::telemetry;
 use crate::rt::ProcessingMode;
 
-use cpal::{OutputStreamTimestamp, StreamInstant};
+use cpal::OutputStreamTimestamp;
 use fundsp::buffer::BufferVec;
 use fundsp::prelude::{AudioUnit, BigBlockAdapter, NetBackend};
 use fundsp::thingbuf::ThingBuf;
-use fundsp::{Frame, Size, MAX_BUFFER_SIZE};
+use fundsp::MAX_BUFFER_SIZE;
+use parking_lot::RwLock;
 
 const MAX_SILENCE_SECS: f64 = 0.5;
 
@@ -18,6 +19,8 @@ pub struct PlaybackCallbackConfig {
     pub input_buffer: Option<Arc<ThingBuf<f32>>>,
     pub sample_rate: u32,
     pub buffer_target_frames: usize,
+    pub sample_type: SampleType,
+    pub quality: Arc<RwLock<PlaybackQualityGate>>,
     pub telemetry: Arc<ThingBuf<telemetry::Message>>,
 }
 
@@ -32,47 +35,78 @@ struct Decision {
 /// - Enter catch-up on underruns, negative slack EMA, or high estimated latency.
 #[allow(clippy::too_many_arguments)]
 fn decide(
-    num_frames: usize,
-    sample_rate: u32,
-    remaining: usize,
-    remaining_cap: usize,
-    optimal_buffer_size: usize,
+    cb_buffer_size: isize,
+    optimal_buffer_size: isize,
+    remaining_filled: isize,
+    remaining_cap: isize,
 ) -> Decision {
-    todo!()
-    // let steady_depth =
-    //     ((buffer_target_frames as f64) * telemetry::STEADY_OCCUPANCY_RATIO).round() as usize;
-    // let estimated_latency_ms =
-    //     ((current_depth + net_latency_frames) as f64 / sample_rate as f64) * 1000.0;
+    const MAX_BUFFER_SIZE_I: isize = MAX_BUFFER_SIZE as isize;
+    const MIN_BUFFER_SIZE_I: isize = 8;
 
-    // let need_catch_up = local_underruns > 0
-    //     || ema_compute_slack_ns < 0.0
-    //     || estimated_latency_ms > buffer_duration_ms * telemetry::CATCH_UP_LATENCY_RATIO;
+    // -y — suboptimal (smaller) callback buffer size
+    // 0 — optimal callback buffer size
+    // +y — suboptimal (larger) callback buffer size
+    let buffers_delta = cb_buffer_size - optimal_buffer_size;
+    // -x — excess frames
+    // 0 — no deficit
+    // +x — deficit frames
+    let deficit = (optimal_buffer_size - remaining_filled).min(remaining_cap);
 
-    // let deficit = steady_depth.saturating_sub(current_depth);
-    // // Translate negative slack (behind schedule) into extra frames to produce
-    // let extra = if ema_compute_slack_ns < 0.0 {
-    //     let ns = (-ema_compute_slack_ns).max(0.0);
-    //     ((ns / 1_000_000_000.0) * sample_rate as f64).round() as usize
-    // } else {
-    //     0
-    // };
-
-    // let fill_size = if need_catch_up {
-    //     (deficit + extra).max(num_frames)
-    // } else {
-    //     deficit.max(num_frames)
-    // };
-
-    // let mode = if fill_size <= 4 {
-    //     ProcessingMode::Tick
-    // } else if fill_size <= 64 {
-    //     ProcessingMode::Process
-    // } else {
-    //     ProcessingMode::ProcessBig
-    // };
-
-    // Decision { fill_size, mode }
+    match (remaining_cap, deficit, buffers_delta) {
+        // capacity exceeded
+        (..=0, _, _) => Decision {
+            fill_size: 0,
+            mode: ProcessingMode::None,
+        },
+        // some capacity remains...
+        (1..=MIN_BUFFER_SIZE_I, _, _) => Decision {
+            fill_size: remaining_cap.unsigned_abs(),
+            mode: ProcessingMode::Tick,
+        },
+        // excess frames beyond cb size
+        (_, d, _) if d < 0 && d.abs() >= cb_buffer_size => Decision {
+            fill_size: 1,
+            mode: ProcessingMode::Tick,
+        },
+        // excess frames, but less than next tick
+        (_, d, _) if d < 0 && d.abs() <= cb_buffer_size => Decision {
+            fill_size: (cb_buffer_size - d.abs()).unsigned_abs(),
+            mode: ProcessingMode::Tick,
+        },
+        // excessive buffer size, large deficit
+        (_, MAX_BUFFER_SIZE_I.., MAX_BUFFER_SIZE_I..) => Decision {
+            fill_size: deficit.unsigned_abs(),
+            mode: ProcessingMode::ProcessBig,
+        },
+        // slightly excessive buffer, deficit frames
+        (_, MIN_BUFFER_SIZE_I..MAX_BUFFER_SIZE_I, 1..MAX_BUFFER_SIZE_I) => Decision {
+            fill_size: deficit.unsigned_abs(),
+            mode: ProcessingMode::Process,
+        },
+        // slight deficit
+        (_, ..MIN_BUFFER_SIZE_I, _) => Decision {
+            fill_size: deficit.unsigned_abs(),
+            mode: ProcessingMode::Tick,
+        },
+        // plenty of capacity, moderate deficit, buffer optimal or smaller — small-batch process
+        (_, MIN_BUFFER_SIZE_I..MAX_BUFFER_SIZE_I, ..=0) => Decision {
+            fill_size: deficit.unsigned_abs(),
+            mode: ProcessingMode::Process,
+        },
+        // plenty of capacity, moderate deficit, buffer much larger than optimal — go big
+        (_, MIN_BUFFER_SIZE_I..MAX_BUFFER_SIZE_I, 64..) => Decision {
+            fill_size: deficit.unsigned_abs(),
+            mode: ProcessingMode::ProcessBig,
+        },
+        // plenty of capacity, large deficit, buffer within moderate excess — go big for throughput
+        (_, MAX_BUFFER_SIZE_I.., ..MAX_BUFFER_SIZE_I) => Decision {
+            fill_size: deficit.unsigned_abs(),
+            mode: ProcessingMode::ProcessBig,
+        },
+    }
 }
+
+const BUFFER_CAP_MS: f64 = 75_f64;
 
 pub fn playback_callback<const N: usize>(
     net: NetBackend,
@@ -85,23 +119,43 @@ pub fn playback_callback<const N: usize>(
     let buffer_target_frames = cfg.buffer_target_frames;
     let telemetry_buff = cfg.telemetry.clone();
 
+    let compute_cap = |sample_rate: u32,
+                       buffer_target_frames: usize,
+                       actual_buffer_size: Option<usize>|
+     -> usize {
+        // Convert BUFFER_CAP_MS to frames: frames = ms * sample_rate / 1000
+        let max_cap_frames: usize = (BUFFER_CAP_MS * (sample_rate as f64) / 1000.0).ceil() as usize;
+
+        // Use actual buffer size if provided; otherwise fall back to MAX_BUFFER_SIZE
+        let block = actual_buffer_size.unwrap_or(MAX_BUFFER_SIZE).max(1);
+
+        // Round target up to whole blocks
+        let target_rounded_up = ((buffer_target_frames + block - 1) / block).max(1) * block;
+
+        // Enforce cap: round cap down to whole blocks
+        let cap_rounded_down = (max_cap_frames / block).max(1) * block;
+
+        // Final capacity is the minimum of rounded target and rounded cap
+        target_rounded_up.min(cap_rounded_down)
+    };
+
     // Target buffer derived from PlaybackQualityGate::buffer_size(...)
-    let buffer_target_frames = buffer_target_frames;
-
-    let mut frame_scratch: [f32; N] = [0_f32; N];
-
-    let mut output_buffer = VecDeque::<[f32; N]>::with_capacity(buffer_target_frames);
     let mut frames_per_output_buffer = MAX_BUFFER_SIZE;
+    let init_cap = compute_cap(sample_rate, buffer_target_frames, None);
+
+    let mut output_buffer = VecDeque::<[f32; N]>::with_capacity(init_cap);
+
+    // tick buffer
+    let mut frame_scratch: [f32; N] = [0_f32; N];
 
     // Fundsp small-batch buffers (64 samples max per channel), used in Mode::Process
     let mut process_in_buf = BufferVec::new(1);
     let mut process_out_buf = BufferVec::new(N);
 
     // Large batch buffers
-
-    let mut process_in_big_buf: Vec<f32> = Vec::with_capacity(buffer_target_frames);
+    let mut process_in_big_buf: Vec<f32> = Vec::with_capacity(init_cap);
     let mut process_out_big_buf_inner: Vec<Vec<f32>> = Vec::with_capacity(N);
-    process_out_big_buf_inner.fill_with(|| Vec::with_capacity(buffer_target_frames));
+    process_out_big_buf_inner.fill_with(|| Vec::with_capacity(init_cap));
 
     // Warm-up: pre-fill to optimal (plus latency)
     {
@@ -122,7 +176,7 @@ pub fn playback_callback<const N: usize>(
 
     Box::new(
         move |ts: OutputStreamTimestamp, channels_frames: &mut [&mut [f32]]| {
-            let now = Instant::now();
+            let start_ts = Instant::now();
             let num_frames = channels_frames[0].len();
 
             for i in 0..num_frames {
@@ -134,21 +188,33 @@ pub fn playback_callback<const N: usize>(
             }
 
             if num_frames > frames_per_output_buffer {
-                output_buffer.reserve(num_frames - frames_per_output_buffer);
+                let updated_cap = compute_cap(sample_rate, buffer_target_frames, Some(num_frames));
+
+                if let Some(add) = updated_cap.checked_sub(output_buffer.capacity()) {
+                    output_buffer.reserve(add);
+                }
+                if let Some(add) = updated_cap.checked_sub(process_in_big_buf.capacity()) {
+                    process_in_big_buf.reserve(add);
+                }
+                process_out_big_buf_inner.iter_mut().for_each(|inner| {
+                    if let Some(add) = updated_cap.checked_sub(inner.capacity()) {
+                        inner.reserve(add);
+                    }
+                });
                 frames_per_output_buffer = num_frames;
             }
 
-            let remainig = output_buffer.len();
-            let remainig_cap = output_buffer.capacity() - remainig;
+            let remainig_filled = output_buffer.len();
+            let remainig_cap = output_buffer.capacity() - remainig_filled;
             let Decision { fill_size, mode } = decide(
-                frames_per_output_buffer,
-                sample_rate,
-                remainig,
-                remainig_cap,
-                buffer_target_frames,
+                frames_per_output_buffer as isize,
+                buffer_target_frames as isize,
+                remainig_filled as isize,
+                remainig_cap as isize,
             );
 
             match mode {
+                ProcessingMode::None => {}
                 ProcessingMode::Tick => {
                     for _ in 0..fill_size {
                         let input = input_buffer
@@ -209,33 +275,25 @@ pub fn playback_callback<const N: usize>(
                 }
             }
 
-            // // After catch-up production, reset accumulated latency
-            // if accumulated_latency > sub_optimal_duration {
-            //     accumulated_latency = Duration::ZERO;
-            // }
+            let processing_time = Instant::now().duration_since(start_ts);
 
-            // // Telemetry: measure render, compute slack vs expected period and recompute latency
-            // let computed_expected = Duration::from_secs_f64(num_frames as f64 / sample_rate as f64);
-            // // Use timestamp hint only if not marked unreliable; otherwise rely on computed expected period.
-            // let expected_period = if timestamp_unreliable {
-            //     computed_expected
-            // } else {
-            //     // Currently, we prefer computed period; timestamp can be incorporated here if needed.
-            //     // Keeping this branch for future enhancement where ts.playback pacing is trustworthy.
-            //     computed_expected
-            // };
+            let summary = telemetry::Message {
+                mode,
+                filled_size: fill_size,
+                buffer_size: num_frames,
+                processing_time,
+                estimated_latency: ts
+                    .playback
+                    .duration_since(&ts.callback)
+                    .and_then(|d| processing_time.checked_sub(d)),
+                quality: (*cfg.quality.read()),
+                sample_type: cfg.sample_type,
+            };
 
-            // // Telemetry: precise render timing and underrun note
-            // let elapsed = start.elapsed();
-            // if let Some(mut t) = telemetry.try_lock() {
-            //     t.note_render(num_frames, elapsed);
-            //     t.recompute_slack(expected_period);
-            //     t.recompute_latency();
-            //     t.note_underruns(local_underruns);
-            // }
-
-            // // Indicator equals current gate value (read-only in callback; engine writes on gate changes)
-            // let _gate_val = quality.load(std::sync::atomic::Ordering::Relaxed);
+            if let Err(e) = telemetry_buff.push(summary) {
+                _ = telemetry_buff.pop();
+                telemetry_buff.push(e.into_inner()).unwrap();
+            }
         },
     ) as Box<super::GenType>
 }

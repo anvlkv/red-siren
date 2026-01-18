@@ -100,6 +100,75 @@ impl From<cpal::SupportedStreamConfig> for PlaybackQualityGate {
     }
 }
 
+impl PlaybackQualityGate {
+    pub fn buffer_size(
+        &self,
+        #[cfg(feature = "rt_cpal")] cfg: Option<&cpal::SupportedStreamConfigRange>,
+    ) -> u32 {
+        let sr_ms = self.sample_rate(
+            #[cfg(feature = "rt_cpal")]
+            cfg,
+        ) as f64
+            / 1000.0;
+        let ultra_buffer = (ULTRA_BUFFER_MS as f64 * sr_ms).round() as u32;
+        let hi_buffer = (HI_BUFFER_MS as f64 * sr_ms).round() as u32;
+        let mid_buffer = (MID_BUFFER_MS as f64 * sr_ms).round() as u32;
+        let lo_buffer = (LO_BUFFER_MS as f64 * sr_ms).round() as u32;
+
+        #[cfg(feature = "rt_cpal")]
+        let mapper =
+            |c: &cpal::SupportedStreamConfigRange, default_buffer: u32| match c.buffer_size() {
+                cpal::SupportedBufferSize::Range { min, max } => ultra_buffer.clamp(*min, *max),
+                cpal::SupportedBufferSize::Unknown => default_buffer,
+            };
+
+        #[cfg(feature = "rt_cpal")]
+        return match self {
+            PlaybackQualityGate::Ultra => cfg.map_or(ultra_buffer, |c| mapper(c, ultra_buffer)),
+            PlaybackQualityGate::HiFi => cfg.map_or(hi_buffer, |c| mapper(c, hi_buffer)),
+            PlaybackQualityGate::Medium => cfg.map_or(mid_buffer, |c| mapper(c, mid_buffer)),
+            PlaybackQualityGate::LoFi => cfg.map_or(lo_buffer, |c| mapper(c, lo_buffer)),
+        };
+
+        #[cfg(not(feature = "rt_cpal"))]
+        return match self {
+            PlaybackQualityGate::Ultra => ultra_buffer,
+            PlaybackQualityGate::HiFi => hi_buffer,
+            PlaybackQualityGate::Medium => mid_buffer,
+            PlaybackQualityGate::LoFi => lo_buffer,
+        };
+    }
+
+    pub fn sample_rate(
+        &self,
+        #[cfg(feature = "rt_cpal")] cfg: Option<&cpal::SupportedStreamConfigRange>,
+    ) -> u32 {
+        #[cfg(feature = "rt_cpal")]
+        return match self {
+            PlaybackQualityGate::Ultra => cfg.map_or(ULTRA_SAMPLE_RATE, |c| {
+                ULTRA_SAMPLE_RATE.clamp(c.min_sample_rate(), c.max_sample_rate())
+            }),
+            PlaybackQualityGate::HiFi => cfg.map_or(HI_SAMPLE_RATE, |c| {
+                HI_SAMPLE_RATE.clamp(c.min_sample_rate(), c.max_sample_rate())
+            }),
+            PlaybackQualityGate::Medium => cfg.map_or(MID_SAMPLE_RATE, |c| {
+                MID_SAMPLE_RATE.clamp(c.min_sample_rate(), c.max_sample_rate())
+            }),
+            PlaybackQualityGate::LoFi => cfg.map_or(LO_SAMPLE_RATE, |c| {
+                LO_SAMPLE_RATE.clamp(c.min_sample_rate(), c.max_sample_rate())
+            }),
+        };
+
+        #[cfg(not(feature = "rt_cpal"))]
+        match self {
+            PlaybackQualityGate::Ultra => ULTRA_SAMPLE_RATE,
+            PlaybackQualityGate::HiFi => HI_SAMPLE_RATE,
+            PlaybackQualityGate::Medium => MID_SAMPLE_RATE,
+            PlaybackQualityGate::LoFi => LO_SAMPLE_RATE,
+        }
+    }
+}
+
 #[cfg(feature = "rt_cpal")]
 impl PlaybackQualityGate {
     pub fn select_output_config(
@@ -146,50 +215,6 @@ impl PlaybackQualityGate {
                 pick.map(|p| p.with_sample_rate(self.sample_rate(Some(&p))))
             })
             .or_else(|| device.default_input_config().ok())
-    }
-
-    pub fn sample_rate(&self, cfg: Option<&cpal::SupportedStreamConfigRange>) -> cpal::SampleRate {
-        match self {
-            PlaybackQualityGate::Ultra => cfg.map_or(ULTRA_SAMPLE_RATE, |c| {
-                ULTRA_SAMPLE_RATE.clamp(c.min_sample_rate(), c.max_sample_rate())
-            }),
-            PlaybackQualityGate::HiFi => cfg.map_or(HI_SAMPLE_RATE, |c| {
-                HI_SAMPLE_RATE.clamp(c.min_sample_rate(), c.max_sample_rate())
-            }),
-            PlaybackQualityGate::Medium => cfg.map_or(MID_SAMPLE_RATE, |c| {
-                MID_SAMPLE_RATE.clamp(c.min_sample_rate(), c.max_sample_rate())
-            }),
-            PlaybackQualityGate::LoFi => cfg.map_or(LO_SAMPLE_RATE, |c| {
-                LO_SAMPLE_RATE.clamp(c.min_sample_rate(), c.max_sample_rate())
-            }),
-        }
-    }
-
-    pub fn buffer_size(&self, cfg: Option<&cpal::SupportedStreamConfigRange>) -> cpal::FrameCount {
-        let sr_ms = self.sample_rate(cfg) as f64 / 1000.0;
-        let ultra_buffer = (ULTRA_BUFFER_MS as f64 * sr_ms).round() as u32;
-        let hi_buffer = (HI_BUFFER_MS as f64 * sr_ms).round() as u32;
-        let mid_buffer = (MID_BUFFER_MS as f64 * sr_ms).round() as u32;
-        let lo_buffer = (LO_BUFFER_MS as f64 * sr_ms).round() as u32;
-
-        match self {
-            PlaybackQualityGate::Ultra => cfg.map_or(ultra_buffer, |c| match c.buffer_size() {
-                cpal::SupportedBufferSize::Range { min, max } => ultra_buffer.clamp(*min, *max),
-                cpal::SupportedBufferSize::Unknown => ultra_buffer,
-            }),
-            PlaybackQualityGate::HiFi => cfg.map_or(hi_buffer, |c| match c.buffer_size() {
-                cpal::SupportedBufferSize::Range { min, max } => hi_buffer.clamp(*min, *max),
-                cpal::SupportedBufferSize::Unknown => hi_buffer,
-            }),
-            PlaybackQualityGate::Medium => cfg.map_or(mid_buffer, |c| match c.buffer_size() {
-                cpal::SupportedBufferSize::Range { min, max } => mid_buffer.clamp(*min, *max),
-                cpal::SupportedBufferSize::Unknown => mid_buffer,
-            }),
-            PlaybackQualityGate::LoFi => cfg.map_or(lo_buffer, |c| match c.buffer_size() {
-                cpal::SupportedBufferSize::Range { min, max } => lo_buffer.clamp(*min, *max),
-                cpal::SupportedBufferSize::Unknown => lo_buffer,
-            }),
-        }
     }
 
     fn is_a_better_than_b(

@@ -42,12 +42,21 @@
 //! The current implementation intentionally returns a `NullController` so that
 //! enabling `rt_web` does not silently change runtime behavior until the real
 //! web backend is ready.
+use common::device::DeviceData;
+use common::instrument::Preset;
+
+use crate::rt::telemetry::TelemetryBuffer;
 use crate::rt::{NullController, StreamController};
 
 /// Factory for the (future) web runtime.
 ///
 /// Currently returns a `NullController` as a placeholder.
-pub fn make_stream_controller() -> common::error::Result<Box<dyn StreamController + Send + Sync>> {
+pub fn make_stream_controller(
+    telemetry: TelemetryBuffer,
+    preset: Option<Preset>,
+    output_device: Option<DeviceData>,
+    input_device: Option<DeviceData>,
+) -> common::error::Result<Box<dyn StreamController + Send + Sync>> {
     Ok(Box::new(NullController))
 }
 

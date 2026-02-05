@@ -4,11 +4,14 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    thread::{self, JoinHandle},
 };
 
 use common::instrument::PlaybackQuality;
-use fundsp::{thingbuf::ThingBuf, DEFAULT_SR};
+use fundsp::{
+    thingbuf::mpsc::{Receiver, Sender, channel},
+    DEFAULT_SR,
+};
+use tokio::{task::{JoinHandle, self}};
 use parking_lot::{Mutex, RwLock};
 
 use crate::quality::{PlaybackQualityGate, SampleType};
@@ -16,8 +19,6 @@ use crate::quality::{PlaybackQualityGate, SampleType};
 use super::telemetry::*;
 
 pub struct QualityGateManager {
-    channel: Arc<ThingBuf<Message>>,
-    verdict_channel: Arc<ThingBuf<PlaybackQualityGate>>,
     telemetry: Arc<Mutex<PlaybackTelemetry>>,
     quality_setting: Arc<RwLock<PlaybackQuality>>,
     proposed_quality_gate: Arc<RwLock<PlaybackQualityGate>>,
@@ -27,8 +28,8 @@ pub struct QualityGateManager {
 
 impl QualityGateManager {
     pub fn new(
-        channel: Arc<ThingBuf<Message>>,
-        verdict_channel: Arc<ThingBuf<PlaybackQualityGate>>,
+        telemetry_rx: TelemetryReceiver,
+        mut managed_change: Box<dyn FnMut(PlaybackQualityGate) + Send + Sync>
     ) -> Self {
         let proposed_quality_gate = PlaybackQualityGate::default();
         let telemetry = Arc::new(Mutex::new(PlaybackTelemetry::new(
@@ -40,45 +41,38 @@ impl QualityGateManager {
         let quality_setting = Arc::new(RwLock::new(PlaybackQuality::default()));
         let proposed_quality_gate = Arc::new(RwLock::new(proposed_quality_gate));
         let job_running = Arc::new(AtomicBool::new(true));
-        let job = thread::spawn({
+        let job = task::spawn({
             let telemetry = telemetry.clone();
             let quality_setting = quality_setting.clone();
             let proposed_quality_gate = proposed_quality_gate.clone();
             let job_running = job_running.clone();
-            let channel = channel.clone();
-            let verdict_channel = verdict_channel.clone();
-            move || loop {
-                if !job_running.load(Ordering::SeqCst) {
-                    break;
-                }
+            async move {
+                loop {
+                    if !job_running.load(Ordering::SeqCst) {
+                        break;
+                    }
 
-                if let Some(msg) = channel.pop() {
-                    let mut tel = telemetry.lock();
-                    if let Some(change) = tel.accept_message(msg) {
-                        *proposed_quality_gate.write() = change;
-                        let mut qs = quality_setting.write();
-                        match qs.deref_mut() {
-                            PlaybackQuality::Auto(val) => {
+                    if let Some(msg) = telemetry_rx.recv().await {
+
+                        if let Some(change) = {
+                            let mut tel = telemetry.lock();
+                            tel.accept_message(msg)
+                        } {
+                            *proposed_quality_gate.write() = change;
+                            let mut qs = quality_setting.write();
+                            if let PlaybackQuality::Auto(val) = qs.deref_mut() {
                                 *val = change as i8;
-                                if let Err(e) =
-                                    verdict_channel.push(PlaybackQualityGate::from(*val))
-                                {
-                                    _ = verdict_channel.pop().unwrap();
-                                    verdict_channel.push(e.into_inner()).unwrap();
-                                }
+                                managed_change(PlaybackQualityGate::from(*val));
                             }
-                            _ => {}
+                        } else {
+                            task::yield_now().await;
                         }
-                    } else {
-                        thread::yield_now();
                     }
                 }
             }
         });
 
         Self {
-            channel,
-            verdict_channel,
             telemetry,
             quality_setting,
             proposed_quality_gate,
@@ -106,16 +100,14 @@ impl QualityGateManager {
         let mut telemetry = self.telemetry.lock();
         telemetry.update(sample_rate, sample_type, q_gate, buffer_size);
         *self.quality_setting.write() = quality;
-        if let Err(e) = self.verdict_channel.push(q_gate) {
-            _ = self.verdict_channel.pop().unwrap();
-            self.verdict_channel.push(e.into_inner()).unwrap();
-        }
     }
 }
 
 impl Drop for QualityGateManager {
     fn drop(&mut self) {
         self.job_running.store(false, Ordering::SeqCst);
-        self.job.take().and_then(|job| job.join().ok()).unwrap();
+        if let Some(j) = self.job.take() {
+            j.abort();
+        }
     }
 }

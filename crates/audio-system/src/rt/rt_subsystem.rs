@@ -20,36 +20,37 @@ pub const FADE_DURATION_MS: u64 = 120;
 const INPUT_SNOOP_SIZE: usize = FFT_WINDOW_SIZE;
 const FOLLOW_RESPONSE_SECS: f32 = FADE_DURATION_MS as f32 / 1000.0;
 
+#[derive(Clone)]
 pub struct RuntimeSubsystem {
     sample_type: SampleType,
     num_channels: u8,
-    sample_rate: RwLock<f64>,
-    dsp_net: RwLock<Net>,
-    dsp_primary_node_id: RwLock<NodeId>,
-    dsp_tuner_node_id: RwLock<NodeId>,
+    sample_rate: Arc<RwLock<f64>>,
+    dsp_net: Arc<RwLock<Net>>,
+    dsp_primary_node_id: Arc<RwLock<NodeId>>,
+    dsp_tuner_node_id: Arc<RwLock<NodeId>>,
     gain_param: Arc<Shared>,
 
-    processed_output_snoops: RwLock<(Snoop, Snoop)>,
-    input_snoop: RwLock<Option<Snoop>>,
-    node_excitement_snoops: RwLock<HashMap<NodeKey, (Snoop, Snoop)>>,
-    node_output_snoops: RwLock<HashMap<NodeKey, Snoop>>,
+    processed_output_snoops: Arc<RwLock<(Snoop, Snoop)>>,
+    input_snoop: Arc<RwLock<Option<Snoop>>>,
+    node_excitement_snoops: Arc<RwLock<HashMap<NodeKey, (Snoop, Snoop)>>>,
+    node_output_snoops: Arc<RwLock<HashMap<NodeKey, Snoop>>>,
 
-    preset: RwLock<Preset>,
-    node_band_controls: RwLock<HashMap<NodeKey, Shared>>,
-    node_key_controls: RwLock<HashMap<NodeKey, Shared>>,
-    node_sensor_controls: RwLock<HashMap<NodeKey, SensorHandles>>,
-    siren_excitements: RwLock<HashMap<NodeKey, ExcitementControl>>,
+    pub(crate) preset: Arc<RwLock<Preset>>,
+    node_band_controls: Arc<RwLock<HashMap<NodeKey, Shared>>>,
+    node_key_controls: Arc<RwLock<HashMap<NodeKey, Shared>>>,
+    node_sensor_controls: Arc<RwLock<HashMap<NodeKey, SensorHandles>>>,
+    siren_excitements: Arc<RwLock<HashMap<NodeKey, ExcitementControl>>>,
 
-    tuner_tap_gain_param: RwLock<Shared>,
+    tuner_tap_gain_param: Arc<Shared>,
     tuner_freq_range: Arc<(Shared, Shared)>,
     tuner_ny_threshold: Arc<Shared>,
     tuner_ny_wet_ratio: Arc<Shared>,
     spectrum_data_thb: SpectrumBuffer,
 
-    layout: RwLock<InstrumentLayout>,
-    config: RwLock<InstrumentConfig>,
-    source: RwLock<ExcitementSource>,
-    tuner_config: RwLock<TunerConfig>,
+    pub(crate) layout: Arc<RwLock<InstrumentLayout>>,
+    pub(crate) config: Arc<RwLock<InstrumentConfig>>,
+    pub(crate) source: Arc<RwLock<ExcitementSource>>,
+    pub(crate) tuner_config: Arc<RwLock<TunerConfig>>,
 
     #[cfg(feature = "editor")]
     fine_tuned_shared_values: RwLock<FineTunedSharedValues>,
@@ -81,6 +82,7 @@ struct CreateTunerNetworkReturn {
 }
 
 impl RuntimeSubsystem {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         layout: InstrumentLayout,
         config: InstrumentConfig,
@@ -143,36 +145,36 @@ impl RuntimeSubsystem {
         Self {
             sample_type,
             num_channels: num_channels as u8,
-            sample_rate: RwLock::new(sample_rate),
-            dsp_net: RwLock::new(dsp_net),
-            dsp_primary_node_id: RwLock::new(instrument_node_id),
-            dsp_tuner_node_id: RwLock::new(tuner_node_id),
+            sample_rate: Arc::new(RwLock::new(sample_rate)),
+            dsp_net: Arc::new(RwLock::new(dsp_net)),
+            dsp_primary_node_id: Arc::new(RwLock::new(instrument_node_id)),
+            dsp_tuner_node_id: Arc::new(RwLock::new(tuner_node_id)),
             gain_param: Arc::new(gain_param),
 
-            processed_output_snoops: RwLock::new((
+            processed_output_snoops: Arc::new(RwLock::new((
                 processed_output_snoop_l,
                 processed_output_snoop_r,
-            )),
-            input_snoop: RwLock::new(input_snoop),
-            node_excitement_snoops: RwLock::new(excitement_snoops),
-            node_output_snoops: RwLock::new(output_snoops),
+            ))),
+            input_snoop: Arc::new(RwLock::new(input_snoop)),
+            node_excitement_snoops: Arc::new(RwLock::new(excitement_snoops)),
+            node_output_snoops: Arc::new(RwLock::new(output_snoops)),
 
-            preset: RwLock::new(preset),
-            node_band_controls: RwLock::new(band_controls),
-            node_key_controls: RwLock::new(key_controls),
-            node_sensor_controls: RwLock::new(sensor_controls),
-            siren_excitements: RwLock::new(siren_excitements),
+            preset: Arc::new(RwLock::new(preset)),
+            node_band_controls: Arc::new(RwLock::new(band_controls)),
+            node_key_controls: Arc::new(RwLock::new(key_controls)),
+            node_sensor_controls: Arc::new(RwLock::new(sensor_controls)),
+            siren_excitements: Arc::new(RwLock::new(siren_excitements)),
 
-            tuner_tap_gain_param: RwLock::new(tuner_tap_gain),
+            tuner_tap_gain_param: Arc::new(tuner_tap_gain),
             tuner_freq_range,
             tuner_ny_threshold,
             tuner_ny_wet_ratio,
             spectrum_data_thb,
 
-            layout: RwLock::new(layout),
-            config: RwLock::new(config),
-            source: RwLock::new(source),
-            tuner_config: RwLock::new(tuner_config),
+            layout: Arc::new(RwLock::new(layout)),
+            config: Arc::new(RwLock::new(config)),
+            source: Arc::new(RwLock::new(source)),
+            tuner_config: Arc::new(RwLock::new(tuner_config)),
 
             #[cfg(feature = "editor")]
             fine_tuned_shared_values: RwLock::new(FineTunedSharedValues::new()),
@@ -231,43 +233,43 @@ impl RuntimeSubsystem {
         Self {
             sample_type,
             num_channels: num_channels as u8,
-            sample_rate: RwLock::new(sample_rate),
-            dsp_net: RwLock::new(dsp_net),
-            dsp_primary_node_id: RwLock::new(instrument_node_id),
-            dsp_tuner_node_id: RwLock::new(tuner_node_id),
+            sample_rate: Arc::new(RwLock::new(sample_rate)),
+            dsp_net: Arc::new(RwLock::new(dsp_net)),
+            dsp_primary_node_id: Arc::new(RwLock::new(instrument_node_id)),
+            dsp_tuner_node_id: Arc::new(RwLock::new(tuner_node_id)),
             gain_param: Arc::new(gain_param),
 
-            processed_output_snoops: RwLock::new((
+            processed_output_snoops: Arc::new(RwLock::new((
                 processed_output_snoop_l,
                 processed_output_snoop_r,
-            )),
-            input_snoop: RwLock::new(input_snoop),
-            node_excitement_snoops: RwLock::new(excitement_snoops),
-            node_output_snoops: RwLock::new(output_snoops),
+            ))),
+            input_snoop: Arc::new(RwLock::new(input_snoop)),
+            node_excitement_snoops: Arc::new(RwLock::new(excitement_snoops)),
+            node_output_snoops: Arc::new(RwLock::new(output_snoops)),
 
-            preset: RwLock::new(Default::default()),
-            node_band_controls: RwLock::new(band_controls),
-            node_key_controls: RwLock::new(key_controls),
-            node_sensor_controls: RwLock::new(sensor_controls),
-            siren_excitements: RwLock::new(siren_excitements),
+            preset: Arc::new(RwLock::new(Default::default())),
+            node_band_controls: Arc::new(RwLock::new(band_controls)),
+            node_key_controls: Arc::new(RwLock::new(key_controls)),
+            node_sensor_controls: Arc::new(RwLock::new(sensor_controls)),
+            siren_excitements: Arc::new(RwLock::new(siren_excitements)),
 
-            tuner_tap_gain_param: RwLock::new(tuner_tap_gain),
+            tuner_tap_gain_param: Arc::new(tuner_tap_gain),
             tuner_freq_range,
             tuner_ny_threshold,
             tuner_ny_wet_ratio,
             spectrum_data_thb,
 
-            layout: RwLock::new(layout),
-            config: RwLock::new(Default::default()),
-            source: RwLock::new(source),
-            tuner_config: RwLock::new(tuner_config),
+            layout: Arc::new(RwLock::new(layout)),
+            config: Arc::new(RwLock::new(Default::default())),
+            source: Arc::new(RwLock::new(source)),
+            tuner_config: Arc::new(RwLock::new(tuner_config)),
 
             #[cfg(feature = "editor")]
             fine_tuned_shared_values: RwLock::new(FineTunedSharedValues::new()),
         }
     }
 
-    pub fn restart_with_sample_type(self, sample_type: SampleType) -> Self {
+    pub fn restart_with_sample_type(&self, sample_type: SampleType) -> Self {
         self.fade_out();
         RuntimeSubsystem::new(
             self.layout.read().clone(),
@@ -282,7 +284,7 @@ impl RuntimeSubsystem {
         )
     }
 
-    pub fn restart_with_tuner_only(self) -> Self {
+    pub fn restart_with_tuner_only(&self, tuner_config: Option<TunerConfig>) -> Self {
         self.fade_out();
         let Self {
             sample_type,
@@ -291,12 +293,12 @@ impl RuntimeSubsystem {
             spectrum_data_thb,
             layout,
             config,
-            tuner_config,
+            tuner_config: old_tuner_config,
             ..
-        } = self;
+        } = self.clone();
         let tuner_only = RuntimeSubsystem::new_with_tuner_only(
             layout.read().clone(),
-            tuner_config.read().clone(),
+            tuner_config.unwrap_or_else(|| old_tuner_config.read().clone()),
             spectrum_data_thb.clone(),
             sample_type,
             num_channels as usize,
@@ -307,6 +309,11 @@ impl RuntimeSubsystem {
             config,
             ..tuner_only
         }
+    }
+
+    pub fn update_tuner_config(&self, tuner_config: &TunerConfig) {
+        let mut tuner_config_lock = self.tuner_config.write();
+        *tuner_config_lock = tuner_config.clone();
     }
 
     pub fn backend(&self) -> NetBackend {
@@ -547,6 +554,7 @@ impl RuntimeSubsystem {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn create_tuner_network(
         sample_rate: f64,
         sample_type: SampleType,

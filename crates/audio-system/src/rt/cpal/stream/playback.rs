@@ -9,11 +9,10 @@ use crate::rt::ProcessingMode;
 use cpal::OutputStreamTimestamp;
 use fundsp::buffer::BufferVec;
 use fundsp::prelude::{AudioUnit, BigBlockAdapter, NetBackend};
+use fundsp::setting::TrySendError;
 use fundsp::thingbuf::ThingBuf;
 use fundsp::MAX_BUFFER_SIZE;
 use parking_lot::RwLock;
-
-const MAX_SILENCE_SECS: f64 = 0.5;
 
 pub struct PlaybackCallbackConfig {
     pub input_buffer: Option<Arc<ThingBuf<f32>>>,
@@ -21,7 +20,7 @@ pub struct PlaybackCallbackConfig {
     pub buffer_target_frames: usize,
     pub sample_type: SampleType,
     pub quality: Arc<RwLock<PlaybackQualityGate>>,
-    pub telemetry: Arc<ThingBuf<telemetry::Message>>,
+    pub telemetry: telemetry::TelemetrySender,
 }
 
 // Decision logic types and helper
@@ -130,7 +129,7 @@ pub fn playback_callback<const N: usize>(
         let block = actual_buffer_size.unwrap_or(MAX_BUFFER_SIZE).max(1);
 
         // Round target up to whole blocks
-        let target_rounded_up = ((buffer_target_frames + block - 1) / block).max(1) * block;
+        let target_rounded_up = buffer_target_frames.div_ceil(block).max(1) * block;
 
         // Enforce cap: round cap down to whole blocks
         let cap_rounded_down = (max_cap_frames / block).max(1) * block;
@@ -268,6 +267,7 @@ pub fn playback_callback<const N: usize>(
                         &[&process_in_big_buf[..fill_size]],
                         process_out_big_buf.as_mut_slice(),
                     );
+                    #[allow(clippy::needless_range_loop)]
                     for i in 0..fill_size {
                         output_buffer
                             .push_back(core::array::from_fn(|ch| process_out_big_buf[ch][i]));
@@ -290,9 +290,11 @@ pub fn playback_callback<const N: usize>(
                 sample_type: cfg.sample_type,
             };
 
-            if let Err(e) = telemetry_buff.push(summary) {
-                _ = telemetry_buff.pop();
-                telemetry_buff.push(e.into_inner()).unwrap();
+            if matches!(
+                telemetry_buff.try_send(summary),
+                Err(TrySendError::Closed(_))
+            ) {
+                panic!("Telemetry channel was closed")
             }
         },
     ) as Box<super::GenType>

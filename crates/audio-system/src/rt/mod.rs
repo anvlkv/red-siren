@@ -5,13 +5,17 @@ pub mod cpal;
 pub mod web;
 
 mod rt_subsystem;
-mod telemetry;
+pub mod telemetry;
 
 use std::collections::BTreeMap;
 
 use common::NodeKey;
+use common::device::DeviceData;
 use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, PlaybackQuality, Preset};
 use common::tuner::Config as TunerConfig;
+
+use crate::quality::PlaybackQualityGate;
+use crate::rt::telemetry::TelemetrySender;
 
 pub type ProcessedOutputSpectrumSnapshot = (BTreeMap<u32, f32>, BTreeMap<u32, f32>);
 
@@ -68,6 +72,7 @@ pub trait AudioRuntime {
         config: &InstrumentConfig,
         source: ExcitementSource,
         tuner_config: &TunerConfig,
+        preset: Preset,
     ) -> common::error::Result<()>;
     fn stop(&self) -> common::error::Result<()>;
     fn pause(&self) -> common::error::Result<()>;
@@ -121,6 +126,8 @@ pub trait AudioRuntime {
 
     fn quality_indicator(&self) -> PlaybackQuality;
 
+    fn update_quality_setting(&self, qg: PlaybackQualityGate);
+
     fn set_preset(&self, preset: Preset) -> common::error::Result<()>;
 
     fn get_preset(&self) -> Preset;
@@ -142,7 +149,6 @@ impl AudioRuntime for NullController {
     }
 
     #[cfg(feature = "editor")]
-    #[allow(clippy::too_many_arguments)]
     fn set_finetuned_values(
         &self,
         _payload: common::commands::edit::FineTunedValuesPayload
@@ -150,10 +156,13 @@ impl AudioRuntime for NullController {
         Ok(())
     }
 
-    fn start(&self, _layout: &InstrumentLayout,
-    _config: &InstrumentConfig,
-    _source: ExcitementSource,
-    _tuner_config: &TunerConfig,) -> common::error::Result<()> {
+    fn start(&self,
+        _layout: &InstrumentLayout,
+        _config: &InstrumentConfig,
+        _source: ExcitementSource,
+        _tuner_config: &TunerConfig,
+        _preset: Preset,
+    ) -> common::error::Result<()> {
         Ok(())
     }
 
@@ -254,6 +263,10 @@ impl AudioRuntime for NullController {
         PlaybackQuality::default()
     }
 
+    fn update_quality_setting(&self, _qg: PlaybackQualityGate) {
+
+    }
+
     fn set_preset(&self, _preset: Preset) -> common::error::Result<()> {
         Ok(())
     }
@@ -270,14 +283,29 @@ impl AudioRuntime for NullController {
 /// 2. rt_web
 /// 3. NullController (fallback)
 #[allow(unreachable_code)]
-pub fn make_stream_controller() -> common::error::Result<Box<dyn AudioRuntime + Send + Sync>> {
+pub fn make_stream_controller(
+    telemetry: TelemetrySender,
+    preset: Option<Preset>,
+    output_device: Option<DeviceData>,
+    input_device: Option<DeviceData>
+) -> common::error::Result<Box<dyn AudioRuntime + Send + Sync>> {
     #[cfg(feature = "rt_cpal")]
     {
-        return cpal::make_stream_controller();
+        return cpal::make_stream_controller(
+            telemetry,
+            preset,
+            output_device,
+            input_device,
+        );
     }
     #[cfg(all(not(feature = "rt_cpal"), feature = "rt_web"))]
     {
-        return web::make_stream_controller();
+        return web::make_stream_controller(
+            telemetry,
+            preset,
+            output_device,
+            input_device,
+        );
     }
     Ok(Box::new(NullController))
 }

@@ -22,7 +22,7 @@ impl NodePreset {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-pub struct Preset(HashMap<NodeKey, NodePreset>);
+pub struct Preset(pub HashMap<NodeKey, NodePreset>);
 
 impl Preset {
     pub fn clear(&mut self) {

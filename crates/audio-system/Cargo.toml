@@ -19,6 +19,7 @@ spectrum-analyzer = "1.7.0"
 u-num-it = "0.3.4"
 wasm-bindgen = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true }
+tokio = {workspace = true, features=["rt-multi-thread"]}
 
 [dev-dependencies]
 common = { workspace = true, features = ["test"] }

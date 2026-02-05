@@ -1,3 +1,7 @@
+use std::sync::Arc;
+
+use audio_system::create_telemetry_channel;
+use audio_system::rt::gate_manager::QualityGateManager;
 use common::NodeKey;
 use parking_lot::RwLock;
 
@@ -12,10 +16,13 @@ use common::tuner::Config as TunerConfig;
 use mint::Vector2;
 use tauri::{AppHandle, Emitter, Manager};
 
+use crate::instrument::{load_input_device, load_output_device, load_preset};
+
 /// Public wrapper so higher layers (commands) only hold one handle.
 pub struct InstrumentState {
     app: AppHandle,
     inner: Inner,
+    gate_manager: Arc<QualityGateManager>,
 }
 
 /// Internal engine state.
@@ -25,24 +32,40 @@ pub(super) struct Inner {
     excitement_source: RwLock<ExcitementSource>,
     layout: RwLock<InstrumentLayout>,
     config: RwLock<InstrumentConfig>,
-
     // Runtime stream controller (lazy; concrete backend chosen by audio_system::rt)
-    stream_controller: RwLock<Box<dyn AudioRuntime + Send + Sync>>,
-    // Dedicated listener thread for gate-reset events from audio runtime evaluator
-    gate_reset_listener: RwLock<Option<std::thread::JoinHandle<()>>>,
+    stream_controller: Arc<RwLock<Box<dyn AudioRuntime + Send + Sync>>>,
 }
 
 impl InstrumentState {
     pub fn new(app: &AppHandle) -> Result<Self> {
+        let input_device = load_input_device(app)?;
+        let output_device = load_output_device(app)?;
+        let preset = load_preset(app).ok();
+        let (telemetry_sx, telemetry_rx) = create_telemetry_channel();
+        let stream_controller = Arc::new(RwLock::new(make_stream_controller(
+            telemetry_sx,
+            preset,
+            output_device,
+            input_device,
+        )?));
+        let gate_manager = QualityGateManager::new(
+            telemetry_rx,
+            Box::new({
+                let stream_controller = stream_controller.clone();
+                move |gate| {
+                    stream_controller.read().update_quality_setting(gate);
+                }
+            }),
+        );
         Ok(InstrumentState {
             app: app.clone(),
+            gate_manager: Arc::new(gate_manager),
             inner: Inner {
                 playing: RwLock::new(false),
                 excitement_source: RwLock::new(ExcitementSource::default()),
                 layout: RwLock::new(InstrumentLayout::default()),
                 config: RwLock::new(InstrumentConfig::default()),
-                stream_controller: RwLock::new(make_stream_controller()?),
-                gate_reset_listener: RwLock::new(None),
+                stream_controller,
             },
         })
     }
@@ -82,11 +105,12 @@ impl InstrumentState {
                 let layout = self.inner.layout.read();
                 let config = self.inner.config.read();
                 let source = *self.inner.excitement_source.read();
+                let preset = load_preset(&self.app)?;
                 log::trace!(
                     "Inner.start_playback: starting stream with source={:?}",
                     source
                 );
-                ctrl.start(&layout, &config, source, &tuner_config)?;
+                ctrl.start(&layout, &config, source, &tuner_config, preset)?;
                 log::trace!("Inner.start_playback: ctrl.start() returned Ok");
             }
 

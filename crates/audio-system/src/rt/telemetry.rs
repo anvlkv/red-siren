@@ -1,8 +1,18 @@
-use std::{collections::VecDeque, time::Duration};
+use std::{collections::VecDeque, sync::Arc, time::Duration};
+
+use fundsp::thingbuf::mpsc::{channel, Receiver, Sender};
 
 use crate::quality::{PlaybackQualityGate, SampleType};
 
 use super::ProcessingMode;
+
+pub type TelemetrySender = Arc<Sender<Message>>;
+pub type TelemetryReceiver = Arc<Receiver<Message>>;
+
+pub fn create_telemetry_channel() -> (TelemetrySender, TelemetryReceiver) {
+    let (sx, rx) = channel(128);
+    (Arc::new(sx), Arc::new(rx))
+}
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Message {
@@ -70,7 +80,7 @@ impl PlaybackTelemetry {
                 size: initial_buffer_size,
                 recompute_in: history_len,
             },
-            |s| BufferSize::Fixed(s),
+            BufferSize::Fixed,
         );
 
         Self {
@@ -178,7 +188,7 @@ impl PlaybackTelemetry {
                 size: initial_buffer_size,
                 recompute_in: history_len,
             },
-            |s| BufferSize::Fixed(s),
+            BufferSize::Fixed,
         );
 
         self.sample_rate = sample_rate;

@@ -222,8 +222,16 @@ pub enum InstrumentError {
     OutputAnalyzerError(String),
     #[error("Preset store error: {0}")]
     PresetStoreError(String),
-    #[error("preset serialization error: {0}")]
+    #[error("Preset serialization error: {0}")]
     PresetSerializationError(String),
+    #[error("Host unavailable")]
+    HostUnavailable,
+    #[error("Invalid device Id")]
+    InvalidDeviceId,
+    #[error("Device doesn't support input")]
+    NoSupportForInput,
+    #[error("Device doesn't support output")]
+    NoSupportForOutput,
 }
 
 #[derive(Debug, Error, Serialize, Deserialize)]

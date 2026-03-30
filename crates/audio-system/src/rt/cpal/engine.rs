@@ -96,7 +96,7 @@ impl CpalController {
         let quality_gate = output_config
             .as_ref()
             .cloned()
-            .map(|cfg| PlaybackQualityGate::from(cfg))
+            .map(PlaybackQualityGate::from)
             .unwrap_or_default();
 
         let runtime = {

@@ -9,10 +9,10 @@ console_error_panic_hook = { workspace = true }
 js-sys = { workspace = true }
 keyframe = "1.1.1"
 keyframe_derive = "1.0.0"
-leptos = { version = "0.8.15", features = ["csr", "nightly"] }
-leptos_router = { version = "0.8.11", features = ["nightly"] }
+leptos = { version = "0.8.17", features = ["csr", "nightly"] }
+leptos_router = { version = "0.8.13", features = ["nightly"] }
 leptos_styling = { version = "0.3.1", features = ["csr"] }
-leptos-use = { version = "0.18.0", default-features = false, features = [
+leptos-use = { version = "0.18.3", default-features = false, features = [
   "signal_debounced",
   "use_device_pixel_ratio",
   "use_document",

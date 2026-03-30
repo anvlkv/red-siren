@@ -272,7 +272,7 @@ impl RuntimeSubsystem {
     pub fn restart_with_sample_type(&self, sample_type: SampleType) -> Self {
         self.fade_out();
         RuntimeSubsystem::new(
-            self.layout.read().clone(),
+            *self.layout.read(),
             self.config.read().clone(),
             *self.source.read(),
             self.tuner_config.read().clone(),

@@ -312,7 +312,7 @@ mod tests {
         let node = common::instrument::config::NodeConfig::new_test_node(440.0);
 
         #[cfg(feature = "editor")]
-        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        let values = FineTunedValues::new(&crate::values::FineTunedSharedValues::default());
         #[cfg(not(feature = "editor"))]
         let values = FineTunedValues::new();
 
@@ -357,7 +357,7 @@ mod tests {
         let node = common::instrument::config::NodeConfig::new_test_node(440.0);
 
         #[cfg(feature = "editor")]
-        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        let values = FineTunedValues::new(&crate::values::FineTunedSharedValues::default());
         #[cfg(not(feature = "editor"))]
         let values = FineTunedValues::new();
 
@@ -447,7 +447,7 @@ mod tests {
         let node = common::instrument::config::NodeConfig::new_test_node(440.0);
 
         #[cfg(feature = "editor")]
-        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        let values = FineTunedValues::new(&crate::values::FineTunedSharedValues::default());
         #[cfg(not(feature = "editor"))]
         let values = FineTunedValues::new();
 
@@ -544,7 +544,7 @@ mod tests {
         snapshot_config_bldr.allow_abnormal_samples(true);
 
         #[cfg(feature = "editor")]
-        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        let values = FineTunedValues::new(&crate::values::FineTunedSharedValues::default());
         #[cfg(not(feature = "editor"))]
         let values = FineTunedValues::new();
 

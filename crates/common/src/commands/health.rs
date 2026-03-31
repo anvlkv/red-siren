@@ -17,6 +17,6 @@ pub struct MicPermissionPayload {
 #[serde(rename_all = "camelCase")]
 pub struct SetupStatePayload {
     pub gui_ready: bool,
-    pub mic_permission: Option<bool>,
+    pub initial_mic_permission: Option<bool>,
     pub devtools: bool,
 }

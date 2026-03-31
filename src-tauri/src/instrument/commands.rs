@@ -129,16 +129,16 @@ pub fn instrument_set_excitement_source(
     }
 
     // Read mic permission with a narrow lock scope
-    let mic_permission_opt = {
-        log::trace!("Locking HealthSetupState to read mic_permission");
+    let initial_mic_permission = {
+        log::trace!("Locking HealthSetupState to read initial mic permission");
         let hs = health.lock();
-        let perm = hs.mic_permission;
-        log::trace!("HealthSetupState.mic_permission={:?}", perm);
+        let perm = hs.initial_mic_permission;
+        log::trace!("HealthSetupState.initial_mic_permission={:?}", perm);
         perm
     };
 
     // Permission check if Mic requested
-    if matches!(requested, ExcitementSource::Mic) && mic_permission_opt != Some(true) {
+    if matches!(requested, ExcitementSource::Mic) && initial_mic_permission != Some(true) {
         log::warn!("Won't enable mic excitement source without mic permission");
         return Err(InstrumentError::MicPermissionMissing.into());
     }

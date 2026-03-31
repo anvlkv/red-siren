@@ -280,7 +280,7 @@ mod tests {
     #[test]
     fn test_alpha_modulation() {
         #[cfg(feature = "editor")]
-        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        let values = FineTunedValues::new(&crate::values::FineTunedSharedValues::default());
         #[cfg(not(feature = "editor"))]
         let values = FineTunedValues::new();
 
@@ -314,7 +314,7 @@ mod tests {
     #[test]
     fn test_siren_excitement() {
         #[cfg(feature = "editor")]
-        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        let values = FineTunedValues::new(&crate::values::FineTunedSharedValues::default());
         #[cfg(not(feature = "editor"))]
         let values = FineTunedValues::new();
 
@@ -354,7 +354,7 @@ mod tests {
     #[test]
     fn test_siren_with_inputs() {
         #[cfg(feature = "editor")]
-        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        let values = FineTunedValues::new(&crate::values::FineTunedSharedValues::default());
         #[cfg(not(feature = "editor"))]
         let values = FineTunedValues::new();
 
@@ -405,7 +405,7 @@ mod tests {
     #[test]
     fn test_formant_bank() {
         #[cfg(feature = "editor")]
-        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        let values = FineTunedValues::new(&crate::values::FineTunedSharedValues::default());
         #[cfg(not(feature = "editor"))]
         let values = FineTunedValues::new();
 
@@ -441,7 +441,7 @@ mod tests {
     #[test]
     fn test_bell_filter() {
         #[cfg(feature = "editor")]
-        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        let values = FineTunedValues::new(&crate::values::FineTunedSharedValues::default());
         #[cfg(not(feature = "editor"))]
         let values = FineTunedValues::new();
 
@@ -515,7 +515,7 @@ mod tests {
         chart_config.chart_layout(Layout::Combined);
 
         #[cfg(feature = "editor")]
-        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        let values = FineTunedValues::new(&crate::values::FineTunedSharedValues::default());
         #[cfg(not(feature = "editor"))]
         let values = FineTunedValues::new();
 
@@ -585,7 +585,7 @@ mod tests {
     #[test]
     fn test_config_cases_nodes() {
         #[cfg(feature = "editor")]
-        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        let values = FineTunedValues::new(&crate::values::FineTunedSharedValues::default());
         #[cfg(not(feature = "editor"))]
         let values = FineTunedValues::new();
 

@@ -10,6 +10,8 @@ use std::{
     time::Duration,
 };
 
+#[cfg(feature = "editor")]
+use common::commands::edit::FineTunedValuesPayload;
 use common::{
     device::DeviceData,
     error::{AppError, TunerError},
@@ -29,8 +31,6 @@ use fundsp::{thingbuf::ThingBuf, typenum::Unsigned};
 use parking_lot::RwLock;
 use u_num_it::u_num_it;
 
-#[cfg(feature = "editor")]
-use crate::system::values::{FineTunedSharedValues, FineTunedValues};
 use crate::{
     input::analyzer::SpectrumBuffer,
     output_analyzer::{self, OUTPUT_ANALYZER_FFT_WINDOW_SIZE},
@@ -721,19 +721,23 @@ impl AudioRuntime for CpalController {
     }
 
     fn set_band_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()> {
-        todo!()
+        let runtime = self.runtime.read();
+        runtime.set_band_control(key, value)
     }
 
     fn get_band_control(&self, key: common::NodeKey) -> common::error::Result<f32> {
-        todo!()
+        let runtime = self.runtime.read();
+        runtime.get_band_control(key)
     }
 
     fn set_key_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()> {
-        todo!()
+        let runtime = self.runtime.read();
+        runtime.set_key_control(key, value)
     }
 
     fn get_key_control(&self, key: common::NodeKey) -> common::error::Result<f32> {
-        todo!()
+        let runtime = self.runtime.read();
+        runtime.get_key_control(key)
     }
 
     fn start_tuner_only(&self, tuner_config: &TunerConfig) -> common::error::Result<()> {
@@ -785,6 +789,18 @@ impl AudioRuntime for CpalController {
 
     fn get_preset(&self) -> Preset {
         todo!()
+    }
+
+    #[cfg(feature = "editor")]
+    fn get_finetuned_values(&self) -> common::error::Result<FineTunedValuesPayload> {
+        let runtime = self.runtime.read();
+        runtime.get_finetuned_values()
+    }
+
+    #[cfg(feature = "editor")]
+    fn set_finetuned_values(&self, payload: FineTunedValuesPayload) -> common::error::Result<()> {
+        let runtime = self.runtime.read();
+        runtime.set_finetuned_values(payload)
     }
 }
 

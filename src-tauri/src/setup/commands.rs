@@ -1,4 +1,5 @@
 use crate::persistence::persistence::save_json;
+use crate::windows;
 use common::{
     commands::setup::UpdateWindowAppearanceOverridePayload,
     error::{Result, SetupError},
@@ -173,19 +174,21 @@ pub fn open_in_new_window(
             })
             .unwrap_or((800.0, 600.0));
 
-        let mut window = WebviewWindowBuilder::new(
-            &app,
-            format!("secondary:{}", title.to_lowercase()).as_str(),
-            WebviewUrl::App(format!("{path}?secondary=true").into()),
+        let mut window = windows::with_secondary_bootstrap(
+            WebviewWindowBuilder::new(
+                &app,
+                format!("secondary:{}", title.to_lowercase()).as_str(),
+                WebviewUrl::App(format!("{path}?secondary=true").into()),
+            )
+            .title(title)
+            .decorations(true)
+            .title_bar_style(tauri::TitleBarStyle::Transparent)
+            .resizable(true)
+            .maximizable(false)
+            .minimizable(false)
+            .maximized(false)
+            .inner_size(main_window_size.0, main_window_size.1),
         )
-        .title(title)
-        .decorations(true)
-        .title_bar_style(tauri::TitleBarStyle::Transparent)
-        .resizable(true)
-        .maximizable(false)
-        .minimizable(false)
-        .maximized(false)
-        .inner_size(main_window_size.0, main_window_size.1)
         .build()?;
 
         let dark = {

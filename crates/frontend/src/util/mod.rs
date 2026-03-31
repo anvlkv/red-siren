@@ -1,3 +1,4 @@
+pub mod boot_flags;
 pub mod drawing;
 pub mod layout_context;
 pub mod log;

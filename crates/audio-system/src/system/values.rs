@@ -74,6 +74,13 @@ impl Default for FineTunedSharedValues {
     }
 }
 
+#[cfg(feature = "editor")]
+impl FineTunedSharedValues {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
 #[allow(clippy::new_without_default)]
 impl FineTunedValues {
     #[cfg(feature = "editor")]

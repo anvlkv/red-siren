@@ -9,28 +9,42 @@ use common::error::{HealthError, AppError};
 /// State to track setup completion
 pub struct SetupState {
     pub gui_ready: bool,
-    pub mic_permission: Option<bool>,
+    pub initial_mic_permission: Option<bool>,
 }
 
 const HEALTH_STORE_NAME:&str = "health.json";
-const MIC_PEMISSION_KEY:&str = "mic_permission";
+const INITIAL_MIC_PERMISSION_KEY:&str = "initial_mic_permission";
+const LEGACY_MIC_PERMISSION_KEY:&str = "mic_permission";
 
 pub type HealthSetupState = Mutex<SetupState>;
 
 pub fn setup(app: &mut App) -> common::error::Result<()> {
-    let mic_permission = load_bool(app.handle(), HEALTH_STORE_NAME, MIC_PEMISSION_KEY)?;
+    let (initial_mic_permission, migrated_legacy_key) =
+        match load_bool(app.handle(), HEALTH_STORE_NAME, INITIAL_MIC_PERMISSION_KEY)? {
+            Some(value) => (Some(value), false),
+            None => {
+                let legacy = load_bool(app.handle(), HEALTH_STORE_NAME, LEGACY_MIC_PERMISSION_KEY)?;
+                (legacy, legacy.is_some())
+            }
+        };
 
     let initial_state = SetupState {
-        mic_permission,
+        initial_mic_permission,
         ..Default::default()
     };
+
+    if migrated_legacy_key {
+        if let Some(value) = initial_state.initial_mic_permission {
+            save_bool(&app.handle(), HEALTH_STORE_NAME, INITIAL_MIC_PERMISSION_KEY, value)?;
+        }
+    }
 
     // Emit initial setup state
     app.emit(
         common::events::health::SETUP_STATE,
         common::commands::health::SetupStatePayload {
             gui_ready: initial_state.gui_ready,
-            mic_permission: initial_state.mic_permission,
+            initial_mic_permission: initial_state.initial_mic_permission,
             devtools: cfg!(feature="devtools")
         },
     ).ok(); // Ignore error during setup
@@ -62,14 +76,14 @@ pub async fn health_grant_mic_premission(
 
     let mut health_state = state.lock();
 
-    health_state.mic_permission = Some(check_result);
+    health_state.initial_mic_permission = Some(check_result);
 
     // Emit the updated setup state
     app.emit(
         common::events::health::SETUP_STATE,
         common::commands::health::SetupStatePayload {
             gui_ready: health_state.gui_ready,
-            mic_permission: health_state.mic_permission,
+            initial_mic_permission: health_state.initial_mic_permission,
             devtools: cfg!(feature="devtools")
         },
     )
@@ -78,7 +92,7 @@ pub async fn health_grant_mic_premission(
         message: e.to_string(),
     })?;
 
-    save_bool(&app, HEALTH_STORE_NAME, MIC_PEMISSION_KEY, check_result)?;
+    save_bool(&app, HEALTH_STORE_NAME, INITIAL_MIC_PERMISSION_KEY, check_result)?;
 
 
 
@@ -101,7 +115,7 @@ pub async fn health_on_gui_ready(
         common::events::health::SETUP_STATE,
         common::commands::health::SetupStatePayload {
             gui_ready: state_lock.gui_ready,
-            mic_permission: state_lock.mic_permission,
+            initial_mic_permission: state_lock.initial_mic_permission,
             devtools: cfg!(feature="devtools")
         },
     )
@@ -128,7 +142,7 @@ pub async fn health_setup_state(
         let state_lock = state.lock();
         common::commands::health::SetupStatePayload {
             gui_ready: state_lock.gui_ready,
-            mic_permission: state_lock.mic_permission,
+            initial_mic_permission: state_lock.initial_mic_permission,
             devtools: cfg!(feature="devtools")
         }
     };

@@ -228,7 +228,7 @@ mod tests {
         snapshot_config.allow_abnormal_samples(true);
 
         #[cfg(feature = "editor")]
-        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        let values = FineTunedValues::new(&crate::values::FineTunedSharedValues::default());
         #[cfg(not(feature = "editor"))]
         let values = FineTunedValues::new();
 
@@ -290,7 +290,7 @@ mod tests {
         snapshot_config_bldr.allow_abnormal_samples(true);
 
         #[cfg(feature = "editor")]
-        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        let values = FineTunedValues::new(&crate::values::FineTunedSharedValues::default());
         #[cfg(not(feature = "editor"))]
         let values = FineTunedValues::new();
 
@@ -388,7 +388,7 @@ mod tests {
         snapshot_config_bldr.allow_abnormal_samples(true);
 
         #[cfg(feature = "editor")]
-        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        let values = FineTunedValues::new(&crate::values::FineTunedSharedValues::default());
         #[cfg(not(feature = "editor"))]
         let values = FineTunedValues::new();
 

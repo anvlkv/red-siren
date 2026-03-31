@@ -73,7 +73,6 @@ type OutputChain = Pipe<Stack<Pass, Delay>, Binop<FrameAdd<U1>, Pass, Pass>>;
 
 pub type GroupType<K, S> = Pipe<Pipe<ResamplerSpeed<K, S>, ProductionChain<K, S>>, OutputChain>;
 
-
 pub fn create_group_node<K, S>(
     config: &GroupConfig,
     group_handles: HashMap<NodeKey, InnerHandles>,
@@ -212,7 +211,7 @@ mod tests {
     #[test]
     fn test_config_cases_groups() {
         #[cfg(feature = "editor")]
-        let values = FineTunedValues::new(&FineTunedSharedValues::default());
+        let values = FineTunedValues::new(&crate::values::FineTunedSharedValues::default());
         #[cfg(not(feature = "editor"))]
         let values = FineTunedValues::new();
 

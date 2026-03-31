@@ -92,7 +92,7 @@ impl AppBus {
             struct SetupStatePayload {
                 gui_ready: bool,
                 #[allow(dead_code)]
-                mic_permission: Option<bool>,
+                initial_mic_permission: Option<bool>,
                 #[allow(dead_code)]
                 devtools: bool,
             }

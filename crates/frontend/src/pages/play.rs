@@ -5,15 +5,15 @@ use tauri_use::{use_command, UseTauriWithReturn};
 
 use crate::{
     components::{
-        with_tooltip, AppearanceToggle, CompactMenu, ExcitementSourceToggle, Icon, Instrument,
-        MenuItem, UiPlacement, UiSize,
+        AppearanceToggle, CompactMenu, ExcitementSourceToggle, Icon, Instrument, MenuItem,
+        UiPlacement, UiSize,
     },
     util::{
         layout_context::{expect_layout_context, LayoutContextReturn},
         playback_service::{expect_playback_service, PlaybackService},
         raf_fn_fps::use_raf_fn_with_fps,
         secondary_window::is_secondary_window,
-        setup_context::{is_devtools_enabled, is_mic_premission_granted},
+        setup_context::{initial_mic_permission, is_devtools_enabled},
         tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
     },
 };
@@ -33,7 +33,7 @@ pub fn Play() -> impl IntoView {
     let navigate = use_navigate();
 
     // Get setup state to check mic permission
-    let mic_permission = is_mic_premission_granted();
+    let mic_permission = initial_mic_permission();
 
     // Check mic permission on mount and redirect if needed
     Effect::new({

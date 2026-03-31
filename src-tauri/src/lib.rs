@@ -7,6 +7,7 @@ mod intro;
 mod persistence;
 mod setup;
 mod tuner;
+mod windows;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -36,11 +37,11 @@ pub fn run() {
         tauri_plugin_log::Builder::new()
             .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepOne)
             .level(if cfg!(debug_assertions) {
-                log::LevelFilter::Trace
-            } else if cfg!(feature = "devtools") {
                 log::LevelFilter::Debug
-            } else {
+            } else if cfg!(feature = "devtools") {
                 log::LevelFilter::Info
+            } else {
+                log::LevelFilter::Warn
             })
             .target(tauri_plugin_log::Target::new(
                 tauri_plugin_log::TargetKind::Webview,
@@ -107,6 +108,10 @@ pub fn run() {
     builder = builder.setup(|app| {
         let config = app.config();
         log::debug!("App starting with config: {config:#?}");
+
+        if let Err(e) = windows::ensure_startup_windows(&app.handle()) {
+            log::error!("failed to create startup windows: {}", e);
+        }
 
         if let Err(e) = setup::app_setup(app) {
             log::error!("setup::app_setup failed: {}", e);

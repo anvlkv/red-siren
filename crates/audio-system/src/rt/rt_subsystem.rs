@@ -1,5 +1,8 @@
 use std::{collections::HashMap, f32, sync::Arc, thread, time::Duration};
 
+#[cfg(feature = "editor")]
+use common::commands::edit::FineTunedValuesPayload;
+use common::error::ControlError;
 use common::{
     instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, Preset},
     tuner::Config as TunerConfig,
@@ -53,7 +56,7 @@ pub struct RuntimeSubsystem {
     pub(crate) tuner_config: Arc<RwLock<TunerConfig>>,
 
     #[cfg(feature = "editor")]
-    fine_tuned_shared_values: RwLock<FineTunedSharedValues>,
+    fine_tuned_shared_values: Arc<RwLock<FineTunedSharedValues>>,
 }
 
 struct CreateMainNetworkReturn {
@@ -94,6 +97,12 @@ impl RuntimeSubsystem {
         num_channels: usize,
         sample_rate: f64,
     ) -> Self {
+        #[cfg(feature = "editor")]
+        let fine_tuned_shared_values = Arc::new(RwLock::new(FineTunedSharedValues::new()));
+
+        #[cfg(feature = "editor")]
+        let fine_tuned_values = Self::snapshot_fine_tuned_values(&fine_tuned_shared_values);
+
         let CreateInstrumentNetworkReturn {
             band_controls,
             key_controls,
@@ -177,7 +186,7 @@ impl RuntimeSubsystem {
             tuner_config: Arc::new(RwLock::new(tuner_config)),
 
             #[cfg(feature = "editor")]
-            fine_tuned_shared_values: RwLock::new(FineTunedSharedValues::new()),
+            fine_tuned_shared_values,
         }
     }
 
@@ -189,6 +198,9 @@ impl RuntimeSubsystem {
         num_channels: usize,
         sample_rate: f64,
     ) -> Self {
+        #[cfg(feature = "editor")]
+        let fine_tuned_shared_values = Arc::new(RwLock::new(FineTunedSharedValues::new()));
+
         let CreateInstrumentNetworkReturn {
             band_controls,
             key_controls,
@@ -265,7 +277,7 @@ impl RuntimeSubsystem {
             tuner_config: Arc::new(RwLock::new(tuner_config)),
 
             #[cfg(feature = "editor")]
-            fine_tuned_shared_values: RwLock::new(FineTunedSharedValues::new()),
+            fine_tuned_shared_values,
         }
     }
 
@@ -342,7 +354,8 @@ impl RuntimeSubsystem {
             let instrument_net = {
                 let config = self.config.read();
                 #[cfg(feature = "editor")]
-                let fine_tuned_values = self.fine_tuned_shared_values.read();
+                let fine_tuned_values =
+                    Self::snapshot_fine_tuned_values(&self.fine_tuned_shared_values);
 
                 let CreateInstrumentNetworkReturn {
                     band_controls,
@@ -383,6 +396,94 @@ impl RuntimeSubsystem {
         self.preset.read().clone()
     }
 
+    pub fn set_band_control(&self, key: NodeKey, value: f32) -> common::error::Result<()> {
+        self.preset.write().set_band_value(&key, value);
+        let controls = self.node_band_controls.read();
+        if let Some(control) = controls.get(&key) {
+            control.set_value(value);
+            Ok(())
+        } else {
+            Err(ControlError::NodeNotFound { key }.into())
+        }
+    }
+
+    pub fn get_band_control(&self, key: NodeKey) -> common::error::Result<f32> {
+        let controls = self.node_band_controls.read();
+        if let Some(control) = controls.get(&key) {
+            Ok(control.value())
+        } else {
+            Err(ControlError::NodeNotFound { key }.into())
+        }
+    }
+
+    pub fn set_key_control(&self, key: NodeKey, value: f32) -> common::error::Result<()> {
+        self.preset.write().set_key_value(&key, value);
+        let controls = self.node_key_controls.read();
+        if let Some(control) = controls.get(&key) {
+            control.set_value(value);
+            Ok(())
+        } else {
+            Err(ControlError::NodeNotFound { key }.into())
+        }
+    }
+
+    pub fn get_key_control(&self, key: NodeKey) -> common::error::Result<f32> {
+        let controls = self.node_key_controls.read();
+        if let Some(control) = controls.get(&key) {
+            Ok(control.value())
+        } else {
+            Err(ControlError::NodeNotFound { key }.into())
+        }
+    }
+
+    #[cfg(feature = "editor")]
+    pub fn get_finetuned_values(&self) -> common::error::Result<FineTunedValuesPayload> {
+        let shared = self.fine_tuned_shared_values.read();
+        Ok(Self::fine_tuned_values_payload(&*shared))
+    }
+
+    #[cfg(feature = "editor")]
+    pub fn set_finetuned_values(
+        &self,
+        payload: FineTunedValuesPayload,
+    ) -> common::error::Result<()> {
+        {
+            let mut shared = self.fine_tuned_shared_values.write();
+            shared.siren_alpha.set_value(payload.siren_alpha);
+            shared
+                .filter_morph_follow_s
+                .set_value(payload.filter_morph_follow_s);
+            shared
+                .node_follow_response_time_s
+                .set_value(payload.node_follow_response_time_s);
+            shared.group_q.set_value(payload.group_q);
+            shared.group_ls_gain_db.set_value(payload.group_ls_gain_db);
+            shared
+                .filter_q_piercing
+                .set_value(payload.filter_q_piercing);
+            shared.filter_q_bright.set_value(payload.filter_q_bright);
+            shared.filter_q_shelf.set_value(payload.filter_q_shelf);
+            shared
+                .filter_shelf_gain_db
+                .set_value(payload.filter_shelf_gain_db);
+            shared.filter_q_warm.set_value(payload.filter_q_warm);
+            shared.node_bell_q.set_value(payload.node_bell_q);
+            shared
+                .node_bell_gain_db
+                .set_value(payload.node_bell_gain_db);
+            shared.formant_base_q.set_value(payload.formant_base_q);
+        }
+
+        let (config, layout, tuner) = {
+            let config = self.config.read().clone();
+            let layout = self.layout.read().clone();
+            let tuner = self.tuner_config.read().clone();
+            (config, layout, tuner)
+        };
+        self.update_configurations(&config, &layout, &tuner);
+        Ok(())
+    }
+
     pub fn update_configurations(
         &self,
         instrument_config: &InstrumentConfig,
@@ -400,7 +501,8 @@ impl RuntimeSubsystem {
 
             let preset = self.preset.read();
             #[cfg(feature = "editor")]
-            let fine_tuned_values = self.fine_tuned_shared_values.read();
+            let fine_tuned_values =
+                Self::snapshot_fine_tuned_values(&self.fine_tuned_shared_values);
 
             let CreateInstrumentNetworkReturn {
                 excitement_snoops,
@@ -448,6 +550,31 @@ impl RuntimeSubsystem {
             dsp_lock.commit();
         }
         self.fade_in();
+    }
+
+    #[cfg(feature = "editor")]
+    fn snapshot_fine_tuned_values(shared: &Arc<RwLock<FineTunedSharedValues>>) -> FineTunedValues {
+        let guard = shared.read();
+        FineTunedValues::new(&*guard)
+    }
+
+    #[cfg(feature = "editor")]
+    fn fine_tuned_values_payload(shared: &FineTunedSharedValues) -> FineTunedValuesPayload {
+        FineTunedValuesPayload {
+            siren_alpha: shared.siren_alpha.value(),
+            group_q: shared.group_q.value(),
+            group_ls_gain_db: shared.group_ls_gain_db.value(),
+            filter_morph_follow_s: shared.filter_morph_follow_s.value(),
+            node_follow_response_time_s: shared.node_follow_response_time_s.value(),
+            filter_q_piercing: shared.filter_q_piercing.value(),
+            filter_q_bright: shared.filter_q_bright.value(),
+            filter_q_shelf: shared.filter_q_shelf.value(),
+            filter_shelf_gain_db: shared.filter_shelf_gain_db.value(),
+            filter_q_warm: shared.filter_q_warm.value(),
+            node_bell_q: shared.node_bell_q.value(),
+            node_bell_gain_db: shared.node_bell_gain_db.value(),
+            formant_base_q: shared.formant_base_q.value(),
+        }
     }
 
     fn create_instrument_dummy(

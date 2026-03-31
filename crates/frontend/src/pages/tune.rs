@@ -6,7 +6,7 @@ use crate::{
     util::{
         layout_context::{expect_layout_context, LayoutContextReturn},
         secondary_window::is_secondary_window,
-        setup_context::is_mic_premission_granted,
+        setup_context::initial_mic_permission,
     },
 };
 use common::RouteId;
@@ -88,7 +88,7 @@ pub fn Tune() -> impl IntoView {
     let navigate = use_navigate();
 
     // Check mic permission on mount and redirect if needed
-    let mic_permission = is_mic_premission_granted();
+    let mic_permission = initial_mic_permission();
     Effect::new({
         let navigate = navigate.clone();
         move |_| {

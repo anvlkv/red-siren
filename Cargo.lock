@@ -394,6 +394,7 @@ dependencies = [
  "insta-fun",
  "js-sys",
  "log",
+ "mint",
  "num-complex",
  "objc",
  "parking_lot",

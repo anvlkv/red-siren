@@ -41,6 +41,16 @@ impl InstrumentState {
         let input_device = load_input_device(app)?;
         let output_device = load_output_device(app)?;
         let preset = load_preset(app).ok();
+        let initial_layout = InstrumentLayout::from_screen_estate(Vector2 {
+            x: 1280.0,
+            y: 720.0,
+        });
+        let initial_config = InstrumentConfig::try_from(initial_layout).unwrap_or_else(|err| {
+            log::error!(
+                "Failed to derive instrument config from default layout during InstrumentState init: {err}"
+            );
+            InstrumentConfig::default()
+        });
         let (telemetry_sx, telemetry_rx) = create_telemetry_channel();
         let stream_controller = Arc::new(RwLock::new(make_stream_controller(
             telemetry_sx,
@@ -63,8 +73,8 @@ impl InstrumentState {
             inner: Inner {
                 playing: RwLock::new(false),
                 excitement_source: RwLock::new(ExcitementSource::default()),
-                layout: RwLock::new(InstrumentLayout::default()),
-                config: RwLock::new(InstrumentConfig::default()),
+                layout: RwLock::new(initial_layout),
+                config: RwLock::new(initial_config),
                 stream_controller,
             },
         })

@@ -13,13 +13,14 @@ fastrand = { workspace = true }
 fundsp = { workspace = true, default-features = false, features = ["std"] }
 js-sys = { workspace = true, optional = true }
 log = { workspace = true }
+mint = { workspace = true }
 num-complex = "0.4.6"
 parking_lot = "0.12"
 spectrum-analyzer = "1.7.0"
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 u-num-it = "0.3.4"
 wasm-bindgen = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true }
-tokio = {workspace = true, features=["rt-multi-thread"]}
 
 [dev-dependencies]
 common = { workspace = true, features = ["test"] }

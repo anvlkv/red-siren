@@ -28,6 +28,7 @@ use cpal::{
 };
 use fundsp::{prelude::*, thingbuf::mpsc::channel};
 use fundsp::{thingbuf::ThingBuf, typenum::Unsigned};
+use mint::Vector2;
 use parking_lot::RwLock;
 use u_num_it::u_num_it;
 
@@ -89,6 +90,14 @@ impl CpalController {
             .or_else(Self::default_output_device);
 
         let spectrum_buffer = SpectrumBuffer::new(ThingBuf::new(SPECTRUM_BUFFER_CAPACITY));
+        let layout = InstrumentLayout::from_screen_estate(Vector2 {
+            x: 1280.0,
+            y: 720.0,
+        });
+        let config = InstrumentConfig::try_from(layout).unwrap_or_else(|err| {
+            log::error!("Failed to derive instrument config from default layout: {err}");
+            InstrumentConfig::default()
+        });
 
         let output_config = output_device
             .as_ref()
@@ -104,8 +113,8 @@ impl CpalController {
             let sample_rate = quality_gate.sample_rate(None);
 
             RuntimeSubsystem::new(
-                InstrumentLayout::default(),
-                InstrumentConfig::default(),
+                layout,
+                config,
                 ExcitementSource::default(),
                 TunerConfig::default(),
                 preset,
@@ -694,30 +703,30 @@ impl AudioRuntime for CpalController {
         *self.quality_gate.write() = qg;
     }
 
-    fn snapshot_output_snoop(&self, key: NodeKey) -> Vec<f32> {
-        todo!()
+    fn snapshot_output_snoop(&self, _key: NodeKey) -> Vec<f32> {
+        Vec::new()
     }
 
     fn snapshot_all_output_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
-        todo!()
+        Vec::new()
     }
 
-    fn snapshot_excitement_snoop(&self, key: NodeKey) -> Vec<(f32, f32)> {
-        todo!()
+    fn snapshot_excitement_snoop(&self, _key: NodeKey) -> Vec<(f32, f32)> {
+        Vec::new()
     }
 
     fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<(f32, f32)>)> {
-        todo!()
+        Vec::new()
     }
 
     fn snapshot_processed_output_spectrum(
         &self,
     ) -> common::error::Result<Option<crate::rt::ProcessedOutputSpectrumSnapshot>> {
-        todo!()
+        Ok(None)
     }
 
     fn snapshot_input_snoop(&self) -> Vec<f32> {
-        todo!()
+        Vec::new()
     }
 
     fn set_band_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()> {
@@ -756,39 +765,56 @@ impl AudioRuntime for CpalController {
     }
 
     fn poll_tuner_spectrum(&self) -> Option<common::tuner::SpectrumSnapshot> {
-        todo!()
+        self.spectrum_buffer.read().pop().map(|spectrum| {
+            common::tuner::SpectrumSnapshot(
+                spectrum
+                    .data()
+                    .iter()
+                    .map(|(freq, mag)| (freq.val(), mag.val()))
+                    .collect(),
+            )
+        })
     }
 
     fn start_tap_tuner_audio(&self) -> common::error::Result<()> {
-        todo!()
+        Ok(())
     }
 
     fn stop_tap_tuner_audio(&self) -> common::error::Result<()> {
-        todo!()
+        Ok(())
     }
 
     fn update_tuner_config(&self, tuner_config: &TunerConfig) -> common::error::Result<()> {
-        todo!()
+        let runtime = self.runtime.read();
+        runtime.update_tuner_config(tuner_config);
+        Ok(())
     }
 
     fn poll_tuner_excitements(&self) -> Vec<(NodeKey, f32)> {
-        todo!()
+        Vec::new()
     }
 
     fn get_sample_rate(&self) -> f64 {
-        todo!()
+        if let Some(cfg) = self.output_config.read().clone() {
+            cfg.sample_rate() as f64
+        } else {
+            self.quality_gate.read().sample_rate(None) as f64
+        }
     }
 
     fn quality_indicator(&self) -> PlaybackQuality {
-        todo!()
+        (*self.quality_gate.read()).into()
     }
 
     fn set_preset(&self, preset: Preset) -> common::error::Result<()> {
-        todo!()
+        let runtime = self.runtime.read();
+        runtime.update_preset(preset);
+        Ok(())
     }
 
     fn get_preset(&self) -> Preset {
-        todo!()
+        let runtime = self.runtime.read();
+        runtime.get_preset()
     }
 
     #[cfg(feature = "editor")]

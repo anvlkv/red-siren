@@ -7,29 +7,31 @@ use std::{
 };
 
 use common::instrument::PlaybackQuality;
-use fundsp::{
-    thingbuf::mpsc::{Receiver, Sender, channel},
-    DEFAULT_SR,
-};
-use tokio::{task::{JoinHandle, self}};
+use fundsp::DEFAULT_SR;
 use parking_lot::{Mutex, RwLock};
+use tokio::{
+    runtime::{Builder as TokioRuntimeBuilder, Runtime as TokioRuntime},
+    task::{self, JoinHandle as TokioJoinHandle},
+};
 
 use crate::quality::{PlaybackQualityGate, SampleType};
 
-use super::telemetry::*;
+use super::telemetry::{PlaybackTelemetry, TelemetryReceiver};
 
+/// Drives playback-quality adjustments on a dedicated Tokio runtime so we never
+/// rely on a globally installed executor during Tauri setup.
 pub struct QualityGateManager {
     telemetry: Arc<Mutex<PlaybackTelemetry>>,
     quality_setting: Arc<RwLock<PlaybackQuality>>,
     proposed_quality_gate: Arc<RwLock<PlaybackQualityGate>>,
-    job_running: Arc<AtomicBool>,
-    job: Option<JoinHandle<()>>,
+    shutdown: Arc<AtomicBool>,
+    worker: Option<GateWorker>,
 }
 
 impl QualityGateManager {
     pub fn new(
         telemetry_rx: TelemetryReceiver,
-        mut managed_change: Box<dyn FnMut(PlaybackQualityGate) + Send + Sync>
+        managed_change: Box<dyn FnMut(PlaybackQualityGate) + Send + Sync>,
     ) -> Self {
         let proposed_quality_gate = PlaybackQualityGate::default();
         let telemetry = Arc::new(Mutex::new(PlaybackTelemetry::new(
@@ -40,44 +42,23 @@ impl QualityGateManager {
         )));
         let quality_setting = Arc::new(RwLock::new(PlaybackQuality::default()));
         let proposed_quality_gate = Arc::new(RwLock::new(proposed_quality_gate));
-        let job_running = Arc::new(AtomicBool::new(true));
-        let job = task::spawn({
-            let telemetry = telemetry.clone();
-            let quality_setting = quality_setting.clone();
-            let proposed_quality_gate = proposed_quality_gate.clone();
-            let job_running = job_running.clone();
-            async move {
-                loop {
-                    if !job_running.load(Ordering::SeqCst) {
-                        break;
-                    }
+        let shutdown = Arc::new(AtomicBool::new(false));
 
-                    if let Some(msg) = telemetry_rx.recv().await {
-
-                        if let Some(change) = {
-                            let mut tel = telemetry.lock();
-                            tel.accept_message(msg)
-                        } {
-                            *proposed_quality_gate.write() = change;
-                            let mut qs = quality_setting.write();
-                            if let PlaybackQuality::Auto(val) = qs.deref_mut() {
-                                *val = change as i8;
-                                managed_change(PlaybackQualityGate::from(*val));
-                            }
-                        } else {
-                            task::yield_now().await;
-                        }
-                    }
-                }
-            }
-        });
+        let worker = GateWorker::spawn(
+            telemetry_rx,
+            telemetry.clone(),
+            quality_setting.clone(),
+            proposed_quality_gate.clone(),
+            shutdown.clone(),
+            Arc::new(Mutex::new(managed_change)),
+        );
 
         Self {
             telemetry,
             quality_setting,
             proposed_quality_gate,
-            job_running,
-            job: Some(job),
+            shutdown,
+            worker: Some(worker),
         }
     }
 
@@ -96,18 +77,75 @@ impl QualityGateManager {
         quality: PlaybackQuality,
         buffer_size: Option<usize>,
     ) {
-        let q_gate = PlaybackQualityGate::from(quality);
+        let gate = PlaybackQualityGate::from(quality);
         let mut telemetry = self.telemetry.lock();
-        telemetry.update(sample_rate, sample_type, q_gate, buffer_size);
+        telemetry.update(sample_rate, sample_type, gate, buffer_size);
         *self.quality_setting.write() = quality;
     }
 }
 
 impl Drop for QualityGateManager {
     fn drop(&mut self) {
-        self.job_running.store(false, Ordering::SeqCst);
-        if let Some(j) = self.job.take() {
-            j.abort();
+        self.shutdown.store(true, Ordering::SeqCst);
+        if let Some(worker) = self.worker.take() {
+            worker.stop();
         }
+    }
+}
+
+struct GateWorker {
+    runtime: TokioRuntime,
+    handle: TokioJoinHandle<()>,
+}
+
+impl GateWorker {
+    #[allow(clippy::too_many_arguments)]
+    fn spawn(
+        telemetry_rx: TelemetryReceiver,
+        telemetry: Arc<Mutex<PlaybackTelemetry>>,
+        quality_setting: Arc<RwLock<PlaybackQuality>>,
+        proposed_quality_gate: Arc<RwLock<PlaybackQualityGate>>,
+        shutdown: Arc<AtomicBool>,
+        managed_change: Arc<Mutex<Box<dyn FnMut(PlaybackQualityGate) + Send + Sync>>>,
+    ) -> Self {
+        let runtime = TokioRuntimeBuilder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("failed to build quality gate runtime");
+
+        let handle = runtime.spawn(async move {
+            loop {
+                if shutdown.load(Ordering::SeqCst) {
+                    break;
+                }
+
+                let Some(msg) = telemetry_rx.recv().await else {
+                    break;
+                };
+
+                if let Some(change) = {
+                    let mut tel = telemetry.lock();
+                    tel.accept_message(msg)
+                } {
+                    *proposed_quality_gate.write() = change;
+
+                    let mut qs = quality_setting.write();
+                    if let PlaybackQuality::Auto(value) = qs.deref_mut() {
+                        *value = change as i8;
+                        (managed_change.lock())(PlaybackQualityGate::from(*value));
+                    }
+                } else {
+                    task::yield_now().await;
+                }
+            }
+        });
+
+        Self { runtime, handle }
+    }
+
+    fn stop(self) {
+        self.handle.abort();
+        self.runtime.shutdown_background();
     }
 }

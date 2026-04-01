@@ -1,5 +1,8 @@
 use std::collections::VecDeque;
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use std::time::Instant;
 
 use crate::quality::{PlaybackQualityGate, SampleType};
@@ -106,6 +109,8 @@ fn decide(
 }
 
 const BUFFER_CAP_MS: f64 = 75_f64;
+
+static TELEMETRY_CHANNEL_CLOSED: AtomicBool = AtomicBool::new(false);
 
 pub fn playback_callback<const N: usize>(
     net: NetBackend,
@@ -294,7 +299,9 @@ pub fn playback_callback<const N: usize>(
                 telemetry_buff.try_send(summary),
                 Err(TrySendError::Closed(_))
             ) {
-                panic!("Telemetry channel was closed")
+                if !TELEMETRY_CHANNEL_CLOSED.swap(true, Ordering::Relaxed) {
+                    log::warn!("Telemetry channel was closed; disabling telemetry updates");
+                }
             }
         },
     ) as Box<super::GenType>

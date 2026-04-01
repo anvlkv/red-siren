@@ -14,8 +14,16 @@
     "use_new_terminal": true,
   },
   {
-    "label": "Build in release mode with devtools",
+    "label": "Build in **release** mode with devtools",
     "command": "cargo tauri build --bundles app --features devtools",
+    "env": {
+      "RUST_BACKTRACE": "1",
+    },
+    "reveal": "always",
+  },
+  {
+    "label": "Build in **debug** mode with devtools",
+    "command": "cargo tauri build --debug --bundles app --features devtools",
     "env": {
       "RUST_BACKTRACE": "1",
     },

@@ -1,6 +1,6 @@
 use std::f32;
 
-use common::instrument::{NodeConfig, K_BASE};
+use common::instrument::{K_BASE, NodeConfig};
 use fundsp::prelude::*;
 
 use crate::{

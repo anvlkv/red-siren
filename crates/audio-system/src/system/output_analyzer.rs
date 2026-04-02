@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use common::error::{InstrumentError, Result};
 use spectrum_analyzer::{
-    samples_fft_to_spectrum, scaling, windows::hamming_window, FrequencyLimit,
+    FrequencyLimit, samples_fft_to_spectrum, scaling, windows::hamming_window,
 };
 
 pub const OUTPUT_ANALYZER_FFT_WINDOW_SIZE: usize = 512;

@@ -6,9 +6,9 @@ mod scale;
 use mint::Point2;
 use serde::{Deserialize, Serialize};
 
-use crate::{error::InstrumentConfigError, orientation::LayoutOrientation, NodeKey};
+use crate::{NodeKey, error::InstrumentConfigError, orientation::LayoutOrientation};
 
-use super::{consts::*, Layout};
+use super::{Layout, consts::*};
 
 pub use channel::*;
 pub use group::*;
@@ -294,9 +294,11 @@ mod tests {
         let valid_node =
             NodeConfig::new_test_node((super::SOFT_MIN_FREQ_HZ + super::SOFT_MAX_FREQ_HZ) / 2.0);
         assert!(valid_node.validate(0).is_ok());
-        assert!(NodeConfig::new_test_node(super::MIN_FREQ_HZ - 1.0)
-            .validate(0)
-            .is_err());
+        assert!(
+            NodeConfig::new_test_node(super::MIN_FREQ_HZ - 1.0)
+                .validate(0)
+                .is_err()
+        );
     }
 
     #[test]

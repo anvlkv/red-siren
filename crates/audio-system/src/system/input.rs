@@ -7,9 +7,9 @@ pub mod random_excitor;
 
 use std::collections::HashMap;
 
-use common::tuner::Config;
 use common::NodeKey;
-use fundsp::{prelude::*, Float, Real};
+use common::tuner::Config;
+use fundsp::{Float, Real, prelude::*};
 use u_num_it::u_num_it;
 
 use crate::ExcitementControl;
@@ -133,7 +133,9 @@ pub fn sensors_system<S: Real + Float + 'static>(
 
     net.connect_output(analyzer_id, 0, tap_channel);
 
-    log::info!("Sensors system created successfully with analyzer node id: {analyzer_id:?}, input node id: {input_id:?}",);
+    log::info!(
+        "Sensors system created successfully with analyzer node id: {analyzer_id:?}, input node id: {input_id:?}",
+    );
 
     sensor_handles
 }

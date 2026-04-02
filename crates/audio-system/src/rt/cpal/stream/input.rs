@@ -1,13 +1,13 @@
 use std::{
-    sync::mpsc::{channel, Receiver, Sender},
+    sync::mpsc::{Receiver, Sender, channel},
     thread,
     time::Duration,
 };
 
 use common::error::InstrumentError;
 use cpal::{
-    traits::{DeviceTrait, StreamTrait},
     SampleFormat, Stream, StreamConfig, SupportedStreamConfig,
+    traits::{DeviceTrait, StreamTrait},
 };
 
 use super::{Control, ControlInvocationResult, STREAM_TIMEOUT_S};
@@ -152,7 +152,7 @@ fn run_input(
             return Err(InstrumentError::UnsupportedSampleFormat(format!(
                 "unsupported_sample_format:{other:?}"
             ))
-            .into())
+            .into());
         }
     }
     .map_err(|e| {

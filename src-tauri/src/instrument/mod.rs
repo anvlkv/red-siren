@@ -1,15 +1,12 @@
 mod commands;
 mod state;
 
-use common::{device::DeviceData, error::Result, instrument::Preset};
-use tauri::{App, AppHandle, Emitter, Manager, async_runtime::spawn};
 use crate::persistence::persistence::{load_json_or_default, save_json};
-
-
+use common::{device::DeviceData, error::Result, instrument::Preset};
+use tauri::{async_runtime::spawn, App, AppHandle, Emitter, Manager};
 
 pub use commands::*;
 pub use state::InstrumentState;
-
 
 pub(super) const INSTRUMENT_STORE_NAME: &str = "instrument.json";
 pub(super) const PRESETS_STORE_KEY: &str = "presets";
@@ -21,7 +18,8 @@ pub fn setup(app: &mut App) -> Result<()> {
 
     if is_new {
         log::debug!("Instrument state initialized and managed state created");
-        let presets: Preset = load_json_or_default(app.handle(), INSTRUMENT_STORE_NAME, PRESETS_STORE_KEY)?;
+        let presets: Preset =
+            load_json_or_default(app.handle(), INSTRUMENT_STORE_NAME, PRESETS_STORE_KEY)?;
 
         let windows = app.webview_windows();
         let base_handle_new = app.handle().clone();
@@ -38,8 +36,8 @@ pub fn setup(app: &mut App) -> Result<()> {
                                     size.height
                                 );
                                 let layout = state.layout();
-                                if let Err(e) = base_handle_new
-                                    .emit(common::instrument::events::LAYOUT, layout)
+                                if let Err(e) =
+                                    base_handle_new.emit(common::instrument::events::LAYOUT, layout)
                                 {
                                     log::error!("Failed emitting initial instrument layout: {e}");
                                 }
@@ -85,38 +83,45 @@ pub fn setup(app: &mut App) -> Result<()> {
         log::debug!("Instrument engine state already exists; skipping initialization");
     }
 
-
-
     Ok(())
 }
 
-
-pub (super) fn save_preset(preset: Preset, app: &AppHandle) -> Result<()> {
+pub(super) fn save_preset(preset: Preset, app: &AppHandle) -> Result<()> {
     save_json(app, INSTRUMENT_STORE_NAME, PRESETS_STORE_KEY, &preset)?;
     log::debug!("Instrument presets saved to store");
     Ok(())
 }
 
-pub (super) fn save_input_device(device: DeviceData, app: &AppHandle) -> Result<()> {
-    save_json(app, INSTRUMENT_STORE_NAME, INPUT_DEVICE_STORE_KEY, &Some(device))?;
+pub(super) fn save_input_device(device: DeviceData, app: &AppHandle) -> Result<()> {
+    save_json(
+        app,
+        INSTRUMENT_STORE_NAME,
+        INPUT_DEVICE_STORE_KEY,
+        &Some(device),
+    )?;
     log::debug!("Input device saved to store");
     Ok(())
 }
 
-pub (super) fn save_output_device(device: DeviceData, app: &AppHandle) -> Result<()> {
-    save_json(app, INSTRUMENT_STORE_NAME, OUTPUT_DEVICE_STORE_KEY, &Some(device))?;
+pub(super) fn save_output_device(device: DeviceData, app: &AppHandle) -> Result<()> {
+    save_json(
+        app,
+        INSTRUMENT_STORE_NAME,
+        OUTPUT_DEVICE_STORE_KEY,
+        &Some(device),
+    )?;
     log::debug!("Output device saved to store");
     Ok(())
 }
 
-pub (super) fn load_input_device(app: &AppHandle) -> Result<Option<DeviceData>> {
+pub(super) fn load_input_device(app: &AppHandle) -> Result<Option<DeviceData>> {
     load_json_or_default::<Option<DeviceData>>(app, INSTRUMENT_STORE_NAME, INPUT_DEVICE_STORE_KEY)
 }
 
-pub (super) fn load_output_device(app: &AppHandle) -> Result<Option<DeviceData>> {
+pub(super) fn load_output_device(app: &AppHandle) -> Result<Option<DeviceData>> {
     load_json_or_default::<Option<DeviceData>>(app, INSTRUMENT_STORE_NAME, OUTPUT_DEVICE_STORE_KEY)
 }
 
-pub (super) fn load_preset(app: &AppHandle) -> Result<Preset> {
+pub(super) fn load_preset(app: &AppHandle) -> Result<Preset> {
     load_json_or_default::<Preset>(app, INSTRUMENT_STORE_NAME, PRESETS_STORE_KEY)
 }

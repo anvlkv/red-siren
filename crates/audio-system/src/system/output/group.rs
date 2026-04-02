@@ -1,9 +1,9 @@
 use std::{cell::RefCell, collections::HashMap, f32, f64};
 
-use common::{instrument::GroupConfig, NodeKey};
+use common::{NodeKey, instrument::GroupConfig};
 use fundsp::{
     prelude::*,
-    typenum::{UInt, UTerm, B1},
+    typenum::{B1, UInt, UTerm},
 };
 
 use super::InnerHandles;
@@ -14,7 +14,7 @@ use crate::output::{
 };
 use crate::{
     output::{
-        metro::{metro_busi, MetroBusType},
+        metro::{MetroBusType, metro_busi},
         node::NodeType,
     },
     system::values::{FineTunedValue, FineTunedValues},

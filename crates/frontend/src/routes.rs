@@ -8,7 +8,7 @@ use tauri_use::{use_invoke, UseTauriReturn};
 use crate::util::secondary_window::is_secondary_window;
 use crate::{
     components::{AppError, ErrorTemplate, Intro},
-    pages::{About, Donate, Home, Permissions, Play, Tune},
+    pages::{About, Donate, Edit, Home, Permissions, Play, Tune},
 };
 
 #[component]
@@ -90,6 +90,7 @@ pub fn AppRoutes() -> impl IntoView {
                     <Route path=(StaticSegment(RouteId::Home.as_ref()),) view=Home />
                     <Route path=(StaticSegment(RouteId::Play.as_ref()),) view=Play />
                     <Route path=(StaticSegment(RouteId::Tune.as_ref()),) view=Tune />
+                    <Route path=(StaticSegment(RouteId::Edit.as_ref()),) view=Edit />
                     <Route path=(StaticSegment(RouteId::About.as_ref()),) view=About />
                     <Route path=(StaticSegment(RouteId::Donate.as_ref()),) view=Donate />
                     <Route path=(StaticSegment(RouteId::Permissions.as_ref()),) view=Permissions />

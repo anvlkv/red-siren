@@ -175,13 +175,9 @@ fn instrument_with_mic_src() {
 
         let mut rng = Rng::with_seed(seed);
 
-        InputSource::VecByChannel(vec![Vec::from_iter((0..2048).map(|_| {
-            if rng.bool() {
-                -rng.f32()
-            } else {
-                rng.f32()
-            }
-        }))])
+        InputSource::VecByChannel(vec![Vec::from_iter(
+            (0..2048).map(|_| if rng.bool() { -rng.f32() } else { rng.f32() }),
+        )])
     };
 
     assert_audio_unit_snapshot!("emulated mic noise", net, input, config);

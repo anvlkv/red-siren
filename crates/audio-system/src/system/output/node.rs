@@ -1,9 +1,9 @@
 use common::instrument::NodeConfig;
 use fundsp::prelude::*;
 
+use super::InnerHandles;
 use super::formant::*;
 use super::siren::*;
-use super::InnerHandles;
 
 use crate::ExcitementControl;
 use crate::{

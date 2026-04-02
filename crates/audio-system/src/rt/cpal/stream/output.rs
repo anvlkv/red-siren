@@ -26,8 +26,8 @@ use std::{
 
 use common::error::InstrumentError;
 use cpal::{
-    traits::{DeviceTrait, StreamTrait},
     OutputStreamTimestamp, SampleFormat, Stream, StreamConfig, SupportedStreamConfig,
+    traits::{DeviceTrait, StreamTrait},
 };
 
 use super::{Control, ControlInvocationResult, STREAM_TIMEOUT_S};
@@ -196,7 +196,7 @@ fn run_output(
             return Err(InstrumentError::UnsupportedSampleFormat(format!(
                 "unsupported_sample_format:{other:?}"
             ))
-            .into())
+            .into());
         }
     }
     .map_err(|e| {

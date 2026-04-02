@@ -12,10 +12,10 @@ pub use stream::{Control, ControlInvocationResult};
 
 pub mod prelude {
     pub use super::stream::{
-        spawn_owned_input_stream, spawn_owned_output_stream, GenType, ProdType, STREAM_TIMEOUT_S,
+        GenType, ProdType, STREAM_TIMEOUT_S, spawn_owned_input_stream, spawn_owned_output_stream,
     };
     pub use super::{
-        check_mic_permission, ensure_audio_session_configured, make_stream_controller, Control,
-        ControlInvocationResult,
+        Control, ControlInvocationResult, check_mic_permission, ensure_audio_session_configured,
+        make_stream_controller,
     };
 }

@@ -3,7 +3,7 @@ use std::num::NonZero;
 use mint::{Point2, Vector2};
 use serde::{Deserialize, Serialize};
 
-use crate::{orientation::LayoutOrientation, safe_area::SafeArea, Line};
+use crate::{Line, orientation::LayoutOrientation, safe_area::SafeArea};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Layout {

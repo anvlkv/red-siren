@@ -1,20 +1,20 @@
 use std::collections::VecDeque;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 use std::time::Instant;
 
 use crate::quality::{PlaybackQualityGate, SampleType};
-use crate::rt::telemetry;
 use crate::rt::ProcessingMode;
+use crate::rt::telemetry;
 
 use cpal::OutputStreamTimestamp;
+use fundsp::MAX_BUFFER_SIZE;
 use fundsp::buffer::BufferVec;
 use fundsp::prelude::{AudioUnit, BigBlockAdapter, NetBackend};
 use fundsp::setting::TrySendError;
 use fundsp::thingbuf::ThingBuf;
-use fundsp::MAX_BUFFER_SIZE;
 use parking_lot::RwLock;
 
 pub struct PlaybackCallbackConfig {

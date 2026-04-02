@@ -16,13 +16,13 @@ use std::collections::HashMap;
 
 use channel::add_one_channel_subsystem;
 use common::{
-    instrument::{Config, GroupChannel, GroupConfig, Scale},
     NodeKey,
+    instrument::{Config, GroupChannel, GroupConfig, Scale},
 };
 use fundsp::prelude::*;
 
 use super::NodeHandles;
-use crate::{output::filter::FilterHandles, system::values::FineTunedValues, ExcitementControl};
+use crate::{ExcitementControl, output::filter::FilterHandles, system::values::FineTunedValues};
 
 #[derive(Clone)]
 pub(super) struct InnerHandles {

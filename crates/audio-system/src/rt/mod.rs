@@ -1,6 +1,6 @@
-pub mod gate_manager;
 #[cfg(feature = "rt_cpal")]
 pub mod cpal;
+pub mod gate_manager;
 #[cfg(feature = "rt_web")]
 pub mod web;
 
@@ -11,7 +11,9 @@ use std::collections::BTreeMap;
 
 use common::NodeKey;
 use common::device::DeviceData;
-use common::instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, PlaybackQuality, Preset};
+use common::instrument::{
+    Config as InstrumentConfig, Layout as InstrumentLayout, PlaybackQuality, Preset,
+};
 use common::tuner::Config as TunerConfig;
 
 use crate::quality::PlaybackQualityGate;
@@ -84,7 +86,7 @@ pub trait AudioRuntime {
         &self,
         layout: &InstrumentLayout,
         config: &InstrumentConfig,
-        tuner_config: &TunerConfig
+        tuner_config: &TunerConfig,
     ) -> common::error::Result<()>;
 
     // Data taps
@@ -92,7 +94,9 @@ pub trait AudioRuntime {
     fn snapshot_all_output_snoops(&self) -> Vec<(NodeKey, Vec<f32>)>;
     fn snapshot_excitement_snoop(&self, key: NodeKey) -> Vec<(f32, f32)>;
     fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<(f32, f32)>)>;
-    fn snapshot_processed_output_spectrum(&self) -> common::error::Result<Option<ProcessedOutputSpectrumSnapshot>>;
+    fn snapshot_processed_output_spectrum(
+        &self,
+    ) -> common::error::Result<Option<ProcessedOutputSpectrumSnapshot>>;
     fn snapshot_input_snoop(&self) -> Vec<f32>;
 
     // Band control
@@ -107,12 +111,14 @@ pub trait AudioRuntime {
 
     // Fine-tuned values (editor feature)
     #[cfg(feature = "editor")]
-    fn get_finetuned_values(&self) -> common::error::Result<common::commands::edit::FineTunedValuesPayload>;
+    fn get_finetuned_values(
+        &self,
+    ) -> common::error::Result<common::commands::edit::FineTunedValuesPayload>;
 
     #[cfg(feature = "editor")]
     fn set_finetuned_values(
         &self,
-        payload: common::commands::edit::FineTunedValuesPayload
+        payload: common::commands::edit::FineTunedValuesPayload,
     ) -> common::error::Result<()>;
 
     // Tuner integration
@@ -144,19 +150,22 @@ pub struct NullController;
 
 impl AudioRuntime for NullController {
     #[cfg(feature = "editor")]
-    fn get_finetuned_values(&self) -> common::error::Result<common::commands::edit::FineTunedValuesPayload> {
+    fn get_finetuned_values(
+        &self,
+    ) -> common::error::Result<common::commands::edit::FineTunedValuesPayload> {
         Err(common::error::InstrumentError::NotInitialized.into())
     }
 
     #[cfg(feature = "editor")]
     fn set_finetuned_values(
         &self,
-        _payload: common::commands::edit::FineTunedValuesPayload
+        _payload: common::commands::edit::FineTunedValuesPayload,
     ) -> common::error::Result<()> {
         Ok(())
     }
 
-    fn start(&self,
+    fn start(
+        &self,
         _layout: &InstrumentLayout,
         _config: &InstrumentConfig,
         _source: ExcitementSource,
@@ -186,7 +195,7 @@ impl AudioRuntime for NullController {
         &self,
         _layout: &InstrumentLayout,
         _config: &InstrumentConfig,
-        _tuner_config: &TunerConfig
+        _tuner_config: &TunerConfig,
     ) -> common::error::Result<()> {
         Ok(())
     }
@@ -211,7 +220,9 @@ impl AudioRuntime for NullController {
         Vec::new()
     }
 
-    fn snapshot_processed_output_spectrum(&self) -> common::error::Result<Option<(BTreeMap<u32, f32>, BTreeMap<u32, f32>)>> {
+    fn snapshot_processed_output_spectrum(
+        &self,
+    ) -> common::error::Result<Option<(BTreeMap<u32, f32>, BTreeMap<u32, f32>)>> {
         Ok(None)
     }
 
@@ -263,15 +274,13 @@ impl AudioRuntime for NullController {
         PlaybackQuality::default()
     }
 
-    fn update_quality_setting(&self, _qg: PlaybackQualityGate) {
-
-    }
+    fn update_quality_setting(&self, _qg: PlaybackQualityGate) {}
 
     fn set_preset(&self, _preset: Preset) -> common::error::Result<()> {
         Ok(())
     }
 
-    fn get_preset(&self) -> Preset{
+    fn get_preset(&self) -> Preset {
         Preset::default()
     }
 }
@@ -287,25 +296,15 @@ pub fn make_stream_controller(
     telemetry: TelemetrySender,
     preset: Option<Preset>,
     output_device: Option<DeviceData>,
-    input_device: Option<DeviceData>
+    input_device: Option<DeviceData>,
 ) -> common::error::Result<Box<dyn AudioRuntime + Send + Sync>> {
     #[cfg(feature = "rt_cpal")]
     {
-        return cpal::make_stream_controller(
-            telemetry,
-            preset,
-            output_device,
-            input_device,
-        );
+        return cpal::make_stream_controller(telemetry, preset, output_device, input_device);
     }
     #[cfg(all(not(feature = "rt_cpal"), feature = "rt_web"))]
     {
-        return web::make_stream_controller(
-            telemetry,
-            preset,
-            output_device,
-            input_device,
-        );
+        return web::make_stream_controller(telemetry, preset, output_device, input_device);
     }
     Ok(Box::new(NullController))
 }

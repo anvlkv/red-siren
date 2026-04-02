@@ -1,17 +1,17 @@
 use std::{cell::RefCell, collections::HashMap, mem};
 
 use common::{
-    instrument::{GroupChannel, GroupConfig},
     NodeKey,
+    instrument::{GroupChannel, GroupConfig},
 };
 use fundsp::prelude::*;
 use u_num_it::u_num_it;
 
 use super::{
+    InnerHandles,
     filter::{FilterHandles, FilterType},
     node::NodeType,
     throw_catch::{ThrowCatchCatch, ThrowCatchThrow},
-    InnerHandles,
 };
 
 use crate::system::values::FineTunedValues;
@@ -34,7 +34,9 @@ pub fn add_one_channel_subsystem<S: Real + Float + 'static>(
                 type GNum = NumType;
 
                 u_num_it!(
-                    [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71,],
+                    [
+                        2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71,
+                    ],
                     match nodes_count_per_group {
                         U => {
                             type KNum = NumType;
@@ -45,7 +47,9 @@ pub fn add_one_channel_subsystem<S: Real + Float + 'static>(
                                 net,
                                 values,
                             );
-                            log::info!("created stereo [{channel:?}] channel system: groups={channel_groups_count}, nodes={nodes_count_per_group}");
+                            log::info!(
+                                "created stereo [{channel:?}] channel system: groups={channel_groups_count}, nodes={nodes_count_per_group}"
+                            );
 
                             id
                         }

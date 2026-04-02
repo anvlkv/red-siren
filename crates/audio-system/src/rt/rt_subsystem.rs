@@ -4,9 +4,9 @@ use std::{collections::HashMap, f32, sync::Arc, thread, time::Duration};
 use common::commands::edit::FineTunedValuesPayload;
 use common::error::ControlError;
 use common::{
+    NodeKey,
     instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, Preset},
     tuner::Config as TunerConfig,
-    NodeKey,
 };
 use fundsp::{prelude::*, typenum::Unsigned as _};
 use parking_lot::RwLock;
@@ -15,8 +15,8 @@ use u_num_it::u_num_it;
 #[cfg(feature = "editor")]
 use crate::system::values::{FineTunedSharedValues, FineTunedValues};
 use crate::{
-    input::analyzer::SpectrumBuffer, output_analyzer::OUTPUT_ANALYZER_FFT_WINDOW_SIZE,
-    quality::SampleType, rt::ExcitementSource, ExcitementControl, SensorHandles, FFT_WINDOW_SIZE,
+    ExcitementControl, FFT_WINDOW_SIZE, SensorHandles, input::analyzer::SpectrumBuffer,
+    output_analyzer::OUTPUT_ANALYZER_FFT_WINDOW_SIZE, quality::SampleType, rt::ExcitementSource,
 };
 
 pub const FADE_DURATION_MS: u64 = 120;

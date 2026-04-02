@@ -1,7 +1,7 @@
 use mint::{Point2, Vector2};
 use serde::{Deserialize, Serialize};
 
-use crate::{safe_area::SafeArea, Line};
+use crate::{Line, safe_area::SafeArea};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LayoutOrientation {

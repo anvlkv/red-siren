@@ -13,11 +13,7 @@ pub struct NodePreset {
 
 impl NodePreset {
     pub fn key_value_as_f32(&self) -> f32 {
-        if self.key_value {
-            1.0
-        } else {
-            0.0
-        }
+        if self.key_value { 1.0 } else { 0.0 }
     }
 }
 

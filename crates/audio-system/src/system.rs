@@ -9,11 +9,11 @@ use std::collections::HashMap;
 use crate::rt::ExcitementSource;
 use common::NodeKey;
 use fundsp::{
+    Float, Real,
     net::Net,
-    prelude::{var, An},
+    prelude::{An, var},
     shared::Shared,
     snoop::{Snoop, SnoopBackend},
-    Float, Real,
 };
 use values::FineTunedValues;
 

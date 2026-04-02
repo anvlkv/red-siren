@@ -1,20 +1,20 @@
+use common::error::{IntroError, Result};
 use common::events::intro::{IntroSnoopBatchPayload, IntroSnoopSample};
-use common::error::{Result, IntroError};
 use tauri::State;
 
-use super::engine::{IntroEngineState, Control};
+use super::engine::{Control, IntroEngineState};
 
 #[tauri::command]
 pub async fn intro_pause(state: State<'_, IntroEngineState>) -> Result<()> {
-    let mut inner = state
-        .inner
-        .lock();
+    let mut inner = state.inner.lock();
     if inner.paused {
         return Ok(());
     }
     if let Some(tx) = &inner.tx {
         tx.send(Control::Pause)
-            .map_err(|e| IntroError::PauseFailed { detail: Some(e.to_string()) })?;
+            .map_err(|e| IntroError::PauseFailed {
+                detail: Some(e.to_string()),
+            })?;
         inner.paused = true;
     }
     Ok(())
@@ -22,21 +22,19 @@ pub async fn intro_pause(state: State<'_, IntroEngineState>) -> Result<()> {
 
 #[tauri::command]
 pub async fn intro_resume(state: State<'_, IntroEngineState>) -> Result<()> {
-    let mut inner = state
-        .inner
-        .lock();
+    let mut inner = state.inner.lock();
     if !inner.paused {
         return Ok(());
     }
     if let Some(tx) = &inner.tx {
         tx.send(Control::Resume)
-            .map_err(|e| IntroError::ResumeFailed { detail: Some(e.to_string()) })?;
+            .map_err(|e| IntroError::ResumeFailed {
+                detail: Some(e.to_string()),
+            })?;
         inner.paused = false;
     }
     Ok(())
 }
-
-
 
 // -----------------------------------------------------------------------------
 // New on-demand frame command
@@ -49,9 +47,7 @@ pub async fn intro_next_frame(
 
     // Lazy start engine if not running.
     {
-        let mut inner = state
-            .inner
-            .lock();
+        let mut inner = state.inner.lock();
         if !inner.started {
             let config = super::engine::EngineConfig::default();
             let (tx, handle, snoops, _depths) = super::engine::spawn_engine(inner.paused, config);
@@ -63,9 +59,7 @@ pub async fn intro_next_frame(
     }
 
     // Collect snapshot.
-    let mut inner = state
-        .inner
-        .lock();
+    let mut inner = state.inner.lock();
     if inner.snoops.is_empty() {
         return Err(IntroError::EngineNotReady.into());
     }

@@ -1,11 +1,11 @@
 use std::sync::Once;
 
+use js_sys::{Object, Reflect};
 use log::{Level, LevelFilter, Log, Metadata, Record};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::console;
-use js_sys::{Object, Reflect};
 
 #[wasm_bindgen]
 extern "C" {
@@ -53,10 +53,18 @@ impl Log for TauriLogger {
 
         // file and line
         if let Some(file) = record.file() {
-            let _ = Reflect::set(&args_obj, &JsValue::from_str("file"), &JsValue::from_str(file));
+            let _ = Reflect::set(
+                &args_obj,
+                &JsValue::from_str("file"),
+                &JsValue::from_str(file),
+            );
         }
         if let Some(line) = record.line() {
-            let _ = Reflect::set(&args_obj, &JsValue::from_str("line"), &JsValue::from_f64(line as f64));
+            let _ = Reflect::set(
+                &args_obj,
+                &JsValue::from_str("line"),
+                &JsValue::from_f64(line as f64),
+            );
         }
 
         // location string like "<module>@<file>:<line>" or "@<file>:<line>"

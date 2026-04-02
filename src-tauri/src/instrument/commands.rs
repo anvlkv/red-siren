@@ -3,9 +3,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use audio_system::rt::ExcitementSource;
 
 use common::error::{InstrumentError, Result};
-use common::instrument::PlaybackQuality;
-use common::instrument::commands::{ReflectBandControlPayload, ReflectKeyControlPayload, SpectrumPayload};
+use common::instrument::commands::{
+    ReflectBandControlPayload, ReflectKeyControlPayload, SpectrumPayload,
+};
 use common::instrument::events::{BAND_CONTROL_G_K, KEY_CONTROL_G_K};
+use common::instrument::PlaybackQuality;
 use common::instrument::{
     events::{ExcitementSourcePayload, PlaybackStatePayload},
     Layout,
@@ -13,8 +15,8 @@ use common::instrument::{
 use common::NodeKey;
 use tauri::{AppHandle, Emitter, State};
 
-use crate::{health::HealthSetupState};
 use super::state::InstrumentState;
+use crate::health::HealthSetupState;
 
 #[tauri::command]
 /// Creates instrument engine and starts streaming
@@ -203,10 +205,7 @@ pub fn instrument_playback_pause(state: State<'_, InstrumentState>, app: AppHand
 
 #[tauri::command]
 /// Resumes playback from paused state
-pub fn instrument_playback_resume(
-    state: State<'_, InstrumentState>,
-    app: AppHandle,
-) -> Result<()> {
+pub fn instrument_playback_resume(state: State<'_, InstrumentState>, app: AppHandle) -> Result<()> {
     log::debug!("instrument_playback_resume called");
 
     match state.resume_playback()? {
@@ -311,11 +310,19 @@ pub fn ui_safe_area_insets_apply(
             let key = state.get_key_control(node_key)?;
             app.emit(
                 BAND_CONTROL_G_K,
-                ReflectBandControlPayload { group: node_key.group(), key: node_key.key(), value: band },
+                ReflectBandControlPayload {
+                    group: node_key.group(),
+                    key: node_key.key(),
+                    value: band,
+                },
             )?;
             app.emit(
                 KEY_CONTROL_G_K,
-                ReflectKeyControlPayload { group: node_key.group(), key: node_key.key(), value: key },
+                ReflectKeyControlPayload {
+                    group: node_key.group(),
+                    key: node_key.key(),
+                    value: key,
+                },
             )?;
         }
 
@@ -349,7 +356,6 @@ pub fn instrument_string_snoop_data(
 pub fn instrument_all_string_snoops(
     state: tauri::State<'_, InstrumentState>,
 ) -> common::error::Result<common::instrument::data::StringSnoopBatchPayload> {
-
     let entries = state
         .snapshot_all_output_snoops()
         .into_iter()
@@ -387,7 +393,6 @@ pub fn instrument_excitement_snoop_data(
 pub fn instrument_all_excitement_snoops(
     state: tauri::State<'_, InstrumentState>,
 ) -> common::error::Result<common::instrument::data::ExcitementSnoopBatchPayload> {
-
     let entries = state
         .snapshot_all_excitement_snoops()
         .into_iter()
@@ -429,13 +434,15 @@ pub fn instrument_update_band_control(
 
         state.set_band_control(node_key, next_value)?;
 
-        log::trace!(
-            "Band control updated for node ({node_key:?}): value={next_value}",
-        );
+        log::trace!("Band control updated for node ({node_key:?}): value={next_value}",);
 
         app.emit(
             BAND_CONTROL_G_K,
-            ReflectBandControlPayload { group: node_key.group(), key: node_key.key(), value: next_value },
+            ReflectBandControlPayload {
+                group: node_key.group(),
+                key: node_key.key(),
+                value: next_value,
+            },
         )?;
     }
 
@@ -459,9 +466,12 @@ pub fn instrument_update_key_control(
 
         app.emit(
             KEY_CONTROL_G_K,
-            ReflectKeyControlPayload { group: node_key.group(), key: node_key.key(), value },
+            ReflectKeyControlPayload {
+                group: node_key.group(),
+                key: node_key.key(),
+                value,
+            },
         )?;
-
 
         log::trace!(
             "Key control updated for node ({node_key:?}): value={value} ({})",
@@ -482,16 +492,21 @@ pub fn instrument_quality_indicator(state: State<'_, InstrumentState>) -> Playba
 }
 
 #[tauri::command]
-pub fn snapshot_processed_output_spectrum(state: State<'_, InstrumentState>) -> Option<SpectrumPayload> {
+pub fn snapshot_processed_output_spectrum(
+    state: State<'_, InstrumentState>,
+) -> Option<SpectrumPayload> {
     let data = state.snapshot_processed_output_spectrum();
 
     data.map(|data| SpectrumPayload {
         data,
-        t_unix_ms: SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis_f64() ).unwrap()
+        t_unix_ms: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis_f64())
+            .unwrap(),
     })
 }
 
-#[cfg(feature="devtools")]
+#[cfg(feature = "devtools")]
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn instrument_edit_finetuned_values(
@@ -510,7 +525,7 @@ pub async fn instrument_edit_finetuned_values(
     formant_base_q: f32,
     state: State<'_, InstrumentState>,
 ) -> Result<common::commands::edit::FineTunedValuesPayload> {
-    let values = common::commands::edit::FineTunedValuesPayload{
+    let values = common::commands::edit::FineTunedValuesPayload {
         siren_alpha,
         group_ls_gain_db,
         group_q,
@@ -526,16 +541,14 @@ pub async fn instrument_edit_finetuned_values(
         formant_base_q,
     };
     // Update the fine-tuned values
-    state.set_finetuned_values(
-        values
-    )?;
+    state.set_finetuned_values(values)?;
 
     log::info!("Fine-tuned values updated via devtools: {values:#?}");
 
     state.get_finetuned_values()
 }
 
-#[cfg(feature="devtools")]
+#[cfg(feature = "devtools")]
 #[tauri::command]
 pub async fn instrument_get_finetuned_values(
     state: State<'_, InstrumentState>,

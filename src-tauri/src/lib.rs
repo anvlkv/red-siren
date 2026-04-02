@@ -109,7 +109,7 @@ pub fn run() {
         let config = app.config();
         log::debug!("App starting with config: {config:#?}");
 
-        if let Err(e) = windows::ensure_startup_windows(&app.handle()) {
+        if let Err(e) = windows::ensure_startup_windows(app.handle()) {
             log::error!("failed to create startup windows: {}", e);
         }
 

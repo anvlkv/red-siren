@@ -1,8 +1,8 @@
 use std::{
     ops::DerefMut,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
 };
 

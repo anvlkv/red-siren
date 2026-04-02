@@ -1,8 +1,8 @@
 use std::f32;
 
 use fundsp::{
-    math::{abs, clamp},
     Float, Real,
+    math::{abs, clamp},
 };
 use num_complex::Complex;
 

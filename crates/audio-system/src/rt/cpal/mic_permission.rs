@@ -22,13 +22,13 @@
 //! NOTE:
 //! - We intentionally avoid adding a Tokio dependency here just for this
 //!   probe. The blocking sleep is considered acceptable for now.
-use std::sync::Arc;
 use common::error::HealthError;
 use cpal::{
+    Device, FromSample, InputCallbackInfo, SampleFormat, SizedSample, Stream, StreamConfig,
+    StreamError,
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    Device, InputCallbackInfo, SampleFormat, SizedSample, Stream, StreamConfig, StreamError,
-    FromSample,
 };
+use std::sync::Arc;
 /// Perform the microphone permission / availability check for a concrete
 /// sample format.
 fn run<S>(device: &Device, config: &StreamConfig) -> Result<(), HealthError>
@@ -45,13 +45,20 @@ where
     let data_cb = move |_: &[S], _: &InputCallbackInfo| {};
     // Error callback writes exactly once into shared flag.
     let err_cb = move |err: StreamError| {
-        if let Ok(mut guard) = err_flag_for_cb.lock() && guard.is_none() {
+        if let Ok(mut guard) = err_flag_for_cb.lock()
+            && guard.is_none()
+        {
             *guard = Some(err.to_string());
         }
     };
     // Build input stream.
     let stream: Stream = dev
-        .build_input_stream::<S, _, _>(&cfg, data_cb, err_cb, Some(std::time::Duration::from_secs(1)))
+        .build_input_stream::<S, _, _>(
+            &cfg,
+            data_cb,
+            err_cb,
+            Some(std::time::Duration::from_secs(1)),
+        )
         .map_err(|e| HealthError::MicPermissionCheckFailed {
             detail: Some(e.to_string()),
         })?;
@@ -78,11 +85,11 @@ pub async fn check_mic_permission() -> Result<(), HealthError> {
     // Host
     let host = cpal::default_host();
     // Default input device.
-    let device = host
-        .default_input_device()
-        .ok_or_else(|| HealthError::MicPermissionCheckFailed {
-            detail: Some("no_input_device".into()),
-        })?;
+    let device =
+        host.default_input_device()
+            .ok_or_else(|| HealthError::MicPermissionCheckFailed {
+                detail: Some("no_input_device".into()),
+            })?;
     // Default input config.
     let cfg = device
         .default_input_config()
@@ -99,7 +106,7 @@ pub async fn check_mic_permission() -> Result<(), HealthError> {
         other => {
             return Err(HealthError::MicPermissionCheckFailed {
                 detail: Some(format!("unsupported_sample_format:{other:?}")),
-            })
+            });
         }
     }
     Ok(())

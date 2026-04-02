@@ -28,6 +28,8 @@ pub enum RouteId {
     Play,
     #[strum(serialize = "/tune")]
     Tune,
+    #[strum(serialize = "/edit")]
+    Edit,
     #[strum(serialize = "/permissions")]
     Permissions,
 }
@@ -44,6 +46,7 @@ impl RouteId {
             Self::Donate => "Donate",
             Self::Play => "Play",
             Self::Tune => "Tune",
+            Self::Edit => "Edit",
             Self::Permissions => "Permissions",
         }
     }

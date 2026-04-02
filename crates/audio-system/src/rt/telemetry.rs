@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, sync::Arc, time::Duration};
 
-use fundsp::thingbuf::mpsc::{channel, Receiver, Sender};
+use fundsp::thingbuf::mpsc::{Receiver, Sender, channel};
 
 use crate::quality::{PlaybackQualityGate, SampleType};
 

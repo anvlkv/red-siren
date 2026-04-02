@@ -48,11 +48,7 @@ impl<F: Real> NewYork<F> {
         let corr = (t - a) / (a + t);
         // Blend factor is nd^2 to fade in away from the knee.
         let y = y0 + (t - y0) * corr * nd * nd;
-        if x < F::zero() {
-            -y
-        } else {
-            y
-        }
+        if x < F::zero() { -y } else { y }
     }
 }
 

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::instrument::consts::*;
-use crate::{error::InstrumentConfigError, NodeKey};
+use crate::{NodeKey, error::InstrumentConfigError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct NodeConfig {

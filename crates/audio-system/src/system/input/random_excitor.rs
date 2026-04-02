@@ -12,9 +12,9 @@ use fundsp::{
 };
 use num_complex::Complex;
 
+use crate::ExcitementControl;
 use crate::system::input::adsr::Adsr;
 use crate::util::hash_str;
-use crate::ExcitementControl;
 
 /// Random excitor node ID for debugging
 const RANDOM_EXCITOR_ID: u64 = hash_str(concat!(module_path!(), "::RandomExcitor"));

@@ -1,9 +1,9 @@
 use std::{cell::RefCell, collections::HashMap};
 
-use common::{instrument::GroupConfig, NodeKey};
+use common::{NodeKey, instrument::GroupConfig};
 use fundsp::prelude::*;
 
-use crate::output::{abs::Abs, div::Div, InnerHandles};
+use crate::output::{InnerHandles, abs::Abs, div::Div};
 
 #[allow(clippy::excessive_precision)]
 const METRO_FREQ_REDUCTION: f64 = 750.750750;

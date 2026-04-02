@@ -3,8 +3,8 @@ use std::{
     f32, mem,
     ops::DerefMut,
     sync::{
-        mpsc::{self, Sender},
         Arc,
+        mpsc::{self, Sender},
     },
     thread,
     time::Duration,
@@ -13,18 +13,18 @@ use std::{
 #[cfg(feature = "editor")]
 use common::commands::edit::FineTunedValuesPayload;
 use common::{
+    NodeKey,
+    error::{ControlError, InstrumentError, Result},
+};
+use common::{
     device::DeviceData,
     error::{AppError, TunerError},
     instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, Preset},
 };
-use common::{
-    error::{ControlError, InstrumentError, Result},
-    NodeKey,
-};
 use common::{instrument::PlaybackQuality, tuner::Config as TunerConfig};
 use cpal::{
-    traits::{DeviceTrait, HostTrait},
     Device, DeviceId, HostId, StreamConfig, SupportedStreamConfig,
+    traits::{DeviceTrait, HostTrait},
 };
 use fundsp::{prelude::*, thingbuf::mpsc::channel};
 use fundsp::{thingbuf::ThingBuf, typenum::Unsigned};
@@ -33,21 +33,21 @@ use parking_lot::RwLock;
 use u_num_it::u_num_it;
 
 use crate::{
+    ExcitementControl, SensorHandles,
     input::analyzer::SpectrumBuffer,
     output_analyzer::{self, OUTPUT_ANALYZER_FFT_WINDOW_SIZE},
     quality::{PlaybackQualityGate, SampleType},
     rt::{
-        cpal::stream::{playback_callback, spawn_owned_input_stream, PlaybackCallbackConfig},
+        AudioRuntime, ExcitementSource,
+        cpal::stream::{PlaybackCallbackConfig, playback_callback, spawn_owned_input_stream},
         rt_subsystem::RuntimeSubsystem,
         telemetry::{self, TelemetrySender},
-        AudioRuntime, ExcitementSource,
     },
     system::input::analyzer::FFT_WINDOW_SIZE,
-    ExcitementControl, SensorHandles,
 };
 
 use super::audio_session;
-use super::stream::{spawn_owned_output_stream, Control, ControlInvocationResult, ProdType};
+use super::stream::{Control, ControlInvocationResult, ProdType, spawn_owned_output_stream};
 
 const CONTROL_INVOKE_TIMEOUT_MS: u64 = 500;
 

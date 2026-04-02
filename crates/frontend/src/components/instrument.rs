@@ -1,6 +1,5 @@
 mod context;
 mod debug;
-mod editor;
 mod element;
 mod keyboard;
 mod spectrum;
@@ -50,7 +49,6 @@ pub fn Instrument(#[prop(into, optional)] editor: Signal<bool>) -> impl IntoView
             <Keyboard attr:class="absolute inset-0" />
             <Show when=move || editor()>
                 <debug::DebugOverlay />
-                <editor::EditorOverlay />
             </Show>
         </div>
     }

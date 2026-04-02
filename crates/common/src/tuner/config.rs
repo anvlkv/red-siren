@@ -1,8 +1,8 @@
 use mint::Point2;
 use serde::{Deserialize, Serialize};
 
-use crate::tuner::layout::Layout;
 use crate::tuner::ReflectTunerConstraints;
+use crate::tuner::layout::Layout;
 use crate::{NodeKey, NodeKeyRegistry};
 
 const DEFAULT_INPUT_NY_THRESHOLD: f32 = 0.75;
@@ -481,7 +481,9 @@ mod tests {
             let mut tuner_layout: Layout = layout.into();
 
             // Force degenerate usable baseline span by shrinking line length relative to inset
-            tuner_layout.sensor_radius = (tuner_layout.line_position.1.x - tuner_layout.line_position.0.x).abs()
+            tuner_layout.sensor_radius = (tuner_layout.line_position.1.x
+                - tuner_layout.line_position.0.x)
+                .abs()
                 .min((tuner_layout.line_position.1.y - tuner_layout.line_position.0.y).abs())
                 / 2.0;
 
@@ -491,7 +493,10 @@ mod tests {
 
             // Calls should not panic and should return finite values
             let p = cfg.frequency_magnitude_to_space(&tuner_layout, mid_f, 0.5);
-            assert!(p.x.is_finite() && p.y.is_finite(), "space mapping must be finite");
+            assert!(
+                p.x.is_finite() && p.y.is_finite(),
+                "space mapping must be finite"
+            );
 
             let (rf, rm) = cfg.space_to_frequency_magnitude(&tuner_layout, p);
             assert!(

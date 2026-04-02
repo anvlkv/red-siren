@@ -4,10 +4,10 @@ use mint::{Point2, Vector2};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    Line, NodeKeyRegistry,
     instrument::GroupChannel,
     orientation::LayoutOrientation,
-    safe_area::{SafeArea, DEFAULT_SAFE_AREA},
-    Line, NodeKeyRegistry,
+    safe_area::{DEFAULT_SAFE_AREA, SafeArea},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

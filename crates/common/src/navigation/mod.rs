@@ -1,3 +1,3 @@
 pub mod routes;
 
-pub use routes::RouteId;
+pub use routes::{EditorRouteId, RouteId};

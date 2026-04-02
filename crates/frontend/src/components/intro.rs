@@ -12,8 +12,10 @@ use leptos_router::{hooks::use_location, location::Location};
 pub fn Intro(children: ChildrenFn) -> impl IntoView {
     let Location { pathname, .. } = use_location();
     let is_intro_fading = Memo::new(move |_| {
-        let route: RouteId = pathname().parse().unwrap();
-        !route.is_content()
+        pathname()
+            .parse::<RouteId>()
+            .map(|route| !route.is_content())
+            .unwrap_or(true)
     });
 
     view! {

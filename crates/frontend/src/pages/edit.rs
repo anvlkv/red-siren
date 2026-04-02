@@ -1,9 +1,9 @@
-use common::RouteId;
+use common::{EditorRouteId, RouteId};
 use leptos::prelude::*;
 use leptos_router::{hooks::use_navigate, NavigateOptions};
 
 use crate::{
-    components::{ContentPage, EditorPanel},
+    components::{ContentPage, EditorPanel, LayoutEditorPanel, RoutedTab, RoutedTabs},
     util::boot_flags::boot_flags,
 };
 
@@ -27,9 +27,34 @@ pub fn Edit() -> impl IntoView {
         }
     });
 
+    let tabs = Signal::derive(move || {
+        vec![
+            RoutedTab {
+                label: "Layout",
+                href: RouteId::Edit(EditorRouteId::Layout).to_string(),
+            },
+            RoutedTab {
+                label: "Fine-tuned values",
+                href: RouteId::Edit(EditorRouteId::FinetunedValues).to_string(),
+            },
+        ]
+    });
+
+    let title = Signal::derive(move || RouteId::Edit(EditorRouteId::Layout).title().to_string());
+
     view! {
-        <ContentPage title=RouteId::Edit.title().to_string()>
-            <EditorPanel />
+        <ContentPage title=title>
+            <RoutedTabs tabs=tabs class="w-auto max-w-full md:w-md xl:w-xl 3xl:w-2xl  h-lvh" />
         </ContentPage>
     }
+}
+
+#[component]
+pub fn EditLayout() -> impl IntoView {
+    view! { <LayoutEditorPanel /> }
+}
+
+#[component]
+pub fn EditFineTunedValues() -> impl IntoView {
+    view! { <EditorPanel /> }
 }

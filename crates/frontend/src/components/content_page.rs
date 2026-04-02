@@ -12,7 +12,7 @@ use crate::{
 pub fn ContentPage(
     /// Page title
     #[prop(into, optional)]
-    title: String,
+    title: Signal<String>,
 
     /// Page content
     children: Children,

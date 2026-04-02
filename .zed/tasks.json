@@ -6,7 +6,7 @@
   },
   {
     "label": "Start Tauri [dev server]",
-    "command": "cargo tauri dev",
+    "command": "cargo tauri dev --features devtools",
     "env": {
       "RUST_BACKTRACE": "1",
     },

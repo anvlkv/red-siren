@@ -20,5 +20,5 @@ pub use events::navigation_payloads::{
     NavCanceledPayload, NavCommittedPayload, NavCompletedPayload, NavGatedPayload,
     NavRequestedPayload, NavStartedPayload,
 };
-pub use navigation::routes::RouteId;
+pub use navigation::routes::{EditorRouteId, RouteId};
 pub use node_key::{NodeKey, NodeKeyError, NodeKeyRegistry};

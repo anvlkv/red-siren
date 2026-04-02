@@ -161,7 +161,7 @@ pub fn open_in_new_window(
 ) -> Result<()> {
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     {
-        let path: &'static str = route.into();
+        let path: &'static str = route.path();
         let title = route.title();
         log::info!("Opening new window for route {:?} (path: {})", route, path);
 

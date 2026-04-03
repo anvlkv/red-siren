@@ -86,4 +86,12 @@
     "reveal": "always",
     "use_new_terminal": true,
   },
+  {
+    "label": "Clippy fix",
+    "command": "cargo clippy --fix",
+    "env": {
+      "RUST_BACKTRACE": "1",
+    },
+    "reveal": "always",
+  },
 ]

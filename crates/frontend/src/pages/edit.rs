@@ -7,7 +7,9 @@ use leptos_router::{
 };
 
 use crate::{
-    components::{ContentPage, EditorPanel, LayoutEditorPanel, RoutedTab, RoutedTabs},
+    components::{
+        ContentPage, FinetunedValuesEditorPanel, LayoutEditorPanel, RoutedTab, RoutedTabs,
+    },
     util::boot_flags::boot_flags,
 };
 
@@ -66,5 +68,5 @@ pub fn EditLayout() -> impl IntoView {
 
 #[component]
 pub fn EditFineTunedValues() -> impl IntoView {
-    view! { <EditorPanel /> }
+    view! { <FinetunedValuesEditorPanel /> }
 }

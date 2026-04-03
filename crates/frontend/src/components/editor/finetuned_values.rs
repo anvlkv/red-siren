@@ -42,7 +42,7 @@ pub fn use_finetuned_values() -> UseFinetunedValuesReturn {
         common::commands::edit::EDIT_FINETUNED_VALUES,
     );
 
-    let fetch_values_on_mount = fetch_values.clone();
+    let fetch_values_on_mount = fetch_values;
     Effect::new(move |_| {
         fetch_values_on_mount(Some(()));
     });
@@ -68,7 +68,7 @@ pub fn use_finetuned_values() -> UseFinetunedValuesReturn {
         }
     });
 
-    let refresh_trigger = fetch_values.clone();
+    let refresh_trigger = fetch_values;
     let refresh = Callback::new(move |_| {
         refresh_trigger(Some(()));
     });
@@ -148,6 +148,7 @@ pub fn FinetunedValuesEditorPanel() -> impl IntoView {
                         <Fold open=false title="Siren Parameters">
                             <fieldset class="flex flex-col gap-2">
                                 <RangeSlider
+                                    show_value=true
                                     label="Alpha"
                                     value=Signal::derive(move || values().siren_alpha.into())
                                     min=0.1
@@ -169,6 +170,7 @@ pub fn FinetunedValuesEditorPanel() -> impl IntoView {
                         <Fold open=false title="Filter Parameters">
                             <fieldset class="flex flex-col gap-4">
                                 <RangeSlider
+                                    show_value=true
                                     label="Morph Follow Time"
                                     value=Signal::derive(move || {
                                         values().filter_morph_follow_s.into()
@@ -191,6 +193,7 @@ pub fn FinetunedValuesEditorPanel() -> impl IntoView {
                             <Fold open=false title="Active Key">
                                 <fieldset class="flex flex-col gap-2">
                                     <RangeSlider
+                                        show_value=true
                                         label="Piercing Q"
                                         value=Signal::derive(move || {
                                             values().filter_q_piercing.into()
@@ -210,6 +213,7 @@ pub fn FinetunedValuesEditorPanel() -> impl IntoView {
                                     />
 
                                     <RangeSlider
+                                        show_value=true
                                         label="Bright Q"
                                         value=Signal::derive(move || {
                                             values().filter_q_bright.into()
@@ -233,6 +237,7 @@ pub fn FinetunedValuesEditorPanel() -> impl IntoView {
                             <Fold open=false title="Plain Key">
                                 <fieldset class="flex flex-col gap-2">
                                     <RangeSlider
+                                        show_value=true
                                         label="Shelf Q"
                                         value=Signal::derive(move || values().filter_q_shelf.into())
                                         min=Q_MIN
@@ -250,6 +255,7 @@ pub fn FinetunedValuesEditorPanel() -> impl IntoView {
                                     />
 
                                     <RangeSlider
+                                        show_value=true
                                         label="Shelf Gain dB"
                                         value=Signal::derive(move || {
                                             values().filter_shelf_gain_db.into()
@@ -269,6 +275,7 @@ pub fn FinetunedValuesEditorPanel() -> impl IntoView {
                                     />
 
                                     <RangeSlider
+                                        show_value=true
                                         label="Warm Q"
                                         value=Signal::derive(move || values().filter_q_warm.into())
                                         min=Q_MIN
@@ -291,6 +298,7 @@ pub fn FinetunedValuesEditorPanel() -> impl IntoView {
                         <Fold open=false title="Node Parameters">
                             <fieldset class="flex flex-col gap-2">
                                 <RangeSlider
+                                    show_value=true
                                     label="Follow Response Time"
                                     value=Signal::derive(move || {
                                         values().node_follow_response_time_s.into()
@@ -310,6 +318,7 @@ pub fn FinetunedValuesEditorPanel() -> impl IntoView {
                                 />
 
                                 <RangeSlider
+                                    show_value=true
                                     label="Bell Q"
                                     value=Signal::derive(move || values().node_bell_q.into())
                                     min=Q_MIN
@@ -327,6 +336,7 @@ pub fn FinetunedValuesEditorPanel() -> impl IntoView {
                                 />
 
                                 <RangeSlider
+                                    show_value=true
                                     label="Bell Gain dB"
                                     value=Signal::derive(move || values().node_bell_gain_db.into())
                                     min=GAIN_MIN
@@ -348,6 +358,7 @@ pub fn FinetunedValuesEditorPanel() -> impl IntoView {
                         <Fold open=false title="Group Parameters">
                             <fieldset class="flex flex-col gap-2">
                                 <RangeSlider
+                                    show_value=true
                                     label="Group Q"
                                     value=Signal::derive(move || values().group_q.into())
                                     min=Q_MIN
@@ -365,6 +376,7 @@ pub fn FinetunedValuesEditorPanel() -> impl IntoView {
                                 />
 
                                 <RangeSlider
+                                    show_value=true
                                     label="Group Low Shelf Gain dB"
                                     value=Signal::derive(move || values().group_ls_gain_db.into())
                                     min=GAIN_MIN
@@ -386,6 +398,7 @@ pub fn FinetunedValuesEditorPanel() -> impl IntoView {
                         <Fold open=false title="Formant Parameters">
                             <fieldset class="flex flex-col gap-2">
                                 <RangeSlider
+                                    show_value=true
                                     label="Base Q"
                                     value=Signal::derive(move || values().formant_base_q.into())
                                     min=Q_MIN

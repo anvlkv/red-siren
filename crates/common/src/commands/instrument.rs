@@ -16,6 +16,12 @@ pub const GET_ACTIVATION_SRC: &str = "instrument_excitement_source";
 pub const SET_EXCITEMENT_SRC: &str = "instrument_set_excitement_source";
 /// Get current instrument layout (same string as event so `use_tauri_resource` can bind both)
 pub const GET_LAYOUT: &str = "instrument_layout";
+/// Set current instrument layout explicitly
+pub const SET_LAYOUT: &str = "instrument_set_layout";
+/// Get layout resize lock state
+pub const GET_LAYOUT_RESIZE_LOCK: &str = "instrument_get_layout_resize_lock";
+/// Set layout resize lock state
+pub const SET_LAYOUT_RESIZE_LOCK: &str = "instrument_set_layout_resize_lock";
 /// Update band control position for a key
 pub const UPDATE_BAND_CONTROL: &str = "instrument_update_band_control";
 /// Update key control state (pressed/released) for a key
@@ -66,4 +72,16 @@ pub struct ReflectKeyControlPayload {
 pub struct SpectrumPayload {
     pub t_unix_ms: f64,
     pub data: Vec<(f32, f32)>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SetLayoutPayload {
+    pub layout: crate::instrument::Layout,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutResizeLockPayload {
+    pub locked: bool,
 }

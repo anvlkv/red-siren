@@ -32,6 +32,7 @@ pub(super) struct Inner {
     excitement_source: RwLock<ExcitementSource>,
     layout: RwLock<InstrumentLayout>,
     config: RwLock<InstrumentConfig>,
+    resize_locked: RwLock<bool>,
     // Runtime stream controller (lazy; concrete backend chosen by audio_system::rt)
     stream_controller: Arc<RwLock<Box<dyn AudioRuntime + Send + Sync>>>,
 }
@@ -75,6 +76,7 @@ impl InstrumentState {
                 excitement_source: RwLock::new(ExcitementSource::default()),
                 layout: RwLock::new(initial_layout),
                 config: RwLock::new(initial_config),
+                resize_locked: RwLock::new(false),
                 stream_controller,
             },
         })
@@ -90,6 +92,14 @@ impl InstrumentState {
 
     pub fn excitement_source(&self) -> ExcitementSource {
         *self.inner.excitement_source.read()
+    }
+
+    pub fn is_resize_locked(&self) -> bool {
+        *self.inner.resize_locked.read()
+    }
+
+    pub fn set_resize_locked(&self, locked: bool) {
+        *self.inner.resize_locked.write() = locked;
     }
 
     pub fn start_playback(&self) -> common::error::Result<bool> {
@@ -317,6 +327,15 @@ impl InstrumentState {
     }
 
     pub fn set_size(&self, width: f64, height: f64) -> common::error::Result<()> {
+        if self.is_resize_locked() {
+            log::debug!(
+                "Skipping layout size update because resize lock is enabled ({}x{})",
+                width,
+                height
+            );
+            return Ok(());
+        }
+
         let tuner_state = self.app.state::<crate::tuner::TunerState>();
         let tuner_config = tuner_state.tuner_config();
         let new_cfg = {
@@ -351,6 +370,32 @@ impl InstrumentState {
 
     pub fn set_preset(&self, preset: Preset) -> common::error::Result<()> {
         self.inner.stream_controller.read().set_preset(preset)
+    }
+
+    pub fn set_layout(&self, layout: InstrumentLayout) -> common::error::Result<()> {
+        let tuner_state = self.app.state::<crate::tuner::TunerState>();
+        let tuner_config = tuner_state.tuner_config();
+
+        let new_cfg = InstrumentConfig::try_from(layout)?;
+        {
+            let mut current_layout = self.inner.layout.write();
+            *current_layout = layout;
+        }
+        {
+            let mut cfg = self.inner.config.write();
+            *cfg = new_cfg;
+        }
+
+        let layout_snapshot = *self.inner.layout.read();
+        let config_snapshot = InstrumentConfig::try_from(layout_snapshot)?;
+        self.inner.stream_controller.read().on_layout_changed(
+            &layout_snapshot,
+            &config_snapshot,
+            &tuner_config,
+        )?;
+        log::info!("Recreated audio systems after manual layout update");
+
+        Ok(())
     }
 
     pub fn set_safe_area(

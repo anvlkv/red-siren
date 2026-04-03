@@ -298,11 +298,10 @@ pub fn playback_callback<const N: usize>(
             if matches!(
                 telemetry_buff.try_send(summary),
                 Err(TrySendError::Closed(_))
-            ) {
-                if !TELEMETRY_CHANNEL_CLOSED.swap(true, Ordering::Relaxed) {
+            )
+                && !TELEMETRY_CHANNEL_CLOSED.swap(true, Ordering::Relaxed) {
                     log::warn!("Telemetry channel was closed; disabling telemetry updates");
                 }
-            }
         },
     ) as Box<super::GenType>
 }

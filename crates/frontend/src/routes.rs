@@ -91,11 +91,11 @@ pub fn AppRoutes() -> impl IntoView {
                             }
                         />
                         <Route
-                            path=(StaticSegment(EditorRouteId::Layout.as_ref()))
+                            path=StaticSegment(EditorRouteId::Layout.as_ref()) 
                             view=EditLayout
                         />
                         <Route
-                            path=(StaticSegment(EditorRouteId::FinetunedValues.as_ref()))
+                            path=StaticSegment(EditorRouteId::FinetunedValues.as_ref()) 
                             view=EditFineTunedValues
                         />
                     </ParentRoute>

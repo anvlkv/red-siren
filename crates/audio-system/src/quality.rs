@@ -54,13 +54,13 @@ impl PlaybackQualityGate {
     }
 }
 
-impl Into<PlaybackQuality> for PlaybackQualityGate {
-    fn into(self) -> PlaybackQuality {
-        match self {
-            Self::Ultra => PlaybackQuality::Ultra,
-            Self::HiFi => PlaybackQuality::HiFi,
-            Self::Medium => PlaybackQuality::Medium,
-            Self::LoFi => PlaybackQuality::LoFi,
+impl From<PlaybackQualityGate> for PlaybackQuality {
+    fn from(val: PlaybackQualityGate) -> Self {
+        match val {
+            PlaybackQualityGate::Ultra => PlaybackQuality::Ultra,
+            PlaybackQualityGate::HiFi => PlaybackQuality::HiFi,
+            PlaybackQualityGate::Medium => PlaybackQuality::Medium,
+            PlaybackQualityGate::LoFi => PlaybackQuality::LoFi,
         }
     }
 }

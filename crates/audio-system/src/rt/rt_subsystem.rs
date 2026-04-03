@@ -309,7 +309,7 @@ impl RuntimeSubsystem {
             ..
         } = self.clone();
         let tuner_only = RuntimeSubsystem::new_with_tuner_only(
-            layout.read().clone(),
+            *layout.read(),
             tuner_config.unwrap_or_else(|| old_tuner_config.read().clone()),
             spectrum_data_thb.clone(),
             sample_type,
@@ -495,7 +495,7 @@ impl RuntimeSubsystem {
             let mut config_lock = self.config.write();
             let mut tuner_config_lock = self.tuner_config.write();
 
-            *layout_lock = instrument_layout.clone();
+            *layout_lock = *instrument_layout;
             *config_lock = instrument_config.clone();
             *tuner_config_lock = tuner_config.clone();
 
@@ -787,7 +787,7 @@ impl RuntimeSubsystem {
                                         let mut join_frame = frame.as_slice().chunks(2).fold(
                                             Frame::<f32, U2>::splat(0.0),
                                             |mut acc, frame| {
-                                                let f1 = frame.get(0).unwrap_or(&0.0);
+                                                let f1 = frame.first().unwrap_or(&0.0);
                                                 let f2 = frame.get(1).unwrap_or(f1);
                                                 acc[0] += f1;
                                                 acc[1] += f2;

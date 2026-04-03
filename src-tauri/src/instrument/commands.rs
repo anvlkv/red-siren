@@ -12,6 +12,7 @@ use common::instrument::{
     events::{ExcitementSourcePayload, PlaybackStatePayload},
     Layout,
 };
+use mint::Vector2;
 use common::NodeKey;
 use tauri::{AppHandle, Emitter, State};
 
@@ -233,6 +234,91 @@ pub fn instrument_playback_resume(state: State<'_, InstrumentState>, app: AppHan
 pub fn instrument_layout(state: State<'_, InstrumentState>) -> Result<Layout> {
     log::debug!("instrument_layout called");
     Ok(state.layout())
+}
+
+#[tauri::command]
+/// Sets full instrument layout and emits layout update
+pub fn instrument_set_layout(
+    layout: Layout,
+    state: State<'_, InstrumentState>,
+    app: AppHandle,
+) -> Result<Layout> {
+    log::debug!("instrument_set_layout called");
+
+    state
+        .set_layout(layout)
+        .map_err(|e| InstrumentError::Emit {
+            event: "set_layout".to_string(),
+            message: e.to_string(),
+        })?;
+
+    let new_layout = state.layout();
+
+    app.emit(common::instrument::events::LAYOUT, new_layout)
+        .map_err(|e| InstrumentError::Emit {
+            event: common::instrument::events::LAYOUT.to_string(),
+            message: e.to_string(),
+        })?;
+
+    Ok(new_layout)
+}
+
+#[tauri::command]
+/// Updates only layout space (screen estate), respecting current orientation/safe area and emits layout update
+pub fn instrument_set_layout_space(
+    width: f64,
+    height: f64,
+    state: State<'_, InstrumentState>,
+    app: AppHandle,
+) -> Result<Layout> {
+    log::debug!(
+        "instrument_set_layout_space called with width={}, height={}",
+        width,
+        height
+    );
+
+    let current = state.layout();
+    let next = Layout {
+        space: Vector2 {
+            x: width,
+            y: height,
+        },
+        ..current
+    };
+
+    state
+        .set_layout(next)
+        .map_err(|e| InstrumentError::Emit {
+            event: "set_layout_space".to_string(),
+            message: e.to_string(),
+        })?;
+
+    let new_layout = state.layout();
+
+    app.emit(common::instrument::events::LAYOUT, new_layout)
+        .map_err(|e| InstrumentError::Emit {
+            event: common::instrument::events::LAYOUT.to_string(),
+            message: e.to_string(),
+        })?;
+
+    Ok(new_layout)
+}
+
+#[tauri::command]
+/// Enables or disables resize-driven layout updates
+pub fn instrument_set_layout_resize_lock(
+    locked: bool,
+    state: State<'_, InstrumentState>,
+) -> Result<bool> {
+    log::debug!("instrument_set_layout_resize_lock called with locked={locked}");
+    state.set_resize_locked(locked);
+    Ok(state.is_resize_locked())
+}
+
+#[tauri::command]
+/// Returns current resize lock flag for layout updates
+pub fn instrument_get_layout_resize_lock(state: State<'_, InstrumentState>) -> Result<bool> {
+    Ok(state.is_resize_locked())
 }
 
 #[allow(clippy::too_many_arguments)]

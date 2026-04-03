@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     f32, mem,
     ops::DerefMut,
     sync::{
@@ -18,7 +17,7 @@ use common::{
 };
 use common::{
     device::DeviceData,
-    error::{AppError, TunerError},
+    error::AppError,
     instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, Preset},
 };
 use common::{instrument::PlaybackQuality, tuner::Config as TunerConfig};
@@ -26,28 +25,24 @@ use cpal::{
     Device, DeviceId, HostId, StreamConfig, SupportedStreamConfig,
     traits::{DeviceTrait, HostTrait},
 };
-use fundsp::{prelude::*, thingbuf::mpsc::channel};
+use fundsp::prelude::*;
 use fundsp::{thingbuf::ThingBuf, typenum::Unsigned};
 use mint::Vector2;
 use parking_lot::RwLock;
 use u_num_it::u_num_it;
 
 use crate::{
-    ExcitementControl, SensorHandles,
     input::analyzer::SpectrumBuffer,
-    output_analyzer::{self, OUTPUT_ANALYZER_FFT_WINDOW_SIZE},
-    quality::{PlaybackQualityGate, SampleType},
+    quality::PlaybackQualityGate,
     rt::{
         AudioRuntime, ExcitementSource,
         cpal::stream::{PlaybackCallbackConfig, playback_callback, spawn_owned_input_stream},
         rt_subsystem::RuntimeSubsystem,
-        telemetry::{self, TelemetrySender},
+        telemetry::TelemetrySender,
     },
-    system::input::analyzer::FFT_WINDOW_SIZE,
 };
 
-use super::audio_session;
-use super::stream::{Control, ControlInvocationResult, ProdType, spawn_owned_output_stream};
+use super::stream::{Control, spawn_owned_output_stream};
 
 const CONTROL_INVOKE_TIMEOUT_MS: u64 = 500;
 

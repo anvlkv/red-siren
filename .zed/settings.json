@@ -7,9 +7,7 @@
   "lsp": {
     "rust-analyzer": {
       "initialization_options": {
-        "cargo": {
-          "features": ["devtools"],
-        },
+        "cargo": {},
         "rustfmt": {
           "overrideCommand": ["leptosfmt", "--stdin", "--rustfmt"],
         },

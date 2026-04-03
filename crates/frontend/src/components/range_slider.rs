@@ -73,6 +73,17 @@ fn pct(v: f32, min: f32, max: f32) -> f32 {
     }
 }
 
+/// Format a value with precision derived from the step size.
+fn format_value(v: f32, step: f32) -> String {
+    let decimals = if step >= 1.0 {
+        0usize
+    } else {
+        let s = format!("{}", step);
+        s.find('.').map(|pos| s.len() - pos - 1).unwrap_or(2)
+    };
+    format!("{:.prec$}", v, prec = decimals)
+}
+
 /// RangeSlider component:
 /// - Supports horizontal and vertical orientation
 /// - Supports SliderValue::Single and SliderValue::Range
@@ -91,6 +102,7 @@ pub fn RangeSlider(
     #[prop(optional)] ui_size: UiSize,
     #[prop(optional, into)] min_label: Signal<String>,
     #[prop(optional, into)] max_label: Signal<String>,
+    #[prop(optional, into)] show_value: Signal<bool>,
     #[prop(optional)] node_ref: NodeRef<html::Label>,
 ) -> impl IntoView {
     // Validate min/max (fail-fast)
@@ -322,12 +334,62 @@ pub fn RangeSlider(
             node_ref=node_ref
         >
             {move || {
-                if !label().is_empty() {
-                    view! { <span class="text-xs text-muted-foreground">{label()}</span> }
-                        .into_any()
+                let has_label = !label().is_empty();
+                let show_v = show_value();
+                if !has_label && !show_v {
+                    return ().into_any();
+                }
+                let value_display = if show_v {
+                    let is_range = matches!(value(), SliderValue::Range(_, _));
+                    if is_range {
+                        view! {
+                            <span class="inline-flex items-baseline gap-1 text-xs font-mono tabular-nums">
+                                <ValueInput
+                                    value=lo_val
+                                    min=min_v
+                                    max=max_v
+                                    step=step_v
+                                    on_commit=Callback::new(move |v: f32| {
+                                        on_input.run(SliderValue::Range(v, hi_val()));
+                                    })
+                                />
+                                <span class="text-muted-foreground">"–"</span>
+                                <ValueInput
+                                    value=hi_val
+                                    min=min_v
+                                    max=max_v
+                                    step=step_v
+                                    on_commit=Callback::new(move |v: f32| {
+                                        on_input.run(SliderValue::Range(lo_val(), v));
+                                    })
+                                />
+                            </span>
+                        }
+                            .into_any()
+                    } else {
+                        view! {
+                            <ValueInput
+                                value=lo_val
+                                min=min_v
+                                max=max_v
+                                step=step_v
+                                on_commit=Callback::new(move |v: f32| {
+                                    on_input.run(SliderValue::Single(v));
+                                })
+                            />
+                        }
+                            .into_any()
+                    }
                 } else {
                     ().into_any()
+                };
+                view! {
+                    <div class="flex items-baseline justify-between gap-2">
+                        <span class="text-xs text-muted-foreground">{label()}</span>
+                        {value_display}
+                    </div>
                 }
+                    .into_any()
             }}
             <div
                 node_ref=track_ref
@@ -641,5 +703,87 @@ fn Thumb(
             on:focus=move |_| set_focused.set(true)
             on:blur=move |_| set_focused.set(false)
         ></div>
+    }
+}
+
+#[component]
+fn ValueInput(
+    #[prop(into)] value: Signal<f32>,
+    #[prop(into)] min: Signal<f32>,
+    #[prop(into)] max: Signal<f32>,
+    #[prop(into)] step: Signal<f32>,
+    #[prop(into)] on_commit: Callback<f32>,
+) -> impl IntoView {
+    let (editing, set_editing) = signal(false);
+    let (draft, set_draft) = signal(String::new());
+    let input_ref: NodeRef<leptos::html::Input> = NodeRef::new();
+
+    // Focus + select all text when entering edit mode
+    Effect::new(move |_| {
+        if editing() {
+            if let Some(el) = input_ref.get() {
+                let _ = el.focus();
+                let _ = el.select();
+            }
+        }
+    });
+
+    let try_commit = move || {
+        let text = draft.get_untracked();
+        if let Ok(parsed) = text.trim().parse::<f32>() {
+            let step_v = step.get_untracked();
+            let min_v = min.get_untracked();
+            let max_v = max.get_untracked();
+            let snapped = snap_to_step(parsed, min_v, step_v).clamp(min_v, max_v);
+            on_commit.run(snapped);
+        }
+        set_editing.set(false);
+    };
+
+    view! {
+        <Show
+            when=move || editing()
+            fallback=move || {
+                let v = value();
+                let s = step();
+                view! {
+                    <span
+                        class="cursor-pointer text-xs font-mono tabular-nums \
+                         text-muted-foreground hover:text-black dark:hover:text-red \
+                         transition-colors underline decoration-dotted"
+                        title="Click to edit"
+                        on:click=move |_| {
+                            set_draft
+                                .set(format_value(value.get_untracked(), step.get_untracked()));
+                            set_editing.set(true);
+                        }
+                    >
+                        {format_value(v, s)}
+                    </span>
+                }
+            }
+        >
+            <input
+                type="text"
+                node_ref=input_ref
+                class="w-20 px-1 text-xs font-mono tabular-nums bg-transparent \
+                 border-b border-black/40 dark:border-red/40 \
+                 focus:outline-none focus:border-black dark:focus:border-red"
+                prop:value=move || draft()
+                on:input:target=move |ev| set_draft.set(ev.target().value())
+                on:keydown=move |ev: web_sys::KeyboardEvent| match ev.key().as_str() {
+                    "Enter" => {
+                        ev.prevent_default();
+                        try_commit();
+                    }
+                    "Escape" => {
+                        ev.prevent_default();
+                        set_editing.set(false);
+                    }
+                    _ => {}
+                }
+                on:blur=move |_| try_commit()
+            />
+        </Show>
     }
 }

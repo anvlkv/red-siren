@@ -1,7 +1,7 @@
-use common::RouteId;
+use common::{EditorRouteId, RouteId};
 use leptos::prelude::*;
-use leptos_router::components::*;
-use leptos_router::{hooks::use_location, location::Location, StaticSegment};
+use leptos_router::StaticSegment;
+use leptos_router::{components::*, NavigateOptions};
 use leptos_use::{signal_debounced, use_window_size, UseWindowSizeReturn};
 use tauri_use::{use_invoke, UseTauriReturn};
 
@@ -13,22 +13,7 @@ use crate::{
 
 #[component]
 pub fn AppRoutes() -> impl IntoView {
-    // Provide a global in-app navigation stack (StoredValue) as context.
-    let nav_stack: StoredValue<Vec<String>> = StoredValue::new(Vec::new());
-    provide_context(nav_stack);
-
     let is_secondary_window = is_secondary_window();
-
-    // Track path changes and push unique consecutive entries.
-    let Location { pathname, .. } = use_location();
-    Effect::new(move |_| {
-        let p = pathname();
-        nav_stack.update_value(|stack| {
-            if stack.last().map(|last| last != &p).unwrap_or(true) {
-                stack.push(p.clone());
-            }
-        });
-    });
 
     let UseWindowSizeReturn { width, height } = use_window_size();
 
@@ -93,10 +78,26 @@ pub fn AppRoutes() -> impl IntoView {
                     <ParentRoute path=(StaticSegment("/edit"),) view=Edit>
                         <Route
                             path=(StaticSegment(""),)
-                            view=|| view! { <Redirect path="layout" /> }
+                            view=|| {
+                                view! {
+                                    <Redirect
+                                        options=NavigateOptions {
+                                            replace: true,
+                                            ..Default::default()
+                                        }
+                                        path="layout"
+                                    />
+                                }
+                            }
                         />
-                        <Route path=(StaticSegment("layout"),) view=EditLayout />
-                        <Route path=(StaticSegment("finetuned-values"),) view=EditFineTunedValues />
+                        <Route
+                            path=(StaticSegment(EditorRouteId::Layout.as_ref()))
+                            view=EditLayout
+                        />
+                        <Route
+                            path=(StaticSegment(EditorRouteId::FinetunedValues.as_ref()))
+                            view=EditFineTunedValues
+                        />
                     </ParentRoute>
                     <Route path=(StaticSegment(RouteId::About.as_ref()),) view=About />
                     <Route path=(StaticSegment(RouteId::Donate.as_ref()),) view=Donate />

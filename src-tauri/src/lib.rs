@@ -61,6 +61,7 @@ pub fn run() {
         setup::update_window_appearance_dark_override,
         setup::window_appearance_override,
         setup::open_in_new_window,
+        setup::go_back,
         health::health_on_gui_ready,
         health::health_grant_mic_premission,
         health::health_setup_state,

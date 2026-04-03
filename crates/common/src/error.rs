@@ -81,6 +81,9 @@ pub enum SetupError {
     #[error("appearance update failed: {message}")]
     Appearance { message: String },
 
+    #[error("window operation failed (op={op}): {message}")]
+    WindowOp { op: String, message: String },
+
     #[error("emit failed (event={event}): {message}")]
     Emit { event: String, message: String },
 

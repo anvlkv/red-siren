@@ -12,6 +12,8 @@ pub const UPDATE_WINDOW_SIZE: &str = "update_window_size";
 pub const OPEN_NEW_WIDNOW: &str = "open_in_new_window";
 /// Get value of appearance override
 pub const GET_WINDOW_APPEARANCE_OVERRIDE: &str = "window_appearance_override";
+/// Navigate the main webview one step back in browser history
+pub const GO_BACK: &str = "go_back";
 
 /// Safe area insets (UI layer) applied to instrument layout, originating from UI elements.
 ///

@@ -154,6 +154,20 @@ pub fn update_window_size(
 }
 
 #[tauri::command]
+pub fn go_back(app: AppHandle) -> Result<()> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or(SetupError::MainWindowMissing)?;
+    window
+        .eval("window.history.back();")
+        .map_err(|e| SetupError::WindowOp {
+            op: "history_back".into(),
+            message: e.to_string(),
+        })?;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn open_in_new_window(
     route: RouteId,
     state: State<'_, WindowState>,

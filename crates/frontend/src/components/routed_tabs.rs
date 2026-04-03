@@ -1,10 +1,15 @@
+use common::RouteId;
 use leptos::prelude::*;
-use leptos_router::components::{Outlet, A};
+use leptos_router::{
+    components::{Outlet, A},
+    hooks::use_navigate,
+    NavigateOptions,
+};
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct RoutedTab {
     pub label: &'static str,
-    pub href: String,
+    pub route: RouteId,
 }
 
 #[component]
@@ -30,12 +35,25 @@ pub fn RoutedTabs(
                 >
                     <For
                         each=move || tabs()
-                        key=|tab| tab.href.clone()
+                        key=|tab| tab.route.path().to_string()
                         children=move |tab| {
+                            let path = tab.route.path().to_string();
+                            let navigate = use_navigate();
+
                             view! {
                                 <A
-                                    href=tab.href
+                                    href=path.clone()
                                     exact=true
+                                    on:click=move |ev| {
+                                        ev.prevent_default();
+                                        navigate(
+                                            path.as_str(),
+                                            NavigateOptions {
+                                                replace: true,
+                                                ..Default::default()
+                                            },
+                                        )
+                                    }
                                     attr:class="group inline-flex min-h-11 min-w-[12rem] max-w-full shrink-0 items-center justify-center rounded-t-xl border-x-2 border-t-2 border-black/25 bg-black/5 px-4 py-3 text-center text-base italic transition-colors transition-shadow duration-200 hover:bg-black/10 hover:shadow-md hover:shadow-gray focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:border-red/25 dark:bg-red/5 dark:hover:bg-red/10 dark:hover:shadow-cinnabar aria-[current=page]:-mb-px aria-[current=page]:border-black aria-[current=page]:bg-black aria-[current=page]:text-red aria-[current=page]:shadow-md aria-[current=page]:shadow-gray dark:aria-[current=page]:border-red dark:aria-[current=page]:bg-red dark:aria-[current=page]:text-black dark:aria-[current=page]:shadow-cinnabar"
                                 >
                                     <span class="truncate">{tab.label}</span>

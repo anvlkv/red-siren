@@ -1,6 +1,5 @@
-use common::RouteId;
 use leptos::prelude::*;
-use leptos_router::{hooks::use_navigate, NavigateOptions};
+use tauri_use::{use_command, UseTauriWithReturn};
 
 use crate::{
     components::{Button, Card, Icon, UiPlacement, UiSize, UiVariant},
@@ -31,8 +30,12 @@ pub fn ContentPage(
 
     #[prop(optional, into)] no_back_button: bool,
 ) -> impl IntoView {
-    let navigate = use_navigate();
     let is_secondary_window = is_secondary_window();
+    let UseTauriWithReturn {
+        trigger: trigger_go_back,
+        error: error_go_back,
+        ..
+    } = use_command::<()>(common::commands::setup::GO_BACK);
 
     // Merge base card class with user-supplied class
     let merged_card_class = Signal::derive(move || {
@@ -43,37 +46,14 @@ pub fn ContentPage(
             format!("{} {}", "max-h-screen", extra)
         }
     });
-    let nav_stack = use_context::<StoredValue<Vec<String>>>();
+    Effect::new(move |_| {
+        if let Some(err) = error_go_back() {
+            log::error!("Error invoking {}: {err}", common::commands::setup::GO_BACK);
+        }
+    });
 
     let go_back = Callback::new(move |_| {
-        if let Some(stack) = nav_stack.as_ref() {
-            // Pop current and navigate to the previous in-app path if present
-            let mut prev: Option<String> = None;
-            stack.update_value(|s| {
-                if s.len() > 1 {
-                    s.pop();
-                    prev = s.last().cloned();
-                }
-            });
-            if let Some(path) = prev {
-                navigate(
-                    &path,
-                    NavigateOptions {
-                        replace: true,
-                        ..Default::default()
-                    },
-                );
-                return;
-            }
-        }
-        // Fallback to Home when no previous in-app entry exists
-        navigate(
-            RouteId::Home.as_ref(),
-            NavigateOptions {
-                replace: true,
-                ..Default::default()
-            },
-        );
+        trigger_go_back(Some(()));
     });
 
     let show_back_button = Signal::derive(move || !no_back_button && !is_secondary_window());

@@ -1,6 +1,10 @@
+use std::str::FromStr;
+
 use common::{EditorRouteId, RouteId};
 use leptos::prelude::*;
-use leptos_router::{hooks::use_navigate, NavigateOptions};
+use leptos_router::{
+    hooks::use_location, hooks::use_navigate, location::Location, NavigateOptions,
+};
 
 use crate::{
     components::{ContentPage, EditorPanel, LayoutEditorPanel, RoutedTab, RoutedTabs},
@@ -31,16 +35,22 @@ pub fn Edit() -> impl IntoView {
         vec![
             RoutedTab {
                 label: "Layout",
-                href: RouteId::Edit(EditorRouteId::Layout).to_string(),
+                route: RouteId::Edit(EditorRouteId::Layout),
             },
             RoutedTab {
                 label: "Fine-tuned values",
-                href: RouteId::Edit(EditorRouteId::FinetunedValues).to_string(),
+                route: RouteId::Edit(EditorRouteId::FinetunedValues),
             },
         ]
     });
 
-    let title = Signal::derive(move || RouteId::Edit(EditorRouteId::Layout).title().to_string());
+    let Location { pathname, .. } = use_location();
+    let title = Signal::derive(move || {
+        RouteId::from_str(&pathname())
+            .unwrap_or(RouteId::Edit(EditorRouteId::Layout))
+            .title()
+            .to_string()
+    });
 
     view! {
         <ContentPage title=title>

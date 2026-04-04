@@ -1,20 +1,20 @@
 use std::collections::VecDeque;
 use std::sync::{
-    Arc,
     atomic::{AtomicBool, Ordering},
+    Arc,
 };
 use std::time::Instant;
 
 use crate::quality::{PlaybackQualityGate, SampleType};
-use crate::rt::ProcessingMode;
 use crate::rt::telemetry;
+use crate::rt::ProcessingMode;
 
 use cpal::OutputStreamTimestamp;
-use fundsp::MAX_BUFFER_SIZE;
 use fundsp::buffer::BufferVec;
 use fundsp::prelude::{AudioUnit, BigBlockAdapter, NetBackend};
 use fundsp::setting::TrySendError;
 use fundsp::thingbuf::ThingBuf;
+use fundsp::MAX_BUFFER_SIZE;
 use parking_lot::RwLock;
 
 pub struct PlaybackCallbackConfig {
@@ -157,9 +157,9 @@ pub fn playback_callback<const N: usize>(
     let mut process_out_buf = BufferVec::new(N);
 
     // Large batch buffers
-    let mut process_in_big_buf: Vec<f32> = Vec::with_capacity(init_cap);
-    let mut process_out_big_buf_inner: Vec<Vec<f32>> = Vec::with_capacity(N);
-    process_out_big_buf_inner.fill_with(|| Vec::with_capacity(init_cap));
+    let mut process_in_big_buf: Vec<f32> = vec![0.0_f32; init_cap];
+    let mut process_out_big_buf_inner: Vec<Vec<f32>> =
+        (0..N).map(|_| vec![0.0_f32; init_cap]).collect();
 
     // Warm-up: pre-fill to optimal (plus latency)
     {
@@ -197,12 +197,12 @@ pub fn playback_callback<const N: usize>(
                 if let Some(add) = updated_cap.checked_sub(output_buffer.capacity()) {
                     output_buffer.reserve(add);
                 }
-                if let Some(add) = updated_cap.checked_sub(process_in_big_buf.capacity()) {
-                    process_in_big_buf.reserve(add);
+                if process_in_big_buf.len() < updated_cap {
+                    process_in_big_buf.resize(updated_cap, 0.0_f32);
                 }
                 process_out_big_buf_inner.iter_mut().for_each(|inner| {
-                    if let Some(add) = updated_cap.checked_sub(inner.capacity()) {
-                        inner.reserve(add);
+                    if inner.len() < updated_cap {
+                        inner.resize(updated_cap, 0.0_f32);
                     }
                 });
                 frames_per_output_buffer = num_frames;
@@ -256,6 +256,17 @@ pub fn playback_callback<const N: usize>(
                     }
                 }
                 ProcessingMode::ProcessBig => {
+                    // Ensure inner output vecs are long enough for this fill_size.
+                    // This handles the first callback before any capacity-update path runs,
+                    // and any edge case where fill_size exceeds the previously allocated length.
+                    process_out_big_buf_inner.iter_mut().for_each(|v| {
+                        if v.len() < fill_size {
+                            v.resize(fill_size, 0.0_f32);
+                        }
+                    });
+                    if process_in_big_buf.len() < fill_size {
+                        process_in_big_buf.resize(fill_size, 0.0_f32);
+                    }
                     let mut process_out_big_buf: Vec<&mut [f32]> = Vec::from_iter(
                         process_out_big_buf_inner
                             .iter_mut()
@@ -298,10 +309,10 @@ pub fn playback_callback<const N: usize>(
             if matches!(
                 telemetry_buff.try_send(summary),
                 Err(TrySendError::Closed(_))
-            )
-                && !TELEMETRY_CHANNEL_CLOSED.swap(true, Ordering::Relaxed) {
-                    log::warn!("Telemetry channel was closed; disabling telemetry updates");
-                }
+            ) && !TELEMETRY_CHANNEL_CLOSED.swap(true, Ordering::Relaxed)
+            {
+                log::warn!("Telemetry channel was closed; disabling telemetry updates");
+            }
         },
     ) as Box<super::GenType>
 }

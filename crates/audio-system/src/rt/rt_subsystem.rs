@@ -4,9 +4,9 @@ use std::{collections::HashMap, f32, sync::Arc, thread, time::Duration};
 use common::commands::edit::FineTunedValuesPayload;
 use common::error::ControlError;
 use common::{
-    NodeKey,
     instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, Preset},
     tuner::Config as TunerConfig,
+    NodeKey,
 };
 use fundsp::{prelude::*, typenum::Unsigned as _};
 use parking_lot::RwLock;
@@ -15,8 +15,8 @@ use u_num_it::u_num_it;
 #[cfg(feature = "editor")]
 use crate::system::values::{FineTunedSharedValues, FineTunedValues};
 use crate::{
-    ExcitementControl, FFT_WINDOW_SIZE, SensorHandles, input::analyzer::SpectrumBuffer,
-    output_analyzer::OUTPUT_ANALYZER_FFT_WINDOW_SIZE, quality::SampleType, rt::ExcitementSource,
+    input::analyzer::SpectrumBuffer, output_analyzer::OUTPUT_ANALYZER_FFT_WINDOW_SIZE,
+    quality::SampleType, rt::ExcitementSource, ExcitementControl, SensorHandles, FFT_WINDOW_SIZE,
 };
 
 pub const FADE_DURATION_MS: u64 = 120;
@@ -384,10 +384,14 @@ impl RuntimeSubsystem {
             self.replace_network(instrument_net, &self.dsp_primary_node_id.read());
         } else {
             self.node_band_controls.write().iter().for_each(|(k, v)| {
-                v.set_value(new_preset.get_band_value(k).unwrap());
+                if let Some(val) = new_preset.get_band_value(k) {
+                    v.set_value(val);
+                }
             });
             self.node_key_controls.write().iter().for_each(|(k, v)| {
-                v.set_value(new_preset.get_key_value(k).unwrap());
+                if let Some(val) = new_preset.get_key_value(k) {
+                    v.set_value(val);
+                }
             });
         }
     }
@@ -434,6 +438,151 @@ impl RuntimeSubsystem {
         } else {
             Err(ControlError::NodeNotFound { key }.into())
         }
+    }
+
+    // ── Snoop snapshots ──────────────────────────────────────────────────
+
+    /// Read the latest output samples for a single node.
+    /// `Snoop::update()` pulls buffered samples from the DSP thread.
+    pub fn snapshot_output_snoop(&self, key: NodeKey) -> Vec<f32> {
+        let mut snoops = self.node_output_snoops.write();
+        let mut out = Vec::new();
+        if let Some(snoop) = snoops.get_mut(&key) {
+            snoop.update();
+            let cap = snoop.capacity();
+            out.reserve(cap);
+            for rev in (0..cap).rev() {
+                let s = snoop.at(rev);
+                out.push(if s.is_normal() || s == 0.0 { s } else { 0.0 });
+            }
+        }
+        out
+    }
+
+    /// Read the latest output samples for every node, keyed by [`NodeKey`].
+    pub fn snapshot_all_output_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
+        let keys: Vec<NodeKey> = self.node_output_snoops.read().keys().copied().collect();
+        keys.into_iter()
+            .map(|k| {
+                let snap = self.snapshot_output_snoop(k);
+                (k, snap)
+            })
+            .collect()
+    }
+
+    /// Read the latest excitement `(primary, secondary)` samples for a single node.
+    pub fn snapshot_excitement_snoop(&self, key: NodeKey) -> Vec<(f32, f32)> {
+        let mut snoops = self.node_excitement_snoops.write();
+        let mut out = Vec::new();
+        if let Some((primary, secondary)) = snoops.get_mut(&key) {
+            primary.update();
+            secondary.update();
+            let cap = primary.capacity();
+            out.reserve(cap);
+            for rev in (0..cap).rev() {
+                let p = primary.at(rev);
+                let s = secondary.at(rev);
+                out.push((
+                    if p.is_normal() || p == 0.0 { p } else { 0.0 },
+                    if s.is_normal() || s == 0.0 { s } else { 0.0 },
+                ));
+            }
+        }
+        out
+    }
+
+    /// Read the latest excitement samples for every node.
+    pub fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<(f32, f32)>)> {
+        let keys: Vec<NodeKey> = self.node_excitement_snoops.read().keys().copied().collect();
+        keys.into_iter()
+            .map(|k| {
+                let snap = self.snapshot_excitement_snoop(k);
+                (k, snap)
+            })
+            .collect()
+    }
+
+    /// Read the latest microphone input samples.
+    /// Returns an empty `Vec` when the excitement source is not [`ExcitementSource::Mic`].
+    pub fn snapshot_input_snoop(&self) -> Vec<f32> {
+        let mut guard = self.input_snoop.write();
+        guard
+            .as_mut()
+            .map(|snoop| {
+                snoop.update();
+                let cap = snoop.capacity();
+                let mut out = Vec::with_capacity(cap);
+                for rev in (0..cap).rev() {
+                    let s = snoop.at(rev);
+                    out.push(if s.is_normal() || s == 0.0 { s } else { 0.0 });
+                }
+                out
+            })
+            .unwrap_or_default()
+    }
+
+    /// Take an FFT snapshot of the processed stereo output.
+    ///
+    /// Returns `None` when not enough samples have accumulated yet
+    /// (needs a full [`OUTPUT_ANALYZER_FFT_WINDOW_SIZE`] frame).
+    pub fn snapshot_processed_output_spectrum(
+        &self,
+    ) -> common::error::Result<Option<super::ProcessedOutputSpectrumSnapshot>> {
+        let sample_rate = *self.sample_rate.read();
+        let min_hz = self.tuner_freq_range.0.value() as f32;
+        let max_hz = self.tuner_freq_range.1.value() as f32;
+
+        let mut l_window = [0.0_f32; OUTPUT_ANALYZER_FFT_WINDOW_SIZE];
+        let mut r_window = [0.0_f32; OUTPUT_ANALYZER_FFT_WINDOW_SIZE];
+
+        let filled = {
+            let mut guard = self.processed_output_snoops.write();
+            let (l, r) = &mut *guard;
+            l.update();
+            r.update();
+            // at(0) = most recent; at(cap-1) = oldest.
+            // Fill oldest-first so the FFT window is time-ordered.
+            let cap = std::cmp::Ord::min(l.capacity(), OUTPUT_ANALYZER_FFT_WINDOW_SIZE);
+            for i in 0..cap {
+                let rev = cap - 1 - i;
+                l_window[i] = l.at(rev);
+                r_window[i] = r.at(rev);
+            }
+            cap
+        };
+
+        if filled < OUTPUT_ANALYZER_FFT_WINDOW_SIZE {
+            return Ok(None);
+        }
+
+        let left = crate::output_analyzer::analyze(l_window, sample_rate, min_hz, max_hz)?;
+        let right = crate::output_analyzer::analyze(r_window, sample_rate, min_hz, max_hz)?;
+        Ok(Some((left, right)))
+    }
+
+    // ── Tuner tap & excitements ──────────────────────────────────────────
+
+    /// Route tuner audio into the output mix (tap gain → 1.0).
+    pub fn start_tap_tuner_audio(&self) {
+        self.tuner_tap_gain_param.set_value(1.0);
+    }
+
+    /// Mute the tuner audio tap (tap gain → 0.0).
+    pub fn stop_tap_tuner_audio(&self) {
+        self.tuner_tap_gain_param.set_value(0.0);
+    }
+
+    /// Return the instantaneous primary excitement level for every node.
+    /// Results are sorted by [`NodeKey`] for a stable ordering.
+    pub fn poll_tuner_excitements(&self) -> Vec<(NodeKey, f32)> {
+        let mut data: Vec<(NodeKey, f32)> = self
+            .siren_excitements
+            .read()
+            .iter()
+            .map(|(k, v)| (*k, v.primary_value::<f32>()))
+            .collect();
+        data.sort_by_key(|(k, _)| *k);
+        data
     }
 
     #[cfg(feature = "editor")]
@@ -543,13 +692,27 @@ impl RuntimeSubsystem {
     }
 
     fn replace_network(&self, unit: Net, id: &NodeId) {
-        self.fade_out();
-        {
-            let mut dsp_lock = self.dsp_net.write();
+        let mut dsp_lock = self.dsp_net.write();
+        if dsp_lock.has_backend() {
+            // Only fade and commit when the backend (audio stream) is live.
+            // Fading without a backend is a no-op but costs 2 × FADE_DURATION_MS.
+            drop(dsp_lock);
+            self.fade_out();
+            {
+                let mut dsp_lock = self.dsp_net.write();
+                dsp_lock.replace(*id, Box::new(unit));
+                dsp_lock.commit();
+            }
+            self.fade_in();
+        } else {
+            // Backend not yet attached (stream not started or already stopped).
+            // Update the network locally so it is correct the next time the
+            // stream starts and calls `sys.backend()`.
+            log::debug!("replace_network: no backend attached – updating net node without commit");
             dsp_lock.replace(*id, Box::new(unit));
-            dsp_lock.commit();
+            // No commit; the next start_output_stream will build a fresh
+            // RuntimeSubsystem from the stored layout/config anyway.
         }
-        self.fade_in();
     }
 
     #[cfg(feature = "editor")]

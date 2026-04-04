@@ -158,7 +158,7 @@ pub fn Play() -> impl IntoView {
     // );
 
     let process_icon = Signal::derive(move || match quality_indicator_data() {
-        PlaybackQuality::Auto(_) => "robot",
+        PlaybackQuality::Auto(_) => "cube",
         PlaybackQuality::Ultra => "diamond",
         PlaybackQuality::HiFi => "cube",
         PlaybackQuality::Medium => "batch",

@@ -177,7 +177,43 @@ pub fn open_in_new_window(
     {
         let path: &'static str = route.path();
         let title = route.title();
-        log::info!("Opening new window for route {:?} (path: {})", route, path);
+        let label = format!(
+            "secondary:{}",
+            path.trim_start_matches('/').replace('/', "-")
+        );
+        log::info!(
+            "Opening new window for route {:?} (path: {}, label: {})",
+            route,
+            path,
+            label
+        );
+
+        if let Some(mut existing_window) = app.get_webview_window(&label) {
+            log::info!(
+                "Secondary window already exists for label `{}`; focusing",
+                label
+            );
+            let dark = {
+                let guard = state.lock();
+                guard.dark
+            };
+            #[cfg(target_os = "macos")]
+            {
+                super::setup_mac_window::update_appearance(&mut existing_window, dark)
+                    .map_err(SetupError::appearance)?;
+            }
+            existing_window.show().map_err(|e| SetupError::WindowOp {
+                op: "show_secondary_existing".into(),
+                message: e.to_string(),
+            })?;
+            existing_window
+                .set_focus()
+                .map_err(|e| SetupError::WindowOp {
+                    op: "focus_secondary_existing".into(),
+                    message: e.to_string(),
+                })?;
+            return Ok(());
+        }
 
         let main_window_size = app
             .get_webview_window("main")
@@ -191,7 +227,7 @@ pub fn open_in_new_window(
         let mut window = windows::with_secondary_bootstrap(
             WebviewWindowBuilder::new(
                 &app,
-                format!("secondary:{}", title.to_lowercase()).as_str(),
+                label.as_str(),
                 WebviewUrl::App(format!("{path}?secondary=true").into()),
             )
             .title(title)

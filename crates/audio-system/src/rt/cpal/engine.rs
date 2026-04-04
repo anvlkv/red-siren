@@ -2,8 +2,8 @@ use std::{
     f32, mem,
     ops::DerefMut,
     sync::{
-        Arc,
         mpsc::{self, Sender},
+        Arc,
     },
     thread,
     time::Duration,
@@ -12,18 +12,18 @@ use std::{
 #[cfg(feature = "editor")]
 use common::commands::edit::FineTunedValuesPayload;
 use common::{
-    NodeKey,
-    error::{ControlError, InstrumentError, Result},
-};
-use common::{
     device::DeviceData,
     error::AppError,
     instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, Preset},
 };
+use common::{
+    error::{ControlError, InstrumentError, Result},
+    NodeKey,
+};
 use common::{instrument::PlaybackQuality, tuner::Config as TunerConfig};
 use cpal::{
-    Device, DeviceId, HostId, StreamConfig, SupportedStreamConfig,
     traits::{DeviceTrait, HostTrait},
+    Device, DeviceId, HostId, StreamConfig, SupportedStreamConfig,
 };
 use fundsp::prelude::*;
 use fundsp::{thingbuf::ThingBuf, typenum::Unsigned};
@@ -35,14 +35,14 @@ use crate::{
     input::analyzer::SpectrumBuffer,
     quality::PlaybackQualityGate,
     rt::{
-        AudioRuntime, ExcitementSource,
-        cpal::stream::{PlaybackCallbackConfig, playback_callback, spawn_owned_input_stream},
+        cpal::stream::{playback_callback, spawn_owned_input_stream, PlaybackCallbackConfig},
         rt_subsystem::RuntimeSubsystem,
         telemetry::TelemetrySender,
+        AudioRuntime, ExcitementSource,
     },
 };
 
-use super::stream::{Control, spawn_owned_output_stream};
+use super::stream::{spawn_owned_output_stream, Control};
 
 const CONTROL_INVOKE_TIMEOUT_MS: u64 = 500;
 
@@ -698,30 +698,30 @@ impl AudioRuntime for CpalController {
         *self.quality_gate.write() = qg;
     }
 
-    fn snapshot_output_snoop(&self, _key: NodeKey) -> Vec<f32> {
-        Vec::new()
+    fn snapshot_output_snoop(&self, key: NodeKey) -> Vec<f32> {
+        self.runtime.read().snapshot_output_snoop(key)
     }
 
     fn snapshot_all_output_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
-        Vec::new()
+        self.runtime.read().snapshot_all_output_snoops()
     }
 
-    fn snapshot_excitement_snoop(&self, _key: NodeKey) -> Vec<(f32, f32)> {
-        Vec::new()
+    fn snapshot_excitement_snoop(&self, key: NodeKey) -> Vec<(f32, f32)> {
+        self.runtime.read().snapshot_excitement_snoop(key)
     }
 
     fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<(f32, f32)>)> {
-        Vec::new()
+        self.runtime.read().snapshot_all_excitement_snoops()
     }
 
     fn snapshot_processed_output_spectrum(
         &self,
     ) -> common::error::Result<Option<crate::rt::ProcessedOutputSpectrumSnapshot>> {
-        Ok(None)
+        self.runtime.read().snapshot_processed_output_spectrum()
     }
 
     fn snapshot_input_snoop(&self) -> Vec<f32> {
-        Vec::new()
+        self.runtime.read().snapshot_input_snoop()
     }
 
     fn set_band_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()> {
@@ -772,10 +772,12 @@ impl AudioRuntime for CpalController {
     }
 
     fn start_tap_tuner_audio(&self) -> common::error::Result<()> {
+        self.runtime.read().start_tap_tuner_audio();
         Ok(())
     }
 
     fn stop_tap_tuner_audio(&self) -> common::error::Result<()> {
+        self.runtime.read().stop_tap_tuner_audio();
         Ok(())
     }
 
@@ -786,7 +788,7 @@ impl AudioRuntime for CpalController {
     }
 
     fn poll_tuner_excitements(&self) -> Vec<(NodeKey, f32)> {
-        Vec::new()
+        self.runtime.read().poll_tuner_excitements()
     }
 
     fn get_sample_rate(&self) -> f64 {

@@ -52,7 +52,9 @@ pub fn use_layout_editor() -> UseLayoutEditorReturn {
         data: apply_layout_data,
         error: apply_layout_error,
         ..
-    } = use_invoke::<Layout, (), Layout>(common::commands::instrument::SET_LAYOUT);
+    } = use_invoke::<common::commands::instrument::SetLayoutPayload, (), Layout>(
+        common::commands::instrument::SET_LAYOUT,
+    );
 
     let UseTauriReturn {
         trigger: apply_lock,
@@ -119,7 +121,10 @@ pub fn use_layout_editor() -> UseLayoutEditorReturn {
     let submit = Callback::new({
         let layout = layout;
         move |_| {
-            apply_layout(Some((layout(), ())));
+            apply_layout(Some((
+                common::commands::instrument::SetLayoutPayload { layout: layout() },
+                (),
+            )));
         }
     });
 

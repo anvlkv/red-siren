@@ -16,9 +16,10 @@ const SAFE_MIN: f32 = 0.0;
 const SAFE_MAX: f32 = 1000.0;
 const SAFE_STEP: f32 = 0.5;
 
-const U8_MIN: f32 = 1.0;
-const U8_MAX: f32 = 32.0;
-const U8_STEP: f32 = 1.0;
+const PRIME_VALS: [u32; 20] = common::instrument::layout::LAYOUT_PRIMES.into_array();
+const PRIME_MIN: f32 = PRIME_VALS[0] as f32;
+const PRIME_MAX: f32 = PRIME_VALS[19] as f32;
+const PRIME_STEP: f32 = 1.0;
 
 pub struct UseLayoutEditorReturn {
     pub layout: Signal<Layout>,
@@ -155,6 +156,16 @@ where
     })
 }
 
+fn nearest_layout_prime(value: f32) -> u8 {
+    let v = value.round() as i64;
+    common::instrument::layout::LAYOUT_PRIMES
+        .as_slice()
+        .iter()
+        .copied()
+        .min_by_key(|&p| (p as i64 - v).abs())
+        .unwrap_or(2) as u8
+}
+
 #[component]
 fn Fold(
     title: &'static str,
@@ -212,6 +223,49 @@ pub fn LayoutEditorPanel() -> impl IntoView {
                                     "Prevent layout updates on window resize"
                                 </span>
                             </label>
+                        </Fold>
+
+                        <Fold open=false title="Groups">
+                            <fieldset class="flex flex-col gap-2">
+                                <RangeSlider
+                                    show_value=true
+                                    label="Keys / Group"
+                                    value=Signal::derive(move || {
+                                        (layout().num_keys_per_group.get() as f32).into()
+                                    })
+                                    min=PRIME_MIN
+                                    max=PRIME_MAX
+                                    step=PRIME_STEP
+                                    on_input=Callback::new({
+                                        let set_layout = set_layout;
+                                        move |val: SliderValue| {
+                                            let raw = nearest_layout_prime(val.into());
+                                            if let Some(nz) = std::num::NonZero::new(raw) {
+                                                set_layout.update(|l| l.num_keys_per_group = nz);
+                                            }
+                                        }
+                                    })
+                                />
+                                <RangeSlider
+                                    show_value=true
+                                    label="Groups"
+                                    value=Signal::derive(move || {
+                                        (layout().num_groups.get() as f32).into()
+                                    })
+                                    min=PRIME_MIN
+                                    max=PRIME_MAX
+                                    step=PRIME_STEP
+                                    on_input=Callback::new({
+                                        let set_layout = set_layout;
+                                        move |val: SliderValue| {
+                                            let raw = nearest_layout_prime(val.into());
+                                            if let Some(nz) = std::num::NonZero::new(raw) {
+                                                set_layout.update(|l| l.num_groups = nz);
+                                            }
+                                        }
+                                    })
+                                />
+                            </fieldset>
                         </Fold>
 
                         <Fold open=false title="Space">
@@ -417,50 +471,6 @@ pub fn LayoutEditorPanel() -> impl IntoView {
                             </fieldset>
                         </Fold>
 
-                        <Fold open=false title="Groups">
-                            <fieldset class="flex flex-col gap-2">
-                                <RangeSlider
-                                    show_value=true
-                                    label="Keys / Group"
-                                    value=Signal::derive(move || {
-                                        (layout().num_keys_per_group.get() as f32).into()
-                                    })
-                                    min=U8_MIN
-                                    max=U8_MAX
-                                    step=U8_STEP
-                                    on_input=Callback::new({
-                                        let set_layout = set_layout;
-                                        move |val: SliderValue| {
-                                            let value: f32 = val.into();
-                                            let raw = value.round().clamp(U8_MIN, U8_MAX) as u8;
-                                            if let Some(nz) = std::num::NonZero::new(raw) {
-                                                set_layout.update(|l| l.num_keys_per_group = nz);
-                                            }
-                                        }
-                                    })
-                                />
-                                <RangeSlider
-                                    show_value=true
-                                    label="Groups"
-                                    value=Signal::derive(move || {
-                                        (layout().num_groups.get() as f32).into()
-                                    })
-                                    min=U8_MIN
-                                    max=U8_MAX
-                                    step=U8_STEP
-                                    on_input=Callback::new({
-                                        let set_layout = set_layout;
-                                        move |val: SliderValue| {
-                                            let value: f32 = val.into();
-                                            let raw = value.round().clamp(U8_MIN, U8_MAX) as u8;
-                                            if let Some(nz) = std::num::NonZero::new(raw) {
-                                                set_layout.update(|l| l.num_groups = nz);
-                                            }
-                                        }
-                                    })
-                                />
-                            </fieldset>
-                        </Fold>
                     </div>
 
                     <div class="mt-6 flex flex-wrap items-center gap-3">

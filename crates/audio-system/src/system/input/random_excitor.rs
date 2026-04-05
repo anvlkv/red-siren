@@ -12,9 +12,9 @@ use fundsp::{
 };
 use num_complex::Complex;
 
-use crate::ExcitementControl;
 use crate::system::input::adsr::Adsr;
 use crate::util::hash_str;
+use crate::ExcitementControl;
 
 /// Random excitor node ID for debugging
 const RANDOM_EXCITOR_ID: u64 = hash_str(concat!(module_path!(), "::RandomExcitor"));
@@ -149,7 +149,10 @@ impl<S: Real + Float> RandomExcitor<S> {
             Complex::<S>::new(S::zero(), S::zero())
         };
 
-        if Complex32::new(value.re.to_f32(), value.im.to_f32()).is_normal() {
+        // Safety guard: zero out NaN or infinite values to prevent audio glitches.
+        // Previously this used `is_normal()` which cleared all valid (normal) floats to zero —
+        // the exact opposite of the intended behaviour and the reason the instrument produced silence.
+        if !Complex32::new(value.re.to_f32(), value.im.to_f32()).is_finite() {
             value = Complex::<S>::new(S::zero(), S::zero());
         }
 

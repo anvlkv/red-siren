@@ -1002,7 +1002,11 @@ impl RuntimeSubsystem {
 
         net.pipe_all(instrument_node_id, processed_output_snoops_id);
         net.pipe_all(processed_output_snoops_id, gain_id);
-        net.pipe_all(tuner_node_id, gain_id);
+        // Connect the tuner's single output to the last input of gain_id (index = num_channels).
+        // We must NOT use pipe_all here: pipe_all iterates over ALL target inputs starting from 0
+        // and cycles the source outputs via `channel % source_outputs`, which would overwrite the
+        // num_channels instrument inputs that were just wired by the previous pipe_all call.
+        net.connect(tuner_node_id, 0, gain_id, num_channels);
         net.pipe_output(gain_id);
         net.pipe_input(tuner_node_id);
 

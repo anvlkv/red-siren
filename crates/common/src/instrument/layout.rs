@@ -4,10 +4,10 @@ use mint::{Point2, Vector2};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Line, NodeKeyRegistry,
     instrument::GroupChannel,
     orientation::LayoutOrientation,
-    safe_area::{DEFAULT_SAFE_AREA, SafeArea},
+    safe_area::{SafeArea, DEFAULT_SAFE_AREA},
+    Line, NodeKeyRegistry,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -101,7 +101,7 @@ impl Layout {
     }
 }
 
-const LAYOUT_PRIMES: const_primes::Primes<20> = const_primes::Primes::new();
+pub const LAYOUT_PRIMES: const_primes::Primes<20> = const_primes::Primes::new();
 
 const MIN_KEY_RADIUS: f64 = 16.0;
 const MIN_BAND_PADDING: f64 = 8.0;

@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use audio_system::create_telemetry_channel;
 use audio_system::rt::gate_manager::QualityGateManager;
+use audio_system::PlaybackQualityGate;
 use common::NodeKey;
 use parking_lot::RwLock;
 
-// use audio_system::quality::PlaybackQualityGate;
 use audio_system::rt::{make_stream_controller, AudioRuntime, ExcitementSource};
 
 use common::error::{AppError, InstrumentError, Result};
@@ -22,6 +22,7 @@ use crate::instrument::{load_input_device, load_output_device, load_preset};
 pub struct InstrumentState {
     app: AppHandle,
     inner: Inner,
+    /// Manages quality gate telemetry and user quality preference.
     gate_manager: Arc<QualityGateManager>,
 }
 
@@ -64,7 +65,39 @@ impl InstrumentState {
             Box::new({
                 let stream_controller = stream_controller.clone();
                 move |gate| {
+                    // Check whether the sample type is changing before we commit the update.
+                    let current_type = stream_controller.read().current_sample_type();
+                    let new_type = gate.sample_type();
+
+                    log::debug!(
+                        "managed_change: applying auto quality gate {:?} (sample_type: {:?} → {:?})",
+                        gate,
+                        current_type,
+                        new_type
+                    );
+
+                    // Always update the gate immediately (affects buffer-size adaptation
+                    // in the hot path with zero latency).
                     stream_controller.read().update_quality_setting(gate);
+
+                    // A sample-type change (F32 ↔ F64) requires a full DSP network rebuild.
+                    // Spawn a blocking thread so we don't stall the GateWorker async loop.
+                    if new_type != current_type && stream_controller.read().is_running() {
+                        log::info!(
+                            "managed_change: sample type changed {:?} → {:?}; scheduling stream restart",
+                            current_type,
+                            new_type
+                        );
+                        let sc = stream_controller.clone();
+                        log::info!("managed_change: restarting stream for quality-driven sample-type change");
+                        std::thread::spawn(move || {
+                            if let Err(e) = sc.read().restart_for_quality() {
+                                log::error!("Quality-driven sample-type restart failed: {e}");
+                            } else {
+                                log::info!("managed_change: stream restart completed successfully");
+                            }
+                        });
+                    }
                 }
             }),
         );
@@ -405,6 +438,14 @@ impl InstrumentState {
         bottom: f64,
         left: f64,
     ) -> common::error::Result<()> {
+        if self.is_resize_locked() {
+            log::debug!(
+                "Skipping safe area update because resize lock is enabled (top={}, right={}, bottom={}, left={})",
+                top, right, bottom, left
+            );
+            return Ok(());
+        }
+
         let tuner_state = self.app.state::<crate::tuner::TunerState>();
         let tuner_config = tuner_state.tuner_config();
 
@@ -556,7 +597,80 @@ impl InstrumentState {
     }
 
     pub fn quality_indicator(&self) -> PlaybackQuality {
-        self.inner.stream_controller.read().quality_indicator()
+        self.gate_manager.current_quality()
+    }
+
+    pub fn set_quality(&self, quality: PlaybackQuality) {
+        log::info!("InstrumentState::set_quality: requested {:?}", quality);
+        self.gate_manager.set_quality(quality);
+        // For manual (non-Auto) selections, apply the gate to the stream immediately.
+        if !matches!(quality, PlaybackQuality::Auto(_)) {
+            let gate = PlaybackQualityGate::from(quality);
+            let sc = &self.inner.stream_controller;
+            let current_type = sc.read().current_sample_type();
+            let new_type = gate.sample_type();
+            log::debug!(
+                "set_quality: applying manual gate {:?} (sample_type: {:?} → {:?})",
+                gate,
+                current_type,
+                new_type
+            );
+            sc.read().update_quality_setting(gate);
+            if new_type != current_type && sc.read().is_running() {
+                log::info!(
+                    "set_quality: sample type changed {:?} → {:?}; scheduling stream restart",
+                    current_type,
+                    new_type
+                );
+                let sc_clone = sc.clone();
+                log::info!("set_quality: restarting stream for manual quality change");
+                std::thread::spawn(move || {
+                    if let Err(e) = sc_clone.read().restart_for_quality() {
+                        log::error!("Manual quality restart failed: {e}");
+                    } else {
+                        log::info!("set_quality: stream restart completed successfully");
+                    }
+                });
+            } else {
+                log::debug!(
+                    "set_quality: gate applied; no restart needed (running={}, type_changed={})",
+                    sc.read().is_running(),
+                    new_type != current_type
+                );
+            }
+        } else {
+            // On re-entry to Auto mode, immediately apply the gate manager's current
+            // proposal so the stream doesn't lag until the next telemetry tick.
+            let proposed = PlaybackQualityGate::from(self.gate_manager.proposed_quality());
+            let sc = &self.inner.stream_controller;
+            let current_type = sc.read().current_sample_type();
+            let new_type = proposed.sample_type();
+            log::info!(
+                "set_quality: switched to Auto mode; applying current proposal {:?} immediately (sample_type: {:?} → {:?})",
+                proposed,
+                current_type,
+                new_type
+            );
+            sc.read().update_quality_setting(proposed);
+            if new_type != current_type && sc.read().is_running() {
+                log::info!(
+                    "set_quality: Auto re-entry requires sample-type change {:?} → {:?}; scheduling stream restart",
+                    current_type,
+                    new_type
+                );
+                let sc_clone = sc.clone();
+                log::info!("set_quality: restarting stream for Auto re-entry sample-type change");
+                std::thread::spawn(move || {
+                    if let Err(e) = sc_clone.read().restart_for_quality() {
+                        log::error!("Auto re-entry stream restart failed: {e}");
+                    } else {
+                        log::info!(
+                            "set_quality: Auto re-entry stream restart completed successfully"
+                        );
+                    }
+                });
+            }
+        }
     }
 
     pub fn get_preset(&self) -> Preset {

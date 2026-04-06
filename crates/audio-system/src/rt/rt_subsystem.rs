@@ -281,6 +281,7 @@ impl RuntimeSubsystem {
         }
     }
 
+    #[allow(dead_code)]
     pub fn restart_with_sample_type(&self, sample_type: SampleType) -> Self {
         self.fade_out();
         RuntimeSubsystem::new(
@@ -324,8 +325,33 @@ impl RuntimeSubsystem {
     }
 
     pub fn update_tuner_config(&self, tuner_config: &TunerConfig) {
-        let mut tuner_config_lock = self.tuner_config.write();
-        *tuner_config_lock = tuner_config.clone();
+        // 1. Update Nyquist Shared params in the live signal graph (zero DSP rebuild).
+        self.tuner_ny_threshold.set_value(tuner_config.ny_threshold);
+        self.tuner_ny_wet_ratio.set_value(tuner_config.ny_wet_ratio);
+
+        // 2. Update frequency-range Shared params.
+        self.tuner_freq_range
+            .0
+            .set_value(tuner_config.frequency_range.0.unwrap_or(f32::NEG_INFINITY));
+        self.tuner_freq_range
+            .1
+            .set_value(tuner_config.frequency_range.1.unwrap_or(f32::INFINITY));
+
+        // 3. Push updated sensor bounds into the per-node Shared params.
+        {
+            let handles = self.node_sensor_controls.read();
+            for sensor in &tuner_config.sensor_data {
+                if let Some(h) = handles.get(&sensor.key) {
+                    h.min_frequency.set_value(sensor.min_frequency);
+                    h.max_frequency.set_value(sensor.max_frequency);
+                    h.min_magnitude.set_value(sensor.min_magnitude);
+                    h.max_magnitude.set_value(sensor.max_magnitude);
+                }
+            }
+        }
+
+        // 4. Store updated config.
+        *self.tuner_config.write() = tuner_config.clone();
     }
 
     pub fn backend(&self) -> NetBackend {
@@ -529,8 +555,8 @@ impl RuntimeSubsystem {
         &self,
     ) -> common::error::Result<Option<super::ProcessedOutputSpectrumSnapshot>> {
         let sample_rate = *self.sample_rate.read();
-        let min_hz = self.tuner_freq_range.0.value() as f32;
-        let max_hz = self.tuner_freq_range.1.value() as f32;
+        let min_hz = self.tuner_freq_range.0.value();
+        let max_hz = self.tuner_freq_range.1.value();
 
         let mut l_window = [0.0_f32; OUTPUT_ANALYZER_FFT_WINDOW_SIZE];
         let mut r_window = [0.0_f32; OUTPUT_ANALYZER_FFT_WINDOW_SIZE];
@@ -689,6 +715,39 @@ impl RuntimeSubsystem {
     pub fn fade_in(&self) {
         self.gain_param.set_value(1.0);
         thread::sleep(Duration::from_millis(FADE_DURATION_MS));
+    }
+
+    /// Replace only the tuner sub-network (1-in/1-out node) without rebuilding the
+    /// instrument network or restarting the CPAL stream.
+    ///
+    /// Handles fade/commit via [`Self::replace_network`] so the audio transition is
+    /// seamless when the stream is running.
+    pub fn replace_tuner_for_source(&self, source: ExcitementSource) {
+        let siren_excitements = self.siren_excitements.read().clone();
+        let tuner_config = self.tuner_config.read().clone();
+        let sample_rate = *self.sample_rate.read();
+
+        let CreateTunerNetworkReturn {
+            input_snoop,
+            handles,
+            net,
+        } = Self::create_tuner_network(
+            sample_rate,
+            self.sample_type,
+            source,
+            &tuner_config,
+            siren_excitements,
+            &self.spectrum_data_thb,
+            (&self.tuner_freq_range.0, &self.tuner_freq_range.1),
+            &self.tuner_ny_threshold,
+            &self.tuner_ny_wet_ratio,
+        );
+
+        *self.input_snoop.write() = input_snoop;
+        *self.node_sensor_controls.write() = handles;
+        *self.source.write() = source;
+
+        self.replace_network(net, &self.dsp_tuner_node_id.read());
     }
 
     fn replace_network(&self, unit: Net, id: &NodeId) {

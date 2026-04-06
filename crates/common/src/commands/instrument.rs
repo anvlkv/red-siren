@@ -1,3 +1,4 @@
+use crate::instrument::PlaybackQuality;
 use crate::NodeKey;
 
 /// Start instrument playback
@@ -28,8 +29,16 @@ pub const UPDATE_BAND_CONTROL: &str = "instrument_update_band_control";
 pub const UPDATE_KEY_CONTROL: &str = "instrument_update_key_control";
 /// Get batch processing bool
 pub const QUALITY_INDICATOR: &str = "instrument_quality_indicator";
+/// Set playback quality
+pub const SET_QUALITY: &str = "instrument_set_quality";
 /// Get processed output spectrum snapshot
 pub const SNAPSHOT_PROCESSED_OUTPUT_SPECTRUM: &str = "snapshot_processed_output_spectrum";
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SetQualityPayload {
+    pub quality: PlaybackQuality,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

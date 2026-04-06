@@ -12,12 +12,22 @@ pub(super) const INSTRUMENT_STORE_NAME: &str = "instrument.json";
 pub(super) const PRESETS_STORE_KEY: &str = "presets";
 pub(super) const INPUT_DEVICE_STORE_KEY: &str = "input_device";
 pub(super) const OUTPUT_DEVICE_STORE_KEY: &str = "output_device";
+pub(super) const RESIZE_LOCK_STORE_KEY: &str = "resize_lock";
 
 pub fn setup(app: &mut App) -> Result<()> {
     let is_new = app.manage(state::InstrumentState::new(app.handle())?);
 
     if is_new {
         log::debug!("Instrument state initialized and managed state created");
+
+        // Load and apply persisted resize lock before the startup set_size call
+        let resize_lock = load_resize_lock(app.handle())?;
+        if resize_lock {
+            let state = app.state::<state::InstrumentState>();
+            state.set_resize_locked(resize_lock);
+            log::debug!("Restored persisted resize lock: {resize_lock}");
+        }
+
         let presets: Preset =
             load_json_or_default(app.handle(), INSTRUMENT_STORE_NAME, PRESETS_STORE_KEY)?;
 
@@ -124,4 +134,14 @@ pub(super) fn load_output_device(app: &AppHandle) -> Result<Option<DeviceData>> 
 
 pub(super) fn load_preset(app: &AppHandle) -> Result<Preset> {
     load_json_or_default::<Preset>(app, INSTRUMENT_STORE_NAME, PRESETS_STORE_KEY)
+}
+
+pub(super) fn save_resize_lock(locked: bool, app: &AppHandle) -> Result<()> {
+    save_json(app, INSTRUMENT_STORE_NAME, RESIZE_LOCK_STORE_KEY, &locked)?;
+    log::debug!("Resize lock saved to store: {locked}");
+    Ok(())
+}
+
+pub(super) fn load_resize_lock(app: &AppHandle) -> Result<bool> {
+    load_json_or_default::<bool>(app, INSTRUMENT_STORE_NAME, RESIZE_LOCK_STORE_KEY)
 }

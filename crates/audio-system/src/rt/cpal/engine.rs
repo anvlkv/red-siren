@@ -1,6 +1,5 @@
 use std::{
-    f32, mem,
-    ops::DerefMut,
+    f32,
     sync::{
         mpsc::{self, Sender},
         Arc,
@@ -33,7 +32,7 @@ use u_num_it::u_num_it;
 
 use crate::{
     input::analyzer::SpectrumBuffer,
-    quality::PlaybackQualityGate,
+    quality::{PlaybackQualityGate, SampleType},
     rt::{
         cpal::stream::{playback_callback, spawn_owned_input_stream, PlaybackCallbackConfig},
         rt_subsystem::RuntimeSubsystem,
@@ -387,7 +386,7 @@ impl CpalController {
             let spectrum_data_thb = self.spectrum_buffer.read().clone();
             let telemetry = self.telemetry_buffer.read().clone();
             let backend = {
-                let sys = RuntimeSubsystem::new(
+                let mut sys = RuntimeSubsystem::new(
                     layout,
                     config,
                     source,
@@ -398,6 +397,9 @@ impl CpalController {
                     num_channels,
                     stream_cfg.sample_rate as f64,
                 );
+                // backend() must be called before any commit()-based operations (e.g.
+                // update_sample_rate). Net::backend() moves vertices to the backend and
+                // sets has_backend(); commit() asserts has_backend() and panics otherwise.
                 let backend = sys.backend();
                 *self.runtime.write() = sys;
                 backend
@@ -660,27 +662,55 @@ impl AudioRuntime for CpalController {
     }
 
     fn on_excitement_source_changed(&self, source: ExcitementSource) -> common::error::Result<()> {
-        let old_source = {
-            let rt = self.runtime.read();
-            let mut src_x = rt.source.write();
-            let mut src_y = source;
-            mem::swap(src_x.deref_mut(), &mut src_y);
-            src_y
-        };
+        let old_source = *self.runtime.read().source.read();
+        if old_source == source {
+            return Ok(());
+        }
 
+        // Manage the microphone input stream first so that input_buffer is
+        // already populated (or absent) by the time the output stream restarts.
         match (old_source, source) {
             (ExcitementSource::Mic, ExcitementSource::Entropy) => {
-                self.stop_input_stream()?;
-                self.restart_output_stream()?;
-                Ok(())
+                self.stop_input_stream().or_else(|e| {
+                    if matches!(
+                        e,
+                        AppError::Instrument(InstrumentError::BackendMissing { .. })
+                    ) {
+                        Ok(())
+                    } else {
+                        Err(e)
+                    }
+                })?;
             }
             (ExcitementSource::Entropy, ExcitementSource::Mic) => {
                 self.start_input_stream()?;
-                self.restart_output_stream()?;
-                Ok(())
             }
-            _ => Ok(()),
+            _ => {}
         }
+
+        if self.output_thread.read().is_some() {
+            // A full DSP rebuild is required here. fundsp's Net::backend() can
+            // only be called once per Net instance – it moves the vertex list
+            // into the backend and the frontend cannot produce a second backend.
+            // restart_output_stream_keep_runtime (which called backend() again)
+            // would therefore panic. We also need the new input_buffer value
+            // (set above) captured fresh in the callback closure, which a full
+            // restart guarantees.
+            let rt = self.runtime.read();
+            let layout = *rt.layout.read();
+            let config = rt.config.read().clone();
+            let tuner_config = rt.tuner_config.read().clone();
+            let preset = rt.preset.read().clone();
+            drop(rt);
+            self.stop_output_stream()?;
+            self.start_output_stream(layout, config, source, tuner_config, preset)?;
+        } else {
+            // Stream not running: persist the new source so the next
+            // start_output_stream picks it up.
+            *self.runtime.read().source.write() = source;
+        }
+
+        Ok(())
     }
 
     fn on_layout_changed(
@@ -801,6 +831,21 @@ impl AudioRuntime for CpalController {
 
     fn quality_indicator(&self) -> PlaybackQuality {
         (*self.quality_gate.read()).into()
+    }
+
+    fn is_running(&self) -> bool {
+        self.output_thread.read().is_some()
+    }
+
+    fn current_sample_type(&self) -> SampleType {
+        self.quality_gate.read().sample_type()
+    }
+
+    fn restart_for_quality(&self) -> common::error::Result<()> {
+        if self.output_thread.read().is_some() {
+            self.restart_output_stream()?;
+        }
+        Ok(())
     }
 
     fn set_preset(&self, preset: Preset) -> common::error::Result<()> {

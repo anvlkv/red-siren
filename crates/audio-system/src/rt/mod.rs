@@ -16,7 +16,7 @@ use common::instrument::{
 };
 use common::tuner::Config as TunerConfig;
 
-use crate::quality::PlaybackQualityGate;
+use crate::quality::{PlaybackQualityGate, SampleType};
 use crate::rt::telemetry::TelemetrySender;
 
 pub type ProcessedOutputSpectrumSnapshot = (BTreeMap<u32, f32>, BTreeMap<u32, f32>);
@@ -137,6 +137,27 @@ pub trait AudioRuntime {
     fn set_preset(&self, preset: Preset) -> common::error::Result<()>;
 
     fn get_preset(&self) -> Preset;
+
+    /// Whether the output stream is currently active (CPAL stream thread running).
+    /// Default implementation returns `false` (suitable for NullController).
+    fn is_running(&self) -> bool {
+        false
+    }
+
+    /// The [`SampleType`] (F32 or F64) currently used by the running DSP network.
+    /// Default implementation returns `SampleType::F32`.
+    fn current_sample_type(&self) -> SampleType {
+        SampleType::default()
+    }
+
+    /// Restart the output stream to apply a pending quality-gate change that
+    /// requires a DSP rebuild (e.g. F32 ↔ F64 sample-type transition).
+    ///
+    /// Implementations should be a no-op when the stream is not running.
+    /// Default returns `Ok(())` (suitable for NullController).
+    fn restart_for_quality(&self) -> common::error::Result<()> {
+        Ok(())
+    }
 }
 
 /// Null / no-op runtime used when no concrete backend feature is enabled.

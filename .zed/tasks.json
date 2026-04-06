@@ -9,6 +9,7 @@
     "command": "cargo tauri dev --features devtools",
     "env": {
       "RUST_BACKTRACE": "1",
+      "RUST_LOG": "trace",
     },
     "reveal": "always",
     "use_new_terminal": true,

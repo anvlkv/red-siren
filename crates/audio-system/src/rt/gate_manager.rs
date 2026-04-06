@@ -70,6 +70,20 @@ impl QualityGateManager {
         *self.quality_setting.read()
     }
 
+    /// Override the quality setting. When set to [`PlaybackQuality::Auto`], the
+    /// gate worker will resume managing quality automatically via telemetry.
+    /// When set to a specific quality, the gate worker will stop updating
+    /// (the `Auto` branch won't match) until switched back to Auto.
+    pub fn set_quality(&self, quality: PlaybackQuality) {
+        let prev = *self.quality_setting.read();
+        log::info!(
+            "QualityGateManager::set_quality: {:?} → {:?}",
+            prev,
+            quality
+        );
+        *self.quality_setting.write() = quality;
+    }
+
     pub fn update_settings(
         &self,
         sample_rate: u32,
@@ -128,12 +142,35 @@ impl GateWorker {
                     let mut tel = telemetry.lock();
                     tel.accept_message(msg)
                 } {
+                    let prev_proposed = *proposed_quality_gate.read();
+                    if prev_proposed != change {
+                        log::debug!(
+                            "GateWorker: proposed quality gate changed {:?} → {:?}",
+                            prev_proposed,
+                            change
+                        );
+                    }
                     *proposed_quality_gate.write() = change;
 
                     let mut qs = quality_setting.write();
                     if let PlaybackQuality::Auto(value) = qs.deref_mut() {
+                        let prev_gate = PlaybackQualityGate::from(*value);
                         *value = change as i8;
+                        if prev_gate != change {
+                            log::info!(
+                                "GateWorker: auto quality adjusted {:?} → {:?} (gate i8={})",
+                                prev_gate,
+                                change,
+                                *value
+                            );
+                        }
                         (managed_change.lock())(PlaybackQualityGate::from(*value));
+                    } else {
+                        log::debug!(
+                            "GateWorker: telemetry suggests {:?} but quality is manually pinned to {:?}; skipping",
+                            change,
+                            *qs
+                        );
                     }
                 } else {
                     task::yield_now().await;

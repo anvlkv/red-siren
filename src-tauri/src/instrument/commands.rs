@@ -305,13 +305,17 @@ pub fn instrument_set_layout_space(
 }
 
 #[tauri::command]
-/// Enables or disables resize-driven layout updates
+/// Enables or disables resize-driven layout updates and persists the choice
 pub fn instrument_set_layout_resize_lock(
     locked: bool,
     state: State<'_, InstrumentState>,
+    app: AppHandle,
 ) -> Result<bool> {
     log::debug!("instrument_set_layout_resize_lock called with locked={locked}");
     state.set_resize_locked(locked);
+    if let Err(e) = super::save_resize_lock(locked, &app) {
+        log::error!("Failed to persist resize lock: {e}");
+    }
     Ok(state.is_resize_locked())
 }
 
@@ -574,7 +578,20 @@ pub fn instrument_update_key_control(
 
 #[tauri::command]
 pub fn instrument_quality_indicator(state: State<'_, InstrumentState>) -> PlaybackQuality {
-    state.quality_indicator()
+    let q = state.quality_indicator();
+    log::trace!("instrument_quality_indicator: {:?}", q);
+    q
+}
+
+#[tauri::command]
+pub fn instrument_set_quality(
+    quality: PlaybackQuality,
+    state: State<'_, InstrumentState>,
+) -> Result<()> {
+    log::info!("instrument_set_quality: received request to set quality to {:?}", quality);
+    state.set_quality(quality);
+    log::debug!("instrument_set_quality: set_quality returned successfully");
+    Ok(())
 }
 
 #[tauri::command]

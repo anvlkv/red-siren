@@ -2,7 +2,7 @@ use common::instrument::Layout;
 use leptos::prelude::*;
 use tauri_use::{use_command, use_invoke, UseTauriReturn, UseTauriWithReturn};
 
-use crate::components::{Button, RangeSlider, SliderValue};
+use crate::components::{Button, Fold, RangeSlider, SliderValue};
 
 const SPACE_MIN: f32 = 64.0;
 const SPACE_MAX: f32 = 7680.0;
@@ -120,7 +120,6 @@ pub fn use_layout_editor() -> UseLayoutEditorReturn {
     });
 
     let submit = Callback::new({
-        let layout = layout;
         move |_| {
             apply_layout(Some((
                 common::commands::instrument::SetLayoutPayload { layout: layout() },
@@ -167,25 +166,6 @@ fn nearest_layout_prime(value: f32) -> u8 {
 }
 
 #[component]
-fn Fold(
-    title: &'static str,
-    #[prop(optional, default = true)] open: bool,
-    children: Children,
-) -> impl IntoView {
-    view! {
-        <details
-            class="rounded-xl border border-black/15 bg-black/5 p-4 dark:border-red/20 dark:bg-red/5"
-            open=open
-        >
-            <summary class="cursor-pointer list-none text-sm font-semibold tracking-wide select-none">
-                {title}
-            </summary>
-            <div class="mt-4 flex flex-col gap-4">{children()}</div>
-        </details>
-    }
-}
-
-#[component]
 pub fn LayoutEditorPanel() -> impl IntoView {
     let UseLayoutEditorReturn {
         layout,
@@ -214,7 +194,7 @@ pub fn LayoutEditorPanel() -> impl IntoView {
                             <label class="inline-flex items-center gap-3">
                                 <input
                                     type="checkbox"
-                                    prop:checked=move || resize_locked()
+                                    prop:checked=resize_locked
                                     on:change:target=move |ev| {
                                         set_resize_lock.run(ev.target().checked());
                                     }

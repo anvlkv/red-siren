@@ -182,6 +182,9 @@ pub fn playback_callback<const N: usize>(
         move |ts: OutputStreamTimestamp, channels_frames: &mut [&mut [f32]]| {
             let start_ts = Instant::now();
             let num_frames = channels_frames[0].len();
+            // Re-read the target from the quality gate so buffer-size changes take
+            // effect dynamically without a stream restart.
+            let buffer_target_frames = cfg.quality.read().buffer_size(None) as usize;
 
             for i in 0..num_frames {
                 if let Some(frame) = output_buffer.pop_front() {

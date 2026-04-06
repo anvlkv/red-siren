@@ -36,12 +36,18 @@ pub fn run() {
     builder = builder.plugin(
         tauri_plugin_log::Builder::new()
             .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepOne)
-            .level(if cfg!(debug_assertions) {
-                log::LevelFilter::Debug
-            } else if cfg!(feature = "devtools") {
-                log::LevelFilter::Info
-            } else {
-                log::LevelFilter::Warn
+            .level({
+                let default = if cfg!(debug_assertions) {
+                    log::LevelFilter::Debug
+                } else if cfg!(feature = "devtools") {
+                    log::LevelFilter::Info
+                } else {
+                    log::LevelFilter::Warn
+                };
+                std::env::var("RUST_LOG")
+                    .ok()
+                    .and_then(|v| v.parse::<log::LevelFilter>().ok())
+                    .unwrap_or(default)
             })
             .target(tauri_plugin_log::Target::new(
                 tauri_plugin_log::TargetKind::Webview,
@@ -101,6 +107,7 @@ pub fn run() {
         instrument::instrument_update_band_control,
         instrument::instrument_update_key_control,
         instrument::instrument_quality_indicator,
+        instrument::instrument_set_quality,
         instrument::snapshot_processed_output_spectrum,
         #[cfg(feature = "devtools")]
         instrument::instrument_edit_finetuned_values,

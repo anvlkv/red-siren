@@ -1,17 +1,15 @@
-use common::{instrument::PlaybackQuality, RouteId};
+use common::RouteId;
 use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
-use tauri_use::{use_command, UseTauriWithReturn};
 
 use crate::{
     components::{
-        AppearanceToggle, CompactMenu, ExcitementSourceToggle, Icon, Instrument, MenuItem,
-        UiPlacement, UiSize,
+        AppearanceToggle, CompactMenu, ExcitementSourceToggle, Instrument, MenuItem,
+        PlayBackQualitySwitch, UiPlacement,
     },
     util::{
         layout_context::{expect_layout_context, LayoutContextReturn},
         playback_service::{expect_playback_service, PlaybackService},
-        raf_fn_fps::use_raf_fn_with_fps,
         secondary_window::is_secondary_window,
         setup_context::{initial_mic_permission, is_devtools_enabled},
         tauri_resource::{use_tauri_resource, UseTauriResourceReturn},
@@ -118,64 +116,12 @@ pub fn Play() -> impl IntoView {
 
     let editor = is_devtools_enabled();
 
-    let icon_ref = NodeRef::new();
-
-    let UseTauriWithReturn {
-        trigger: check_quality_indicator,
-        data: quality_indicator_data,
-        error: quality_indicator_error,
-    } = use_command::<PlaybackQuality>(common::instrument::commands::QUALITY_INDICATOR);
-
-    let quality_indicator_data = Memo::new(move |prev| {
-        quality_indicator_data().unwrap_or_else(|| prev.copied().unwrap_or_default())
-    });
-
-    _ = use_raf_fn_with_fps(
-        move |_| {
-            check_quality_indicator(Some(()));
-        },
-        20.0,
-    );
-
-    Effect::new(move |_| {
-        if let Some(err) = quality_indicator_error() {
-            log::error!("Error checking quality status: {}", err);
-        }
-    });
-
-    // with_tooltip(
-    //     icon_ref,
-    //     Signal::derive(move || {
-    //         match quality_indicator_data() {
-    //             PlaybackQuality::HighQuality => "High Quality",
-    //             PlaybackQuality::OptimizedQuality => "Optimized",
-    //             PlaybackQuality::Resetting => "Restarting...",
-    //             PlaybackQuality::Underruns => "Overload!",
-    //         }
-    //         .to_string()
-    //     }),
-    //     Signal::derive(move || Some(placement().opposite())),
-    // );
-
-    let process_icon = Signal::derive(move || match quality_indicator_data() {
-        PlaybackQuality::Auto(_) => "cube",
-        PlaybackQuality::Ultra => "diamond",
-        PlaybackQuality::HiFi => "cube",
-        PlaybackQuality::Medium => "batch",
-        PlaybackQuality::LoFi => "squares",
-    });
-
     view! {
         <div>
             <Instrument editor />
             <Show when=move || !is_secondary_window()>
                 <CompactMenu items=menu_items placement>
-                    <Icon
-                        name=process_icon
-                        size=UiSize::Sm
-                        class="text-gary dark:text-cinnabar"
-                        node_ref=icon_ref
-                    />
+                    <PlayBackQualitySwitch placement=Signal::derive(move || Some(placement())) />
                     <ExcitementSourceToggle placement mic_permission />
                     <AppearanceToggle placement />
                 </CompactMenu>

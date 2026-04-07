@@ -11,7 +11,7 @@ use insta_fun::prelude::*;
 use crate::rt::ExcitementSource;
 #[cfg(feature = "editor")]
 use crate::system::values::{FineTunedSharedValues, FineTunedValues};
-use crate::system::{create_input_system, create_output_system};
+use crate::system::{create_input_system, mount_output_system};
 
 #[test]
 fn instrument_with_rand_src() {
@@ -35,7 +35,7 @@ fn instrument_with_rand_src() {
         #[cfg(feature = "editor")]
         let values = FineTunedValues::new(&FineTunedSharedValues::default());
 
-        let node_handles = create_output_system::<f32>(
+        let node_handles = mount_output_system::<f32>(
             &instrument_config,
             &mut net,
             2, // stereo
@@ -134,7 +134,7 @@ fn instrument_with_mic_src() {
     let values = FineTunedValues::new(&FineTunedSharedValues::default());
 
     // Output system
-    let node_handles = create_output_system::<f32>(
+    let node_handles = mount_output_system::<f32>(
         &instrument_config,
         &mut net,
         2, // stereo
@@ -175,9 +175,13 @@ fn instrument_with_mic_src() {
 
         let mut rng = Rng::with_seed(seed);
 
-        InputSource::VecByChannel(vec![Vec::from_iter(
-            (0..2048).map(|_| if rng.bool() { -rng.f32() } else { rng.f32() }),
-        )])
+        InputSource::VecByChannel(vec![Vec::from_iter((0..2048).map(|_| {
+            if rng.bool() {
+                -rng.f32()
+            } else {
+                rng.f32()
+            }
+        }))])
     };
 
     assert_audio_unit_snapshot!("emulated mic noise", net, input, config);

@@ -1,23 +1,25 @@
-pub mod excitement_control;
+pub mod adsr;
+pub mod excitor;
 pub mod input;
+pub mod metro;
 pub mod output;
 pub mod output_analyzer;
 pub mod values;
 
 use std::collections::HashMap;
 
-use crate::rt::ExcitementSource;
+use crate::{adsr::mount_adsr_an, rt::ExcitementSource};
 use common::NodeKey;
 use fundsp::{
-    Float, Real,
     net::Net,
-    prelude::{An, var},
+    prelude::{var, An},
     shared::Shared,
     snoop::{Snoop, SnoopBackend},
+    Float, Real,
 };
 use values::FineTunedValues;
 
-pub use excitement_control::ExcitementControl;
+pub use excitor::control::Control as ExcitementControl;
 
 pub struct NodeHandles {
     pub key: NodeKey,
@@ -39,7 +41,7 @@ pub struct SensorHandles {
 
 /// Create output subsystem for live playback.
 #[must_use]
-pub fn create_output_system<S: Real + Float + 'static>(
+pub fn mount_output_system<S: Real + Float + 'static>(
     config: &common::instrument::Config,
     net: &mut Net,
     num_channels: usize,
@@ -50,14 +52,22 @@ pub fn create_output_system<S: Real + Float + 'static>(
 
     log::debug!("Creating output system with fine-tuned values: {values:#?}");
 
-    match num_channels {
-        1 => output::mono_system::<S>(config, net, values),
-        2 => output::stereo_system::<S>(config, net, values),
-        3.. => output::multi_channel_system::<S>(config, net, num_channels, values),
-        0 => {
-            panic!("Number of output channels cannot be zero");
-        }
-    }
+    let handles = output::prepare_handles(&config.0, config.1);
+
+    let mut inner_net = Net::new(config.num_nodes_total() * 2, num_channels);
+
+    mount_adsr_an(net, inner)
+
+    // match num_channels {
+    //     1 => output::mono_system::<S>(config, net, values),
+    //     2 => output::stereo_system::<S>(config, net, values),
+    //     3.. => output::multi_channel_system::<S>(config, net, num_channels, values),
+    //     0 => {
+    //         panic!("Number of output channels cannot be zero");
+    //     }
+    // }
+    //
+    handles.0
 }
 
 #[must_use]

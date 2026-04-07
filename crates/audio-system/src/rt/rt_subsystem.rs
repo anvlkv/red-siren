@@ -845,14 +845,14 @@ impl RuntimeSubsystem {
 
         // Build output system graph & retrieve handles.
         let node_handles = match sample_type {
-            SampleType::F32 => crate::create_output_system::<f32>(
+            SampleType::F32 => crate::mount_output_system::<f32>(
                 config,
                 &mut net,
                 num_channels,
                 #[cfg(feature = "editor")]
                 &fine_tuned_values,
             ),
-            SampleType::F64 => crate::create_output_system::<f64>(
+            SampleType::F64 => crate::mount_output_system::<f64>(
                 config,
                 &mut net,
                 num_channels,

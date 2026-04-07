@@ -29,6 +29,8 @@ pub enum ExcitementSource {
     Entropy,
     /// Live microphone input (if permission & capture available).
     Mic,
+    /// Manually excite any specific node
+    Manual
 }
 
 /// Buffer processing mode
@@ -55,6 +57,7 @@ impl From<ExcitementSource> for u8 {
         match v {
             ExcitementSource::Entropy => 0,
             ExcitementSource::Mic => 1,
+            ExcitementSource::Manual => 2,
         }
     }
 }

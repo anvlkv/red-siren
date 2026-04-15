@@ -31,7 +31,6 @@ use parking_lot::RwLock;
 use u_num_it::u_num_it;
 
 use crate::{
-    input::analyzer::SpectrumBuffer,
     quality::{PlaybackQualityGate, SampleType},
     rt::{
         cpal::stream::{playback_callback, spawn_owned_input_stream, PlaybackCallbackConfig},
@@ -39,6 +38,7 @@ use crate::{
         telemetry::TelemetrySender,
         AudioRuntime, ExcitementSource,
     },
+    system::excitor::SpectrumBuffer,
 };
 
 use super::stream::{spawn_owned_output_stream, Control};
@@ -772,6 +772,22 @@ impl AudioRuntime for CpalController {
     fn get_key_control(&self, key: common::NodeKey) -> common::error::Result<f32> {
         let runtime = self.runtime.read();
         runtime.get_key_control(key)
+    }
+
+    fn hit_test_node(
+        &self,
+        key: common::NodeKey,
+        frequency: f32,
+        excite_real: f32,
+        excite_imag: f32,
+    ) -> common::error::Result<()> {
+        self.runtime
+            .read()
+            .hit_test_node(key, frequency, excite_real, excite_imag)
+    }
+
+    fn release_test_node(&self, key: common::NodeKey) -> common::error::Result<()> {
+        self.runtime.read().release_test_node(key)
     }
 
     fn start_tuner_only(&self, tuner_config: &TunerConfig) -> common::error::Result<()> {

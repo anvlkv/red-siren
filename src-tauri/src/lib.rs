@@ -113,6 +113,10 @@ pub fn run() {
         instrument::instrument_edit_finetuned_values,
         #[cfg(feature = "devtools")]
         instrument::instrument_get_finetuned_values,
+        #[cfg(feature = "devtools")]
+        instrument::test_node_hit,
+        #[cfg(feature = "devtools")]
+        instrument::test_node_release,
     ]);
 
     // Setup logic

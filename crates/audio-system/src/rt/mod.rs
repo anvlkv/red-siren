@@ -112,6 +112,12 @@ pub trait AudioRuntime {
 
     fn get_key_control(&self, key: common::NodeKey) -> common::error::Result<f32>;
 
+    /// Set excite values + frequency + key for a test hit (devtools feature).
+    fn hit_test_node(&self, key: NodeKey, frequency: f32, excite_real: f32, excite_imag: f32) -> common::error::Result<()>;
+
+    /// Release a test node (sets key control to 0.0, resets excite to 0).
+    fn release_test_node(&self, key: NodeKey) -> common::error::Result<()>;
+
     // Fine-tuned values (editor feature)
     #[cfg(feature = "editor")]
     fn get_finetuned_values(
@@ -264,6 +270,14 @@ impl AudioRuntime for NullController {
 
     fn get_key_control(&self, _key: common::NodeKey) -> common::error::Result<f32> {
         Ok(0.0)
+    }
+
+    fn hit_test_node(&self, _key: NodeKey, _frequency: f32, _excite_real: f32, _excite_imag: f32) -> common::error::Result<()> {
+        Ok(())
+    }
+
+    fn release_test_node(&self, _key: NodeKey) -> common::error::Result<()> {
+        Ok(())
     }
 
     fn start_tuner_only(&self, _tuner_config: &TunerConfig) -> common::error::Result<()> {

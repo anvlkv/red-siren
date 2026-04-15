@@ -15,8 +15,11 @@ use u_num_it::u_num_it;
 #[cfg(feature = "editor")]
 use crate::system::values::{FineTunedSharedValues, FineTunedValues};
 use crate::{
-    input::analyzer::SpectrumBuffer, output_analyzer::OUTPUT_ANALYZER_FFT_WINDOW_SIZE,
-    quality::SampleType, rt::ExcitementSource, ExcitementControl, SensorHandles, FFT_WINDOW_SIZE,
+    output_analyzer::OUTPUT_ANALYZER_FFT_WINDOW_SIZE,
+    quality::SampleType,
+    rt::ExcitementSource,
+    system::excitor::{control::Control as ExcitementControl, SpectrumBuffer, FFT_WINDOW_SIZE},
+    SensorHandles,
 };
 
 pub const FADE_DURATION_MS: u64 = 120;
@@ -379,10 +382,6 @@ impl RuntimeSubsystem {
         if should_update_nets {
             let instrument_net = {
                 let config = self.config.read();
-                #[cfg(feature = "editor")]
-                let fine_tuned_values =
-                    Self::snapshot_fine_tuned_values(&self.fine_tuned_shared_values);
-
                 let CreateInstrumentNetworkReturn {
                     band_controls,
                     key_controls,
@@ -397,7 +396,7 @@ impl RuntimeSubsystem {
                     &config,
                     &new_preset,
                     #[cfg(feature = "editor")]
-                    &fine_tuned_values,
+                    &Self::snapshot_fine_tuned_values(&self.fine_tuned_shared_values),
                 );
 
                 *self.node_band_controls.write() = band_controls;
@@ -464,6 +463,71 @@ impl RuntimeSubsystem {
         } else {
             Err(ControlError::NodeNotFound { key }.into())
         }
+    }
+
+    pub fn set_siren_excite(
+        &self,
+        key: NodeKey,
+        real: f32,
+        imag: f32,
+    ) -> common::error::Result<()> {
+        let controls = self.siren_excitements.read();
+        if let Some(control) = controls.get(&key) {
+            control.set_value((real, imag));
+            Ok(())
+        } else {
+            Err(ControlError::NodeNotFound { key }.into())
+        }
+    }
+
+    pub fn hit_test_node(
+        &self,
+        key: NodeKey,
+        frequency: f32,
+        excite_real: f32,
+        excite_imag: f32,
+    ) -> common::error::Result<()> {
+        log::debug!(
+            "rt_subsystem::hit_test_node: key={:?}, freq={}, re={}, im={}",
+            key,
+            frequency,
+            excite_real,
+            excite_imag
+        );
+        // Set excite values (ignore NodeNotFound — node may not be wired yet)
+        let excite_result = self.set_siren_excite(key, excite_real, excite_imag);
+        log::debug!(
+            "rt_subsystem::hit_test_node: set_siren_excite result={:?}",
+            excite_result
+        );
+        // Set frequency via band control (ignore NodeNotFound)
+        let band_result = self.set_band_control(key, frequency);
+        log::debug!(
+            "rt_subsystem::hit_test_node: set_band_control result={:?}",
+            band_result
+        );
+        // Press the key
+        let key_result = self.set_key_control(key, 1.0).or_else(|_| Ok(()));
+        log::debug!(
+            "rt_subsystem::hit_test_node: set_key_control(1.0) result={:?}",
+            key_result
+        );
+        key_result
+    }
+
+    pub fn release_test_node(&self, key: NodeKey) -> common::error::Result<()> {
+        log::debug!("rt_subsystem::release_test_node: key={:?}", key);
+        let excite_result = self.set_siren_excite(key, 0.0, 0.0);
+        log::debug!(
+            "rt_subsystem::release_test_node: set_siren_excite(0,0) result={:?}",
+            excite_result
+        );
+        let key_result = self.set_key_control(key, 0.0).or_else(|_| Ok(()));
+        log::debug!(
+            "rt_subsystem::release_test_node: set_key_control(0.0) result={:?}",
+            key_result
+        );
+        key_result
     }
 
     // ── Snoop snapshots ──────────────────────────────────────────────────
@@ -850,14 +914,14 @@ impl RuntimeSubsystem {
                 &mut net,
                 num_channels,
                 #[cfg(feature = "editor")]
-                &fine_tuned_values,
+                fine_tuned_values,
             ),
             SampleType::F64 => crate::mount_output_system::<f64>(
                 config,
                 &mut net,
                 num_channels,
                 #[cfg(feature = "editor")]
-                &fine_tuned_values,
+                fine_tuned_values,
             ),
         };
 
@@ -925,6 +989,7 @@ impl RuntimeSubsystem {
                 let (snoop, be) = snoop(INPUT_SNOOP_SIZE);
                 (Some(be), Some(snoop))
             }
+            ExcitementSource::Manual => (None, None),
         };
 
         let handles = match sample_type {

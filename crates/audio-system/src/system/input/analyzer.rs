@@ -2,27 +2,27 @@ use std::{
     collections::HashMap,
     mem,
     sync::{
-        Arc,
         atomic::{AtomicBool, Ordering},
+        Arc,
     },
-    thread::{JoinHandle, sleep, spawn},
+    thread::{sleep, spawn, JoinHandle},
     time::Duration,
 };
 
 use common::{
-    NodeKey,
     tuner::{Config, SensorData},
+    NodeKey,
 };
 use fundsp::prelude::*;
 use fundsp::{audiounit::BigBlockAdapter, thingbuf::ThingBuf};
 use num_complex::Complex;
 use parking_lot::RwLock;
 use spectrum_analyzer::{
-    FrequencyLimit, FrequencySpectrum, samples_fft_to_spectrum, windows::hann_window,
+    samples_fft_to_spectrum, windows::hann_window, FrequencyLimit, FrequencySpectrum,
 };
 
 use super::adsr::Adsr;
-use crate::{ExcitementControl, util::hash_str};
+use crate::{util::hash_str, ExcitementControl};
 
 const ANALYZER_ID: u64 = hash_str(concat!(module_path!(), "::FFTAnalyzer"));
 pub const FFT_WINDOW_SIZE: usize = 8192; // Power of 2 for FFT, good balance of frequency resolution vs latency

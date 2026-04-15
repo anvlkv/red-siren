@@ -18,7 +18,8 @@ pub enum Phase<S: Real + Float> {
 }
 
 impl<S: Real + Float> Phase<S> {
-    fn remaining_steps(&self) -> u64 {
+    /// Remaining steps in the current phase (0 = last step, about to complete).
+    pub(super) fn remaining_steps(&self) -> u64 {
         match *self {
             Self::Idle => 0,
             Self::Sustain { steps, .. }
@@ -28,7 +29,29 @@ impl<S: Real + Float> Phase<S> {
         }
     }
 
-    fn tick(self) -> Option<Self> {
+    /// The amplitude target for the current phase.
+    ///
+    /// - `Attack`  → the attack peak target
+    /// - `Decay`   → the sustain level target
+    /// - `Sustain` → `running_value` (no change)
+    /// - `Release` → `S::zero()`
+    /// - `Idle`    → `S::zero()`
+    pub(super) fn target_value(&self, running_value: S) -> S {
+        match *self {
+            Self::Idle => S::zero(),
+            Self::Attack { target, .. } => target,
+            Self::Decay { target, .. } => target,
+            Self::Sustain { .. } => running_value,
+            Self::Release { .. } => S::zero(),
+        }
+    }
+
+    /// Decrement the step counter by one.
+    ///
+    /// Returns `Some(updated_phase)` while steps remain, `None` when this
+    /// phase's last step has been consumed and the caller should transition via
+    /// [`Self::next_phase`].
+    pub(super) fn tick(self) -> Option<Self> {
         match self {
             Self::Idle => Some(Self::Idle),
             Self::Attack { steps, target } => steps
@@ -42,29 +65,41 @@ impl<S: Real + Float> Phase<S> {
         }
     }
 
-    fn update_sample_rate(&mut self, d: f64, scheme: &Scheme, old_scheme: &Scheme) {
+    /// Rescale remaining steps after a sample-rate change.
+    ///
+    /// `d` is `new_sr / old_sr`.  `scheme` and `old_scheme` provide the full
+    /// step counts at the new and old rates respectively.
+    pub(super) fn update_sample_rate(&mut self, d: f64, scheme: &Scheme, old_scheme: &Scheme) {
         match self {
             Self::Idle => {}
             Self::Attack { steps, .. } => {
-                let r = old_scheme.atack - *steps;
-                *steps = scheme.atack - (r as f64 * d).ceil() as u64;
+                let elapsed = old_scheme.atack.saturating_sub(*steps);
+                let new_elapsed = (elapsed as f64 * d).ceil() as u64;
+                *steps = scheme.atack.saturating_sub(new_elapsed);
             }
             Self::Decay { steps, .. } => {
-                let r = old_scheme.decay - *steps;
-                *steps = scheme.decay - (r as f64 * d).ceil() as u64;
+                let elapsed = old_scheme.decay.saturating_sub(*steps);
+                let new_elapsed = (elapsed as f64 * d).ceil() as u64;
+                *steps = scheme.decay.saturating_sub(new_elapsed);
             }
             Self::Sustain { steps } => {
-                let r = old_scheme.sustain - *steps;
-                *steps = scheme.sustain - (r as f64 * d).ceil() as u64;
+                let elapsed = old_scheme.sustain.saturating_sub(*steps);
+                let new_elapsed = (elapsed as f64 * d).ceil() as u64;
+                *steps = scheme.sustain.saturating_sub(new_elapsed);
             }
             Self::Release { steps } => {
-                let r = old_scheme.release - *steps;
-                *steps = scheme.release - (r as f64 * d).ceil() as u64;
+                let elapsed = old_scheme.release.saturating_sub(*steps);
+                let new_elapsed = (elapsed as f64 * d).ceil() as u64;
+                *steps = scheme.release.saturating_sub(new_elapsed);
             }
         }
     }
 
-    fn next_phase(self, scheme: &Scheme, shape: S) -> Self {
+    /// Advance to the next ADSR stage after the current one completes.
+    ///
+    /// `shape` is the decay-level multiplier applied to the attack peak:
+    /// `decay_target = attack_target * shape`.
+    pub(super) fn next_phase(self, scheme: &Scheme, shape: S) -> Self {
         match self {
             Self::Idle => Self::Idle,
             Self::Attack { target, .. } => Self::Decay {

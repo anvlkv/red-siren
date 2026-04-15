@@ -48,6 +48,7 @@ pub enum RouteId {
     Play,
     Tune,
     Edit(EditorRouteId),
+    TestNode,
     Permissions,
 }
 
@@ -64,6 +65,7 @@ impl RouteId {
             Self::Play => "Play",
             Self::Tune => "Tune",
             Self::Edit(route) => route.title(),
+            Self::TestNode => "Test Node",
             Self::Permissions => "Permissions",
         }
     }
@@ -76,6 +78,7 @@ impl RouteId {
             Self::Play => "/play",
             Self::Tune => "/tune",
             Self::Edit(route) => route.path(),
+            Self::TestNode => "/test-node",
             Self::Permissions => "/permissions",
         }
     }
@@ -105,6 +108,7 @@ impl FromStr for RouteId {
             "/tune" => Ok(Self::Tune),
             "/edit" | "/edit/" | "/edit/layout" => Ok(Self::Edit(EditorRouteId::Layout)),
             "/edit/finetuned-values" => Ok(Self::Edit(EditorRouteId::FinetunedValues)),
+            "/test-node" => Ok(Self::TestNode),
             "/permissions" => Ok(Self::Permissions),
             _ => Err(format!("unknown route: {value}")),
         }

@@ -1,5 +1,0 @@
----
-source: crates/audio-system/src/system/output/abs.rs
-extension: wav
-snapshot_kind: binary
----

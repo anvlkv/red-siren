@@ -30,6 +30,16 @@ impl Control {
         S::from_f32(self.imaginary.value())
     }
 
+    pub fn primary_value<S: Real + Float>(&self) -> S {
+        self.real_value()
+    }
+    pub fn secondary_value<S: Real + Float>(&self) -> S {
+        self.imaginary_value()
+    }
+    pub fn new_primary(real: Shared) -> Self {
+        Self::new(real, shared(0.0))
+    }
+
     pub fn set_value<S: Real + Float>(&self, (re, im): (S, S)) {
         self.real.set_value(re.to_f32());
         self.imaginary.set_value(im.to_f32());

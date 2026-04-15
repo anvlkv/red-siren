@@ -658,3 +658,39 @@ pub async fn instrument_get_finetuned_values(
 ) -> Result<common::commands::edit::FineTunedValuesPayload> {
     state.get_finetuned_values()
 }
+
+#[cfg(feature = "devtools")]
+#[tauri::command]
+pub fn test_node_hit(
+    node_key: common::NodeKey,
+    frequency: f32,
+    excite_real: f32,
+    excite_imag: f32,
+    state: State<'_, InstrumentState>,
+) -> Result<()> {
+    log::debug!(
+        "test_node_hit called: key={:?}, freq={}, re={}, im={}",
+        node_key, frequency, excite_real, excite_imag
+    );
+    let result = state.hit_test_node(node_key, frequency, excite_real, excite_imag);
+    match &result {
+        Ok(_) => log::debug!("test_node_hit succeeded: key={:?}", node_key),
+        Err(e) => log::debug!("test_node_hit failed: key={:?}, err={}", node_key, e),
+    }
+    result
+}
+
+#[cfg(feature = "devtools")]
+#[tauri::command]
+pub fn test_node_release(
+    node_key: common::NodeKey,
+    state: State<'_, InstrumentState>,
+) -> Result<()> {
+    log::debug!("test_node_release called: key={:?}", node_key);
+    let result = state.release_test_node(node_key);
+    match &result {
+        Ok(_) => log::debug!("test_node_release succeeded: key={:?}", node_key),
+        Err(e) => log::debug!("test_node_release failed: key={:?}, err={}", node_key, e),
+    }
+    result
+}

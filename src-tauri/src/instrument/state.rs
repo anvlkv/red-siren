@@ -499,6 +499,23 @@ impl InstrumentState {
         self.inner.stream_controller.read().get_key_control(key)
     }
 
+    pub fn hit_test_node(
+        &self,
+        key: common::NodeKey,
+        frequency: f32,
+        excite_real: f32,
+        excite_imag: f32,
+    ) -> common::error::Result<()> {
+        self.inner
+            .stream_controller
+            .read()
+            .hit_test_node(key, frequency, excite_real, excite_imag)
+    }
+
+    pub fn release_test_node(&self, key: common::NodeKey) -> common::error::Result<()> {
+        self.inner.stream_controller.read().release_test_node(key)
+    }
+
     pub fn snapshot_input_snoop(&self) -> Vec<f32> {
         self.inner.stream_controller.read().snapshot_input_snoop()
     }

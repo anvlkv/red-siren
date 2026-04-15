@@ -388,6 +388,7 @@ dependencies = [
  "console_error_panic_hook",
  "cpal",
  "dasp_sample",
+ "dyn-clone",
  "fastrand",
  "fundsp",
  "insta",

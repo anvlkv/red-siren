@@ -42,13 +42,22 @@ pub fn with_secondary_bootstrap<'a, R: Runtime, M: Manager<R>>(
 
 fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
     with_primary_bootstrap(
-        WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, WebviewUrl::App("/".into()))
+        {
+            #[allow(unused_mut)]
+            let mut builder = WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, WebviewUrl::App("/".into()))
             .title(PRODUCT_NAME)
             .decorations(true)
-            .visible(false)
-            .title_bar_style(TitleBarStyle::Transparent)
-            .resizable(true)
-            .inner_size(DEFAULT_WIDTH, DEFAULT_HEIGHT),
+            .visible(false).resizable(true)
+            .inner_size(DEFAULT_WIDTH, DEFAULT_HEIGHT);
+
+            #[cfg(target_os = "macos")]
+            {
+                builder = builder
+                    .title_bar_style(TitleBarStyle::Transparent);
+            }
+            builder
+        }
+        
     )
     .build()
     .map(|_| ())

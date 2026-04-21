@@ -19,12 +19,19 @@ use crate::{
     quality::SampleType,
     rt::ExcitementSource,
     system::excitor::{control::Control as ExcitementControl, SpectrumBuffer, FFT_WINDOW_SIZE},
-    SensorHandles,
 };
 
 pub const FADE_DURATION_MS: u64 = 120;
 const INPUT_SNOOP_SIZE: usize = FFT_WINDOW_SIZE;
 const FOLLOW_RESPONSE_SECS: f32 = FADE_DURATION_MS as f32 / 1000.0;
+
+#[derive(Clone)]
+struct SensorControls {
+    min_frequency: Shared,
+    max_frequency: Shared,
+    min_magnitude: Shared,
+    max_magnitude: Shared,
+}
 
 #[derive(Clone)]
 pub struct RuntimeSubsystem {
@@ -44,7 +51,7 @@ pub struct RuntimeSubsystem {
     pub(crate) preset: Arc<RwLock<Preset>>,
     node_band_controls: Arc<RwLock<HashMap<NodeKey, Shared>>>,
     node_key_controls: Arc<RwLock<HashMap<NodeKey, Shared>>>,
-    node_sensor_controls: Arc<RwLock<HashMap<NodeKey, SensorHandles>>>,
+    node_sensor_controls: Arc<RwLock<HashMap<NodeKey, SensorControls>>>,
     siren_excitements: Arc<RwLock<HashMap<NodeKey, ExcitementControl>>>,
 
     tuner_tap_gain_param: Arc<Shared>,
@@ -83,7 +90,7 @@ struct CreateInstrumentNetworkReturn {
 
 struct CreateTunerNetworkReturn {
     input_snoop: Option<Snoop>,
-    handles: HashMap<NodeKey, SensorHandles>,
+    handles: HashMap<NodeKey, SensorControls>,
     net: Net,
 }
 
@@ -894,7 +901,7 @@ impl RuntimeSubsystem {
     fn create_instrument_network(
         num_channels: usize,
         sample_rate: f64,
-        sample_type: SampleType,
+        _sample_type: SampleType,
         config: &InstrumentConfig,
         preset: &Preset,
         #[cfg(feature = "editor")] fine_tuned_values: &FineTunedValues,
@@ -905,61 +912,53 @@ impl RuntimeSubsystem {
             config.0.first().map(|g| g.nodes.len()).unwrap_or(0)
         );
 
-        let mut net = Net::new(0, num_channels);
+        #[cfg(feature = "editor")]
+        let _ = fine_tuned_values;
 
-        // Build output system graph & retrieve handles.
-        let node_handles = match sample_type {
-            SampleType::F32 => crate::mount_output_system::<f32>(
-                config,
-                &mut net,
-                num_channels,
-                #[cfg(feature = "editor")]
-                fine_tuned_values,
-            ),
-            SampleType::F64 => crate::mount_output_system::<f64>(
-                config,
-                &mut net,
-                num_channels,
-                #[cfg(feature = "editor")]
-                fine_tuned_values,
-            ),
-        };
+        // Collect all nodes across all groups so control maps remain populated.
+        let nodes: Vec<_> = config
+            .0
+            .iter()
+            .flat_map(|group| group.nodes.iter())
+            .collect();
 
         let mut siren_excitements = HashMap::<NodeKey, ExcitementControl>::new();
-
-        let mut excitement_snoops = HashMap::new();
-        let mut output_snoops = HashMap::new();
         let mut band_controls = HashMap::new();
         let mut key_controls = HashMap::new();
 
-        for handle in node_handles {
-            excitement_snoops.insert(
-                handle.key,
-                (handle.excitement_snoop, handle.secondary_excitement_snoop),
-            );
-            output_snoops.insert(handle.key, handle.output_snoop);
-            siren_excitements.insert(handle.key, handle.siren_control);
+        // Minimal skeleton: one always-on sine beep duplicated to every output channel.
+        let mut net = Net::new(0, num_channels);
 
-            if let Some(val) = preset.get_band_value(&handle.key) {
-                handle.band_control.set_value(val);
-            }
-            if let Some(val) = preset.get_key_value(&handle.key) {
-                handle.key_control.set_value(val);
-            }
+        let beep_id = net.push(Box::new(sine_hz::<f32>(440.0)));
 
-            band_controls.insert(handle.key, handle.band_control);
-            key_controls.insert(handle.key, handle.key_control);
+        for node in &nodes {
+            let excitement = ExcitementControl::default();
+            let band_val = preset.get_band_value(&node.key).unwrap_or(0.0);
+            let key_val = preset.get_key_value(&node.key).unwrap_or(0.0);
+
+            let band = shared(band_val);
+            let key = shared(key_val);
+
+            band_controls.insert(node.key, band);
+            key_controls.insert(node.key, key);
+            siren_excitements.insert(node.key, excitement);
+        }
+
+        for _ in 0..num_channels {
+            let tap_id = net.push(Box::new(pass()));
+            net.connect(beep_id, 0, tap_id, 0);
+            net.pipe_output(tap_id);
         }
 
         net.set_sample_rate(sample_rate);
         net.allocate();
         net.check();
 
-        log::debug!("created network: {}", net.display());
+        log::debug!("created instrument network: {}", net.display());
 
         CreateInstrumentNetworkReturn {
-            excitement_snoops,
-            output_snoops,
+            excitement_snoops: HashMap::new(),
+            output_snoops: HashMap::new(),
             band_controls,
             key_controls,
             siren_excitements,
@@ -970,14 +969,14 @@ impl RuntimeSubsystem {
     #[allow(clippy::too_many_arguments)]
     fn create_tuner_network(
         sample_rate: f64,
-        sample_type: SampleType,
+        _sample_type: SampleType,
         source: ExcitementSource,
         tuner_config: &TunerConfig,
-        siren_excitements: HashMap<NodeKey, ExcitementControl>,
-        spectrum_data_thb: &SpectrumBuffer,
-        tuner_freq_range: (&Shared, &Shared),
-        tuner_ny_threshold: &Shared,
-        tuner_ny_wet_ratio: &Shared,
+        _siren_excitements: HashMap<NodeKey, ExcitementControl>,
+        _spectrum_data_thb: &SpectrumBuffer,
+        _tuner_freq_range: (&Shared, &Shared),
+        _tuner_ny_threshold: &Shared,
+        _tuner_ny_wet_ratio: &Shared,
     ) -> CreateTunerNetworkReturn {
         log::info!("Creating tuner network");
 
@@ -992,32 +991,31 @@ impl RuntimeSubsystem {
             ExcitementSource::Manual => (None, None),
         };
 
-        let handles = match sample_type {
-            SampleType::F32 => crate::create_input_system::<f32>(
-                tuner_config,
-                &mut net,
-                siren_excitements,
-                source,
-                spectrum_data_thb,
-                snoop_be,
-                tuner_freq_range,
-                (tuner_ny_threshold, tuner_ny_wet_ratio),
-                0,
-            ),
-            SampleType::F64 => crate::create_input_system::<f64>(
-                tuner_config,
-                &mut net,
-                siren_excitements,
-                source,
-                spectrum_data_thb,
-                snoop_be,
-                tuner_freq_range,
-                (tuner_ny_threshold, tuner_ny_wet_ratio),
-                0,
-            ),
+        let tuner_node_id = match (source, snoop_be) {
+            (ExcitementSource::Mic, Some(snoop_backend)) => {
+                let mut input_net = Net::new(1, 1);
+                let snoop_id = input_net.push(Box::new(snoop_backend));
+                input_net.connect_input(0, snoop_id, 0);
+                input_net.pipe_output(snoop_id);
+                net.push(Box::new(input_net))
+            }
+            _ => net.push(Box::new(pass())),
         };
 
-        let handles = HashMap::from_iter(handles.into_iter().map(|h| (h.key, h)));
+        net.connect_input(0, tuner_node_id, 0);
+        net.pipe_output(tuner_node_id);
+
+        let handles = HashMap::from_iter(tuner_config.sensor_data.iter().map(|sensor| {
+            (
+                sensor.key,
+                SensorControls {
+                    min_frequency: shared(sensor.min_frequency),
+                    max_frequency: shared(sensor.max_frequency),
+                    min_magnitude: shared(sensor.min_magnitude),
+                    max_magnitude: shared(sensor.max_magnitude),
+                },
+            )
+        }));
 
         net.set_sample_rate(sample_rate);
         net.allocate();

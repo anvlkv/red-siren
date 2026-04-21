@@ -10,7 +10,7 @@ use crate::{
     components::{
         ContentPage, FinetunedValuesEditorPanel, LayoutEditorPanel, RoutedTab, RoutedTabs,
     },
-    util::boot_flags::boot_flags,
+    util::{boot_flags::boot_flags, playback_service::expect_playback_service},
 };
 
 #[component]
@@ -63,6 +63,16 @@ pub fn Edit() -> impl IntoView {
 
 #[component]
 pub fn EditLayout() -> impl IntoView {
+    let service = expect_playback_service();
+
+    Effect::new(move |_| {
+        service.start.run(());
+    });
+
+    on_cleanup(move || {
+        service.stop.run(());
+    });
+
     view! { <LayoutEditorPanel /> }
 }
 

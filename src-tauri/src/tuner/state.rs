@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use audio_system::{input::analyzer::FFT_WINDOW_SIZE, rt::ExcitementSource};
+use audio_system::{FFT_WINDOW_SIZE, rt::ExcitementSource};
 use common::{
     error::{Result, TunerError},
     NodeKeyRegistry,

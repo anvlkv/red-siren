@@ -31,7 +31,7 @@ iOS/Pods/
 .vscode/
 .idea/
 
-_*.*
+_*
 
 node_modules/
 

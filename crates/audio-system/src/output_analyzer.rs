@@ -14,7 +14,6 @@ pub fn analyze(
     max: f32,
 ) -> Result<BTreeMap<u32, f32>> {
     let windowed = hamming_window(&window);
-
     let sampling_rate = sample_rate as u32;
 
     let spectrum = samples_fft_to_spectrum(
@@ -23,7 +22,7 @@ pub fn analyze(
         FrequencyLimit::Range(min * 0.5, (max * 1.5).min(sampling_rate as f32 / 2.0)),
         Some(&scaling::scale_to_zero_to_one),
     )
-    .map_err(|e| InstrumentError::OutputAnalyzerError(e.to_string()))?;
+    .map_err(|error| InstrumentError::OutputAnalyzerError(error.to_string()))?;
 
     Ok(spectrum.to_map())
 }

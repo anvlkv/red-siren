@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use fundsp::{thingbuf::ThingBuf, Float, Real};
+use fundsp::{Float, Real, thingbuf::ThingBuf};
 use num_complex::Complex;
 use spectrum_analyzer::FrequencySpectrum;
 
 pub mod control {
-    use fundsp::{prelude::shared, shared::Shared, Float, Real};
+    use fundsp::{Float, Real, prelude::shared, shared::Shared};
     use num_complex::Complex;
 
     #[derive(Clone)]

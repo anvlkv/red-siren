@@ -19,12 +19,16 @@ pub fn Switch(
     // Callback when state changes
     #[prop(into)] on_change: Callback<usize>,
 
+    // Optional callback that fires on every segment click (even if already selected)
+    #[prop(optional, into)] on_segment_click: Option<Callback<usize>>,
+
     // Styling props
     #[prop(optional, into)] disabled: Signal<bool>,
     #[prop(optional, into)] class: Signal<String>,
     #[prop(optional, into)] variant: Signal<UiVariant>,
     #[prop(optional, into)] size: Signal<UiSize>,
     #[prop(optional, into)] round: Signal<bool>,
+    #[prop(optional, into)] allow_reselect: Signal<bool>,
     // Placement drives orientation (Top/Bottom horizontal, Left/Right vertical)
     #[prop(into)] placement: Signal<Option<UiPlacement>>,
 ) -> impl IntoView {
@@ -42,9 +46,13 @@ pub fn Switch(
 
     let handle_segment_click = move |segment_index: usize| {
         move |_| {
+            if let Some(cb) = on_segment_click {
+                cb.run(segment_index);
+            }
+
             if !disabled.get_untracked() {
                 let current = current_state.get_untracked();
-                if current != segment_index {
+                if current != segment_index || allow_reselect.get_untracked() {
                     on_change.run(segment_index);
                 }
             }

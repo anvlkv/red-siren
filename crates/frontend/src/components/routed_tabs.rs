@@ -30,7 +30,7 @@ pub fn RoutedTabs(
         <section class=root_class>
             <div class="w-full shrink-0">
                 <nav
-                    class="flex w-full items-end gap-2 overflow-visible px-1 pt-1"
+                    class="flex flex-wrap w-full items-end gap-2 overflow-visible px-1 pt-1"
                     aria-label="Editor sections"
                 >
                     <For

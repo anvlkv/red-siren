@@ -17,17 +17,9 @@ pub fn Menu() -> impl IntoView {
         menu_items.insert(
             0,
             MenuItem::Navigate {
-                route: RouteId::Edit(common::EditorRouteId::Layout),
+                route: RouteId::Edit(common::EditorRouteId::InstrumentLayout),
                 icon: "probe",
                 label: "Edit",
-            },
-        );
-        menu_items.insert(
-            1,
-            MenuItem::Navigate {
-                route: RouteId::TestNode,
-                icon: "tune",
-                label: "Test Node",
             },
         );
     }

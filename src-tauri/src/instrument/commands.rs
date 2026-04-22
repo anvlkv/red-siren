@@ -12,8 +12,8 @@ use common::instrument::{
     events::{ExcitementSourcePayload, PlaybackStatePayload},
     Layout,
 };
-use mint::Vector2;
 use common::NodeKey;
+use mint::Vector2;
 use tauri::{AppHandle, Emitter, State};
 
 use super::state::InstrumentState;
@@ -286,12 +286,10 @@ pub fn instrument_set_layout_space(
         ..current
     };
 
-    state
-        .set_layout(next)
-        .map_err(|e| InstrumentError::Emit {
-            event: "set_layout_space".to_string(),
-            message: e.to_string(),
-        })?;
+    state.set_layout(next).map_err(|e| InstrumentError::Emit {
+        event: "set_layout_space".to_string(),
+        message: e.to_string(),
+    })?;
 
     let new_layout = state.layout();
 
@@ -588,7 +586,10 @@ pub fn instrument_set_quality(
     quality: PlaybackQuality,
     state: State<'_, InstrumentState>,
 ) -> Result<()> {
-    log::info!("instrument_set_quality: received request to set quality to {:?}", quality);
+    log::info!(
+        "instrument_set_quality: received request to set quality to {:?}",
+        quality
+    );
     state.set_quality(quality);
     log::debug!("instrument_set_quality: set_quality returned successfully");
     Ok(())
@@ -670,7 +671,10 @@ pub fn test_node_hit(
 ) -> Result<()> {
     log::debug!(
         "test_node_hit called: key={:?}, freq={}, re={}, im={}",
-        node_key, frequency, excite_real, excite_imag
+        node_key,
+        frequency,
+        excite_real,
+        excite_imag
     );
     let result = state.hit_test_node(node_key, frequency, excite_real, excite_imag);
     match &result {

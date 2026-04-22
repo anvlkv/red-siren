@@ -225,31 +225,28 @@ pub fn open_in_new_window(
             .unwrap_or((800.0, 600.0));
 
         #[allow(unused_mut)]
-        let mut window = windows::with_secondary_bootstrap(
-            { 
-                #[allow(unused_mut)]
-                let mut builder = WebviewWindowBuilder::new(
-                    &app,
-                    label.as_str(),
-                    WebviewUrl::App(format!("{path}?secondary=true").into()),
-                )
-                .title(title)
-                .decorations(true)
-                .resizable(true)
-                .maximizable(false)
-                .minimizable(false)
-                .maximized(false)
-                .inner_size(main_window_size.0, main_window_size.1);
-                
-                #[cfg(target_os = "macos")]
-                {
-                    builder = builder
-                    .title_bar_style(tauri::TitleBarStyle::Transparent);
-                }
+        let mut window = windows::with_secondary_bootstrap({
+            #[allow(unused_mut)]
+            let mut builder = WebviewWindowBuilder::new(
+                &app,
+                label.as_str(),
+                WebviewUrl::App(format!("{path}?secondary=true").into()),
+            )
+            .title(title)
+            .decorations(true)
+            .resizable(true)
+            .maximizable(false)
+            .minimizable(false)
+            .maximized(false)
+            .inner_size(main_window_size.0, main_window_size.1);
 
-                builder
+            #[cfg(target_os = "macos")]
+            {
+                builder = builder.title_bar_style(tauri::TitleBarStyle::Transparent);
             }
-        )
+
+            builder
+        })
         .build()?;
 
         let dark = {

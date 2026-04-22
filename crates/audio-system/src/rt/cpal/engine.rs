@@ -1,8 +1,8 @@
 use std::{
     f32,
     sync::{
-        mpsc::{self, Sender},
         Arc,
+        mpsc::{self, Sender},
     },
     thread,
     time::Duration,
@@ -11,18 +11,18 @@ use std::{
 #[cfg(feature = "editor")]
 use common::commands::edit::FineTunedValuesPayload;
 use common::{
+    NodeKey,
+    error::{ControlError, InstrumentError, Result},
+};
+use common::{
     device::DeviceData,
     error::AppError,
     instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, Preset},
 };
-use common::{
-    error::{ControlError, InstrumentError, Result},
-    NodeKey,
-};
 use common::{instrument::PlaybackQuality, tuner::Config as TunerConfig};
 use cpal::{
-    traits::{DeviceTrait, HostTrait},
     Device, DeviceId, HostId, StreamConfig, SupportedStreamConfig,
+    traits::{DeviceTrait, HostTrait},
 };
 use fundsp::prelude::*;
 use fundsp::{thingbuf::ThingBuf, typenum::Unsigned};
@@ -33,15 +33,15 @@ use u_num_it::u_num_it;
 use crate::{
     quality::{PlaybackQualityGate, SampleType},
     rt::{
-        cpal::stream::{playback_callback, spawn_owned_input_stream, PlaybackCallbackConfig},
+        AudioRuntime, ExcitementSource,
+        cpal::stream::{PlaybackCallbackConfig, playback_callback, spawn_owned_input_stream},
         rt_subsystem::RuntimeSubsystem,
         telemetry::TelemetrySender,
-        AudioRuntime, ExcitementSource,
     },
     system::excitor::SpectrumBuffer,
 };
 
-use super::stream::{spawn_owned_output_stream, Control};
+use super::stream::{Control, spawn_owned_output_stream};
 
 const CONTROL_INVOKE_TIMEOUT_MS: u64 = 500;
 

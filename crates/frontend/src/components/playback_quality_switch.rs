@@ -3,15 +3,42 @@ use leptos::prelude::*;
 use tauri_use::{use_command, use_invoke, UseTauriReturn, UseTauriWithReturn};
 
 use crate::{
-    components::{Icon, Switch, UiPlacement, UiSize},
+    components::{Dropdown, Icon, UiPlacement, UiSize},
     util::raf_fn_fps::use_raf_fn_with_fps,
 };
 
+fn recommended_quality(value: i8) -> PlaybackQuality {
+    match value {
+        i8::MIN..=-1 => PlaybackQuality::LoFi,
+        0 => PlaybackQuality::Medium,
+        1 => PlaybackQuality::HiFi,
+        2..=i8::MAX => PlaybackQuality::Ultra,
+    }
+}
+
+fn quality_icon(quality: PlaybackQuality) -> &'static str {
+    match quality {
+        PlaybackQuality::Auto(v) => quality_icon(recommended_quality(v)),
+        PlaybackQuality::LoFi => "squares",
+        PlaybackQuality::Medium => "batch",
+        PlaybackQuality::HiFi => "cube",
+        PlaybackQuality::Ultra => "diamond",
+    }
+}
+
+fn dropdown_arrow(placement: UiPlacement) -> &'static str {
+    match placement {
+        UiPlacement::Top => "▲",
+        UiPlacement::Bottom => "▼",
+        UiPlacement::Left => "◂",
+        UiPlacement::Right => "▸",
+    }
+}
+
 /// A segmented switch for selecting playback quality.
 ///
-/// Displays five segments: Auto, LoFi, Medium, HiFi, Ultra.
-/// When in Auto mode, the segment that the gate manager currently recommends
-/// shows a small dot callout above its icon.
+/// Displays two segments: auto and current.
+/// Selecting current opens a dropdown with explicit quality options.
 #[component]
 pub fn PlayBackQualitySwitch(
     /// Drives orientation: Left/Right → vertical, Top/Bottom → horizontal.
@@ -24,9 +51,8 @@ pub fn PlayBackQualitySwitch(
         error: quality_error,
     } = use_command::<PlaybackQuality>(common::instrument::commands::QUALITY_INDICATOR);
 
-    let quality = Memo::new(move |prev| {
-        quality_data().unwrap_or_else(|| prev.copied().unwrap_or_default())
-    });
+    let quality =
+        Memo::new(move |prev| quality_data().unwrap_or_else(|| prev.copied().unwrap_or_default()));
 
     _ = use_raf_fn_with_fps(
         move |_| {
@@ -58,83 +84,124 @@ pub fn PlayBackQualitySwitch(
         }
     });
 
-    // Map quality to switch segment index.
-    let current_state = Signal::derive(move || match quality() {
-        PlaybackQuality::Auto(_) => 0usize,
-        PlaybackQuality::LoFi => 1,
-        PlaybackQuality::Medium => 2,
-        PlaybackQuality::HiFi => 3,
-        PlaybackQuality::Ultra => 4,
+    let auto_selected = Signal::derive(move || matches!(quality(), PlaybackQuality::Auto(_)));
+
+    let current_quality_icon = Signal::derive(move || match quality() {
+        PlaybackQuality::Auto(v) => quality_icon(recommended_quality(v)).to_string(),
+        explicit => quality_icon(explicit).to_string(),
     });
 
-    // When in Auto mode, which segment is currently recommended.
-    // None when the user has manually selected a quality.
-    let recommended_index: Signal<Option<usize>> = Signal::derive(move || match quality() {
-        PlaybackQuality::Auto(v) => Some(match v {
-            i8::MIN..=-1 => 1usize, // LoFi
-            0 => 2,                 // Medium
-            1 => 3,                 // HiFi
-            2..=i8::MAX => 4,       // Ultra
-        }),
-        _ => None,
+    let dropdown_placement = Signal::derive(move || {
+        placement()
+            .map(|current| current.opposite())
+            .or(Some(UiPlacement::Top))
     });
 
-    let on_change = Callback::new(move |index: usize| {
-        let new_quality = match index {
-            0 => PlaybackQuality::Auto(0),
-            1 => PlaybackQuality::LoFi,
-            2 => PlaybackQuality::Medium,
-            3 => PlaybackQuality::HiFi,
-            _ => PlaybackQuality::Ultra,
-        };
+    let arrow = Signal::derive(move || {
+        dropdown_arrow(dropdown_placement().unwrap_or(UiPlacement::Top)).to_string()
+    });
+
+    let select_quality = move |new_quality: PlaybackQuality| {
         set_quality_trigger(Some((
             common::instrument::commands::SetQualityPayload {
                 quality: new_quality,
             },
             (),
         )));
-    });
-
-    // Build a reactive label for each segment.
-    // The dot above the icon is only visible when this segment is the recommended one.
-    let make_label = |segment_index: usize, icon_name: &'static str| {
-        view! {
-            <span class="relative inline-flex flex-col items-center gap-0.5">
-                <span
-                    class=move || {
-                        if recommended_index() == Some(segment_index) {
-                            "w-1 h-1 rounded-full bg-current"
-                        } else {
-                            "w-1 h-1 rounded-full opacity-0"
-                        }
-                    }
-                />
-                <Icon name=icon_name size=UiSize::Sm />
-            </span>
-        }
-        .into_any()
     };
 
     view! {
-        <Switch
-            labels=vec![
-                make_label(0, "system"),
-                make_label(1, "squares"),
-                make_label(2, "batch"),
-                make_label(3, "cube"),
-                make_label(4, "diamond"),
-            ]
-            tooltips=vec![
-                "Auto".to_string(),
-                "Lo-Fi".to_string(),
-                "Medium".to_string(),
-                "Hi-Fi".to_string(),
-                "Ultra".to_string(),
-            ]
-            current_state=current_state
-            on_change=on_change
-            size=UiSize::Sm
-            placement=placement
-        />
+        <div class="inline-flex overflow-visible rounded-lg border-2 border-black dark:border-red">
+            <button
+                type="button"
+                class=move || {
+                    if auto_selected() {
+                        "relative flex items-center justify-center md:h-10 h-8 md:px-4 px-2 md:text-base text-sm bg-black dark:bg-red text-red dark:text-black shadow-inner"
+                    } else {
+                        "relative flex items-center justify-center md:h-10 h-8 md:px-4 px-2 md:text-base text-sm text-black dark:text-red hover:bg-black/5 dark:hover:bg-red/5"
+                    }
+                }
+                on:click=move |_| {
+                    set_quality_trigger(
+                        Some((
+                            common::instrument::commands::SetQualityPayload {
+                                quality: PlaybackQuality::Auto(0),
+                            },
+                            (),
+                        )),
+                    );
+                }
+                aria-pressed=auto_selected
+                title="Auto mode"
+            >
+                <span class="inline-flex items-center justify-center" aria-hidden="true">
+                    <Icon name="system" size=UiSize::Sm />
+                </span>
+            </button>
+
+            <Dropdown
+                placement=dropdown_placement
+                class="min-w-32"
+                trigger_class=Signal::derive(move || {
+                    if auto_selected() {
+                        "border-l border-black/20 dark:border-red/20 md:h-10 h-8 md:px-4 px-2 md:text-base text-sm text-black dark:text-red hover:bg-black/5 dark:hover:bg-red/5"
+                            .to_string()
+                    } else {
+                        "md:h-10 h-8 md:px-4 px-2 md:text-base text-sm bg-black dark:bg-red text-red dark:text-black shadow-inner"
+                            .to_string()
+                    }
+                })
+                trigger=view! {
+                    <span class="inline-flex items-center justify-center gap-1" aria-hidden="true">
+                        <Icon name=current_quality_icon size=UiSize::Sm />
+                        <span class="text-base leading-none opacity-80 font-semibold">{arrow}</span>
+                    </span>
+                }
+                    .into_any()
+            >
+                <div class="flex flex-col gap-1">
+                    {[
+                        ("lo-fi", PlaybackQuality::LoFi),
+                        ("medium", PlaybackQuality::Medium),
+                        ("hi-fi", PlaybackQuality::HiFi),
+                        ("ultra", PlaybackQuality::Ultra),
+                    ]
+                        .into_iter()
+                        .map(|(label, item_quality)| {
+                            let is_selected = Signal::derive(move || quality() == item_quality);
+                            let icon_name = quality_icon(item_quality);
+
+                            view! {
+                                <button
+                                    type="button"
+                                    role="menuitemradio"
+                                    aria-checked=is_selected
+                                    class=move || {
+                                        if is_selected() {
+                                            "w-full rounded-md px-3 py-1 text-left bg-black text-red dark:bg-red dark:text-black"
+                                        } else {
+                                            "w-full rounded-md px-3 py-1 text-left hover:bg-black/10 dark:hover:bg-red/20"
+                                        }
+                                    }
+                                    on:click=move |_| {
+                                        select_quality(item_quality);
+                                    }
+                                >
+                                    <span class="inline-flex w-full items-center justify-between gap-2">
+                                        <span class="inline-flex items-center gap-2">
+                                            <Icon name=icon_name size=UiSize::Sm />
+                                            <span class="leading-none">{label}</span>
+                                        </span>
+                                        <Show when=is_selected>
+                                            <Icon name="ok" size=UiSize::Sm class="opacity-80" />
+                                        </Show>
+                                    </span>
+                                </button>
+                            }
+                        })
+                        .collect_view()}
+                </div>
+            </Dropdown>
+        </div>
     }
 }

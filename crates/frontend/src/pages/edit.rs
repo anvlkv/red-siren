@@ -7,14 +7,22 @@ use leptos_router::{
 };
 
 use crate::{
-    components::{
-        ContentPage, FinetunedValuesEditorPanel, LayoutEditorPanel, RoutedTab, RoutedTabs,
-    },
+    components::{ContentPage, RoutedTab, RoutedTabs},
     util::{boot_flags::boot_flags, playback_service::expect_playback_service},
 };
 
 #[component]
 pub fn Edit() -> impl IntoView {
+    let service = expect_playback_service();
+
+    Effect::new(move |_| {
+        service.start.run(());
+    });
+
+    on_cleanup(move || {
+        service.stop.run(());
+    });
+
     let navigate = use_navigate();
     let devtools_enabled = boot_flags().devtools;
 
@@ -37,11 +45,19 @@ pub fn Edit() -> impl IntoView {
         vec![
             RoutedTab {
                 label: "Layout",
-                route: RouteId::Edit(EditorRouteId::Layout),
+                route: RouteId::Edit(EditorRouteId::InstrumentLayout),
             },
             RoutedTab {
                 label: "Fine-tuned values",
                 route: RouteId::Edit(EditorRouteId::FinetunedValues),
+            },
+            RoutedTab {
+                label: "Rhythm grid",
+                route: RouteId::Edit(EditorRouteId::RhythmGrid),
+            },
+            RoutedTab {
+                label: "Node test bed",
+                route: RouteId::Edit(EditorRouteId::NodeTestBed),
             },
         ]
     });
@@ -49,34 +65,14 @@ pub fn Edit() -> impl IntoView {
     let Location { pathname, .. } = use_location();
     let title = Signal::derive(move || {
         RouteId::from_str(&pathname())
-            .unwrap_or(RouteId::Edit(EditorRouteId::Layout))
+            .unwrap_or(RouteId::Edit(EditorRouteId::InstrumentLayout))
             .title()
             .to_string()
     });
 
     view! {
         <ContentPage title=title>
-            <RoutedTabs tabs=tabs class="w-auto max-w-full md:w-md xl:w-xl 3xl:w-2xl  h-lvh" />
+            <RoutedTabs tabs=tabs class="w-auto max-w-full h-lvh" />
         </ContentPage>
     }
-}
-
-#[component]
-pub fn EditLayout() -> impl IntoView {
-    let service = expect_playback_service();
-
-    Effect::new(move |_| {
-        service.start.run(());
-    });
-
-    on_cleanup(move || {
-        service.stop.run(());
-    });
-
-    view! { <LayoutEditorPanel /> }
-}
-
-#[component]
-pub fn EditFineTunedValues() -> impl IntoView {
-    view! { <FinetunedValuesEditorPanel /> }
 }

@@ -5,13 +5,11 @@ use leptos_router::{components::*, NavigateOptions};
 use leptos_use::{signal_debounced, use_window_size, UseWindowSizeReturn};
 use tauri_use::{use_invoke, UseTauriReturn};
 
+use crate::components::{FinetunedValuesEditorPanel, LayoutEditorPanel, TestNodePanel};
 use crate::util::secondary_window::is_secondary_window;
 use crate::{
     components::{AppError, ErrorTemplate, Intro},
-    pages::{
-        About, Donate, Edit, EditFineTunedValues, EditLayout, Home, Permissions, Play, TestNode,
-        Tune,
-    },
+    pages::{About, Donate, Edit, Home, Permissions, Play, Tune},
 };
 
 #[component]
@@ -93,13 +91,14 @@ pub fn AppRoutes() -> impl IntoView {
                                 }
                             }
                         />
-                        <Route path=StaticSegment(EditorRouteId::Layout.as_ref()) view=EditLayout />
+                        <Route path=StaticSegment(EditorRouteId::InstrumentLayout.as_ref()) view=LayoutEditorPanel />
                         <Route
                             path=StaticSegment(EditorRouteId::FinetunedValues.as_ref())
-                            view=EditFineTunedValues
+                            view=FinetunedValuesEditorPanel
                         />
+                        <Route path=(StaticSegment(EditorRouteId::NodeTestBed.as_ref()),) view=TestNodePanel />
+                        <Route path=StaticSegment(EditorRouteId::RhythmGrid.as_ref()) view=|| { view! { <p>{"Rhythm Grid"}</p> } } />
                     </ParentRoute>
-                    <Route path=(StaticSegment(RouteId::TestNode.as_ref()),) view=TestNode />
                     <Route path=(StaticSegment(RouteId::About.as_ref()),) view=About />
                     <Route path=(StaticSegment(RouteId::Donate.as_ref()),) view=Donate />
                     <Route path=(StaticSegment(RouteId::Permissions.as_ref()),) view=Permissions />

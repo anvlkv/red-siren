@@ -2,39 +2,56 @@ use std::{fmt, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    strum::EnumString,
-    strum::IntoStaticStr,
-    strum::Display,
-    strum::VariantNames,
-    strum::AsRefStr,
-)]
-#[strum(serialize_all = "kebab-case")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum EditorRouteId {
-    Layout,
+    #[default]
+    InstrumentLayout,
     FinetunedValues,
+    RhythmGrid,
+    NodeTestBed,
 }
 
 impl EditorRouteId {
     pub const fn path(self) -> &'static str {
         match self {
-            Self::Layout => "/edit/layout",
+            Self::InstrumentLayout => "/edit/layout",
             Self::FinetunedValues => "/edit/finetuned-values",
+            Self::RhythmGrid => "/edit/rhythm-grid",
+            Self::NodeTestBed => "/edit/node-test-bed",
         }
     }
 
     pub const fn title(self) -> &'static str {
         match self {
-            Self::Layout => "Layout editor",
+            Self::InstrumentLayout => "Layout editor",
             Self::FinetunedValues => "Fine tuning",
+            Self::RhythmGrid => "Rhythm grid editor",
+            Self::NodeTestBed => "Node test bed",
+        }
+    }
+}
+
+impl AsRef<str> for EditorRouteId {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::InstrumentLayout => "/layout",
+            Self::FinetunedValues => "/finetuned-values",
+            Self::RhythmGrid => "/rhythm-grid",
+            Self::NodeTestBed => "/node-test-bed",
+        }
+    }
+}
+
+impl FromStr for EditorRouteId {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "layout" => Ok(Self::InstrumentLayout),
+            "finetuned-values" => Ok(Self::FinetunedValues),
+            "rhythm-grid" => Ok(Self::RhythmGrid),
+            "node-test-bed" => Ok(Self::NodeTestBed),
+            _ => Err(format!("unknown route: {value}")),
         }
     }
 }
@@ -48,7 +65,6 @@ pub enum RouteId {
     Play,
     Tune,
     Edit(EditorRouteId),
-    TestNode,
     Permissions,
 }
 
@@ -65,7 +81,6 @@ impl RouteId {
             Self::Play => "Play",
             Self::Tune => "Tune",
             Self::Edit(route) => route.title(),
-            Self::TestNode => "Test Node",
             Self::Permissions => "Permissions",
         }
     }
@@ -78,7 +93,6 @@ impl RouteId {
             Self::Play => "/play",
             Self::Tune => "/tune",
             Self::Edit(route) => route.path(),
-            Self::TestNode => "/test-node",
             Self::Permissions => "/permissions",
         }
     }
@@ -106,9 +120,12 @@ impl FromStr for RouteId {
             "/donate" => Ok(Self::Donate),
             "/play" => Ok(Self::Play),
             "/tune" => Ok(Self::Tune),
-            "/edit" | "/edit/" | "/edit/layout" => Ok(Self::Edit(EditorRouteId::Layout)),
-            "/edit/finetuned-values" => Ok(Self::Edit(EditorRouteId::FinetunedValues)),
-            "/test-node" => Ok(Self::TestNode),
+            "/edit" => Ok(Self::Edit(EditorRouteId::default())),
+            r if r.starts_with("/edit/") => {
+                let suffix = &r["/edit/".len()..];
+                let editor_route = EditorRouteId::from_str(suffix)?;
+                Ok(Self::Edit(editor_route))
+            }
             "/permissions" => Ok(Self::Permissions),
             _ => Err(format!("unknown route: {value}")),
         }

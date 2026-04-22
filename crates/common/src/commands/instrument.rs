@@ -1,5 +1,5 @@
-use crate::instrument::PlaybackQuality;
 use crate::NodeKey;
+use crate::instrument::PlaybackQuality;
 
 /// Start instrument playback
 pub const PLAYBACK_START: &str = "instrument_playback_start";

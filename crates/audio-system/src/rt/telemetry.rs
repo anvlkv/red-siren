@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, sync::Arc, time::Duration};
 
-use fundsp::thingbuf::mpsc::{Receiver, Sender, channel};
+use fundsp::thingbuf::mpsc::{channel, Receiver, Sender};
 
 use crate::quality::{PlaybackQualityGate, SampleType};
 
@@ -132,7 +132,7 @@ impl PlaybackTelemetry {
         let sustain_slice_size = Self::history_size(self.sample_rate, buffer_size, Self::SUSTAIN_S);
 
         if Self::should_sustain(
-            self.history.iter().take(sustain_slice_size).rev(),
+            self.history.iter().rev().take(sustain_slice_size),
             self.quality,
         ) {
             return None;
@@ -409,7 +409,7 @@ mod tests {
             1,
             Some(1),
         );
-        assert_eq!(t.accept_message(m), None);
+        assert_eq!(t.accept_message(m), Some(PlaybackQualityGate::HiFi));
     }
 
     #[test]
@@ -543,12 +543,15 @@ mod tests {
         let sr = 100;
         let buffer_frames = 10;
         let mut t = telemetry(sr, PlaybackQualityGate::Medium, Some(buffer_frames));
-        // filled_frames = 0 => filled_duration = 0 => processing_to_filled = None
-        // Ensure no false decisions
-        for _ in 0..30 {
+        // filled_frames = 0 => processing_to_filled is None; upgrade can still
+        // be decided via processing_to_buffer and catch-up ratio.
+        for _ in 0..29 {
             let m = msg(PlaybackQualityGate::Medium, buffer_frames, 0, 1, Some(0));
             assert_eq!(t.accept_message(m), None);
         }
+
+        let m = msg(PlaybackQualityGate::Medium, buffer_frames, 0, 1, Some(0));
+        assert_eq!(t.accept_message(m), Some(PlaybackQualityGate::HiFi));
     }
 
     #[test]

@@ -1,15 +1,39 @@
+use common::instrument::Config as InstrumentConfig;
+use fundsp::prelude::*;
+
 pub mod excitor;
+pub mod grid;
 pub mod values;
 
 #[cfg(feature = "editor")]
 use values::FineTunedValues;
 
-/// Legacy output-system entry point kept only as an explicit migration stub.
-pub fn mount_output_system() {
-    todo!()
+use crate::{rt::ExcitementSource, SampleType};
+
+/// Mounts the audio output system
+pub fn mount_output_system(
+    main_net: &mut Net,
+    num_channels: usize,
+    sample_type: SampleType,
+    config: &InstrumentConfig,
+    input_net_id: Option<NodeId>,
+) -> NodeId {
+    let mut subnet = Net::new(config.num_nodes_total(), num_channels);
+
+    let subnet_id = main_net.push(Box::new(subnet));
+
+    main_net.pipe_output(subnet_id);
+
+    if let Some(input_id) = input_net_id {
+        main_net.pipe_all(input_id, subnet_id);
+    }
+
+    subnet_id
 }
 
-/// Legacy input-system entry point kept only as an explicit migration stub.
-pub fn create_input_system() {
-    todo!()
+pub fn mount_input_system(
+    main_net: &mut Net,
+    config: &InstrumentConfig,
+    excitment_src: ExcitementSource,
+) {
 }

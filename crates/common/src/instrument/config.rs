@@ -6,9 +6,9 @@ mod scale;
 use mint::Point2;
 use serde::{Deserialize, Serialize};
 
-use crate::{NodeKey, error::InstrumentConfigError, orientation::LayoutOrientation};
+use crate::{error::InstrumentConfigError, orientation::LayoutOrientation, NodeKey};
 
-use super::{Layout, consts::*};
+use super::{consts::*, Layout};
 
 pub use channel::*;
 pub use group::*;
@@ -182,7 +182,6 @@ impl TryFrom<Layout> for Config {
                 let frequency =
                     scale.freq_n(k as f64, octave_f_base, num_divisions_per_group as f64);
 
-                let divisions = num_divisions_per_group as u32;
                 let phase = phase_step * n as f64;
                 let cents = 1200.0 * (frequency / octave_f_base).log2();
 
@@ -191,7 +190,6 @@ impl TryFrom<Layout> for Config {
                     frequency,
                     l,
                     phase,
-                    divisions,
                     cents,
                 });
 
@@ -294,11 +292,9 @@ mod tests {
         let valid_node =
             NodeConfig::new_test_node((super::SOFT_MIN_FREQ_HZ + super::SOFT_MAX_FREQ_HZ) / 2.0);
         assert!(valid_node.validate(0).is_ok());
-        assert!(
-            NodeConfig::new_test_node(super::MIN_FREQ_HZ - 1.0)
-                .validate(0)
-                .is_err()
-        );
+        assert!(NodeConfig::new_test_node(super::MIN_FREQ_HZ - 1.0)
+            .validate(0)
+            .is_err());
     }
 
     #[test]

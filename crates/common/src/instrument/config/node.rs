@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::instrument::consts::*;
-use crate::{NodeKey, error::InstrumentConfigError};
+use crate::{error::InstrumentConfigError, NodeKey};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct NodeConfig {
@@ -13,9 +13,7 @@ pub struct NodeConfig {
     pub l: f64,
     /// Starting phase of the oscillator
     pub phase: f64,
-    /// Number of divisions
-    pub divisions: u32,
-    /// cents
+    /// cents offset from the base frequency (for fine-tuning)
     pub cents: f64,
 }
 
@@ -86,7 +84,6 @@ impl NodeConfig {
             frequency: f,
             l: 170.0,
             phase: 0.1,
-            divisions: 7,
             cents: f / 1200.0,
         }
     }

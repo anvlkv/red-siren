@@ -19,6 +19,9 @@ pub struct AdsrShape {
     pub sustain: f32,
     /// Fraction of total duration spent in release (sustain → 0). Default: 0.20
     pub release: f32,
+    /// Blend factor for rounded stage curves in [0.0, 1.0].
+    /// 0.0 = linear ADSR segments, 1.0 = fully smoothed (smoothstep).
+    pub smoothness: f32,
 }
 
 impl Default for AdsrShape {
@@ -28,6 +31,7 @@ impl Default for AdsrShape {
             decay: 0.10,
             sustain: 0.7,
             release: 0.20,
+            smoothness: 0.0,
         }
     }
 }
@@ -40,6 +44,7 @@ struct Schedule {
     sustain: f32,
     release: u64,
     total_duration: u64,
+    smoothness: f32,
 }
 
 #[derive(Clone)]
@@ -67,18 +72,18 @@ struct ActiveState {
 /// - Divisible
 /// - Divisor
 ///
-/// Each time the start/duration inputs change to a new non-zero value, a new schedule
-/// is appended to the pending queue. The grid trigger uses the next beat position to pop
-/// one schedule from the queue and activate it. Each schedule fires exactly once.
-/// To repeat, send new inputs to enqueue the next occurrence.
+/// Each tick where start/duration inputs are non-zero, a new schedule is enqueued.
+/// The caller is responsible for pulsing inputs for exactly one tick per desired event.
+/// The grid trigger pops one pending schedule and activates it — on the current beat if
+/// the trigger and pulse arrive on the same tick, otherwise on the next beat trigger.
+/// Each schedule fires exactly once; to repeat, pulse the inputs again.
 ///
 /// ## Outputs: `N::Outputs`
 pub struct RhythmGridEnvelope<S: Float, N: AudioNode> {
     inner: An<N>,
     adsr: AdsrShape,
     pending_schedules: Vec<Schedule>,
-    active: Option<ActiveState>,
-    last_inputs: Option<[u64; 4]>,
+    active: Vec<ActiveState>,
     _sample_type: PhantomData<S>,
 }
 
@@ -88,10 +93,16 @@ impl<S: Float, N: AudioNode> RhythmGridEnvelope<S, N> {
             inner,
             adsr,
             pending_schedules: Vec::new(),
-            active: None,
-            last_inputs: None,
+            active: Vec::new(),
             _sample_type: PhantomData,
         }
+    }
+
+    fn smooth_progress(t: f32, smoothness: f32) -> f32 {
+        let t = t.clamp(0.0, 1.0);
+        let s = smoothness.clamp(0.0, 1.0);
+        let smoothstep = t * t * (3.0 - 2.0 * t);
+        t + (smoothstep - t) * s
     }
 
     fn compute_schedule(
@@ -117,6 +128,7 @@ impl<S: Float, N: AudioNode> RhythmGridEnvelope<S, N> {
             sustain: adsr.sustain,
             release,
             total_duration: total_ticks,
+            smoothness: adsr.smoothness,
         }
     }
 
@@ -129,18 +141,21 @@ impl<S: Float, N: AudioNode> RhythmGridEnvelope<S, N> {
         let release_start = schedule.total_duration.saturating_sub(schedule.release);
         if tick < attack_end {
             // attack: 0 → 1
-            tick as f32 / schedule.attack as f32
+            let t = tick as f32 / schedule.attack as f32;
+            Self::smooth_progress(t, schedule.smoothness)
         } else if tick < decay_end {
             // decay: 1 → sustain
             let t = (tick - attack_end) as f32 / schedule.decay as f32;
-            1.0 - t * (1.0 - schedule.sustain)
+            let p = Self::smooth_progress(t, schedule.smoothness);
+            1.0 - p * (1.0 - schedule.sustain)
         } else if tick < release_start {
             // sustain
             schedule.sustain
         } else {
             // release: sustain → 0
             let t = (tick - release_start) as f32 / schedule.release as f32;
-            schedule.sustain * (1.0 - t)
+            let p = Self::smooth_progress(t, schedule.smoothness);
+            schedule.sustain * (1.0 - p)
         }
     }
 }
@@ -160,56 +175,50 @@ impl<S: Float, N: AudioNode> AudioNode for RhythmGridEnvelope<S, N> {
         let duration_divisible = input[5] as u64;
         let duration_divisor = input[6] as u64;
 
-        // When the start/duration inputs change to a valid new value, enqueue a new schedule.
-        if ticks_per_beat > 0 && start_divisor > 0 && duration_divisor > 0 {
-            let new_inputs = [
+        // When inputs are non-zero this tick (a pulse from the caller), enqueue a schedule.
+        if ticks_per_beat > 0 && start_divisor > 0 && duration_divisor > 0 && duration_divisible > 0
+        {
+            let sched = Self::compute_schedule(
+                &self.adsr.clone(),
+                ticks_per_beat,
                 start_divisible,
                 start_divisor,
                 duration_divisible,
                 duration_divisor,
-            ];
-            if self.last_inputs != Some(new_inputs) {
-                self.last_inputs = Some(new_inputs);
-                let sched = Self::compute_schedule(
-                    &self.adsr.clone(),
-                    ticks_per_beat,
-                    start_divisible,
-                    start_divisor,
-                    duration_divisible,
-                    duration_divisor,
-                );
-                self.pending_schedules.push(sched);
-            }
+            );
+            self.pending_schedules.push(sched);
         }
 
         // On beat trigger: pop the next pending schedule and activate it. Each fires once.
         if grid_trigger == 1.0 && !self.pending_schedules.is_empty() {
             let sched = self.pending_schedules.remove(0);
-            self.active = Some(ActiveState {
+            self.active.push(ActiveState {
                 ticks_until_start: sched.start_ticks,
                 envelope_tick: 0,
                 schedule: sched,
             });
         }
 
-        // Advance the active envelope and read its current value.
-        let env_value = if let Some(active) = &mut self.active {
+        // Advance all active envelopes and sum their values to support overlap.
+        let mut env_value = 0.0_f32;
+        for active in &mut self.active {
             if active.ticks_until_start > 0 {
                 active.ticks_until_start -= 1;
-                0.0_f32
             } else {
                 let val = Self::envelope_value(active.envelope_tick, &active.schedule);
                 active.envelope_tick += 1;
-                val
+                env_value += val;
             }
-        } else {
-            0.0_f32
-        };
-
-        // Expire a finished envelope.
-        if matches!(&self.active, Some(a) if a.envelope_tick >= a.schedule.total_duration) {
-            self.active = None;
         }
+
+        // Expire finished envelopes while preserving delayed starts.
+        self.active.retain(|a| {
+            if a.ticks_until_start > 0 {
+                true
+            } else {
+                a.envelope_tick < a.schedule.total_duration
+            }
+        });
 
         // Tick the inner generator and scale its output by the envelope.
         let inner_out = self.inner.tick(&Frame::default());
@@ -227,8 +236,7 @@ impl<S: Float, N: AudioNode> AudioNode for RhythmGridEnvelope<S, N> {
     fn reset(&mut self) {
         self.inner.reset();
         self.pending_schedules.clear();
-        self.active = None;
-        self.last_inputs = None;
+        self.active.clear();
     }
 }
 
@@ -249,21 +257,21 @@ mod tests {
     use insta_fun::prelude::*;
 
     // At 100 Hz sample rate, 60 BPM → ticks_per_beat = 100.
-    // First beat trigger fires at tick 100.
+    // Beat triggers fire at ticks 100, 200, 300, ...
     //
     // Envelope input layout (7 channels):
     //  [0] grid trigger  [1] ticks_per_beat  [2] ticks_to_next (unused)
     //  [3] start_div  [4] start_sor  [5] dur_div  [6] dur_sor
+    //
+    // Schedule pulses: each entry is (tick, start_div, start_sor, dur_div, dur_sor).
+    // Inputs are non-zero only on the exact pulse tick; zero on all other ticks.
     fn make_input(
-        trigger_ticks: Vec<usize>,
-        start_div_fn: impl Fn(usize) -> f32 + 'static,
-        start_sor_fn: impl Fn(usize) -> f32 + 'static,
-        dur_div_fn: impl Fn(usize) -> f32 + 'static,
-        dur_sor_fn: impl Fn(usize) -> f32 + 'static,
+        beat_ticks: Vec<usize>,
+        schedule_pulses: Vec<(usize, f32, f32, f32, f32)>,
     ) -> InputSource {
         InputSource::Generator(Box::new(move |i, ch| match ch {
             0 => {
-                if trigger_ticks.contains(&i) {
+                if beat_ticks.contains(&i) {
                     1.0
                 } else {
                     0.0
@@ -271,11 +279,19 @@ mod tests {
             }
             1 => 100.0,
             2 => 0.0,
-            3 => start_div_fn(i),
-            4 => start_sor_fn(i),
-            5 => dur_div_fn(i),
-            6 => dur_sor_fn(i),
-            _ => 0.0,
+            _ => {
+                if let Some(&(_, sd, ss, dd, ds)) = schedule_pulses.iter().find(|(t, ..)| *t == i) {
+                    match ch {
+                        3 => sd,
+                        4 => ss,
+                        5 => dd,
+                        6 => ds,
+                        _ => 0.0,
+                    }
+                } else {
+                    0.0
+                }
+            }
         }))
     }
 
@@ -287,17 +303,14 @@ mod tests {
             .unwrap()
     }
 
-    // Enqueue one event: start=0/1 (immediate), duration=1/1 (one beat = 100 ticks).
-    // Trigger at tick 100. Envelope runs ticks 100-199 then expires.
+    // Pulse at tick 0: start=0/1 (immediate), duration=1/1 (one beat = 100 ticks).
+    // Beat trigger at tick 100 activates it. Envelope runs ticks 100-199 then expires.
     #[test]
     fn envelope_one_shot_immediate() {
         let env = rhythm_grid_envelope::<f32, _>(dc(1.0f32), AdsrShape::default());
         let input = make_input(
             vec![100],
-            |_| 0.0, // start_div = 0 (immediate)
-            |_| 1.0, // start_sor = 1
-            |_| 1.0, // dur_div = 1
-            |_| 1.0, // dur_sor = 1 → 1 beat
+            vec![(0, 0.0, 1.0, 1.0, 1.0)], // start=0/1, dur=1/1
         );
         assert_audio_unit_snapshot!(
             "envelope_one_shot_immediate",
@@ -307,17 +320,14 @@ mod tests {
         );
     }
 
-    // Enqueue one event: start=1/4 beat (25 ticks offset), duration=1/2 beat (50 ticks).
-    // Trigger at tick 100. Envelope starts at tick 125 and runs 50 ticks.
+    // Pulse at tick 0: start=1/4 beat (25 ticks offset), duration=1/2 beat (50 ticks).
+    // Beat trigger at tick 100 activates it. Envelope starts at tick 125 and runs 50 ticks.
     #[test]
     fn envelope_one_shot_with_offset() {
         let env = rhythm_grid_envelope::<f32, _>(dc(1.0f32), AdsrShape::default());
         let input = make_input(
             vec![100],
-            |_| 1.0, // start_div = 1
-            |_| 4.0, // start_sor = 4 → 1/4 beat = 25 ticks offset
-            |_| 1.0, // dur_div = 1
-            |_| 2.0, // dur_sor = 2 → 1/2 beat = 50 ticks
+            vec![(0, 1.0, 4.0, 1.0, 2.0)], // start=1/4, dur=1/2
         );
         assert_audio_unit_snapshot!(
             "envelope_one_shot_with_offset",
@@ -327,20 +337,87 @@ mod tests {
         );
     }
 
-    // Enqueue two events by changing inputs at tick 50.
-    // Trigger at tick 100 fires the first (immediate, 1 beat).
-    // Trigger at tick 200 fires the second (1/4 offset, 3/4 beat).
+    // Pulse at tick 0: event 1 (immediate, 1 beat) → activated by beat at tick 100.
+    // Pulse at tick 150: event 2 (immediate, 3/4 beat) → activated by beat at tick 200.
     #[test]
     fn envelope_queue_two_events() {
         let env = rhythm_grid_envelope::<f32, _>(dc(1.0f32), AdsrShape::default());
         let input = make_input(
             vec![100, 200],
-            |i| if i < 50 { 0.0 } else { 1.0 }, // start_div: 0 then 1
-            |i| if i < 50 { 1.0 } else { 4.0 }, // start_sor: 1 then 4
-            |_| 1.0,                            // dur_div = 1
-            |i| if i < 50 { 1.0 } else { 2.0 }, // dur_sor: 1 beat then 1/2 beat
+            vec![
+                (0, 0.0, 1.0, 1.0, 1.0),   // start=0/1, dur=1/1
+                (150, 0.0, 1.0, 3.0, 4.0), // start=0/1, dur=3/4
+            ],
         );
         assert_audio_unit_snapshot!("envelope_queue_two_events", env, input, low_sr_config(400));
+    }
+
+    // Rounded segments with high smoothness produce eased attack/decay/release transitions.
+    #[test]
+    fn envelope_smoothness_rounded_curve() {
+        let adsr = AdsrShape {
+            attack: 0.25,
+            decay: 0.25,
+            sustain: 0.5,
+            release: 0.25,
+            smoothness: 0.9,
+        };
+        let env = rhythm_grid_envelope::<f32, _>(dc(1.0f32), adsr);
+        let input = make_input(vec![100], vec![(0, 0.0, 1.0, 1.0, 1.0)]);
+        assert_audio_unit_snapshot!(
+            "envelope_smoothness_rounded_curve",
+            env,
+            input,
+            low_sr_config(300)
+        );
+    }
+
+    // A second attack while another envelope is still active is mixed, not replaced.
+    #[test]
+    fn envelope_overlap_attacks() {
+        let env = rhythm_grid_envelope::<f32, _>(dc(1.0f32), AdsrShape::default());
+        let input = make_input(
+            vec![100, 200],
+            vec![
+                (0, 0.0, 1.0, 3.0, 1.0),   // 3 beats, starts at beat 100
+                (150, 0.0, 1.0, 1.0, 1.0), // 1 beat, starts at beat 200 (overlaps event 1)
+            ],
+        );
+        assert_audio_unit_snapshot!("envelope_overlap_attacks", env, input, low_sr_config(500));
+    }
+
+    // Duration ratios above 1.0 should produce envelopes longer than one beat.
+    #[test]
+    fn envelope_duration_longer_than_one_beat() {
+        let env = rhythm_grid_envelope::<f32, _>(dc(1.0f32), AdsrShape::default());
+        let input = make_input(
+            vec![100],
+            vec![(0, 0.0, 1.0, 5.0, 2.0)], // 5/2 beats = 250 ticks
+        );
+        assert_audio_unit_snapshot!(
+            "envelope_duration_longer_than_one_beat",
+            env,
+            input,
+            low_sr_config(500)
+        );
+    }
+
+    // One-minute schedule at 60 BPM: 60 beat-aligned pulses over 6000 ticks.
+    #[test]
+    fn envelope_long_snapshot_one_minute_60bpm() {
+        let env = rhythm_grid_envelope::<f32, _>(dc(1.0f32), AdsrShape::default());
+        let beat_ticks: Vec<usize> = (1..=60).map(|b| b * 100).collect();
+        let schedule_pulses: Vec<(usize, f32, f32, f32, f32)> = beat_ticks
+            .iter()
+            .map(|t| (*t, 0.0, 1.0, 1.0, 4.0))
+            .collect();
+        let input = make_input(beat_ticks, schedule_pulses);
+        assert_audio_unit_snapshot!(
+            "envelope_long_snapshot_one_minute_60bpm",
+            env,
+            input,
+            low_sr_config(6100)
+        );
     }
 
     // Custom ADSR shape: sharp attack (20%), no decay, full sustain, long release (40%).
@@ -351,9 +428,10 @@ mod tests {
             decay: 0.0,
             sustain: 1.0,
             release: 0.40,
+            smoothness: 0.0,
         };
         let env = rhythm_grid_envelope::<f32, _>(dc(1.0f32), adsr);
-        let input = make_input(vec![100], |_| 0.0, |_| 1.0, |_| 1.0, |_| 1.0);
+        let input = make_input(vec![100], vec![(0, 0.0, 1.0, 1.0, 1.0)]);
         assert_audio_unit_snapshot!("envelope_custom_adsr_shape", env, input, low_sr_config(300));
     }
 }

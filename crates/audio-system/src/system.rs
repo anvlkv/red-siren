@@ -4,6 +4,7 @@ use fundsp::prelude::*;
 pub mod excitor;
 pub mod feedback_pass;
 pub mod grid;
+pub mod node;
 pub mod values;
 
 #[cfg(feature = "editor")]

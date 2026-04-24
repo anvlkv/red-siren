@@ -2,6 +2,7 @@ use common::instrument::Config as InstrumentConfig;
 use fundsp::prelude::*;
 
 pub mod excitor;
+pub mod feedback_pass;
 pub mod grid;
 pub mod values;
 

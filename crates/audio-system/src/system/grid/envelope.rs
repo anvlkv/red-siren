@@ -158,28 +158,20 @@ impl<S: Float, N: AudioNode> RhythmGridEnvelope<S, N> {
             schedule.sustain * (1.0 - p)
         }
     }
-}
 
-impl<S: Float, N: AudioNode> AudioNode for RhythmGridEnvelope<S, N> {
-    const ID: u64 = RHYTHM_GRID_ENVELOPE_ID;
-
-    type Inputs = op!(U3 + U2 + U2);
-
-    type Outputs = N::Outputs;
-
-    fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
-        let grid_trigger = input[0];
-        let ticks_per_beat = input[1].round() as u64;
-        let start_divisible = input[3] as u64;
-        let start_divisor = input[4] as u64;
-        let duration_divisible = input[5] as u64;
-        let duration_divisor = input[6] as u64;
-
-        // When inputs are non-zero this tick (a pulse from the caller), enqueue a schedule.
+    fn step_envelope(
+        &mut self,
+        grid_trigger: f32,
+        ticks_per_beat: u64,
+        start_divisible: u64,
+        start_divisor: u64,
+        duration_divisible: u64,
+        duration_divisor: u64,
+    ) -> f32 {
         if ticks_per_beat > 0 && start_divisor > 0 && duration_divisor > 0 && duration_divisible > 0
         {
             let sched = Self::compute_schedule(
-                &self.adsr.clone(),
+                &self.adsr,
                 ticks_per_beat,
                 start_divisible,
                 start_divisor,
@@ -189,7 +181,6 @@ impl<S: Float, N: AudioNode> AudioNode for RhythmGridEnvelope<S, N> {
             self.pending_schedules.push(sched);
         }
 
-        // On beat trigger: pop the next pending schedule and activate it. Each fires once.
         if grid_trigger == 1.0 && !self.pending_schedules.is_empty() {
             let sched = self.pending_schedules.remove(0);
             self.active.push(ActiveState {
@@ -199,7 +190,6 @@ impl<S: Float, N: AudioNode> AudioNode for RhythmGridEnvelope<S, N> {
             });
         }
 
-        // Advance all active envelopes and sum their values to support overlap.
         let mut env_value = 0.0_f32;
         for active in &mut self.active {
             if active.ticks_until_start > 0 {
@@ -211,7 +201,6 @@ impl<S: Float, N: AudioNode> AudioNode for RhythmGridEnvelope<S, N> {
             }
         }
 
-        // Expire finished envelopes while preserving delayed starts.
         self.active.retain(|a| {
             if a.ticks_until_start > 0 {
                 true
@@ -220,6 +209,27 @@ impl<S: Float, N: AudioNode> AudioNode for RhythmGridEnvelope<S, N> {
             }
         });
 
+        env_value
+    }
+}
+
+impl<S: Float, N: AudioNode> AudioNode for RhythmGridEnvelope<S, N> {
+    const ID: u64 = RHYTHM_GRID_ENVELOPE_ID;
+
+    type Inputs = op!(U3 + U2 + U2);
+
+    type Outputs = N::Outputs;
+
+    fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
+        let env_value = self.step_envelope(
+            input[0],
+            input[1].round() as u64,
+            input[3] as u64,
+            input[4] as u64,
+            input[5] as u64,
+            input[6] as u64,
+        );
+
         // Tick the inner generator and scale its output by the envelope.
         let inner_out = self.inner.tick(&Frame::default());
         let mut result: Frame<f32, N::Outputs> = Frame::default();
@@ -227,6 +237,35 @@ impl<S: Float, N: AudioNode> AudioNode for RhythmGridEnvelope<S, N> {
             *r = *v * env_value;
         }
         result
+    }
+
+    fn process(&mut self, size: usize, input: &BufferRef, output: &mut BufferMut) {
+        let mut env_values = [0.0_f32; MAX_BUFFER_SIZE];
+        for (sample, env_value) in env_values.iter_mut().enumerate().take(size) {
+            *env_value = self.step_envelope(
+                input.at_f32(0, sample),
+                input.at_f32(1, sample).round() as u64,
+                input.at_f32(3, sample) as u64,
+                input.at_f32(4, sample) as u64,
+                input.at_f32(5, sample) as u64,
+                input.at_f32(6, sample) as u64,
+            );
+        }
+
+        let mut inner_output = BufferArray::<N::Outputs>::new();
+        self.inner
+            .process(size, &BufferRef::empty(), &mut inner_output.buffer_mut());
+
+        let inner_output = inner_output.buffer_ref();
+        for channel in 0..self.outputs() {
+            for (sample, env_value) in env_values.iter().enumerate().take(size) {
+                output.set_f32(
+                    channel,
+                    sample,
+                    inner_output.at_f32(channel, sample) * *env_value,
+                );
+            }
+        }
     }
 
     fn set_sample_rate(&mut self, sample_rate: f64) {
@@ -255,6 +294,10 @@ pub fn rhythm_grid_envelope<S: Float, N: AudioNode>(
 mod tests {
     use super::*;
     use insta_fun::prelude::*;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
 
     // At 100 Hz sample rate, 60 BPM → ticks_per_beat = 100.
     // Beat triggers fire at ticks 100, 200, 300, ...
@@ -433,5 +476,59 @@ mod tests {
         let env = rhythm_grid_envelope::<f32, _>(dc(1.0f32), adsr);
         let input = make_input(vec![100], vec![(0, 0.0, 1.0, 1.0, 1.0)]);
         assert_audio_unit_snapshot!("envelope_custom_adsr_shape", env, input, low_sr_config(300));
+    }
+
+    #[derive(Clone)]
+    struct ProcessProbeNode {
+        tick_calls: Arc<AtomicUsize>,
+        process_calls: Arc<AtomicUsize>,
+    }
+
+    impl AudioNode for ProcessProbeNode {
+        const ID: u64 = crate::util::hash_str("ProcessProbeNode");
+
+        type Inputs = U0;
+        type Outputs = U1;
+
+        fn tick(&mut self, _input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
+            self.tick_calls.fetch_add(1, Ordering::Relaxed);
+            [0.0].into()
+        }
+
+        fn process(&mut self, size: usize, _input: &BufferRef, output: &mut BufferMut) {
+            self.process_calls.fetch_add(1, Ordering::Relaxed);
+            for sample in 0..size {
+                output.set_f32(0, sample, 1.0);
+            }
+        }
+    }
+
+    #[test]
+    fn envelope_process_forwards_to_inner_process() {
+        type EnvelopeInputs = op!(U3 + U2 + U2);
+
+        let tick_calls = Arc::new(AtomicUsize::new(0));
+        let process_calls = Arc::new(AtomicUsize::new(0));
+        let probe = ProcessProbeNode {
+            tick_calls: tick_calls.clone(),
+            process_calls: process_calls.clone(),
+        };
+        let mut env = rhythm_grid_envelope::<f32, _>(An(probe), AdsrShape::default());
+
+        let mut input = BufferArray::<EnvelopeInputs>::new();
+        for sample in 0..4 {
+            input.set_f32(1, sample, 4.0);
+        }
+        input.set_f32(0, 0, 1.0);
+        input.set_f32(4, 0, 1.0);
+        input.set_f32(5, 0, 1.0);
+        input.set_f32(6, 0, 1.0);
+
+        let mut output = BufferArray::<U1>::new();
+        env.process(4, &input.buffer_ref(), &mut output.buffer_mut());
+
+        assert_eq!(process_calls.load(Ordering::Relaxed), 1);
+        assert_eq!(tick_calls.load(Ordering::Relaxed), 0);
+        assert!(output.at_f32(0, 1) > 0.0);
     }
 }

@@ -277,6 +277,15 @@ impl<S: Float, N: AudioNode> AudioNode for RhythmGridEnvelope<S, N> {
         self.pending_schedules.clear();
         self.active.clear();
     }
+
+    fn allocate(&mut self) {
+        self.inner.allocate();
+    }
+
+    fn set_hash(&mut self, hash: u64) {
+        self.inner.set_hash(hash);
+        self.reset();
+    }
 }
 
 /// Create a rhythm grid envelope node wrapping `inner` with the given `adsr` shape.

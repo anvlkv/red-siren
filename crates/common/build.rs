@@ -157,5 +157,15 @@ fn generate_instrument_config_consts_file() -> Result<(), Box<dyn std::error::Er
     )?;
     writeln!(f, "pub const K_BASE: f32 = {k_base:?};", k_base = k_base)?;
 
+    // Body mass bounds: mouse to blue whale
+    writeln!(f, "// Body mass bounds for physical resonator model")?;
+    writeln!(f, "pub const W_MIN_KG: f64 = 0.02;")?;
+    writeln!(f, "pub const W_MAX_KG: f64 = 150_000.0;")?;
+
+    // Body density range: dense metallic (steel ~8 g/cm³) at bass, hollow metal (~0.5 g/cm³) at treble
+    writeln!(f, "// Body density range for volume derivation (g/cm³)")?;
+    writeln!(f, "pub const BODY_DENSITY_MAX_G_CM3: f64 = 8.0;")?;
+    writeln!(f, "pub const BODY_DENSITY_MIN_G_CM3: f64 = 0.5;")?;
+
     Ok(())
 }

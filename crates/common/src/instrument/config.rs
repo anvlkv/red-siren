@@ -153,10 +153,21 @@ impl TryFrom<Layout> for Config {
         let phase_step = 1.0 / total_steps as f64;
         let l_step_nodes = layout.key_radius + layout.key_bands_gap;
 
+        // Pre-compute frequency range across all groups to anchor mass/volume.
+        // Mersenne law: w ∝ 1/f², so log(w) is linear in log(f).
+        let octave_bases = collect_octave_bases(string_len, num_groups);
+        let f_config_min = scale.freq_n(0.0, octave_bases[0], num_divisions_per_group as f64);
+        let f_config_max = scale.freq_n(
+            (num_divisions_per_group - 1) as f64,
+            *octave_bases.last().unwrap_or(&octave_bases[0]),
+            num_divisions_per_group as f64,
+        );
+        let ln_f_range = f_config_max.ln() - f_config_min.ln();
+
         // track values
         let mut n = 0;
         let mut n_base = 1;
-        let mut l = {
+        let mut l_mm = {
             let p = layout
                 .orientation
                 .safe_length_start_point(Point2 { x: 0.0, y: 0.0 }, layout.safe_area_padding);
@@ -185,19 +196,36 @@ impl TryFrom<Layout> for Config {
                 let phase = phase_step * n as f64;
                 let cents = 1200.0 * (frequency / octave_f_base).log2();
 
+                // t=0: lowest frequency (heaviest body, whale), t=1: highest (lightest, mouse).
+                // Guard against degenerate single-frequency configs.
+                let t = if ln_f_range.abs() < f64::EPSILON {
+                    0.5
+                } else {
+                    ((frequency.ln() - f_config_min.ln()) / ln_f_range).clamp(0.0, 1.0)
+                };
+                // Mersenne-inspired: w ∝ 1/f² → log-linear from W_MAX_KG to W_MIN_KG
+                let w_kg = W_MAX_KG * (W_MIN_KG / W_MAX_KG).powf(t);
+                // Volume derived from mass and body density: v = m / ρ
+                // Density also follows t: dense metallic at bass, hollow/light at treble
+                let body_density =
+                    BODY_DENSITY_MAX_G_CM3 * (BODY_DENSITY_MIN_G_CM3 / BODY_DENSITY_MAX_G_CM3).powf(t);
+                let v_cm3 = (w_kg * 1000.0) / body_density;
+
                 nodes.push(NodeConfig {
                     key,
                     frequency,
-                    l,
+                    l_mm,
+                    w_kg,
+                    v_cm3,
                     phase,
                     cents,
                 });
 
-                l += l_step_nodes;
+                l_mm += l_step_nodes;
                 n += 1;
             }
 
-            l += layout.groups_gap;
+            l_mm += layout.groups_gap;
             target_f_min = Some(octave_f_base * 2.0);
             n_base = (next_n_base + 1).max(g + 1);
 
@@ -218,6 +246,26 @@ impl TryFrom<Layout> for Config {
 
 fn fundamental_frequency(n: usize, v: f64, l: f64) -> f64 {
     (n as f64 * v) / (2.0 * l)
+}
+
+/// Pre-computes the octave base frequency for each group without building nodes.
+/// Mirrors the outer group loop in `TryFrom<Layout> for Config`, tracking the same
+/// `n_base` / `target_f_min` state so the returned bases match the real generation.
+fn collect_octave_bases(
+    string_len: f64,
+    num_groups: usize,
+) -> Vec<f64> {
+    let mut bases = Vec::with_capacity(num_groups);
+    let mut n_base: usize = 1;
+    let mut target_f_min: Option<f64> = None;
+    for g in 0..num_groups {
+        let (octave_f_base, next_n_base) =
+            compute_fundamentals(string_len, n_base, target_f_min);
+        bases.push(octave_f_base);
+        target_f_min = Some(octave_f_base * 2.0);
+        n_base = (next_n_base + 1).max(g + 1);
+    }
+    bases
 }
 
 fn compute_fundamentals(l: f64, mut n_base: usize, min_freq: Option<f64>) -> (f64, usize) {

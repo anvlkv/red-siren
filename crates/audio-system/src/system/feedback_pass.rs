@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use fundsp::{prelude::*, thingbuf::ThingBuf};
 
-const FEEDBACK_PASS_ID: u64 = crate::util::hash_str("FeedbackPass");
-const FEEDBACK_CATCH_ID: u64 = crate::util::hash_str("FeedbackCatch");
+const FEEDBACK_PASS_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::FeedbackPass"));
+const FEEDBACK_CATCH_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::FeedbackCatch"));
 const FEEDBACK_PASS_BUFFER_SIZE: usize = 128;
 
 #[derive(Clone)]

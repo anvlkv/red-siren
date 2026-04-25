@@ -698,30 +698,8 @@ impl RuntimeSubsystem {
         payload: FineTunedValuesPayload,
     ) -> common::error::Result<()> {
         {
-            let mut shared = self.fine_tuned_shared_values.write();
-            shared.siren_alpha.set_value(payload.siren_alpha);
-            shared
-                .filter_morph_follow_s
-                .set_value(payload.filter_morph_follow_s);
-            shared
-                .node_follow_response_time_s
-                .set_value(payload.node_follow_response_time_s);
-            shared.group_q.set_value(payload.group_q);
-            shared.group_ls_gain_db.set_value(payload.group_ls_gain_db);
-            shared
-                .filter_q_piercing
-                .set_value(payload.filter_q_piercing);
-            shared.filter_q_bright.set_value(payload.filter_q_bright);
-            shared.filter_q_shelf.set_value(payload.filter_q_shelf);
-            shared
-                .filter_shelf_gain_db
-                .set_value(payload.filter_shelf_gain_db);
-            shared.filter_q_warm.set_value(payload.filter_q_warm);
-            shared.node_bell_q.set_value(payload.node_bell_q);
-            shared
-                .node_bell_gain_db
-                .set_value(payload.node_bell_gain_db);
-            shared.formant_base_q.set_value(payload.formant_base_q);
+            let shared = self.fine_tuned_shared_values.write();
+            shared.formants_q.set_value(payload.formants_q);
         }
 
         let (config, layout, tuner) = {
@@ -858,19 +836,7 @@ impl RuntimeSubsystem {
     #[cfg(feature = "editor")]
     fn fine_tuned_values_payload(shared: &FineTunedSharedValues) -> FineTunedValuesPayload {
         FineTunedValuesPayload {
-            siren_alpha: shared.siren_alpha.value(),
-            group_q: shared.group_q.value(),
-            group_ls_gain_db: shared.group_ls_gain_db.value(),
-            filter_morph_follow_s: shared.filter_morph_follow_s.value(),
-            node_follow_response_time_s: shared.node_follow_response_time_s.value(),
-            filter_q_piercing: shared.filter_q_piercing.value(),
-            filter_q_bright: shared.filter_q_bright.value(),
-            filter_q_shelf: shared.filter_q_shelf.value(),
-            filter_shelf_gain_db: shared.filter_shelf_gain_db.value(),
-            filter_q_warm: shared.filter_q_warm.value(),
-            node_bell_q: shared.node_bell_q.value(),
-            node_bell_gain_db: shared.node_bell_gain_db.value(),
-            formant_base_q: shared.formant_base_q.value(),
+            formants_q: shared.formants_q.value(),
         }
     }
 

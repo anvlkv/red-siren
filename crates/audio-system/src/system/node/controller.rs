@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use common::instrument::NodeConfig;
 use fundsp::prelude::*;
 
-const CONTROLLER_ID: u64 = crate::util::hash_str("NodeController");
+const CONTROLLER_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::NodeController"));
 const NUM_LEVELS: usize = 11;
 
 #[derive(Clone)]

@@ -5,7 +5,7 @@ use fundsp::prelude::*;
 mod envelope;
 pub use envelope::{rhythm_grid_envelope, AdsrShape, RhythmGridEnvelope};
 
-const RHYTHM_GRID_ID: u64 = crate::util::hash_str("RhythmGrid");
+const RHYTHM_GRID_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::RhythmGrid"));
 
 #[derive(Clone)]
 /// A rhythm grid that outputs a trigger signal (1.0) on the first tick of each beat, and 0.0 otherwise.

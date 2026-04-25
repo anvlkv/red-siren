@@ -3,7 +3,8 @@ use std::marker::PhantomData;
 use fundsp::prelude::*;
 use typenum::op;
 
-const RHYTHM_GRID_ENVELOPE_ID: u64 = crate::util::hash_str("RhythmGridEnvelope");
+const RHYTHM_GRID_ENVELOPE_ID: u64 =
+    crate::util::hash_str(concat!(module_path!(), "::RhythmGridEnvelope"));
 
 /// ADSR shape parameters expressed as fractions of the total note duration.
 ///
@@ -494,7 +495,7 @@ mod tests {
     }
 
     impl AudioNode for ProcessProbeNode {
-        const ID: u64 = crate::util::hash_str("ProcessProbeNode");
+        const ID: u64 = crate::util::hash_str(concat!(module_path!(), "::ProcessProbeNode"));
 
         type Inputs = U0;
         type Outputs = U1;

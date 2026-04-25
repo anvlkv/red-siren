@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use common::instrument::NodeConfig;
 use fundsp::prelude::*;
 
-const GENERATOR_ID: u64 = crate::util::hash_str("NodeGenerator");
+const GENERATOR_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::NodeGenerator"));
 
 #[derive(Clone)]
 pub struct NodeGenerator<S: Float> {

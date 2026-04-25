@@ -18,7 +18,7 @@ const RHYTHM_GRID_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::Rhy
 /// - Trigger signal: 1.0 on the first tick of each beat, 0.0 otherwise
 /// - Current ticks per beat as a float
 /// - Current ticks to next beat as a float
-pub struct RhythmGrid<S: Float> {
+pub struct RhythmGrid<S: Real + Float> {
     sample_rate: f64,
     current_bpm: u64,
     current_ticks_per_beat: u64,
@@ -26,7 +26,7 @@ pub struct RhythmGrid<S: Float> {
     _sample_type: PhantomData<S>,
 }
 
-impl<S: Float> RhythmGrid<S> {
+impl<S: Real + Float> RhythmGrid<S> {
     pub fn new() -> Self {
         Self {
             sample_rate: DEFAULT_SR,
@@ -59,7 +59,7 @@ impl<S: Float> RhythmGrid<S> {
     }
 }
 
-impl<S: Float> AudioNode for RhythmGrid<S> {
+impl<S: Real + Float> AudioNode for RhythmGrid<S> {
     const ID: u64 = RHYTHM_GRID_ID;
 
     type Inputs = U1;
@@ -121,7 +121,7 @@ impl<S: Float> AudioNode for RhythmGrid<S> {
 
 /// Create a rhythm grid node. Outputs 1.0 on the first tick of each beat, 0.0 otherwise.
 /// Input is BPM as a float.
-pub fn rhythm_grid<S: Float>() -> An<RhythmGrid<S>> {
+pub fn rhythm_grid<S: Real + Float>() -> An<RhythmGrid<S>> {
     An(RhythmGrid::new())
 }
 

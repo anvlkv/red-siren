@@ -14,7 +14,7 @@ macro_rules! define_fine_tuned_values {
             $(pub $field: Shared,)*
         }
 
-        $(const $const_name: f32 = $default;)*
+        $(pub(crate) const $const_name: f32 = $default;)*
 
         #[cfg(feature = "editor")]
         impl Default for FineTunedSharedValues {

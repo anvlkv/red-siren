@@ -80,7 +80,7 @@ struct ActiveState {
 /// Each schedule fires exactly once; to repeat, pulse the inputs again.
 ///
 /// ## Outputs: `N::Outputs`
-pub struct RhythmGridEnvelope<S: Float, N: AudioNode> {
+pub struct RhythmGridEnvelope<S: Real + Float, N: AudioNode> {
     inner: An<N>,
     adsr: AdsrShape,
     pending_schedules: Vec<Schedule>,
@@ -88,7 +88,7 @@ pub struct RhythmGridEnvelope<S: Float, N: AudioNode> {
     _sample_type: PhantomData<S>,
 }
 
-impl<S: Float, N: AudioNode> RhythmGridEnvelope<S, N> {
+impl<S: Real + Float, N: AudioNode> RhythmGridEnvelope<S, N> {
     pub fn new(inner: An<N>, adsr: AdsrShape) -> Self {
         Self {
             inner,
@@ -214,7 +214,7 @@ impl<S: Float, N: AudioNode> RhythmGridEnvelope<S, N> {
     }
 }
 
-impl<S: Float, N: AudioNode> AudioNode for RhythmGridEnvelope<S, N> {
+impl<S: Real + Float, N: AudioNode> AudioNode for RhythmGridEnvelope<S, N> {
     const ID: u64 = RHYTHM_GRID_ENVELOPE_ID;
 
     type Inputs = op!(U3 + U2 + U2);
@@ -293,7 +293,7 @@ impl<S: Float, N: AudioNode> AudioNode for RhythmGridEnvelope<S, N> {
 ///
 /// The grid trigger is used only for beat-aligned positioning. Each enqueued schedule
 /// fires exactly once; to repeat, send new start/duration inputs to enqueue the next event.
-pub fn rhythm_grid_envelope<S: Float, N: AudioNode>(
+pub fn rhythm_grid_envelope<S: Real + Float, N: AudioNode>(
     inner: An<N>,
     adsr: AdsrShape,
 ) -> An<RhythmGridEnvelope<S, N>> {

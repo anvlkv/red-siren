@@ -6,12 +6,12 @@ use fundsp::prelude::*;
 const GENERATOR_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::NodeGenerator"));
 
 #[derive(Clone)]
-pub struct NodeGenerator<S: Float> {
+pub struct NodeGenerator<S: Real + Float> {
     inner: Box<dyn AudioUnit>,
     _sample_type: PhantomData<S>,
 }
 
-impl<S: Float> NodeGenerator<S> {
+impl<S: Real + Float> NodeGenerator<S> {
     pub fn new(config: &NodeConfig) -> Self {
         let inner = Net::new(1, 1);
 
@@ -22,7 +22,7 @@ impl<S: Float> NodeGenerator<S> {
     }
 }
 
-impl<S: Float> AudioNode for NodeGenerator<S> {
+impl<S: Real + Float> AudioNode for NodeGenerator<S> {
     const ID: u64 = GENERATOR_ID;
 
     type Inputs = U1;

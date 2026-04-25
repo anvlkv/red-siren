@@ -29,7 +29,7 @@ const NUM_LEVELS: usize = 11;
 ///
 /// ### Accentuation output (1):
 /// - Accentuation value [4] (0.0 or 1.0)
-pub struct NodeController<S: Float> {
+pub struct NodeController<S: Real + Float> {
     config: NodeConfig,
     /// Control for whether the current hit is accented or not. A hit is considered accented if the control value is above 0.5.
     ///
@@ -45,7 +45,7 @@ pub struct NodeController<S: Float> {
     _sample_type: PhantomData<S>,
 }
 
-impl<S: Float> NodeController<S> {
+impl<S: Real + Float> NodeController<S> {
     const FIBONACCI: [u16; NUM_LEVELS] = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144];
     const HARMONIC_NUMERATORS: [u16; NUM_LEVELS] = [1, 9, 5, 4, 3, 5, 15, 2, 7, 11, 13];
     const HARMONIC_DENOMINATORS: [u16; NUM_LEVELS] = [1, 8, 4, 3, 2, 3, 8, 1, 4, 8, 8];
@@ -95,7 +95,7 @@ impl<S: Float> NodeController<S> {
     }
 }
 
-impl<S: Float> AudioNode for NodeController<S> {
+impl<S: Real + Float> AudioNode for NodeController<S> {
     const ID: u64 = CONTROLLER_ID;
 
     type Inputs = U2;
@@ -143,7 +143,7 @@ impl<S: Float> AudioNode for NodeController<S> {
     }
 }
 
-pub fn create_node_controller<S: Float>(
+pub fn create_node_controller<S: Real + Float>(
     config: NodeConfig,
     accentuation: &Shared,
     rhythm: &Shared,

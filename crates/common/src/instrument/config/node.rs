@@ -78,6 +78,7 @@ impl NodeConfig {
         Ok(())
     }
 
+    /// Calculate the formant frequency for a given formant number (1-based index) based on the vocal tract length of the node.
     pub fn formant_hz(&self, formant: usize) -> f64 {
         ((2.0 * formant as f64 - 1.0) * SPEED_OF_SOUND_M_S) / (4.0 * (self.l_mm / 1000.0))
     }
@@ -87,14 +88,17 @@ impl NodeConfig {
         self.v_cm3 / 1_000_000.0
     }
 
+    /// Calculate the heart rate in beats per minute based on the mass of the node using an allometric scaling law.
     pub fn hr_bpm(&self) -> u16 {
         (241.0 * self.w_kg.powf(-0.25)).ceil() as u16
     }
 
+    /// Calculate the buoyant force exerted on the node when submerged in a fluid with the given density (in g/cm³). The force is returned in Newtons.
     pub fn buoyant_force(&self, fluid_density_g_cm3: f64) -> f64 {
         self.v_cm3 * fluid_density_g_cm3 * GRAVITY_M_S2
     }
 
+    /// Calculate the body density of the node in g/cm³.
     pub fn body_density_g_cm3(&self) -> f64 {
         (self.w_kg * 1000.0) / self.v_cm3
     }

@@ -62,14 +62,14 @@ fn waveform_points(samples: &[f32]) -> String {
 /// Devtools panel for manually exercising a single audio node.
 ///
 /// Sections:
-/// - **Node** — group + key via sliders.
+/// - **Node** — band + key via sliders.
 /// - **Parameters** — frequency and excite (re/im) sliders.
 /// - **Hold-to-play** pad — mousedown → hit, mouseup / mouseleave → release.
 /// - **Snoop** — A1 / A2 / O level bars and an output waveform polled at 12 FPS.
 #[component]
 pub fn TestNodePanel() -> impl IntoView {
     // ── node selection ────────────────────────────────────────────────────────
-    let (node_group, set_node_group) = signal(0_u8);
+    let (node_band, set_node_band) = signal(0_u8);
     let (node_key_idx, set_node_key_idx) = signal(0_u8);
 
     // ── audio parameters ──────────────────────────────────────────────────────
@@ -134,7 +134,7 @@ pub fn TestNodePanel() -> impl IntoView {
     let on_hit = move |_: web_sys::MouseEvent| {
         do_hit(Some((
             TestNodeHitPayload {
-                node_key: NodeKey(node_group(), node_key_idx()),
+                node_key: NodeKey(node_band(), node_key_idx()),
                 frequency: frequency(),
                 excite_real: excite_real(),
                 excite_imag: excite_imag(),
@@ -146,7 +146,7 @@ pub fn TestNodePanel() -> impl IntoView {
     let on_release = move |_: web_sys::MouseEvent| {
         do_release(Some((
             TestNodeReleasePayload {
-                node_key: NodeKey(node_group(), node_key_idx()),
+                node_key: NodeKey(node_band(), node_key_idx()),
             },
             (),
         )));
@@ -158,7 +158,7 @@ pub fn TestNodePanel() -> impl IntoView {
         excitement_batch().and_then(|b| {
             b.snoops
                 .into_iter()
-                .find(|e| e.group == node_group() && e.key == node_key_idx())
+                .find(|e| e.band == node_band() && e.key == node_key_idx())
                 .map(|e| e.samples.into_iter().map(|(r, _)| r).collect::<Vec<_>>())
         })
     });
@@ -167,7 +167,7 @@ pub fn TestNodePanel() -> impl IntoView {
         excitement_batch().and_then(|b| {
             b.snoops
                 .into_iter()
-                .find(|e| e.group == node_group() && e.key == node_key_idx())
+                .find(|e| e.band == node_band() && e.key == node_key_idx())
                 .map(|e| e.samples.into_iter().map(|(_, i)| i).collect::<Vec<_>>())
         })
     });
@@ -176,7 +176,7 @@ pub fn TestNodePanel() -> impl IntoView {
         output_batch().and_then(|b| {
             b.snoops
                 .into_iter()
-                .find(|e| e.group == node_group() && e.key == node_key_idx())
+                .find(|e| e.band == node_band() && e.key == node_key_idx())
                 .map(|e| e.samples)
         })
     });
@@ -204,15 +204,15 @@ pub fn TestNodePanel() -> impl IntoView {
                 <Fold title="Node">
                     <div class="flex flex-col gap-3 pt-2">
                         <RangeSlider
-                            label="Group"
+                            label="Band"
                             show_value=true
-                            value=Signal::derive(move || SliderValue::Single(node_group() as f32))
+                            value=Signal::derive(move || SliderValue::Single(node_band() as f32))
                             min=0.0_f32
                             max=15.0_f32
                             step=1.0_f32
                             on_input=Callback::new(move |v: SliderValue| {
                                 let n: f32 = v.into();
-                                set_node_group(n as u8);
+                                set_node_band(n as u8);
                             })
                         />
                         <RangeSlider
@@ -228,7 +228,7 @@ pub fn TestNodePanel() -> impl IntoView {
                             })
                         />
                         <p class="text-sm tabular-nums text-black/50 dark:text-red/50">
-                            {move || format!("NodeKey({}, {})", node_group(), node_key_idx())}
+                            {move || format!("NodeKey({}, {})", node_band(), node_key_idx())}
                         </p>
                     </div>
                 </Fold>
@@ -294,7 +294,7 @@ pub fn TestNodePanel() -> impl IntoView {
 
                         // current node label
                         <p class="text-xs tabular-nums text-black/50 dark:text-red/50">
-                            {move || format!("NodeKey({}, {})", node_group(), node_key_idx())}
+                            {move || format!("NodeKey({}, {})", node_band(), node_key_idx())}
                         </p>
 
                         // A1 — excite real

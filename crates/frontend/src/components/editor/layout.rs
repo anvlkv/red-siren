@@ -205,13 +205,13 @@ pub fn LayoutEditorPanel() -> impl IntoView {
                             </label>
                         </Fold>
 
-                        <Fold open=false title="Groups">
+                        <Fold open=false title="Bands">
                             <fieldset class="flex flex-col gap-2">
                                 <RangeSlider
                                     show_value=true
-                                    label="Keys / Group"
+                                    label="Keys / Band"
                                     value=Signal::derive(move || {
-                                        (layout().num_keys_per_group.get() as f32).into()
+                                        (layout().num_keys_per_band.get() as f32).into()
                                     })
                                     min=PRIME_MIN
                                     max=PRIME_MAX
@@ -221,16 +221,16 @@ pub fn LayoutEditorPanel() -> impl IntoView {
                                         move |val: SliderValue| {
                                             let raw = nearest_layout_prime(val.into());
                                             if let Some(nz) = std::num::NonZero::new(raw) {
-                                                set_layout.update(|l| l.num_keys_per_group = nz);
+                                                set_layout.update(|l| l.num_keys_per_band = nz);
                                             }
                                         }
                                     })
                                 />
                                 <RangeSlider
                                     show_value=true
-                                    label="Groups"
+                                    label="Bands"
                                     value=Signal::derive(move || {
-                                        (layout().num_groups.get() as f32).into()
+                                        (layout().num_bands.get() as f32).into()
                                     })
                                     min=PRIME_MIN
                                     max=PRIME_MAX
@@ -240,7 +240,7 @@ pub fn LayoutEditorPanel() -> impl IntoView {
                                         move |val: SliderValue| {
                                             let raw = nearest_layout_prime(val.into());
                                             if let Some(nz) = std::num::NonZero::new(raw) {
-                                                set_layout.update(|l| l.num_groups = nz);
+                                                set_layout.update(|l| l.num_bands = nz);
                                             }
                                         }
                                     })
@@ -363,16 +363,16 @@ pub fn LayoutEditorPanel() -> impl IntoView {
                                 />
                                 <RangeSlider
                                     show_value=true
-                                    label="Groups Gap"
+                                    label="Bands Gap"
                                     value=Signal::derive(move || {
-                                        (layout().groups_gap as f32).into()
+                                        (layout().bands_gap as f32).into()
                                     })
                                     min=DIM_MIN
                                     max=DIM_MAX
                                     step=DIM_STEP
                                     on_input={
                                         let set_layout = set_layout;
-                                        slider_input(set_layout, |l, v| l.groups_gap = v.max(0.0))
+                                        slider_input(set_layout, |l, v| l.bands_gap = v.max(0.0))
                                     }
                                 />
                             </fieldset>

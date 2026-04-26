@@ -1,5 +1,5 @@
+mod band;
 mod channel;
-mod group;
 mod node;
 mod scale;
 
@@ -10,14 +10,14 @@ use crate::{error::InstrumentConfigError, orientation::LayoutOrientation, NodeKe
 
 use super::{consts::*, Layout};
 
+pub use band::*;
 pub use channel::*;
-pub use group::*;
 pub use node::*;
 pub use scale::*;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 /// Instrument configuartion for audio generation
-pub struct Config(pub Vec<GroupConfig>, pub Scale);
+pub struct Config(pub Vec<BandConfig>, pub Scale);
 
 impl Config {
     /// Simultaneous node "power" budget check.
@@ -40,7 +40,7 @@ impl Config {
         let all_len = self.0.first().map_or(0, |g| g.nodes.len());
 
         if self.0.iter().any(|g| g.nodes.len() != all_len) {
-            return Err(InstrumentConfigError::InvalidGroups);
+            return Err(InstrumentConfigError::InvalidBands);
         }
 
         for (gi, g) in self.0.iter().enumerate() {
@@ -56,12 +56,12 @@ impl Config {
         Ok(())
     }
 
-    /// Validation of all nodes in all groups
+    /// Validation of all nodes in all bands
     ///
     /// - Resonate in recommended frequencies
     /// - Total volume does not exceed max dB
     fn validate_channels(&self) -> Result<(), InstrumentConfigError> {
-        let mut prev: Option<GroupChannel> = None;
+        let mut prev: Option<BandChannel> = None;
         for g in &self.0 {
             if prev == Some(g.channel) {
                 return Err(InstrumentConfigError::ChannelsConfigurationInvalid);
@@ -71,43 +71,43 @@ impl Config {
         Ok(())
     }
 
-    pub fn group_nth_channel(
+    pub fn band_nth_channel(
         &self,
-        channel: GroupChannel,
+        channel: BandChannel,
         nth_in_channel: usize,
-    ) -> Option<&GroupConfig> {
+    ) -> Option<&BandConfig> {
         self.0
             .iter()
             .filter(|g| g.channel == channel)
             .nth(nth_in_channel)
     }
 
-    pub fn channel_of_key(&self, key: &NodeKey) -> Option<GroupChannel> {
+    pub fn channel_of_key(&self, key: &NodeKey) -> Option<BandChannel> {
         self.0
             .iter()
             .find(|g| g.nodes.iter().any(|n| &n.key == key))
             .map(|g| g.channel)
     }
 
-    pub fn num_groups_left(&self) -> usize {
+    pub fn num_bands_left(&self) -> usize {
         self.0
             .iter()
-            .filter(|g| matches!(g.channel, GroupChannel::Left))
+            .filter(|g| matches!(g.channel, BandChannel::Left))
             .count()
     }
 
-    pub fn num_groups_right(&self) -> usize {
+    pub fn num_bands_right(&self) -> usize {
         self.0
             .iter()
-            .filter(|g| matches!(g.channel, GroupChannel::Right))
+            .filter(|g| matches!(g.channel, BandChannel::Right))
             .count()
     }
 
-    pub fn num_groups(&self) -> usize {
+    pub fn num_bands(&self) -> usize {
         self.0.len()
     }
 
-    pub fn num_nodes_per_group(&self) -> usize {
+    pub fn num_nodes_per_band(&self) -> usize {
         self.0.first().map_or(0, |g| g.nodes.len())
     }
 
@@ -144,8 +144,8 @@ impl TryFrom<Layout> for Config {
         let string_len = ((b.x - a.x).powi(2) + (b.y - a.y).powi(2)).sqrt();
 
         // initial data
-        let num_groups = key_registry.num_groups() as usize;
-        let num_divisions_per_group = key_registry.num_keys_per_group() as usize;
+        let num_bands = key_registry.num_bands() as usize;
+        let num_divisions_per_band = key_registry.num_keys_per_band() as usize;
         let scale = layout.scale;
 
         // computed properties
@@ -153,14 +153,14 @@ impl TryFrom<Layout> for Config {
         let phase_step = 1.0 / total_steps as f64;
         let l_step_nodes = layout.key_radius + layout.key_bands_gap;
 
-        // Pre-compute frequency range across all groups to anchor mass/volume.
+        // Pre-compute frequency range across all bands to anchor mass/volume.
         // Mersenne law: w ∝ 1/f², so log(w) is linear in log(f).
-        let octave_bases = collect_octave_bases(string_len, num_groups);
-        let f_config_min = scale.freq_n(0.0, octave_bases[0], num_divisions_per_group as f64);
+        let octave_bases = collect_octave_bases(string_len, num_bands);
+        let f_config_min = scale.freq_n(0.0, octave_bases[0], num_divisions_per_band as f64);
         let f_config_max = scale.freq_n(
-            (num_divisions_per_group - 1) as f64,
+            (num_divisions_per_band - 1) as f64,
             *octave_bases.last().unwrap_or(&octave_bases[0]),
-            num_divisions_per_group as f64,
+            num_divisions_per_band as f64,
         );
         let ln_f_range = f_config_max.ln() - f_config_min.ln();
 
@@ -177,21 +177,21 @@ impl TryFrom<Layout> for Config {
             }) + layout.key_pad_main()
         };
 
-        let mut groups = Vec::new();
+        let mut bands = Vec::new();
         let mut target_f_min = None;
-        for g in 0..num_groups {
-            let channel = layout.first_group_channel.nth_channel_from_first(g);
+        for g in 0..num_bands {
+            let channel = layout.first_band_channel.nth_channel_from_first(g);
 
             let (octave_f_base, next_n_base) =
                 compute_fundamentals(string_len, n_base, target_f_min);
 
             let mut nodes = vec![];
 
-            for k in 0..num_divisions_per_group {
+            for k in 0..num_divisions_per_band {
                 let key = key_registry.create_key(g.try_into()?, k.try_into()?)?;
 
                 let frequency =
-                    scale.freq_n(k as f64, octave_f_base, num_divisions_per_group as f64);
+                    scale.freq_n(k as f64, octave_f_base, num_divisions_per_band as f64);
 
                 let phase = phase_step * n as f64;
                 let cents = 1200.0 * (frequency / octave_f_base).log2();
@@ -207,8 +207,8 @@ impl TryFrom<Layout> for Config {
                 let w_kg = W_MAX_KG * (W_MIN_KG / W_MAX_KG).powf(t);
                 // Volume derived from mass and body density: v = m / ρ
                 // Density also follows t: dense metallic at bass, hollow/light at treble
-                let body_density =
-                    BODY_DENSITY_MAX_G_CM3 * (BODY_DENSITY_MIN_G_CM3 / BODY_DENSITY_MAX_G_CM3).powf(t);
+                let body_density = BODY_DENSITY_MAX_G_CM3
+                    * (BODY_DENSITY_MIN_G_CM3 / BODY_DENSITY_MAX_G_CM3).powf(t);
                 let v_cm3 = (w_kg * 1000.0) / body_density;
 
                 nodes.push(NodeConfig {
@@ -225,16 +225,16 @@ impl TryFrom<Layout> for Config {
                 n += 1;
             }
 
-            l_mm += layout.groups_gap;
+            l_mm += layout.bands_gap;
             target_f_min = Some(octave_f_base * 2.0);
             n_base = (next_n_base + 1).max(g + 1);
 
             nodes.sort();
 
-            groups.push(GroupConfig { channel, nodes });
+            bands.push(BandConfig { channel, nodes });
         }
 
-        let config = Config(groups, scale);
+        let config = Config(bands, scale);
 
         // Single-pass validation (recommended + safe)
         // Caller can decide how to surface any error.
@@ -248,19 +248,15 @@ fn fundamental_frequency(n: usize, v: f64, l: f64) -> f64 {
     (n as f64 * v) / (2.0 * l)
 }
 
-/// Pre-computes the octave base frequency for each group without building nodes.
-/// Mirrors the outer group loop in `TryFrom<Layout> for Config`, tracking the same
+/// Pre-computes the octave base frequency for each band without building nodes.
+/// Mirrors the outer band loop in `TryFrom<Layout> for Config`, tracking the same
 /// `n_base` / `target_f_min` state so the returned bases match the real generation.
-fn collect_octave_bases(
-    string_len: f64,
-    num_groups: usize,
-) -> Vec<f64> {
-    let mut bases = Vec::with_capacity(num_groups);
+fn collect_octave_bases(string_len: f64, num_bands: usize) -> Vec<f64> {
+    let mut bases = Vec::with_capacity(num_bands);
     let mut n_base: usize = 1;
     let mut target_f_min: Option<f64> = None;
-    for g in 0..num_groups {
-        let (octave_f_base, next_n_base) =
-            compute_fundamentals(string_len, n_base, target_f_min);
+    for g in 0..num_bands {
+        let (octave_f_base, next_n_base) = compute_fundamentals(string_len, n_base, target_f_min);
         bases.push(octave_f_base);
         target_f_min = Some(octave_f_base * 2.0);
         n_base = (next_n_base + 1).max(g + 1);
@@ -316,22 +312,22 @@ mod tests {
     }
 
     #[test]
-    fn test_group_channel_nth_channel_from_first() {
+    fn test_band_channel_nth_channel_from_first() {
         assert_eq!(
-            GroupChannel::Left.nth_channel_from_first(0),
-            GroupChannel::Left
+            BandChannel::Left.nth_channel_from_first(0),
+            BandChannel::Left
         );
         assert_eq!(
-            GroupChannel::Left.nth_channel_from_first(1),
-            GroupChannel::Right
+            BandChannel::Left.nth_channel_from_first(1),
+            BandChannel::Right
         );
         assert_eq!(
-            GroupChannel::Right.nth_channel_from_first(0),
-            GroupChannel::Right
+            BandChannel::Right.nth_channel_from_first(0),
+            BandChannel::Right
         );
         assert_eq!(
-            GroupChannel::Right.nth_channel_from_first(1),
-            GroupChannel::Left
+            BandChannel::Right.nth_channel_from_first(1),
+            BandChannel::Left
         );
     }
 
@@ -346,14 +342,14 @@ mod tests {
     }
 
     #[test]
-    fn test_group_config_validity() {
+    fn test_band_config_validity() {
         let node =
             NodeConfig::new_test_node((super::SOFT_MIN_FREQ_HZ + super::SOFT_MAX_FREQ_HZ) / 2.0);
-        let group = GroupConfig {
-            channel: GroupChannel::Left,
+        let band = BandConfig {
+            channel: BandChannel::Left,
             nodes: vec![node],
         };
-        assert!(group.validate(0).is_ok());
+        assert!(band.validate(0).is_ok());
     }
 
     #[test]
@@ -362,11 +358,11 @@ mod tests {
         // MAX_DBS is treated as the hard cap on total simultaneous nodes.
         let excessive_nodes = MAX_DBS + 1;
         let dummy_node = NodeConfig::new_test_node((SOFT_MIN_FREQ_HZ + SOFT_MAX_FREQ_HZ) / 2.0);
-        let group = GroupConfig {
-            channel: GroupChannel::Left,
+        let band = BandConfig {
+            channel: BandChannel::Left,
             nodes: vec![dummy_node; excessive_nodes],
         };
-        let cfg_excess = Config(vec![group], Scale::Yo);
+        let cfg_excess = Config(vec![band], Scale::Yo);
         assert!(
             !cfg_excess.max_event_volume_ok(),
             "Excessive node count should fail volume check"
@@ -378,16 +374,16 @@ mod tests {
 
         // Construct a config that is just at the limit
         let ok_nodes = MAX_DBS;
-        let group_ok = GroupConfig {
-            channel: GroupChannel::Left,
+        let band_ok = BandConfig {
+            channel: BandChannel::Left,
             nodes: vec![dummy_node; ok_nodes],
         };
-        let cfg_ok = Config(vec![group_ok], Scale::In);
+        let cfg_ok = Config(vec![band_ok], Scale::In);
         assert!(
             cfg_ok.max_event_volume_ok(),
             "Node count at limit should pass"
         );
-        // Single group: channel alternation not applicable. Uses recommended band; validate() should succeed.
+        // Single band: channel alternation not applicable. Uses recommended band; validate() should succeed.
         assert!(
             cfg_ok.validate().is_ok(),
             "Config at volume limit should remain valid"

@@ -116,7 +116,7 @@ impl AppBus {
                             if let Err(e) = handle.emit(
                                 BAND_CONTROL_G_K,
                                 ReflectBandControlPayload {
-                                    group: node_key.group(),
+                                    band: node_key.band(),
                                     key: node_key.key(),
                                     value: band_value,
                                 },
@@ -130,7 +130,7 @@ impl AppBus {
                             if let Err(e) = handle.emit(
                                 KEY_CONTROL_G_K,
                                 ReflectKeyControlPayload {
-                                    group: node_key.group(),
+                                    band: node_key.band(),
                                     key: node_key.key(),
                                     value: key_value,
                                 },
@@ -247,7 +247,7 @@ fn emit_reflect_events(handle: &AppHandle, instrument: &InstrumentState) {
         if let Err(e) = handle.emit(
             BAND_CONTROL_G_K,
             ReflectBandControlPayload {
-                group: node_key.group(),
+                band: node_key.band(),
                 key: node_key.key(),
                 value: band_value,
             },
@@ -261,7 +261,7 @@ fn emit_reflect_events(handle: &AppHandle, instrument: &InstrumentState) {
         if let Err(e) = handle.emit(
             KEY_CONTROL_G_K,
             ReflectKeyControlPayload {
-                group: node_key.group(),
+                band: node_key.band(),
                 key: node_key.key(),
                 value: key_value,
             },

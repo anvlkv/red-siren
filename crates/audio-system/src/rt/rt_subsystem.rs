@@ -877,19 +877,19 @@ impl RuntimeSubsystem {
         #[cfg(feature = "editor")] fine_tuned_values: &FineTunedValues,
     ) -> CreateInstrumentNetworkReturn {
         log::info!(
-            "Creating network with {} groups, {} keys per group",
-            config.num_groups(),
+            "Creating network with {} bands, {} keys per band",
+            config.num_bands(),
             config.0.first().map(|g| g.nodes.len()).unwrap_or(0)
         );
 
         #[cfg(feature = "editor")]
         let _ = fine_tuned_values;
 
-        // Collect all nodes across all groups so control maps remain populated.
+        // Collect all nodes across all bands so control maps remain populated.
         let nodes: Vec<_> = config
             .0
             .iter()
-            .flat_map(|group| group.nodes.iter())
+            .flat_map(|band| band.nodes.iter())
             .collect();
 
         let mut siren_excitements = HashMap::<NodeKey, ExcitementControl>::new();

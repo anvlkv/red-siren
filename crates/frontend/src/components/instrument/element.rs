@@ -23,7 +23,7 @@ use crate::{
 pub fn KeyboardElement(
     g: usize,
     k: usize,
-    channel: common::instrument::GroupChannel,
+    channel: common::instrument::BandChannel,
     #[prop(into)] excitement_samples: Signal<Option<Vec<(f32, f32)>>>,
 ) -> impl IntoView {
     let ctx = expect_instrument_context();
@@ -33,8 +33,8 @@ pub fn KeyboardElement(
         key_band_breadth,
         key_band_length,
         orientation,
-        num_groups,
-        num_keys_per_group,
+        num_bands,
+        num_keys_per_band,
         space,
         ..
     } = expect_layout_context();
@@ -42,7 +42,7 @@ pub fn KeyboardElement(
     let (drag_start_pos, set_drag_start_pos) = signal(Option::<(i32, i32, i32)>::None);
     let (prev_instant, set_prev_instant) = signal(Instant::now());
 
-    let registry = Signal::derive(move || NodeKeyRegistry::new(num_groups(), num_keys_per_group()));
+    let registry = Signal::derive(move || NodeKeyRegistry::new(num_bands(), num_keys_per_band()));
 
     let UseTauriReturn {
         error: band_control_error,
@@ -60,8 +60,8 @@ pub fn KeyboardElement(
             common::orientation::LayoutOrientation::Horizontal => d_y,
         } as f64
             * match channel {
-                common::instrument::GroupChannel::Left => -1.0,
-                common::instrument::GroupChannel::Right => 1.0,
+                common::instrument::BandChannel::Left => -1.0,
+                common::instrument::BandChannel::Right => 1.0,
             }
             * if ctrl { 0.1 } else { 1.0 };
         let bound = key_band_length();
@@ -88,7 +88,7 @@ pub fn KeyboardElement(
                 (),
             )));
         } else if alt {
-            let keys = registry().group_keys(g as u8);
+            let keys = registry().band_keys(g as u8);
             update_band_control.set(Some((
                 UpdateBandControlPayload {
                     keys,
@@ -174,7 +174,7 @@ pub fn KeyboardElement(
         band_control_data()
             .iter()
             .find_map(|d| {
-                if d.group == g as u8 && d.key == k as u8 {
+                if d.band == g as u8 && d.key == k as u8 {
                     let value = (len / 2.0) + (d.value as f64 * (len / 2.0));
                     Some(value - radius + pad / 2.0)
                 } else {
@@ -189,7 +189,7 @@ pub fn KeyboardElement(
         key_control_data()
             .iter()
             .find_map(|d| {
-                if d.group == g as u8 && d.key == k as u8 {
+                if d.band == g as u8 && d.key == k as u8 {
                     Some(d.value > 0.0)
                 } else {
                     None
@@ -245,7 +245,7 @@ pub fn KeyboardElement(
                 value: if key_control_data() { 0.0 } else { 1.0 },
             }
         } else if alt {
-            let keys = registry().group_keys(g as u8);
+            let keys = registry().band_keys(g as u8);
             UpdateKeyControlPayload {
                 keys,
                 value: if key_control_data() { 0.0 } else { 1.0 },
@@ -438,7 +438,7 @@ pub fn KeyboardElement(
                 band_control_data()
                     .iter()
                     .find_map(|d| {
-                        if d.group == g as u8 && d.key == k as u8 {
+                        if d.band == g as u8 && d.key == k as u8 {
                             Some(format!("{}", d.value))
                         } else {
                             None
@@ -472,19 +472,19 @@ pub fn KeyboardElement(
                         match (orientation(), channel) {
                             (
                                 common::orientation::LayoutOrientation::Horizontal,
-                                common::instrument::GroupChannel::Left,
+                                common::instrument::BandChannel::Left,
                             ) => "top-0 border-t-1 border-x-3 border-b-5",
                             (
                                 common::orientation::LayoutOrientation::Vertical,
-                                common::instrument::GroupChannel::Left,
+                                common::instrument::BandChannel::Left,
                             ) => "left-0 border-l-1 border-y-3 border-r-5",
                             (
                                 common::orientation::LayoutOrientation::Horizontal,
-                                common::instrument::GroupChannel::Right,
+                                common::instrument::BandChannel::Right,
                             ) => "bottom-0 border-b-1 border-x-3 border-t-5",
                             (
                                 common::orientation::LayoutOrientation::Vertical,
-                                common::instrument::GroupChannel::Right,
+                                common::instrument::BandChannel::Right,
                             ) => "right-0 border-r-1 border-y-3 border-l-5",
                         },
                         if should_animate() {
@@ -507,19 +507,19 @@ pub fn KeyboardElement(
                             match (orientation(), channel) {
                                 (
                                     common::orientation::LayoutOrientation::Vertical,
-                                    common::instrument::GroupChannel::Left,
+                                    common::instrument::BandChannel::Left,
                                 ) => "h-3 left-1/2 top-0 w-[1px]",
                                 (
                                     common::orientation::LayoutOrientation::Vertical,
-                                    common::instrument::GroupChannel::Right,
+                                    common::instrument::BandChannel::Right,
                                 ) => "h-3 right-1/2 bottom-0 w-[1px]",
                                 (
                                     common::orientation::LayoutOrientation::Horizontal,
-                                    common::instrument::GroupChannel::Left,
+                                    common::instrument::BandChannel::Left,
                                 ) => "w-3 top-1/2 left-0 h-[1px]",
                                 (
                                     common::orientation::LayoutOrientation::Horizontal,
-                                    common::instrument::GroupChannel::Right,
+                                    common::instrument::BandChannel::Right,
                                 ) => "w-3 bottom-1/2 right-0 h-[1px]",
                             },
                         )
@@ -545,8 +545,8 @@ pub fn KeyboardElement(
                         format!(
                             "{}px",
                             match channel {
-                                common::instrument::GroupChannel::Left => band_control_pos(),
-                                common::instrument::GroupChannel::Right => -band_control_pos(),
+                                common::instrument::BandChannel::Left => band_control_pos(),
+                                common::instrument::BandChannel::Right => -band_control_pos(),
                             },
                         )
                     } else {
@@ -558,8 +558,8 @@ pub fn KeyboardElement(
                         format!(
                             "{}px",
                             match channel {
-                                common::instrument::GroupChannel::Left => band_control_pos(),
-                                common::instrument::GroupChannel::Right => -band_control_pos(),
+                                common::instrument::BandChannel::Left => band_control_pos(),
+                                common::instrument::BandChannel::Right => -band_control_pos(),
                             },
                         )
                     } else {

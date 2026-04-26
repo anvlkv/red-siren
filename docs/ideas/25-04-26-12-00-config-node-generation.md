@@ -18,7 +18,7 @@ This creates **exponential explosion**:
 - Node 6: 594 kg (plausible)
 - **Node (1,1): 3.2×10¹⁷ kg** (impossible)
 
-**Root cause**: Squaring mass at each step compounds across groups without reset.
+**Root cause**: Squaring mass at each step compounds across bands without reset.
 
 **Snapshot issue** ([common__instrument__config__node__tests__config_1920x1080.snap](crates/common/src/instrument/config/snapshots/common__instrument__config__node__tests__config_1920x1080.snap#L403-L411)):
 - hr_bpm collapses to 1–2 (inverse ∝ mass^0.25)
@@ -32,7 +32,7 @@ This creates **exponential explosion**:
 From user:
 1. **Focus only on physical params**: l_mm, w_kg, v_cm3 (derive hr, density, buoyancy).
 2. **Deterministic**: no randomness; same layout → same config.
-3. **Monotonicity**: strict: l_mm, w_kg, v_cm3 must increase across nodes within group, and across groups.
+3. **Monotonicity**: strict: l_mm, w_kg, v_cm3 must increase across nodes within group, and across bands.
 4. **Mass range**: mouse (~10g) to whale (~100kg+).
 5. **No layout/channel changes**: work with existing screen estate mapping.
 6. **Physically-inspired**: ground in resonator/string physics to justify organo-metallic timbre.
@@ -81,7 +81,7 @@ $$f = \frac{1}{2L} \sqrt{\frac{T}{\mu}}$$
 ### Solution 1: Controlled Linear Progression (Safest, Fastest)
 
 **Concept**:  
-Global linear interpolation from `min_w_kg` to `max_w_kg`, distributed across all nodes. Per-group offsets ensure monotonicity across groups.
+Global linear interpolation from `min_w_kg` to `max_w_kg`, distributed across all nodes. Per-group offsets ensure monotonicity across bands.
 
 **Algorithm**:
 ```
@@ -138,7 +138,7 @@ For each group g:
 
 ---
 
-### Solution 3: Piecewise Exponential with Per-Group Reset (Practical Sweet Spot)
+### Solution 3: Piecewise Exponential with Per-Band Reset (Practical Sweet Spot)
 
 **Concept**:  
 Each group claims a budget of mass. Within a group, apply controlled power law (exponent ~0.5–0.8) to avoid exponential explosion. Reset at group boundary.
@@ -147,7 +147,7 @@ Each group claims a budget of mass. Within a group, apply controlled power law (
 ```
 min_w_kg = 0.01 kg
 max_w_kg = 200 kg
-group_count = num_groups
+group_count = num_bands
 
 group_step = (max_w_kg - min_w_kg) / group_count
 group_min[g] = min_w_kg + g * group_step
@@ -248,7 +248,7 @@ For each node n:
 
 **Validation checklist**:
 - [ ] All w_kg values in [0.01, 500] kg.
-- [ ] Monotonic across nodes and groups.
+- [ ] Monotonic across nodes and bands.
 - [ ] hr_bpm in [1, 250] range.
 - [ ] body_density in [0.1, 10] g/cm³.
 - [ ] Snapshot diffs show sensible values (no 10ⁿ exponents).

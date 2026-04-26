@@ -4,10 +4,10 @@ use mint::{Point2, Vector2};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Line, NodeKeyRegistry,
-    instrument::GroupChannel,
+    instrument::BandChannel,
     orientation::LayoutOrientation,
-    safe_area::{DEFAULT_SAFE_AREA, SafeArea},
+    safe_area::{SafeArea, DEFAULT_SAFE_AREA},
+    Line, NodeKeyRegistry,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -30,16 +30,16 @@ pub struct Layout {
     pub key_band_breadth: f64,
     /// Minimum distance from edge of the screen to any interactive element
     pub safe_area_padding: SafeArea,
-    /// Distance between `track`s (keys) inside a group (main axis)
+    /// Distance between `track`s (keys) inside a band (main axis)
     pub key_bands_gap: f64,
-    /// Distance between groups (main axis)
-    pub groups_gap: f64,
-    /// Number of keys and bands in each group
-    pub num_keys_per_group: NonZero<u8>,
-    /// Number of groups
-    pub num_groups: NonZero<u8>,
-    /// Channel of the first group in the layout
-    pub first_group_channel: super::GroupChannel,
+    /// Distance between bands (main axis)
+    pub bands_gap: f64,
+    /// Number of keys and bands in each band
+    pub num_keys_per_band: NonZero<u8>,
+    /// Number of bands
+    pub num_bands: NonZero<u8>,
+    /// Channel of the first band in the layout
+    pub first_band_channel: super::BandChannel,
     /// Whether dark or bright scale is used
     ///
     /// `Scale::Yo` by default
@@ -57,7 +57,7 @@ impl Default for Layout {
             key_band_breadth: Default::default(),
             safe_area_padding: Default::default(),
             key_bands_gap: Default::default(),
-            groups_gap: Default::default(),
+            bands_gap: Default::default(),
             scale: Default::default(),
             // zero defaults
             instrument_breadth: 0.0,
@@ -65,9 +65,9 @@ impl Default for Layout {
             orientation: LayoutOrientation::Horizontal,
             left_string_position: (default_pt, default_pt),
             right_string_position: (default_pt, default_pt),
-            num_keys_per_group: NonZero::new(2).unwrap(),
-            num_groups: NonZero::new(2).unwrap(),
-            first_group_channel: GroupChannel::Right,
+            num_keys_per_band: NonZero::new(2).unwrap(),
+            num_bands: NonZero::new(2).unwrap(),
+            first_band_channel: BandChannel::Right,
         }
     }
 }
@@ -76,28 +76,28 @@ impl Eq for Layout {}
 
 /// Helper / utility methods shared by intro animation & instrument layout
 impl Layout {
-    /// Number of groups as f64
+    /// Number of bands as f64
     #[inline]
-    fn groups_f(&self) -> f64 {
-        self.num_groups.get() as f64
+    fn bands_f(&self) -> f64 {
+        self.num_bands.get() as f64
     }
 
-    /// Main–axis (groups axis) padding used to center the grouped bands.
+    /// Main–axis (bands axis) padding used to center the grouped bands.
     #[inline]
     pub fn key_pad_main(&self) -> f64 {
         let safe_len = self
             .orientation
             .safe_length(self.space, self.safe_area_padding);
-        let groups = self.groups_f();
-        if groups <= 0.0 {
+        let bands = self.bands_f();
+        if bands <= 0.0 {
             return 0.0;
         }
-        let required = groups * self.key_band_length + (groups - 1.0) * self.groups_gap;
+        let required = bands * self.key_band_length + (bands - 1.0) * self.bands_gap;
         ((safe_len - required) / 2.0).max(0.0)
     }
 
     pub fn registry(&self) -> NodeKeyRegistry {
-        NodeKeyRegistry::new(self.num_groups.get(), self.num_keys_per_group.get())
+        NodeKeyRegistry::new(self.num_bands.get(), self.num_keys_per_band.get())
     }
 }
 
@@ -106,7 +106,7 @@ pub const LAYOUT_PRIMES: const_primes::Primes<20> = const_primes::Primes::new();
 const MIN_KEY_RADIUS: f64 = 16.0;
 const MIN_BAND_PADDING: f64 = 8.0;
 const MIN_GAP: f64 = 16.0;
-const MIN_KEY_GAP_TO_GROUP_GAP_RATIO: f64 = 1.15;
+const MIN_KEY_GAP_TO_BAND_GAP_RATIO: f64 = 1.15;
 
 const SOFT_RADIUS_RATIO: f64 = 0.40;
 const ABSOLUTE_RADIUS_RATIO_MAX: f64 = 0.55;
@@ -114,8 +114,8 @@ const ABSOLUTE_RADIUS_RATIO_MAX: f64 = 0.55;
 // Gap model ratios (relative to diameter)
 const KEY_GAP_RATIO_BASE: f64 = 0.25;
 const KEY_GAP_MAX_RATIO: f64 = 0.90;
-const GROUP_GAP_RATIO_MULTI: f64 = 1.20;
-const GROUP_GAP_MAX_RATIO: f64 = 1.40;
+const BAND_GAP_RATIO_MULTI: f64 = 1.20;
+const BAND_GAP_MAX_RATIO: f64 = 1.40;
 const STRING_TO_BAND_MIN_GAP_RATIO: f64 = 0.13;
 
 // Packing target parameters
@@ -143,7 +143,7 @@ struct Candidate {
     k: u32,
     r: f64,
     key_gap: f64,
-    group_gap: f64,
+    band_gap: f64,
     band_breadth: f64,
     packing_eff: f64,
     leftover: f64,
@@ -164,7 +164,7 @@ impl Candidate {
             return None;
         }
 
-        let first_group_channel = GroupChannel::Right;
+        let first_band_channel = BandChannel::Right;
         let safe_breadth = orientation.safe_breadth(space, safe_area_padding).max(1.0);
         let instrument_breadth = self.band_breadth * (1.0 + 2.0 * STRING_TO_BAND_MIN_GAP_RATIO);
         let band_length = (safe_breadth - instrument_breadth) / 2.0;
@@ -192,10 +192,10 @@ impl Candidate {
             key_band_breadth: self.band_breadth,
             safe_area_padding,
             key_bands_gap: self.key_gap,
-            groups_gap: self.group_gap,
-            num_keys_per_group: NonZero::new(self.k as u8)?,
-            num_groups: NonZero::new(self.g as u8)?,
-            first_group_channel,
+            bands_gap: self.band_gap,
+            num_keys_per_band: NonZero::new(self.k as u8)?,
+            num_bands: NonZero::new(self.g as u8)?,
+            first_band_channel,
             scale: super::Scale::default(),
         })
     }
@@ -301,7 +301,7 @@ fn enumerate(
 
             // iterative solve to incorporate gap dependency
             let mut key_gap = MIN_GAP;
-            let mut group_gap = if g_have_gaps { MIN_GAP } else { 0.0 };
+            let mut band_gap = if g_have_gaps { MIN_GAP } else { 0.0 };
             for _ in 0..4 {
                 let diameter = 2.0 * r;
                 let key_gap_ratio = KEY_GAP_RATIO_BASE + (k as f64) / 60.0;
@@ -318,9 +318,9 @@ fn enumerate(
                 } else {
                     0.0
                 };
-                group_gap = if g_have_gaps {
-                    let desired = key_gap * GROUP_GAP_RATIO_MULTI;
-                    let upper = (diameter * GROUP_GAP_MAX_RATIO).max(MIN_GAP);
+                band_gap = if g_have_gaps {
+                    let desired = key_gap * BAND_GAP_RATIO_MULTI;
+                    let upper = (diameter * BAND_GAP_MAX_RATIO).max(MIN_GAP);
                     if desired < MIN_GAP {
                         MIN_GAP
                     } else if desired > upper {
@@ -334,15 +334,15 @@ fn enumerate(
                 // enforce ratio rule if both conceptual
                 if g_have_gaps
                     && g_have_key_gaps
-                    && group_gap < key_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO
+                    && band_gap < key_gap * MIN_KEY_GAP_TO_BAND_GAP_RATIO
                 {
-                    group_gap = key_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO;
+                    band_gap = key_gap * MIN_KEY_GAP_TO_BAND_GAP_RATIO;
                 }
                 let intra_key_gap_count = g as f64 * (k.saturating_sub(1) as f64);
-                let group_gap_count = (g.saturating_sub(1)) as f64;
+                let band_gap_count = (g.saturating_sub(1)) as f64;
                 let used = diameter * total_keys as f64
                     + intra_key_gap_count * key_gap
-                    + group_gap_count * group_gap;
+                    + band_gap_count * band_gap;
 
                 let packing_eff = (diameter * total_keys as f64) / safe_length;
                 // adjust target_packing slightly upward if actual packing too low but leftover big
@@ -366,10 +366,10 @@ fn enumerate(
             // final geometry
             let diameter = 2.0 * r;
             let intra_key_gap_count = g as f64 * (k.saturating_sub(1) as f64);
-            let group_gap_count = (g.saturating_sub(1)) as f64;
+            let band_gap_count = (g.saturating_sub(1)) as f64;
             let used = diameter * total_keys as f64
                 + intra_key_gap_count * key_gap
-                + group_gap_count * group_gap;
+                + band_gap_count * band_gap;
             let leftover = (safe_length - used).max(0.0);
             let packing_eff = (diameter * total_keys as f64) / safe_length;
 
@@ -384,16 +384,14 @@ fn enumerate(
             if g_have_key_gaps && key_gap < MIN_GAP {
                 valid = false;
             }
-            if g_have_gaps && group_gap < MIN_GAP {
+            if g_have_gaps && band_gap < MIN_GAP {
                 valid = false;
             }
-            if g_have_gaps
-                && g_have_key_gaps
-                && group_gap < key_gap * MIN_KEY_GAP_TO_GROUP_GAP_RATIO
+            if g_have_gaps && g_have_key_gaps && band_gap < key_gap * MIN_KEY_GAP_TO_BAND_GAP_RATIO
             {
                 valid = false;
             }
-            if group_gap > diameter * GROUP_GAP_MAX_RATIO + 0.001 {
+            if band_gap > diameter * BAND_GAP_MAX_RATIO + 0.001 {
                 valid = false;
             }
             if key_gap > diameter * KEY_GAP_MAX_RATIO + 0.001 {
@@ -416,8 +414,8 @@ fn enumerate(
                 }
             }
             if g_have_gaps {
-                let near = diameter * GROUP_GAP_MAX_RATIO * 0.95;
-                if group_gap >= near {
+                let near = diameter * BAND_GAP_MAX_RATIO * 0.95;
+                if band_gap >= near {
                     gap_tension += 0.7;
                 }
             }
@@ -465,7 +463,7 @@ fn enumerate(
                 k,
                 r,
                 key_gap,
-                group_gap,
+                band_gap,
                 band_breadth,
                 packing_eff,
                 leftover,
@@ -543,7 +541,7 @@ fn fallback(
         raw.max(lower).min(upper)
     };
     let key_gap = MIN_GAP;
-    let group_gap = 0.0;
+    let band_gap = 0.0;
     let band_breadth = (2.0 * r + MIN_BAND_PADDING).max(instrument_breadth / 4.0);
     let band_length =
         (orientation.safe_breadth(space, safe_area_padding) / 2.0) - instrument_breadth;
@@ -573,10 +571,10 @@ fn fallback(
         key_band_breadth: band_breadth,
         safe_area_padding,
         key_bands_gap: key_gap,
-        groups_gap: group_gap,
-        num_keys_per_group: NonZero::new(2).unwrap(),
-        num_groups: NonZero::new(2).unwrap(),
-        first_group_channel: GroupChannel::Right,
+        bands_gap: band_gap,
+        num_keys_per_band: NonZero::new(2).unwrap(),
+        num_bands: NonZero::new(2).unwrap(),
+        first_band_channel: BandChannel::Right,
         scale: super::Scale::default(),
     }
 }

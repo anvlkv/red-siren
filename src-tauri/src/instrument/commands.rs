@@ -399,7 +399,7 @@ pub fn ui_safe_area_insets_apply(
             app.emit(
                 BAND_CONTROL_G_K,
                 ReflectBandControlPayload {
-                    group: node_key.group(),
+                    band: node_key.band(),
                     key: node_key.key(),
                     value: band,
                 },
@@ -407,7 +407,7 @@ pub fn ui_safe_area_insets_apply(
             app.emit(
                 KEY_CONTROL_G_K,
                 ReflectKeyControlPayload {
-                    group: node_key.group(),
+                    band: node_key.band(),
                     key: node_key.key(),
                     value: key,
                 },
@@ -432,11 +432,11 @@ pub fn ui_safe_area_insets_apply(
 
 #[tauri::command]
 pub fn instrument_string_snoop_data(
-    group: usize,
+    band: usize,
     key: usize,
     state: tauri::State<'_, InstrumentState>,
 ) -> common::error::Result<common::instrument::data::StringSnoopDataResponse> {
-    let samples = state.snapshot_output_snoop(NodeKey::new(group as u8, key as u8));
+    let samples = state.snapshot_output_snoop(NodeKey::new(band as u8, key as u8));
     Ok(common::instrument::data::StringSnoopDataResponse { samples })
 }
 
@@ -448,8 +448,8 @@ pub fn instrument_all_string_snoops(
         .snapshot_all_output_snoops()
         .into_iter()
         .map(
-            |(NodeKey(group, key), samples)| common::instrument::data::StringSnoopEntry {
-                group,
+            |(NodeKey(band, key), samples)| common::instrument::data::StringSnoopEntry {
+                band,
                 key,
                 samples,
             },
@@ -469,11 +469,11 @@ pub fn instrument_all_string_snoops(
 
 #[tauri::command]
 pub fn instrument_excitement_snoop_data(
-    group: usize,
+    band: usize,
     key: usize,
     state: tauri::State<'_, InstrumentState>,
 ) -> common::error::Result<common::instrument::data::ExcitementSnoopDataResponse> {
-    let samples = state.snapshot_excitement_snoop(NodeKey::new(group as u8, key as u8));
+    let samples = state.snapshot_excitement_snoop(NodeKey::new(band as u8, key as u8));
     Ok(common::instrument::data::ExcitementSnoopDataResponse { samples })
 }
 
@@ -485,8 +485,8 @@ pub fn instrument_all_excitement_snoops(
         .snapshot_all_excitement_snoops()
         .into_iter()
         .map(
-            |(NodeKey(group, key), samples)| common::instrument::data::ExcitementSnoopEntry {
-                group,
+            |(NodeKey(band, key), samples)| common::instrument::data::ExcitementSnoopEntry {
+                band,
                 key,
                 samples,
             },
@@ -527,7 +527,7 @@ pub fn instrument_update_band_control(
         app.emit(
             BAND_CONTROL_G_K,
             ReflectBandControlPayload {
-                group: node_key.group(),
+                band: node_key.band(),
                 key: node_key.key(),
                 value: next_value,
             },
@@ -555,7 +555,7 @@ pub fn instrument_update_key_control(
         app.emit(
             KEY_CONTROL_G_K,
             ReflectKeyControlPayload {
-                group: node_key.group(),
+                band: node_key.band(),
                 key: node_key.key(),
                 value,
             },
@@ -615,8 +615,8 @@ pub fn snapshot_processed_output_spectrum(
 #[tauri::command]
 pub async fn instrument_edit_finetuned_values(
     siren_alpha: f32,
-    group_ls_gain_db: f32,
-    group_q: f32,
+    band_ls_gain_db: f32,
+    band_q: f32,
     node_follow_response_time_s: f32,
     filter_morph_follow_s: f32,
     filter_q_piercing: f32,
@@ -631,8 +631,8 @@ pub async fn instrument_edit_finetuned_values(
 ) -> Result<common::commands::edit::FineTunedValuesPayload> {
     let values = common::commands::edit::FineTunedValuesPayload {
         siren_alpha,
-        group_ls_gain_db,
-        group_q,
+        band_ls_gain_db,
+        band_q,
         filter_morph_follow_s,
         node_follow_response_time_s,
         filter_q_piercing,

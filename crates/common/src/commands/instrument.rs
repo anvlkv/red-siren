@@ -56,7 +56,7 @@ pub struct UpdateBandControlPayload {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ReflectBandControlPayload {
-    pub group: u8,
+    pub band: u8,
     pub key: u8,
     pub value: f32,
 }
@@ -71,7 +71,7 @@ pub struct UpdateKeyControlPayload {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ReflectKeyControlPayload {
-    pub group: u8,
+    pub band: u8,
     pub key: u8,
     pub value: f32, // 0.0 = released, 1.0 = pressed
 }

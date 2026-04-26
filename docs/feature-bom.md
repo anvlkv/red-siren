@@ -16,7 +16,7 @@ Current implementation includes:
 
 ## Layer Inventory
 
-| Layer | Feature Group | Status | Key Files |
+| Layer | Feature Band | Status | Key Files |
 |---|---|---|---|
 | Frontend | Routes and page shell | Implemented | crates/frontend/src/app.rs, crates/frontend/src/routes.rs, crates/frontend/src/pages |
 | Frontend | Instrument UI and controls | Implemented | crates/frontend/src/components/instrument |
@@ -56,7 +56,7 @@ Current implementation includes:
 
 ### Core UI Components
 
-| Component Group | Implemented Pieces |
+| Component Band | Implemented Pieces |
 |---|---|
 | Instrument | instrument/mod.rs, keyboard.rs, element.rs, strings.rs, spectrum.rs, debug.rs, context.rs |
 | Tuner | tuner/mod.rs, spectrum.rs, sensor_handles.rs, context.rs |
@@ -109,7 +109,7 @@ Current implementation includes:
 | Scope | Materials |
 |---|---|
 | Per key node | SirenWithInputs, SourceOscillator, FormantBank, BellFilter, key/band shared controls |
-| Group processing | Metro grid/cadastre timing, delay/cross-talk routing, group-level shaping |
+| Band processing | Metro grid/cadastre timing, delay/cross-talk routing, group-level shaping |
 | Channel processing | HP/BP/LP branches, shelf EQ, reverb, chorus, cross-talk blend, DC block |
 | System outputs | mono_system, stereo_system, multi_channel_system factories |
 | Input analysis | FFTAnalyzer, preamp chain, NewYork compressor, input ADSR smoothing |
@@ -152,7 +152,7 @@ Current implementation includes:
 
 | Family | Materials |
 |---|---|
-| Instrument | Config, GroupConfig, NodeConfig, Layout, Preset, Scale, GroupChannel, PlaybackQuality |
+| Instrument | Config, BandConfig, NodeConfig, Layout, Preset, Scale, BandChannel, PlaybackQuality |
 | Tuner | Config, SensorData, Layout, SpectrumData and update payloads |
 | Navigation | RouteId, EditorRouteId and navigation payload types |
 | Geometry/System | NodeKey, NodeKeyRegistry, SafeArea, LayoutOrientation, DeviceData, geometry aliases |

@@ -6,12 +6,12 @@ use std::collections::{BTreeMap, HashSet};
 /// Why:
 /// - Centralized tracking of bounding boxes for keys, bands, and strings
 /// - One-shot animation flags to avoid re-triggering appear animations on layout changes
-/// - Strings animate per group; keep per-group rectangles and first-appearance flags
+/// - Strings animate per band; keep per-band rectangles and first-appearance flags
 ///
 /// What:
 /// - `key_bboxes[(g,k)]` and `band_bboxes[(g,k)]` hold measured boxes
-/// - `strings_group_rects[g]` holds group-level boxes; `strings_rect` is the overall strings rect (optional)
-/// - `animated_keys`, `animated_bands`, `animated_string_groups` are one-shot guards for appear animations
+/// - `strings_band_rects[g]` holds band-level boxes; `strings_rect` is the overall strings rect (optional)
+/// - `animated_keys`, `animated_bands`, `animated_string_bands` are one-shot guards for appear animations
 ///
 /// How:
 /// - Call `upsert_*` when a node's bounding box becomes valid (> 0 size). The method returns `true` only for the first time,

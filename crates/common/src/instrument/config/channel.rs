@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-/// Output chanel of the group
-pub enum GroupChannel {
+/// Output channel of the band
+pub enum BandChannel {
     Left,
     Right,
 }
 
-impl GroupChannel {
+impl BandChannel {
     pub fn nth_channel_from_first(&self, n: usize) -> Self {
         if n.is_multiple_of(2) {
             *self

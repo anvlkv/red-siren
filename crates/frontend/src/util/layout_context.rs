@@ -1,4 +1,4 @@
-use common::{instrument::GroupChannel, orientation::LayoutOrientation, safe_area::SafeArea, Line};
+use common::{instrument::BandChannel, orientation::LayoutOrientation, safe_area::SafeArea, Line};
 use leptos::prelude::*;
 use mint::Vector2;
 
@@ -62,27 +62,27 @@ pub fn provide_layout_context() {
         let has_changed = Some(prop) != old;
         (prop, has_changed)
     });
-    let groups_gap = Memo::new_owning(move |old| {
+    let bands_gap = Memo::new_owning(move |old| {
         let layout = layout.get().unwrap_or_default();
-        let prop = layout.groups_gap;
+        let prop = layout.bands_gap;
         let has_changed = Some(prop) != old;
         (prop, has_changed)
     });
-    let num_keys_per_group = Memo::new_owning(move |old| {
+    let num_keys_per_band = Memo::new_owning(move |old| {
         let layout = layout.get().unwrap_or_default();
-        let prop = layout.num_keys_per_group.get();
+        let prop = layout.num_keys_per_band.get();
         let has_changed = Some(prop) != old;
         (prop, has_changed)
     });
-    let num_groups = Memo::new_owning(move |old| {
+    let num_bands = Memo::new_owning(move |old| {
         let layout = layout.get().unwrap_or_default();
-        let prop = layout.num_groups.get();
+        let prop = layout.num_bands.get();
         let has_changed = Some(prop) != old;
         (prop, has_changed)
     });
-    let first_group_channel = Memo::new_owning(move |old| {
+    let first_band_channel = Memo::new_owning(move |old| {
         let layout = layout.get().unwrap_or_default();
-        let prop = layout.first_group_channel;
+        let prop = layout.first_band_channel;
         let has_changed = Some(prop) != old;
         (prop, has_changed)
     });
@@ -133,10 +133,10 @@ pub fn provide_layout_context() {
         key_band_breadth,
         safe_area_padding,
         key_bands_gap,
-        groups_gap,
-        num_keys_per_group,
-        num_groups,
-        first_group_channel,
+        bands_gap,
+        num_keys_per_band,
+        num_bands,
+        first_band_channel,
         complete_layout,
         key_pad_main,
         scale,
@@ -154,10 +154,10 @@ pub struct LayoutContextReturn {
     pub key_band_breadth: Memo<f64>,
     pub safe_area_padding: Memo<SafeArea>,
     pub key_bands_gap: Memo<f64>,
-    pub groups_gap: Memo<f64>,
-    pub num_keys_per_group: Memo<u8>,
-    pub num_groups: Memo<u8>,
-    pub first_group_channel: Memo<GroupChannel>,
+    pub bands_gap: Memo<f64>,
+    pub num_keys_per_band: Memo<u8>,
+    pub num_bands: Memo<u8>,
+    pub first_band_channel: Memo<BandChannel>,
     pub complete_layout: Memo<common::instrument::Layout>,
     pub key_pad_main: Memo<f64>,
     pub scale: Memo<common::instrument::Scale>,

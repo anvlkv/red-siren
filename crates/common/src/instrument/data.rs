@@ -12,7 +12,7 @@ pub struct StringSnoopDataResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StringSnoopDataRequest {
-    pub group: usize,
+    pub band: usize,
     pub key: usize,
 }
 
@@ -21,7 +21,7 @@ pub const GET_ALL_STRING_SNOOPS: &str = "instrument_all_string_snoops";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StringSnoopEntry {
-    pub group: u8,
+    pub band: u8,
     pub key: u8,
     pub samples: Vec<f32>,
 }
@@ -44,7 +44,7 @@ pub struct ExcitementSnoopDataResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExcitementSnoopDataRequest {
-    pub group: usize,
+    pub band: usize,
     pub key: usize,
 }
 
@@ -53,7 +53,7 @@ pub const GET_ALL_ACTIVATION_SNOOPS: &str = "instrument_all_excitement_snoops";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExcitementSnoopEntry {
-    pub group: u8,
+    pub band: u8,
     pub key: u8,
     pub samples: Vec<(f32, f32)>,
 }

@@ -188,7 +188,7 @@ impl InstrumentState {
                         .emit(
                             common::instrument::events::BAND_CONTROL_G_K,
                             common::instrument::commands::ReflectBandControlPayload {
-                                group: node_key.group(),
+                                band: node_key.band(),
                                 key: node_key.key(),
                                 value: band,
                             },
@@ -203,7 +203,7 @@ impl InstrumentState {
                         .emit(
                             common::instrument::events::KEY_CONTROL_G_K,
                             common::instrument::commands::ReflectKeyControlPayload {
-                                group: node_key.group(),
+                                band: node_key.band(),
                                 key: node_key.key(),
                                 value: key,
                             },

@@ -4,7 +4,7 @@
    - Stages per docs/animation.md: 1, 1.5 (crossfade+glare), 2 (normalize+collapse), 3 (place), 4 (bands expand)
    - Keys move breadth-axis first (still stacked), then length-axis (unstack)
    - Bands: glare as random radiuses via per-element vars; remain circles until Stage 4
-   - Strings animate per group (<g>), with rotation/scale/translation to match flute constants
+   - Strings animate per band (<g>), with rotation/scale/translation to match flute constants
    - View Transition: leave animations prepared for the instrument scene
 */
 
@@ -132,7 +132,7 @@
 }
 
 /* -------------------------------------------------------------------------------------------------
-   STRINGS (per group) — staged sequence with rotation normalization
+   STRINGS (per band) — staged sequence with rotation normalization
    - Stage 1 -> 1.5: crossfade only (duration from --inst-crossfade-duration)
    - Then: rotation to normal (0deg) and scale normalize; still offset (collapsed along axis)
    - Finally: translate to final position
@@ -154,7 +154,7 @@
     }
 }
 
-.instrument-strings-group--appear,
+.instrument-strings-band--appear,
 .instrument-strings-root--appear {
     transform-box: view-box;
     /* movement starts after crossfade; scene handles opacity */
@@ -266,7 +266,7 @@
 @media (prefers-reduced-motion: reduce) {
     .instrument-key--appear,
     .instrument-band--appear,
-    .instrument-strings-group--appear {
+    .instrument-strings-band--appear {
         animation: none !important;
     }
 

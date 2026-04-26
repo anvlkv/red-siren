@@ -12,9 +12,9 @@ pub fn Keyboard() -> impl IntoView {
         orientation,
         space,
         safe_area_padding,
-        num_groups,
+        num_bands,
         key_band_length,
-        groups_gap,
+        bands_gap,
         key_bands_gap,
         key_band_breadth,
         key_radius,
@@ -54,9 +54,9 @@ pub fn Keyboard() -> impl IntoView {
         let orientation = orientation();
         let space = space();
         let safe_area_padding = safe_area_padding();
-        let num_groups = num_groups();
+        let num_bands = num_bands();
         let key_band_length = key_band_length();
-        let groups_gap = groups_gap();
+        let bands_gap = bands_gap();
         let key_bands_gap = key_bands_gap();
         let key_band_breadth = key_band_breadth();
         let key_radius = key_radius();
@@ -82,9 +82,9 @@ pub fn Keyboard() -> impl IntoView {
                 --keyboard-pad-top: {pad_top}px;
                 --keyboard-pad-bottom: {pad_bottom}px;
                 "#,
-                rows = num_groups,
+                rows = num_bands,
                 cols = 1,
-                row_gap = groups_gap,
+                row_gap = bands_gap,
                 col_gap = 0,
                 pad_left = safe_left,
                 pad_right = safe_right,
@@ -103,9 +103,9 @@ pub fn Keyboard() -> impl IntoView {
                 --keyboard-pad-bottom: {pad_bottom}px;
                 "#,
                 rows = 1,
-                cols = num_groups,
+                cols = num_bands,
                 row_gap = 0,
-                col_gap = groups_gap,
+                col_gap = bands_gap,
                 pad_left = pad_main.max(safe_left),
                 pad_right = pad_main.max(safe_right),
                 pad_top = safe_top,
@@ -158,11 +158,11 @@ pub fn Keyboard() -> impl IntoView {
         >
             <div class="grid items-center justify-center grid-rows-(--keyboard-rows) grid-cols-(--keyboard-cols) gap-y-(--keyboard-row-gap) gap-x-(--keyboard-col-gap) p-t-(length:--keyboard-pad-top) p-b-(length:--keyboard-pad-bottom) p-l-(length:--keyboard-pad-left) p-r-(length:--keyboard-pad-right) w-full h-full">
                 {move || {
-                    let num_groups = num_groups();
-                    (0..num_groups as usize)
+                    let num_bands = num_bands();
+                    (0..num_bands as usize)
                         .rev()
                         .map(|g| {
-                            view! { <Group g batch_data=batch_data /> }
+                            view! { <Band g batch_data=batch_data /> }
                         })
                         .collect_view()
                 }}
@@ -172,14 +172,14 @@ pub fn Keyboard() -> impl IntoView {
 }
 
 #[component]
-fn Group(
+fn Band(
     g: usize,
     #[prop(into)] batch_data: Signal<Option<common::instrument::data::ExcitementSnoopBatchPayload>>,
 ) -> impl IntoView {
     let LayoutContextReturn {
         orientation,
-        num_keys_per_group,
-        first_group_channel,
+        num_keys_per_band,
+        first_band_channel,
         key_band_length,
         key_band_breadth,
         ..
@@ -211,10 +211,10 @@ fn Group(
     view! {
         <div class=class style=group_band_dims_style>
             {move || {
-                let first_group_channel = first_group_channel();
-                let num_keys_per_group = num_keys_per_group();
-                let channel = first_group_channel.nth_channel_from_first(g);
-                (0..(num_keys_per_group as usize))
+                let first_band_channel = first_band_channel();
+                let num_keys_per_band = num_keys_per_band();
+                let channel = first_band_channel.nth_channel_from_first(g);
+                (0..(num_keys_per_band as usize))
                     .rev()
                     .map(move |k| {
                         {
@@ -223,7 +223,7 @@ fn Group(
                                     .and_then(|b| {
                                         b.snoops
                                             .iter()
-                                            .find(|e| e.group as usize == g && e.key as usize == k)
+                                            .find(|e| e.band as usize == g && e.key as usize == k)
                                             .map(|e| e.samples.clone())
                                     })
                             });

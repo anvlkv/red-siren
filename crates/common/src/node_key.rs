@@ -21,23 +21,23 @@ impl Ord for NodeKey {
 
 impl NodeKey {
     /// Create a new NodeKey with bounds validation
-    pub fn new(group: u8, key: u8) -> Self {
-        NodeKey(group, key)
+    pub fn new(band: u8, key: u8) -> Self {
+        NodeKey(band, key)
     }
 
-    /// Get group index
-    pub fn group(&self) -> u8 {
+    /// Get band index
+    pub fn band(&self) -> u8 {
         self.0
     }
 
-    /// Get key index within group
+    /// Get key index within band
     pub fn key(&self) -> u8 {
         self.1
     }
 
     /// Validate this NodeKey against layout bounds
-    pub fn is_valid(&self, num_groups: u8, num_keys_per_group: u8) -> bool {
-        self.0 < num_groups && self.1 < num_keys_per_group
+    pub fn is_valid(&self, num_bands: u8, num_keys_per_band: u8) -> bool {
+        self.0 < num_bands && self.1 < num_keys_per_band
     }
 
     /// Get linear index for this NodeKey
@@ -49,58 +49,58 @@ impl NodeKey {
 /// Utility for managing NodeKeys with layout validation
 #[derive(Debug, Clone, Copy)]
 pub struct NodeKeyRegistry {
-    num_groups: u8,
-    num_keys_per_group: u8,
+    num_bands: u8,
+    num_keys_per_band: u8,
 }
 
 impl NodeKeyRegistry {
     /// Create new registry with layout bounds
-    pub fn new(num_groups: u8, num_keys_per_group: u8) -> Self {
+    pub fn new(num_bands: u8, num_keys_per_band: u8) -> Self {
         Self {
-            num_groups,
-            num_keys_per_group,
+            num_bands,
+            num_keys_per_band,
         }
     }
 
     /// Create NodeKey with validation
-    pub fn create_key(&self, group: u8, key: u8) -> Result<NodeKey, NodeKeyError> {
-        if group >= self.num_groups {
-            return Err(NodeKeyError::GroupOutOfBounds {
-                group,
-                max: self.num_groups.saturating_sub(1),
+    pub fn create_key(&self, band: u8, key: u8) -> Result<NodeKey, NodeKeyError> {
+        if band >= self.num_bands {
+            return Err(NodeKeyError::BandOutOfBounds {
+                band,
+                max: self.num_bands.saturating_sub(1),
             });
         }
-        if key >= self.num_keys_per_group {
+        if key >= self.num_keys_per_band {
             return Err(NodeKeyError::KeyOutOfBounds {
                 key,
-                max: self.num_keys_per_group.saturating_sub(1),
+                max: self.num_keys_per_band.saturating_sub(1),
             });
         }
-        Ok(NodeKey::new(group, key))
+        Ok(NodeKey::new(band, key))
     }
 
     /// Validate existing NodeKey
     pub fn validate(&self, node_key: &NodeKey) -> Result<(), NodeKeyError> {
-        self.create_key(node_key.group(), node_key.key())?;
+        self.create_key(node_key.band(), node_key.key())?;
         Ok(())
     }
 
     /// Generate all valid NodeKeys for current layout
     pub fn all_keys(&self) -> Vec<NodeKey> {
         let mut keys =
-            Vec::with_capacity((self.num_groups as usize) * (self.num_keys_per_group as usize));
-        for group in 0..self.num_groups {
-            keys.extend(self.group_keys(group))
+            Vec::with_capacity((self.num_bands as usize) * (self.num_keys_per_band as usize));
+        for band in 0..self.num_bands {
+            keys.extend(self.band_keys(band))
         }
         keys
     }
 
-    /// Generate all valid NodeKeys for a specific group
-    pub fn group_keys(&self, group: u8) -> Vec<NodeKey> {
-        assert!(group < self.num_groups);
-        let mut keys = Vec::with_capacity(self.num_keys_per_group as usize);
-        for key in 0..self.num_keys_per_group {
-            keys.push(NodeKey::new(group, key));
+    /// Generate all valid NodeKeys for a specific band
+    pub fn band_keys(&self, band: u8) -> Vec<NodeKey> {
+        assert!(band < self.num_bands);
+        let mut keys = Vec::with_capacity(self.num_keys_per_band as usize);
+        for key in 0..self.num_keys_per_band {
+            keys.push(NodeKey::new(band, key));
         }
         keys
     }
@@ -110,20 +110,20 @@ impl NodeKeyRegistry {
     where
         F: FnMut(NodeKey),
     {
-        for group in 0..self.num_groups {
-            for key in 0..self.num_keys_per_group {
-                f(NodeKey::new(group, key));
+        for band in 0..self.num_bands {
+            for key in 0..self.num_keys_per_band {
+                f(NodeKey::new(band, key));
             }
         }
     }
 
-    pub fn iter_group_keys<F>(&self, group: u8, mut f: F)
+    pub fn iter_band_keys<F>(&self, band: u8, mut f: F)
     where
         F: FnMut(NodeKey),
     {
-        assert!(group < self.num_groups);
-        for key in 0..self.num_keys_per_group {
-            f(NodeKey::new(group, key));
+        assert!(band < self.num_bands);
+        for key in 0..self.num_keys_per_band {
+            f(NodeKey::new(band, key));
         }
     }
 
@@ -133,7 +133,7 @@ impl NodeKeyRegistry {
         T: Clone,
     {
         map.iter()
-            .filter(|(node_key, _)| node_key.is_valid(self.num_groups, self.num_keys_per_group))
+            .filter(|(node_key, _)| node_key.is_valid(self.num_bands, self.num_keys_per_band))
             .map(|(k, v)| (*k, v.clone()))
             .collect()
     }
@@ -141,21 +141,21 @@ impl NodeKeyRegistry {
     /// Check if any keys in collection are invalid
     pub fn has_invalid_keys<T>(&self, map: &HashMap<NodeKey, T>) -> Vec<NodeKey> {
         map.keys()
-            .filter(|node_key| !node_key.is_valid(self.num_groups, self.num_keys_per_group))
+            .filter(|node_key| !node_key.is_valid(self.num_bands, self.num_keys_per_band))
             .copied()
             .collect()
     }
 
-    pub fn num_groups(&self) -> u8 {
-        self.num_groups
+    pub fn num_bands(&self) -> u8 {
+        self.num_bands
     }
 
-    pub fn num_keys_per_group(&self) -> u8 {
-        self.num_keys_per_group
+    pub fn num_keys_per_band(&self) -> u8 {
+        self.num_keys_per_band
     }
 
     pub fn total_keys(&self) -> usize {
-        (self.num_groups as usize) * (self.num_keys_per_group as usize)
+        (self.num_bands as usize) * (self.num_keys_per_band as usize)
     }
 
     pub fn seed_from_keys<'k, I>(keys: I) -> u64
@@ -177,7 +177,7 @@ mod tests {
     #[test]
     fn test_node_key_creation() {
         let key = NodeKey::new(1, 2);
-        assert_eq!(key.group(), 1);
+        assert_eq!(key.band(), 1);
         assert_eq!(key.key(), 2);
     }
 
@@ -185,7 +185,7 @@ mod tests {
     fn test_node_key_validation() {
         let key = NodeKey::new(1, 2);
         assert!(key.is_valid(3, 4));
-        assert!(!key.is_valid(1, 4)); // group out of bounds
+        assert!(!key.is_valid(1, 4)); // band out of bounds
         assert!(!key.is_valid(3, 2)); // key out of bounds
     }
 
@@ -198,7 +198,7 @@ mod tests {
         assert!(registry.create_key(1, 2).is_ok());
 
         // Invalid keys
-        assert!(registry.create_key(2, 0).is_err()); // group out of bounds
+        assert!(registry.create_key(2, 0).is_err()); // band out of bounds
         assert!(registry.create_key(0, 3).is_err()); // key out of bounds
     }
 
@@ -220,7 +220,7 @@ mod tests {
         let mut map = HashMap::new();
         map.insert(NodeKey::new(0, 0), "valid".to_string());
         map.insert(NodeKey::new(1, 1), "valid".to_string());
-        map.insert(NodeKey::new(2, 0), "invalid".to_string()); // group out of bounds
+        map.insert(NodeKey::new(2, 0), "invalid".to_string()); // band out of bounds
         map.insert(NodeKey::new(0, 3), "invalid".to_string()); // key out of bounds
 
         let filtered = registry.filter_valid_keys(&map);
@@ -234,7 +234,7 @@ mod tests {
         let registry = NodeKeyRegistry::new(2, 2);
         let mut map = HashMap::new();
         map.insert(NodeKey::new(0, 0), "valid");
-        map.insert(NodeKey::new(2, 0), "invalid"); // group out of bounds
+        map.insert(NodeKey::new(2, 0), "invalid"); // band out of bounds
         map.insert(NodeKey::new(0, 3), "invalid"); // key out of bounds
 
         let invalid = registry.has_invalid_keys(&map);

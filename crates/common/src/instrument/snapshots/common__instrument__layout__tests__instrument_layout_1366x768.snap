@@ -39,9 +39,9 @@ expression: layout
     "left": 18.0
   },
   "key_bands_gap": 21.00747819351403,
-  "groups_gap": 25.208973832216834,
-  "num_keys_per_group": 3,
-  "num_groups": 2,
-  "first_group_channel": "Right",
+  "bands_gap": 25.208973832216834,
+  "num_keys_per_band": 3,
+  "num_bands": 2,
+  "first_band_channel": "Right",
   "scale": "Yo"
 }

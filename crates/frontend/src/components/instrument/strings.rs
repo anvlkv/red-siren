@@ -1,4 +1,4 @@
-use common::instrument::GroupChannel;
+use common::instrument::BandChannel;
 use leptos::{html, prelude::*};
 use leptos_use::use_device_pixel_ratio;
 use tauri_use::{use_command, UseTauriWithReturn};
@@ -26,7 +26,7 @@ pub fn InstrumentStrings() -> impl IntoView {
 
     let LayoutContextReturn {
         space,
-        first_group_channel,
+        first_band_channel,
         left_string_position,
         right_string_position,
         complete_layout,
@@ -135,15 +135,15 @@ pub fn InstrumentStrings() -> impl IntoView {
                 last_ts.set_value(Some(batch.t_unix_ms));
                 clear_cavas(Some(ctx.clone()));
 
-                let first_group_channel = first_group_channel.get_untracked();
+                let first_band_channel = first_band_channel.get_untracked();
                 let (left, right) = batch.snoops.into_iter().fold(
                     (Vec::new(), Vec::new()),
                     |(mut left, mut right), snoop| {
-                        match first_group_channel.nth_channel_from_first(snoop.group as usize) {
-                            GroupChannel::Left => {
+                        match first_band_channel.nth_channel_from_first(snoop.band as usize) {
+                            BandChannel::Left => {
                                 left.push(snoop.samples);
                             }
-                            GroupChannel::Right => {
+                            BandChannel::Right => {
                                 right.push(snoop.samples);
                             }
                         }

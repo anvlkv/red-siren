@@ -307,11 +307,11 @@ pub enum InstrumentConfigError {
     #[error("empty config")]
     Empty,
 
-    #[error("some groups have varying number of nodes")]
-    InvalidGroups,
+    #[error("some bands have varying number of nodes")]
+    InvalidBands,
 
-    #[error("empty group")]
-    EmptyGroup,
+    #[error("empty band")]
+    EmptyBand,
 
     #[error("node key error: {0}")]
     NodeKey(#[from] NodeKeyError),
@@ -322,8 +322,8 @@ pub enum InstrumentConfigError {
 
 #[derive(Debug, Clone, thiserror::Error, Serialize, Deserialize)]
 pub enum NodeKeyError {
-    #[error("Group index {group} out of bounds (max: {max})")]
-    GroupOutOfBounds { group: u8, max: u8 },
+    #[error("Band index {band} out of bounds (max: {max})")]
+    BandOutOfBounds { band: u8, max: u8 },
     #[error("Key index {key} out of bounds (max: {max})")]
     KeyOutOfBounds { key: u8, max: u8 },
 }

@@ -66,4 +66,8 @@ pub type FineTunedValue = Var;
 
 define_fine_tuned_values! {
     (formants_q, FORMANTS_Q, 3.7),
+    (band_bell_q, BAND_BELL_Q, 0.7),
+    (band_bell_gain, BAND_BELL_GAIN, 0.5),
+    (band_shelf_q, BAND_SHELF_Q, 2.2),
+    (band_shelf_gain, BAND_SHELF_GAIN, 1.5),
 }

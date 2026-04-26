@@ -11,8 +11,8 @@ const REFRESH_FPS: f64 = 12.0; // small & cheap; good enough to spot trends
 #[component]
 pub fn DebugOverlay() -> impl IntoView {
     let LayoutContextReturn {
-        num_groups,
-        num_keys_per_group,
+        num_bands,
+        num_keys_per_band,
         ..
     } = expect_layout_context();
 
@@ -66,8 +66,8 @@ pub fn DebugOverlay() -> impl IntoView {
     // - grid: rows = groups, cols = keys-per-group
     let overlay_class = "absolute top-2 left-2 z-50";
     let grid_style = move || {
-        let rows = num_groups();
-        let cols = num_keys_per_group();
+        let rows = num_bands();
+        let cols = num_keys_per_band();
         format!(
             "display: grid; grid-template-rows: repeat({}, minmax(0,auto)); grid-template-columns: repeat({}, minmax(0,auto)); gap: 2px;",
             rows, cols
@@ -80,8 +80,8 @@ pub fn DebugOverlay() -> impl IntoView {
                 <Fold title="Siren debug: Excitement vs Output">
                     <div style=grid_style class="text-[10px] pointer-events-none select-none">
                         {move || {
-                            let ng = num_groups();
-                            let nk = num_keys_per_group();
+                            let ng = num_bands();
+                            let nk = num_keys_per_band();
                             (0..ng as usize)
                                 .flat_map(move |g| {
                                     (0..nk as usize)
@@ -92,7 +92,7 @@ pub fn DebugOverlay() -> impl IntoView {
                                                         .and_then(|b| {
                                                             b.snoops
                                                                 .into_iter()
-                                                                .find(|e| e.group as usize == g && e.key as usize == k)
+                                                                .find(|e| e.band as usize == g && e.key as usize == k)
                                                                 .map(|e| -> (Vec<f32>, Vec<f32>) {
                                                                     e.samples.into_iter().unzip()
                                                                 })
@@ -111,7 +111,7 @@ pub fn DebugOverlay() -> impl IntoView {
                                                         .and_then(|b| {
                                                             b.snoops
                                                                 .iter()
-                                                                .find(|e| e.group as usize == g && e.key as usize == k)
+                                                                .find(|e| e.band as usize == g && e.key as usize == k)
                                                                 .map(|e| e.samples.clone())
                                                         })
                                                 }

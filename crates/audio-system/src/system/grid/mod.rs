@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
 use fundsp::prelude::*;
+use num_rational::Ratio;
 
 mod envelope;
 pub use envelope::{rhythm_grid_envelope, AdsrShape, RhythmGridEnvelope};
@@ -27,6 +28,8 @@ pub struct RhythmGrid<S: Real + Float> {
 }
 
 impl<S: Real + Float> RhythmGrid<S> {
+    const RATIO_SCALE: i64 = 1_000_000;
+
     pub fn new() -> Self {
         Self {
             sample_rate: DEFAULT_SR,
@@ -37,20 +40,68 @@ impl<S: Real + Float> RhythmGrid<S> {
         }
     }
 
+    fn as_i64(value: u64) -> i64 {
+        i64::try_from(value).unwrap_or(i64::MAX)
+    }
+
+    fn ratio_from_u64(value: u64) -> Ratio<i64> {
+        Ratio::from_integer(Self::as_i64(value))
+    }
+
+    fn ratio_from_positive_f64(value: f64) -> Ratio<i64> {
+        if !value.is_finite() || value <= 0.0 {
+            return Ratio::from_integer(0);
+        }
+        let scaled = (value * Self::RATIO_SCALE as f64).round() as i64;
+        Ratio::new(scaled, Self::RATIO_SCALE)
+    }
+
+    fn ratio_floor_u64(value: &Ratio<i64>) -> u64 {
+        let numer = *value.numer();
+        let denom = *value.denom();
+        if numer <= 0 {
+            0
+        } else {
+            (numer / denom) as u64
+        }
+    }
+
+    fn ratio_ceil_u64(value: &Ratio<i64>) -> u64 {
+        let numer = *value.numer();
+        let denom = *value.denom();
+        if numer <= 0 {
+            0
+        } else {
+            ((numer + denom - 1) / denom) as u64
+        }
+    }
+
+    fn rescale_remaining_ticks_floor(remaining: u64, new_total: u64, old_total: u64) -> u64 {
+        if old_total == 0 {
+            return new_total;
+        }
+        let ratio = Self::ratio_from_u64(remaining) * Self::ratio_from_u64(new_total)
+            / Self::ratio_from_u64(old_total);
+        Self::ratio_floor_u64(&ratio)
+    }
+
     fn compute_ticks_per_beat(&self, target_bpm: u64) -> u64 {
-        ((convert::<f64, S>(self.sample_rate) * convert::<f64, S>(60_f64))
-            / convert(target_bpm as f32))
-        .round()
-        .to_i64()
-        .unsigned_abs()
+        if target_bpm == 0 {
+            return 0;
+        }
+        let sample_rate_ratio = Self::ratio_from_positive_f64(self.sample_rate);
+        let ticks_ratio = sample_rate_ratio * Ratio::new(60, Self::as_i64(target_bpm));
+        Ord::max(Self::ratio_ceil_u64(&ticks_ratio), 1)
     }
 
     fn apply_bpm_change(&mut self, new_bpm: u64) {
         let new_tpb = self.compute_ticks_per_beat(new_bpm);
         if self.current_ticks_per_beat > 0 {
-            self.ticks_to_beat_remaining = (self.ticks_to_beat_remaining as f64 * new_tpb as f64
-                / self.current_ticks_per_beat as f64)
-                .round() as u64;
+            self.ticks_to_beat_remaining = Self::rescale_remaining_ticks_floor(
+                self.ticks_to_beat_remaining,
+                new_tpb,
+                self.current_ticks_per_beat,
+            );
         } else {
             self.ticks_to_beat_remaining = new_tpb;
         }
@@ -108,9 +159,11 @@ impl<S: Real + Float> AudioNode for RhythmGrid<S> {
         if self.current_bpm > 0 {
             let new_tpb = self.compute_ticks_per_beat(self.current_bpm);
             if old_tpb > 0 {
-                self.ticks_to_beat_remaining =
-                    (self.ticks_to_beat_remaining as f64 * new_tpb as f64 / old_tpb as f64).round()
-                        as u64;
+                self.ticks_to_beat_remaining = Self::rescale_remaining_ticks_floor(
+                    self.ticks_to_beat_remaining,
+                    new_tpb,
+                    old_tpb,
+                );
             } else {
                 self.ticks_to_beat_remaining = new_tpb;
             }

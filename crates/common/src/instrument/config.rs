@@ -196,19 +196,23 @@ impl TryFrom<Layout> for Config {
                 let phase = phase_step * n as f64;
                 let cents = 1200.0 * (frequency / octave_f_base).log2();
 
-                // t=0: lowest frequency (heaviest body, whale), t=1: highest (lightest, mouse).
+                // t=0: lowest frequency, t=1: highest frequency.
                 // Guard against degenerate single-frequency configs.
                 let t = if ln_f_range.abs() < f64::EPSILON {
                     0.5
                 } else {
                     ((frequency.ln() - f_config_min.ln()) / ln_f_range).clamp(0.0, 1.0)
                 };
-                // Mersenne-inspired: w ∝ 1/f² → log-linear from W_MAX_KG to W_MIN_KG
-                let w_kg = W_MAX_KG * (W_MIN_KG / W_MAX_KG).powf(t);
+
+                // Mass rises across pitch bands using geometric interpolation.
+                let w_kg = W_MIN_KG * (W_MAX_KG / W_MIN_KG).powf(t);
+
+                // Density rises toward high pitch with a custom smoothstep curve.
+                let density_curve = t * t * (3.0 - 2.0 * t);
+
                 // Volume derived from mass and body density: v = m / ρ
-                // Density also follows t: dense metallic at bass, hollow/light at treble
-                let body_density = BODY_DENSITY_MAX_G_CM3
-                    * (BODY_DENSITY_MIN_G_CM3 / BODY_DENSITY_MAX_G_CM3).powf(t);
+                let body_density = BODY_DENSITY_MIN_G_CM3
+                    * (BODY_DENSITY_MAX_G_CM3 / BODY_DENSITY_MIN_G_CM3).powf(density_curve);
                 let v_cm3 = (w_kg * 1000.0) / body_density;
 
                 nodes.push(NodeConfig {
@@ -388,5 +392,38 @@ mod tests {
             cfg_ok.validate().is_ok(),
             "Config at volume limit should remain valid"
         );
+    }
+
+    #[test]
+    fn test_physical_progression_increases_with_frequency() {
+        let epsilon = 1e-12;
+
+        for (config, _) in config_test_cases() {
+            let mut nodes = config
+                .0
+                .iter()
+                .flat_map(|band| band.nodes.iter().copied())
+                .collect::<Vec<_>>();
+
+            nodes.sort_by(|a, b| a.frequency.partial_cmp(&b.frequency).unwrap());
+
+            for pair in nodes.windows(2) {
+                let prev = pair[0];
+                let next = pair[1];
+
+                assert!(
+                    next.w_kg + epsilon >= prev.w_kg,
+                    "mass should be non-decreasing with frequency"
+                );
+                assert!(
+                    next.v_cm3 + epsilon >= prev.v_cm3,
+                    "volume should be non-decreasing with frequency"
+                );
+                assert!(
+                    next.body_density_g_cm3() + epsilon >= prev.body_density_g_cm3(),
+                    "density should be non-decreasing with frequency"
+                );
+            }
+        }
     }
 }

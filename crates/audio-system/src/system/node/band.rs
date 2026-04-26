@@ -141,7 +141,7 @@ pub fn create_band_node<
     config: BandConfig,
     generator: G,
     values: &FineTunedValues,
-) -> Band<S>
+) -> An<Band<S>>
 where
     <X as fundsp::audionode::AudioNode>::Inputs: Mul<N> + Unsigned,
     <X as fundsp::audionode::AudioNode>::Outputs: Mul<N>,
@@ -149,7 +149,7 @@ where
     <<X as fundsp::audionode::AudioNode>::Outputs as Mul<N>>::Output: Sync + Send + ArrayLength,
     U1: Mul<N, Output = N>,
 {
-    Band::new(config, generator, values)
+    An(Band::new(config, generator, values))
 }
 
 #[cfg(test)]
@@ -183,11 +183,11 @@ mod tests {
     fn band_under_test() -> An<Band<f32>> {
         let config = make_band_config();
         let values = FineTunedValues::new();
-        An(create_band_node::<f32, _, U1, _>(
+        create_band_node::<f32, _, U1, _>(
             config,
             |node| sine_hz(node.frequency as f32) * pass(),
             &values,
-        ))
+        )
     }
 
     fn steady_input(len: usize, value: f32) -> InputSource {

@@ -16,7 +16,7 @@ pub struct NodeConfig {
     // meta
     /// cents offset from the base frequency (for fine-tuning)
     pub cents: f64,
-    // animalistics
+    // physical modeling parameters
     /// vocal tract length to node in mm (used for formant calculations in physical modeling)
     pub l_mm: f64,
     /// mass of the node in kg (for physical modeling)
@@ -49,13 +49,13 @@ impl NodeConfig {
         // 1. Structural
         // 2. Recommended bounds (soft limits)
         if self.frequency < SOFT_MIN_FREQ_HZ {
-            return Err(InstrumentConfigError::NodeFreqencyBelowRecomended {
+            return Err(InstrumentConfigError::NodeFrequencyBelowRecommended {
                 node: idx,
                 freq: self.frequency as f32,
             });
         }
         if self.frequency > SOFT_MAX_FREQ_HZ {
-            return Err(InstrumentConfigError::NodeFreqencyAboveRecomended {
+            return Err(InstrumentConfigError::NodeFrequencyAboveRecommended {
                 node: idx,
                 freq: self.frequency as f32,
             });
@@ -63,13 +63,13 @@ impl NodeConfig {
 
         // 3. Safe bounds (hard limits) - only reached if recommended passed.
         if self.frequency < MIN_FREQ_HZ {
-            return Err(InstrumentConfigError::NodeFreqencyBelowSafe {
+            return Err(InstrumentConfigError::NodeFrequencyBelowSafe {
                 node: idx,
                 freq: self.frequency as f32,
             });
         }
         if self.frequency > MAX_FREQ_HZ {
-            return Err(InstrumentConfigError::NodeFreqencyAboveSafe {
+            return Err(InstrumentConfigError::NodeFrequencyAboveSafe {
                 node: idx,
                 freq: self.frequency as f32,
             });

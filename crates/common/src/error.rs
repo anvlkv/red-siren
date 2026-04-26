@@ -263,22 +263,22 @@ impl From<ControlError> for AppError {
 #[derive(Debug, Error, Serialize, Deserialize)]
 pub enum InstrumentConfigError {
     #[error("node {node} frequency {freq} above recommended")]
-    NodeFreqencyAboveRecomended { node: usize, freq: f32 },
+    NodeFrequencyAboveRecommended { node: usize, freq: f32 },
 
     #[error("node {node} frequency {freq} below recommended")]
-    NodeFreqencyBelowRecomended { node: usize, freq: f32 },
+    NodeFrequencyBelowRecommended { node: usize, freq: f32 },
 
     #[error("node {node} frequency {freq} above safe")]
-    NodeFreqencyAboveSafe { node: usize, freq: f32 },
+    NodeFrequencyAboveSafe { node: usize, freq: f32 },
 
     #[error("node {node} frequency {freq} below safe")]
-    NodeFreqencyBelowSafe { node: usize, freq: f32 },
+    NodeFrequencyBelowSafe { node: usize, freq: f32 },
 
     #[error("node {node} band start {freq} above recommended")]
-    NodeBandStartAboveRecomended { node: usize, freq: f32 },
+    NodeBandStartAboveRecommended { node: usize, freq: f32 },
 
     #[error("node {node} band start {freq} below recommended")]
-    NodeBandStartBelowRecomended { node: usize, freq: f32 },
+    NodeBandStartBelowRecommended { node: usize, freq: f32 },
 
     #[error("node {node} band start {freq} above safe")]
     NodeBandStartAboveSafe { node: usize, freq: f32 },
@@ -287,10 +287,10 @@ pub enum InstrumentConfigError {
     NodeBandStartBelowSafe { node: usize, freq: f32 },
 
     #[error("node {node} band end {freq} above recommended")]
-    NodeBandEndAboveRecomended { node: usize, freq: f32 },
+    NodeBandEndAboveRecommended { node: usize, freq: f32 },
 
     #[error("node {node} band end {freq} below recommended")]
-    NodeBandEndBelowRecomended { node: usize, freq: f32 },
+    NodeBandEndBelowRecommended { node: usize, freq: f32 },
 
     #[error("node {node} band end {freq} above safe")]
     NodeBandEndAboveSafe { node: usize, freq: f32 },
@@ -370,8 +370,8 @@ impl InstrumentConfigError {
     pub fn is_unsafe(&self) -> bool {
         matches!(
             self,
-            InstrumentConfigError::NodeFreqencyAboveSafe { .. }
-                | InstrumentConfigError::NodeFreqencyBelowSafe { .. }
+            InstrumentConfigError::NodeFrequencyAboveSafe { .. }
+                | InstrumentConfigError::NodeFrequencyBelowSafe { .. }
                 | InstrumentConfigError::NodeBandStartAboveSafe { .. }
                 | InstrumentConfigError::NodeBandStartBelowSafe { .. }
                 | InstrumentConfigError::NodeBandEndAboveSafe { .. }

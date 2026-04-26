@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
 use fundsp::prelude::*;
+use num_rational::Ratio;
 use typenum::op;
 
 const RHYTHM_GRID_ENVELOPE_ID: u64 =
@@ -11,48 +12,48 @@ const RHYTHM_GRID_ENVELOPE_ID: u64 =
 /// `attack`, `decay`, and `release` are ratios in `[0.0, 1.0]` of the total duration.
 /// `sustain` is an amplitude level in `[0.0, 1.0]`.
 #[derive(Clone)]
-pub struct AdsrShape {
+pub struct AdsrShape<S: Real + Float + 'static> {
     /// Fraction of total duration spent in attack (0 → 1). Default: 0.05
-    pub attack: f32,
+    pub attack: S,
     /// Fraction of total duration spent in decay (1 → sustain). Default: 0.10
-    pub decay: f32,
+    pub decay: S,
     /// Sustain amplitude level. Default: 0.7
-    pub sustain: f32,
+    pub sustain: S,
     /// Fraction of total duration spent in release (sustain → 0). Default: 0.20
-    pub release: f32,
+    pub release: S,
     /// Blend factor for rounded stage curves in [0.0, 1.0].
     /// 0.0 = linear ADSR segments, 1.0 = fully smoothed (smoothstep).
-    pub smoothness: f32,
+    pub smoothness: S,
 }
 
-impl Default for AdsrShape {
+impl<S: Real + Float + 'static> Default for AdsrShape<S> {
     fn default() -> Self {
         Self {
-            attack: 0.05,
-            decay: 0.10,
-            sustain: 0.7,
-            release: 0.20,
-            smoothness: 0.0,
+            attack: S::from_f32(0.05),
+            decay: S::from_f32(0.10),
+            sustain: S::from_f32(0.7),
+            release: S::from_f32(0.20),
+            smoothness: S::from_f32(0.0),
         }
     }
 }
 
 #[derive(Clone)]
-struct Schedule {
+struct Schedule<S: Real + Float + 'static> {
     start_ticks: u64,
     attack: u64,
     decay: u64,
-    sustain: f32,
+    sustain: S,
     release: u64,
     total_duration: u64,
-    smoothness: f32,
+    smoothness: S,
 }
 
 #[derive(Clone)]
-struct ActiveState {
+struct ActiveState<S: Real + Float + 'static> {
     ticks_until_start: u64,
     envelope_tick: u64,
-    schedule: Schedule,
+    schedule: Schedule<S>,
 }
 
 #[derive(Clone)]
@@ -80,16 +81,18 @@ struct ActiveState {
 /// Each schedule fires exactly once; to repeat, pulse the inputs again.
 ///
 /// ## Outputs: `N::Outputs`
-pub struct RhythmGridEnvelope<S: Real + Float, N: AudioNode> {
+pub struct RhythmGridEnvelope<S: Real + Float + 'static, N: AudioNode> {
     inner: An<N>,
-    adsr: AdsrShape,
-    pending_schedules: Vec<Schedule>,
-    active: Vec<ActiveState>,
+    adsr: AdsrShape<S>,
+    pending_schedules: Vec<Schedule<S>>,
+    active: Vec<ActiveState<S>>,
     _sample_type: PhantomData<S>,
 }
 
-impl<S: Real + Float, N: AudioNode> RhythmGridEnvelope<S, N> {
-    pub fn new(inner: An<N>, adsr: AdsrShape) -> Self {
+impl<S: Real + Float + 'static, N: AudioNode> RhythmGridEnvelope<S, N> {
+    const RATIO_SCALE: i64 = 1_000_000;
+
+    pub fn new(inner: An<N>, adsr: AdsrShape<S>) -> Self {
         Self {
             inner,
             adsr,
@@ -99,29 +102,106 @@ impl<S: Real + Float, N: AudioNode> RhythmGridEnvelope<S, N> {
         }
     }
 
-    fn smooth_progress(t: f32, smoothness: f32) -> f32 {
-        let t = t.clamp(0.0, 1.0);
-        let s = smoothness.clamp(0.0, 1.0);
-        let smoothstep = t * t * (3.0 - 2.0 * t);
+    fn as_i64(value: u64) -> i64 {
+        i64::try_from(value).unwrap_or(i64::MAX)
+    }
+
+    fn ratio_from_u64(value: u64) -> Ratio<i64> {
+        Ratio::from_integer(Self::as_i64(value))
+    }
+
+    fn ratio_floor_u64(value: &Ratio<i64>) -> u64 {
+        let numer = *value.numer();
+        let denom = *value.denom();
+        if numer <= 0 {
+            0
+        } else {
+            (numer / denom) as u64
+        }
+    }
+
+    fn ratio_ceil_u64(value: &Ratio<i64>) -> u64 {
+        let numer = *value.numer();
+        let denom = *value.denom();
+        if numer <= 0 {
+            0
+        } else {
+            ((numer + denom - 1) / denom) as u64
+        }
+    }
+
+    fn unit_ratio(value: S) -> Ratio<i64> {
+        let raw = value.to_f64();
+        if !raw.is_finite() || raw <= 0.0 {
+            return Ratio::from_integer(0);
+        }
+        let clamped = raw.min(1.0);
+        let scaled = (clamped * Self::RATIO_SCALE as f64).round() as i64;
+        Ratio::new(scaled, Self::RATIO_SCALE)
+    }
+
+    fn smooth_progress(t: S, smoothness: S) -> S {
+        let zero = S::zero();
+        let one = S::one();
+        let two = S::from_f64(2.0);
+        let three = S::from_f64(3.0);
+
+        // Clamp t to [0, 1]
+        let t = if t < zero {
+            zero
+        } else if t > one {
+            one
+        } else {
+            t
+        };
+        // Clamp s to [0, 1]
+        let s = if smoothness < zero {
+            zero
+        } else if smoothness > one {
+            one
+        } else {
+            smoothness
+        };
+
+        let smoothstep = t * t * (three - two * t);
         t + (smoothstep - t) * s
     }
 
     fn compute_schedule(
-        adsr: &AdsrShape,
+        adsr: &AdsrShape<S>,
         ticks_per_beat: u64,
         start_divisible: u64,
         start_divisor: u64,
         duration_divisible: u64,
         duration_divisor: u64,
-    ) -> Schedule {
-        let start_ticks =
-            (ticks_per_beat as f64 * start_divisible as f64 / start_divisor as f64).round() as u64;
-        let total_ticks = (ticks_per_beat as f64 * duration_divisible as f64
-            / duration_divisor as f64)
-            .round() as u64;
-        let attack = Ord::max((total_ticks as f64 * adsr.attack as f64).round() as u64, 1);
-        let decay = Ord::max((total_ticks as f64 * adsr.decay as f64).round() as u64, 1);
-        let release = Ord::max((total_ticks as f64 * adsr.release as f64).round() as u64, 1);
+    ) -> Schedule<S> {
+        let ticks_per_beat_ratio = Self::ratio_from_u64(ticks_per_beat);
+        let start_ratio = ticks_per_beat_ratio
+            * Ratio::new(Self::as_i64(start_divisible), Self::as_i64(start_divisor));
+        let duration_ratio = ticks_per_beat_ratio
+            * Ratio::new(
+                Self::as_i64(duration_divisible),
+                Self::as_i64(duration_divisor),
+            );
+
+        // Explicit policy: start uses floor; duration uses ceil and remains at least one tick.
+        let start_ticks = Self::ratio_floor_u64(&start_ratio);
+        let total_ticks = Ord::max(Self::ratio_ceil_u64(&duration_ratio), 1);
+        let total_ticks_ratio = Self::ratio_from_u64(total_ticks);
+
+        // Explicit policy: stage lengths use floor and remain at least one tick.
+        let attack = Ord::max(
+            Self::ratio_floor_u64(&(total_ticks_ratio * Self::unit_ratio(adsr.attack))),
+            1,
+        );
+        let decay = Ord::max(
+            Self::ratio_floor_u64(&(total_ticks_ratio * Self::unit_ratio(adsr.decay))),
+            1,
+        );
+        let release = Ord::max(
+            Self::ratio_floor_u64(&(total_ticks_ratio * Self::unit_ratio(adsr.release))),
+            1,
+        );
         Schedule {
             start_ticks,
             attack,
@@ -133,30 +213,33 @@ impl<S: Real + Float, N: AudioNode> RhythmGridEnvelope<S, N> {
         }
     }
 
-    fn envelope_value(tick: u64, schedule: &Schedule) -> f32 {
+    fn envelope_value(tick: u64, schedule: &Schedule<S>) -> S {
+        let zero = S::zero();
+        let one = S::one();
+
         if tick >= schedule.total_duration {
-            return 0.0;
+            return zero;
         }
         let attack_end = schedule.attack;
         let decay_end = attack_end + schedule.decay;
         let release_start = schedule.total_duration.saturating_sub(schedule.release);
         if tick < attack_end {
             // attack: 0 → 1
-            let t = tick as f32 / schedule.attack as f32;
+            let t = S::from_f64(tick as f64 / schedule.attack as f64);
             Self::smooth_progress(t, schedule.smoothness)
         } else if tick < decay_end {
             // decay: 1 → sustain
-            let t = (tick - attack_end) as f32 / schedule.decay as f32;
+            let t = S::from_f64((tick - attack_end) as f64 / schedule.decay as f64);
             let p = Self::smooth_progress(t, schedule.smoothness);
-            1.0 - p * (1.0 - schedule.sustain)
+            one - p * (one - schedule.sustain)
         } else if tick < release_start {
             // sustain
             schedule.sustain
         } else {
             // release: sustain → 0
-            let t = (tick - release_start) as f32 / schedule.release as f32;
+            let t = S::from_f64((tick - release_start) as f64 / schedule.release as f64);
             let p = Self::smooth_progress(t, schedule.smoothness);
-            schedule.sustain * (1.0 - p)
+            schedule.sustain * (one - p)
         }
     }
 
@@ -168,10 +251,10 @@ impl<S: Real + Float, N: AudioNode> RhythmGridEnvelope<S, N> {
         start_divisor: u64,
         duration_divisible: u64,
         duration_divisor: u64,
-    ) -> f32 {
+    ) -> S {
         if ticks_per_beat > 0 && start_divisor > 0 && duration_divisor > 0 && duration_divisible > 0
         {
-            let sched = Self::compute_schedule(
+            let schedule = Self::compute_schedule(
                 &self.adsr,
                 ticks_per_beat,
                 start_divisible,
@@ -179,19 +262,19 @@ impl<S: Real + Float, N: AudioNode> RhythmGridEnvelope<S, N> {
                 duration_divisible,
                 duration_divisor,
             );
-            self.pending_schedules.push(sched);
+            self.pending_schedules.push(schedule);
         }
 
         if grid_trigger == 1.0 && !self.pending_schedules.is_empty() {
-            let sched = self.pending_schedules.remove(0);
+            let schedule = self.pending_schedules.remove(0);
             self.active.push(ActiveState {
-                ticks_until_start: sched.start_ticks,
+                ticks_until_start: schedule.start_ticks,
                 envelope_tick: 0,
-                schedule: sched,
+                schedule,
             });
         }
 
-        let mut env_value = 0.0_f32;
+        let mut env_value = S::zero();
         for active in &mut self.active {
             if active.ticks_until_start > 0 {
                 active.ticks_until_start -= 1;
@@ -234,8 +317,9 @@ impl<S: Real + Float, N: AudioNode> AudioNode for RhythmGridEnvelope<S, N> {
         // Tick the inner generator and scale its output by the envelope.
         let inner_out = self.inner.tick(&Frame::default());
         let mut result: Frame<f32, N::Outputs> = Frame::default();
+        let env_f32 = env_value.to_f32();
         for (r, v) in result.iter_mut().zip(inner_out.iter()) {
-            *r = *v * env_value;
+            *r = *v * env_f32;
         }
         result
     }
@@ -243,7 +327,7 @@ impl<S: Real + Float, N: AudioNode> AudioNode for RhythmGridEnvelope<S, N> {
     fn process(&mut self, size: usize, input: &BufferRef, output: &mut BufferMut) {
         let mut env_values = [0.0_f32; MAX_BUFFER_SIZE];
         for (sample, env_value) in env_values.iter_mut().enumerate().take(size) {
-            *env_value = self.step_envelope(
+            let env_s = self.step_envelope(
                 input.at_f32(0, sample),
                 input.at_f32(1, sample).round() as u64,
                 input.at_f32(3, sample) as u64,
@@ -251,6 +335,7 @@ impl<S: Real + Float, N: AudioNode> AudioNode for RhythmGridEnvelope<S, N> {
                 input.at_f32(5, sample) as u64,
                 input.at_f32(6, sample) as u64,
             );
+            *env_value = env_s.to_f32();
         }
 
         let mut inner_output = BufferArray::<N::Outputs>::new();
@@ -293,9 +378,9 @@ impl<S: Real + Float, N: AudioNode> AudioNode for RhythmGridEnvelope<S, N> {
 ///
 /// The grid trigger is used only for beat-aligned positioning. Each enqueued schedule
 /// fires exactly once; to repeat, send new start/duration inputs to enqueue the next event.
-pub fn rhythm_grid_envelope<S: Real + Float, N: AudioNode>(
+pub fn rhythm_grid_envelope<S: Real + Float + 'static, N: AudioNode>(
     inner: An<N>,
-    adsr: AdsrShape,
+    adsr: AdsrShape<S>,
 ) -> An<RhythmGridEnvelope<S, N>> {
     An(RhythmGridEnvelope::new(inner, adsr))
 }

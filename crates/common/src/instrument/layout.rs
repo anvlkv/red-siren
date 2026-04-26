@@ -740,4 +740,9 @@ mod tests {
             )
         }
     }
+
+    #[test]
+    fn primes() {
+        assert_json_snapshot!(LAYOUT_PRIMES.iter().copied().collect::<Vec<u32>>());
+    }
 }

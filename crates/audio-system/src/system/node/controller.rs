@@ -7,7 +7,7 @@ const CONTROLLER_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::Node
 const NUM_LEVELS: usize = 11;
 
 #[derive(Clone)]
-/// Cntroller for a single node
+/// Controller for a single node
 ///
 /// Schedules the node's behavior based on its inputs and internal state, allowing for complex rhythmic patterns and accentuation.
 ///

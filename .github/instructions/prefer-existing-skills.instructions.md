@@ -12,6 +12,7 @@ When a task clearly falls into one of the workspace's established areas, load an
 - Use [.github/skills/tauri-trunk/SKILL.md](../skills/tauri-trunk/SKILL.md) when changing Tauri frontend hosting, Trunk config, dev/build commands, ports, static asset copying, or desktop/mobile frontend build wiring.
 - Use [.github/skills/cpal-runtime/SKILL.md](../skills/cpal-runtime/SKILL.md) when changing native audio I/O, CPAL stream setup, device selection, sample-format handling, or callback behavior.
 - Use [.github/skills/fundsp-dsp-design/SKILL.md](../skills/fundsp-dsp-design/SKILL.md) when changing DSP graphs, synthesis, filters, modulation, signal routing, parameter smoothing, or other FunDSP structure.
+- Use [.github/skills/num-rational-docs-first/SKILL.md](../skills/num-rational-docs-first/SKILL.md) when using or reviewing `num-rational` APIs, including constructor invariants, checked arithmetic, float conversions, parsing/formatting, and feature-flag choices.
 
 If a task spans multiple concerns, load all relevant skills before proceeding. Typical overlaps:
 - DSP plus native runtime: use both `fundsp-dsp-design` and `cpal-runtime`.

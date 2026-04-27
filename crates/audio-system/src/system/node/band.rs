@@ -2,36 +2,57 @@ use std::{marker::PhantomData, ops::Mul};
 
 use common::instrument::{BandConfig, NodeConfig};
 use fundsp::{numeric_array::ArrayLength, prelude::*};
-use typenum::Unsigned;
 
 use crate::values::FineTunedValues;
 
 const BAND_NODE_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::Band")); // Unique identifier for the Band node
 
 #[derive(Clone)]
-pub struct Band<S: Real + Float + 'static> {
-    config: BandConfig,
-    inner: Box<dyn AudioUnit>,
+pub struct Band<
+    S: Real + Float + 'static,
+    X: AudioNode<Outputs = XO, Inputs = XI> + 'static,
+    N: Size<S> + Size<X>,
+    XI: Size<S> + Size<X>,
+    XO: Size<S> + Size<X>,
+    XON: Size<S> + Size<X>,
+    XIN: Size<S> + Size<X>,
+> where
+    XI: Mul<N>,
+    <XI as Mul<N>>::Output: ArrayLength + Send + Sync,
+    XO: Mul<N, Output = XON>,
+    <XO as Mul<N>>::Output: ArrayLength + Send + Sync,
+{
+    inner: Net,
+    _config: BandConfig,
     _sample_type: PhantomData<S>,
+    _num_nodes: PhantomData<N>,
+    _num_inputs_per_node: PhantomData<XI>,
+    _num_outputs_per_node: PhantomData<XO>,
+    _num_inputs: PhantomData<XIN>,
+    _num_outputs: PhantomData<XON>,
+    _node_type: PhantomData<X>,
 }
 
-impl<S: Real + Float + 'static> Band<S> {
-    pub fn new<
-        X: AudioNode<Outputs = U1> + 'static,
+impl<
+        S: Real + Float + 'static,
+        X: AudioNode<Outputs = XO, Inputs = XI> + 'static,
         N: Size<S> + Size<X>,
-        G: Fn(NodeConfig) -> An<X>,
-    >(
+        XI: Size<S> + Size<X>,
+        XO: Size<S> + Size<X>,
+        XON: Size<S> + Size<X>,
+        XIN: Size<S> + Size<X>,
+    > Band<S, X, N, XI, XO, XON, XIN>
+where
+    XI: Mul<N>,
+    <XI as Mul<N>>::Output: ArrayLength + Send + Sync,
+    XO: Mul<N, Output = XON>,
+    <XO as Mul<N>>::Output: ArrayLength + Send + Sync,
+{
+    pub fn new<G: Fn(NodeConfig) -> An<X>>(
         config: BandConfig,
         generator: G,
         values: &FineTunedValues,
-    ) -> Self
-    where
-        <X as fundsp::audionode::AudioNode>::Inputs: Mul<N> + Unsigned,
-        <X as fundsp::audionode::AudioNode>::Outputs: Mul<N>,
-        <<X as fundsp::audionode::AudioNode>::Inputs as Mul<N>>::Output: Sync + Send + ArrayLength,
-        <<X as fundsp::audionode::AudioNode>::Outputs as Mul<N>>::Output: Sync + Send + ArrayLength,
-        U1: Mul<N, Output = N>,
-    {
+    ) -> Self {
         let mut net = Net::new(N::USIZE * X::Inputs::USIZE as usize, 1);
         let center_freq =
             config.nodes.iter().map(|n| n.frequency).sum::<f64>() / config.nodes.len() as f64;
@@ -39,7 +60,7 @@ impl<S: Real + Float + 'static> Band<S> {
         let min_freq = config.nodes.first().map(|n| n.frequency).unwrap_or(0.0);
 
         let band_stack = net.push(Box::new(
-            stacki::<N, X, _>(|i| generator(config.nodes[i as usize])) >> join::<N>(),
+            stacki::<N, X, _>(|i| generator(config.nodes[i as usize])) >> join::<XON>(),
         ));
 
         let filter_input = split::<U3>()
@@ -97,17 +118,37 @@ impl<S: Real + Float + 'static> Band<S> {
         net.pipe_output(filter_stack);
 
         Self {
-            config,
-            inner: Box::new(net),
+            inner: net,
+            _config: config,
             _sample_type: PhantomData,
+            _num_nodes: PhantomData,
+            _num_inputs_per_node: PhantomData,
+            _num_outputs_per_node: PhantomData,
+            _num_inputs: PhantomData,
+            _num_outputs: PhantomData,
+            _node_type: PhantomData,
         }
     }
 }
 
-impl<S: Real + Float + 'static> AudioNode for Band<S> {
+impl<
+        S: Real + Float + 'static,
+        X: AudioNode<Outputs = XO, Inputs = XI> + 'static,
+        N: Size<S> + Size<X>,
+        XI: Size<S> + Size<X>,
+        XO: Size<S> + Size<X>,
+        XON: Size<S> + Size<X>,
+        XIN: Size<S> + Size<X>,
+    > AudioNode for Band<S, X, N, XI, XO, XON, XIN>
+where
+    XI: Mul<N>,
+    <XI as Mul<N>>::Output: ArrayLength + Send + Sync,
+    XO: Mul<N, Output = XON>,
+    <XO as Mul<N>>::Output: ArrayLength + Send + Sync,
+{
     const ID: u64 = BAND_NODE_ID;
-    type Inputs = U1;
-    type Outputs = U1;
+    type Inputs = XIN;
+    type Outputs = XON;
 
     fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
         let mut output = Frame::<f32, Self::Outputs>::default();
@@ -134,20 +175,23 @@ impl<S: Real + Float + 'static> AudioNode for Band<S> {
 
 pub fn create_band_node<
     S: Real + Float + 'static,
-    X: AudioNode<Outputs = U1> + 'static,
+    X: AudioNode<Outputs = XO, Inputs = XI> + 'static,
     N: Size<S> + Size<X>,
+    XI: Size<S> + Size<X>,
+    XO: Size<S> + Size<X>,
+    XON: Size<S> + Size<X>,
+    XIN: Size<S> + Size<X>,
     G: Fn(NodeConfig) -> An<X>,
 >(
     config: BandConfig,
     generator: G,
     values: &FineTunedValues,
-) -> An<Band<S>>
+) -> An<Band<S, X, N, XI, XO, XON, XIN>>
 where
-    <X as fundsp::audionode::AudioNode>::Inputs: Mul<N> + Unsigned,
-    <X as fundsp::audionode::AudioNode>::Outputs: Mul<N>,
-    <<X as fundsp::audionode::AudioNode>::Inputs as Mul<N>>::Output: Sync + Send + ArrayLength,
-    <<X as fundsp::audionode::AudioNode>::Outputs as Mul<N>>::Output: Sync + Send + ArrayLength,
-    U1: Mul<N, Output = N>,
+    XI: Mul<N>,
+    <XI as Mul<N>>::Output: ArrayLength + Send + Sync,
+    XO: Mul<N, Output = XON>,
+    <XO as Mul<N>>::Output: ArrayLength + Send + Sync,
 {
     An(Band::new(config, generator, values))
 }
@@ -158,7 +202,6 @@ mod tests {
     use common::instrument::BandChannel;
     use fundsp::prelude32::sine_hz;
     use insta_fun::prelude::*;
-    use typenum::U1;
 
     fn make_band_config() -> BandConfig {
         BandConfig {
@@ -180,14 +223,22 @@ mod tests {
             .unwrap()
     }
 
-    fn band_under_test() -> An<Band<f32>> {
+    fn band_under_test(
+    ) -> An<Band<f32, Binop<FrameMul<U1>, Pipe<Constant<U1>, Sine<f32>>, Pass>, U1, U1, U1, U1, U1>>
+    {
         let config = make_band_config();
         let values = FineTunedValues::new();
-        create_band_node::<f32, _, U1, _>(
-            config,
-            |node| sine_hz(node.frequency as f32) * pass(),
-            &values,
-        )
+        let func = |node: NodeConfig| sine_hz(node.frequency as f32) * pass();
+        create_band_node::<
+            f32,
+            Binop<FrameMul<U1>, Pipe<Constant<U1>, Sine<f32>>, Pass>,
+            U1,
+            U1,
+            U1,
+            U1,
+            U1,
+            _,
+        >(config, func, &values)
     }
 
     fn steady_input(len: usize, value: f32) -> InputSource {

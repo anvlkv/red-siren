@@ -3,6 +3,8 @@ mod controller;
 mod formant;
 mod generator;
 
+use std::ops::Mul;
+
 use common::{
     instrument::{BandChannel, BandConfig, Config as InstrumentConfig, NodeConfig},
     NodeKey,
@@ -11,14 +13,15 @@ use fundsp::prelude::*;
 use typenum::Unsigned;
 
 use crate::{
-    grid::{AdsrShape, RhythmGrid},
-    node::controller::NodeController,
+    grid::{AdsrShape, RhythmGrid, RhythmGridEnvelope},
+    node::{controller::NodeController, generator::NodeGenerator},
     values::FineTunedValues,
 };
 
 use super::grid::rhythm_grid_envelope;
 
 pub struct NodeHandle {
+    channel: BandChannel,
     key: NodeKey,
     accentuation: Shared,
     rhythm: Shared,
@@ -55,19 +58,33 @@ pub fn mount_node_bands<S: Real + Float + 'static>(
         .cloned()
         .partition::<Vec<_>, _>(|band| band.channel == BandChannel::Left);
 
-    // let mut handles = Vec::new();
+    let (l_net, l_handles) = create_channel_bands::<S>(&l_bands, values);
+    let (r_net, r_handles) = create_channel_bands::<S>(&r_bands, values);
 
-    // // let (l_band_ids, r_band_ids) = []
-    // let l_band_ids = [l_bands]
-    //     // let controllers = band_config.nodes.iter().map(|node_config| {
-    //     //     let handle = NodeHandle {
-    //     //         key: node_config.key,
-    //     //         accentuation: shared(0.0),
-    //     //         rhythm: shared(0.0),
-    //     //     };
-    //     //     controller::create_node_controller(*node_config, &handle.accentuation, &handle.rhythm)
-    //     // });
-    // });
+    let handles = {
+        let mut v = Vec::from_iter(l_handles.into_iter().chain(r_handles));
+        v.sort_by_key(|nh| nh.key);
+        v
+    };
+
+    let l_net = net.push(Box::new(l_net));
+    let r_net = net.push(Box::new(r_net));
+
+    let rhythm_data_len = <RhythmGrid<S> as AudioNode>::Outputs::USIZE;
+
+    let lr_rhythm_split = net.push(Box::new(multisplit::<
+        <RhythmGrid<S> as AudioNode>::Outputs,
+        U2,
+    >()));
+
+    net.pipe_output(l_net);
+    net.pipe_output(r_net);
+
+    for gi in 0..rhythm_data_len {
+        net.connect_input(gi, lr_rhythm_split, gi);
+        net.connect(lr_rhythm_split, gi, l_net, gi);
+        net.connect(lr_rhythm_split, gi + rhythm_data_len, r_net, gi);
+    }
 }
 
 fn create_channel_bands<S: Real + Float + 'static>(
@@ -75,67 +92,193 @@ fn create_channel_bands<S: Real + Float + 'static>(
     values: &FineTunedValues,
 ) -> (Net, Vec<NodeHandle>) {
     let num_nodes = bands.iter().map(|b| b.nodes.len()).sum::<usize>();
+    let rhythm_data_len = <RhythmGrid<S> as AudioNode>::Outputs::USIZE;
+    let node_inputs_len = <NodeController<S> as AudioNode>::Inputs::USIZE;
+    let mut net = Net::new(rhythm_data_len + num_nodes * node_inputs_len, bands.len());
 
-    let mut net = Net::new(
-        <RhythmGrid<S> as AudioNode>::Outputs::USIZE
-            + num_nodes * <NodeController<S> as AudioNode>::Inputs::USIZE,
-        1,
+    let split_grid_data = u_num_it::u_num_it!(
+        [1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71],
+        match bands.len() {
+            U => {
+                type NumBands = NumType;
+
+                net.push(Box::new(multisplit::<
+                    <RhythmGrid<S> as AudioNode>::Outputs,
+                    NumBands,
+                >()))
+            }
+            _ => panic!("Unsupported number of bands: {}", bands.len()),
+        }
     );
 
-    let mut handles = Vec::new();
+    for gi in 0..rhythm_data_len {
+        net.connect_input(gi, split_grid_data, gi);
+    }
 
-    let bands_ids = bands.iter().map(|band_config| {
-        let handles_inner =
-            Vec::from_iter(band_config.nodes.iter().map(|node_config| NodeHandle {
-                key: node_config.key,
-                accentuation: shared(0.0),
-                rhythm: shared(0.0),
-            }));
+    let handles =
+        bands
+            .iter()
+            .enumerate()
+            .fold(Vec::new(), |mut handles, (band_index, band_config)| {
+                let handles_inner =
+                    Vec::from_iter(band_config.nodes.iter().map(|node_config| NodeHandle {
+                        channel: band_config.channel,
+                        key: node_config.key,
+                        accentuation: shared(0.0),
+                        rhythm: shared(0.0),
+                    }));
 
-        let (controllers_stack, band) = u_num_it::u_num_it!(
-            [1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71],
-            match band_config.nodes.len() {
-                U => {
-                    type NumNodes = NumType;
+                let (_controllers_stack, _band, _rhythm_data_split) = u_num_it::u_num_it!(
+                    [
+                        1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67,
+                        71
+                    ],
+                    match band_config.nodes.len() {
+                        U => {
+                            type NumNodes = NumType;
 
-                    let ctrl_id =
-                        net.push(Box::new(stacki::<NumNodes, NodeController<S>, _>(|i| {
-                            let node_config = band_config.nodes[i as usize];
-                            let handle = &handles_inner[i as usize];
-                            let ctrl = controller::create_node_controller::<S>(
-                                node_config,
-                                &handle.accentuation,
-                                &handle.rhythm,
+                            let MountBandReturn {
+                                controllers_stack,
+                                band,
+                                rhythm_data_split,
+                            } = mount_band::<S, NumNodes>(
+                                &mut net,
+                                band_config,
+                                &handles_inner,
+                                band_index,
+                                split_grid_data,
+                                values,
                             );
+                            handles.extend(handles_inner);
 
-                            ctrl
-                        })));
+                            (controllers_stack, band, rhythm_data_split)
+                        }
+                        _ => panic!(
+                            "Unsupported number of nodes in band: {}",
+                            band_config.nodes.len()
+                        ),
+                    }
+                );
 
-                    let band_id = band::create_band_node::<S, _, NumNodes, _>(
-                        band_config.clone(),
-                        |node_config| {
-                            let shape = adsr_shape_for_node::<S>(&node_config);
-                            rhythm_grid_envelope::<S, _>(
-                                generator::create_node_generator::<S>(&node_config, values),
-                                shape,
-                            )
-                        },
-                        values,
-                    );
-
-                    handles.extend(handles_inner);
-
-                    (ctrl_id, band_id)
-                }
-                _ => panic!(
-                    "Unsupported number of nodes in band: {}",
-                    band_config.nodes.len()
-                ),
-            }
-        );
-    });
+                handles
+            });
 
     (net, handles)
+}
+
+struct MountBandReturn {
+    controllers_stack: NodeId,
+    band: NodeId,
+    rhythm_data_split: NodeId,
+}
+
+type EnvelopedNodeGenerator<S> =
+    RhythmGridEnvelope<S, NodeGenerator<S>, <NodeGenerator<S> as AudioNode>::Inputs>;
+
+fn mount_band<S: Real + Float + 'static, N: Size<S> + Size<NodeController<S>>>(
+    net: &mut Net,
+    band_config: &BandConfig,
+    handles: &[NodeHandle],
+    band_index: usize,
+    split_grid_data: NodeId,
+    values: &FineTunedValues,
+) -> MountBandReturn
+where
+    // Current NodeController arity is U2 -> U5.
+    NodeController<S>: AudioNode<Inputs = U2, Outputs = U5>,
+    U2: Mul<N>,
+    <U2 as Mul<N>>::Output: Size<S>,
+    U5: Mul<N>,
+    <U5 as Mul<N>>::Output: Size<S>,
+    // Current EnvelopedNodeGenerator arity is U9 -> U1.
+    EnvelopedNodeGenerator<S>: AudioNode<Inputs = U9, Outputs = U1>,
+    U9: Mul<N>,
+    <U9 as Mul<N>>::Output: Size<S>,
+    U1: Mul<N>,
+    <U1 as Mul<N>>::Output: Size<S>,
+    // Current NodeGenerator arity is U2 -> U1
+    NodeGenerator<S>: AudioNode<Inputs = U2, Outputs = U1>,
+    // Current RhythmGrid output U3
+    RhythmGrid<S>: AudioNode<Outputs = U3>,
+    U3: Mul<N>,
+    <U3 as Mul<N>>::Output: Size<S>,
+{
+    let controllers_stack = net.push(Box::new(stacki::<N, _, _>(|i| {
+        let node_config = band_config.nodes[i as usize];
+        let handle = &handles[i as usize];
+        let room_size_m3 = S::from_f64(node_config.v_cm3 / 1000.0); // Convert cm^3 to m^3 for reverb parameters.
+        let time_to_min60db_s: S = S::from_f64(node_config.hr_bpm() as f64) / S::from_f64(60.0); // Time to decay to -60dB in seconds, scaled by tempo
+
+        let reverb_unit = || reverb4_stereo(convert(room_size_m3), convert(time_to_min60db_s));
+
+        controller::create_node_controller::<S>(node_config, &handle.accentuation, &handle.rhythm)
+            >> (reverb_unit() | reverb_unit() | follow(time_to_min60db_s / S::from_f32(4.0)))
+    })));
+
+    let band = net.push(Box::new(band::create_band_node::<
+        S,
+        EnvelopedNodeGenerator<S>,
+        N,
+        <EnvelopedNodeGenerator<S> as AudioNode>::Inputs,
+        <EnvelopedNodeGenerator<S> as AudioNode>::Outputs,
+        _,
+        _,
+        _,
+    >(
+        band_config.clone(),
+        |node_config| {
+            let shape = adsr_shape_for_node::<S>(&node_config);
+            rhythm_grid_envelope::<S, NodeGenerator<S>, U2>(
+                generator::create_node_generator::<S>(&node_config, values),
+                shape,
+            )
+        },
+        values,
+    )));
+
+    let rhythm_data_split = net.push(Box::new(multisplit::<
+        <RhythmGrid<S> as AudioNode>::Outputs,
+        N,
+    >()));
+
+    let num_nodes = N::USIZE;
+    let rhythm_data_len = <RhythmGrid<S> as AudioNode>::Outputs::USIZE;
+    let node_ctrl_outputs_len = <NodeController<S> as AudioNode>::Outputs::USIZE;
+    let envelope_node_gen_inputs_len = <EnvelopedNodeGenerator<S> as AudioNode>::Inputs::USIZE;
+
+    for rg_i in 0..rhythm_data_len {
+        net.connect(
+            split_grid_data,
+            rg_i + band_index * rhythm_data_len,
+            rhythm_data_split,
+            rg_i,
+        );
+    }
+
+    for node_i in 0..num_nodes {
+        for rg_i in 0..rhythm_data_len {
+            net.connect(
+                rhythm_data_split,
+                rg_i + node_i * rhythm_data_len,
+                band,
+                rg_i + node_i * envelope_node_gen_inputs_len,
+            );
+        }
+        for ctrl_i in 0..node_ctrl_outputs_len {
+            net.connect(
+                controllers_stack,
+                ctrl_i + node_i * node_ctrl_outputs_len,
+                band,
+                rhythm_data_len + ctrl_i + node_i * envelope_node_gen_inputs_len,
+            );
+        }
+    }
+
+    MountBandReturn {
+        controllers_stack,
+        band,
+        rhythm_data_split,
+    }
 }
 
 fn adsr_shape_for_node<S: Real + Float + 'static>(node_config: &NodeConfig) -> AdsrShape<S> {

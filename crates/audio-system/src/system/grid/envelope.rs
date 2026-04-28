@@ -63,7 +63,13 @@ struct ActiveState<S: Real + Float + 'static> {
 #[derive(Clone)]
 /// An envelope generator that produces an ADSR envelope synchronized to the rhythm grid.
 ///
-/// ## Inputs: `U3 + U2 + U2`
+/// ## Inputs: `U3 + U2 + U2 + NI`
+///
+/// Each tick where start/duration inputs are non-zero, a new schedule is enqueued.
+/// The caller is responsible for pulsing inputs for exactly one tick per desired event.
+/// The grid trigger pops one pending schedule and activates it — on the current beat if
+/// the trigger and pulse arrive on the same tick, otherwise on the next beat trigger.
+/// Each schedule fires exactly once; to repeat, pulse the inputs again.
 ///
 /// ### Grid inputs: `U3`
 /// - Grid trigger signal (1.0 on the first tick of each beat, 0.0 otherwise)
@@ -78,11 +84,7 @@ struct ActiveState<S: Real + Float + 'static> {
 /// - Divisible
 /// - Divisor
 ///
-/// Each tick where start/duration inputs are non-zero, a new schedule is enqueued.
-/// The caller is responsible for pulsing inputs for exactly one tick per desired event.
-/// The grid trigger pops one pending schedule and activates it — on the current beat if
-/// the trigger and pulse arrive on the same tick, otherwise on the next beat trigger.
-/// Each schedule fires exactly once; to repeat, pulse the inputs again.
+/// ### Inner node inputs: `NI`
 ///
 /// ## Outputs: `N::Outputs`
 pub struct RhythmGridEnvelope<
@@ -104,8 +106,6 @@ where
     UInt<UInt<UInt<UTerm, B1>, B1>, B1>: Add<NI>,
     <UInt<UInt<UInt<UTerm, B1>, B1>, B1> as Add<NI>>::Output: ArrayLength + Send + Sync,
 {
-    const RATIO_SCALE: i64 = 1_000_000;
-
     pub fn new(inner: An<N>, adsr: AdsrShape<S>) -> Self {
         Self {
             inner,
@@ -121,27 +121,21 @@ where
         i64::try_from(value).unwrap_or(i64::MAX)
     }
 
-    fn ratio_from_u64(value: u64) -> Ratio<i64> {
-        Ratio::from_integer(Self::as_i64(value))
-    }
-
     fn ratio_floor_u64(value: &Ratio<i64>) -> u64 {
-        let numer = *value.numer();
-        let denom = *value.denom();
-        if numer <= 0 {
+        let floored = value.floor().to_integer();
+        if floored <= 0 {
             0
         } else {
-            (numer / denom) as u64
+            floored as u64
         }
     }
 
     fn ratio_ceil_u64(value: &Ratio<i64>) -> u64 {
-        let numer = *value.numer();
-        let denom = *value.denom();
-        if numer <= 0 {
+        let ceiled = value.ceil().to_integer();
+        if ceiled <= 0 {
             0
         } else {
-            ((numer + denom - 1) / denom) as u64
+            ceiled as u64
         }
     }
 
@@ -151,8 +145,8 @@ where
             return Ratio::from_integer(0);
         }
         let clamped = raw.min(1.0);
-        let scaled = (clamped * Self::RATIO_SCALE as f64).round() as i64;
-        Ratio::new(scaled, Self::RATIO_SCALE)
+        let scaled = (clamped * super::RATIO_SCALE as f64).round() as i64;
+        Ratio::new(scaled, super::RATIO_SCALE)
     }
 
     fn smooth_progress(t: S, smoothness: S) -> S {
@@ -190,7 +184,7 @@ where
         duration_divisible: u64,
         duration_divisor: u64,
     ) -> Schedule<S> {
-        let ticks_per_beat_ratio = Self::ratio_from_u64(ticks_per_beat);
+        let ticks_per_beat_ratio = Ratio::from_integer(Self::as_i64(ticks_per_beat));
         let start_ratio = ticks_per_beat_ratio
             * Ratio::new(Self::as_i64(start_divisible), Self::as_i64(start_divisor));
         let duration_ratio = ticks_per_beat_ratio
@@ -202,7 +196,7 @@ where
         // Explicit policy: start uses floor; duration uses ceil and remains at least one tick.
         let start_ticks = Self::ratio_floor_u64(&start_ratio);
         let total_ticks = Ord::max(Self::ratio_ceil_u64(&duration_ratio), 1);
-        let total_ticks_ratio = Self::ratio_from_u64(total_ticks);
+        let total_ticks_ratio = Ratio::from_integer(Self::as_i64(total_ticks));
 
         // Explicit policy: stage lengths use floor and remain at least one tick.
         let attack = Ord::max(

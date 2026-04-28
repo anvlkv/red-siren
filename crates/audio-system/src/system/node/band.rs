@@ -17,7 +17,7 @@ pub struct Band<
     XON: Size<S> + Size<X>,
     XIN: Size<S> + Size<X>,
 > where
-    XI: Mul<N>,
+    XI: Mul<N, Output = XIN>,
     <XI as Mul<N>>::Output: ArrayLength + Send + Sync,
     XO: Mul<N, Output = XON>,
     <XO as Mul<N>>::Output: ArrayLength + Send + Sync,
@@ -43,7 +43,7 @@ impl<
         XIN: Size<S> + Size<X>,
     > Band<S, X, N, XI, XO, XON, XIN>
 where
-    XI: Mul<N>,
+    XI: Mul<N, Output = XIN>,
     <XI as Mul<N>>::Output: ArrayLength + Send + Sync,
     XO: Mul<N, Output = XON>,
     <XO as Mul<N>>::Output: ArrayLength + Send + Sync,
@@ -141,7 +141,7 @@ impl<
         XIN: Size<S> + Size<X>,
     > AudioNode for Band<S, X, N, XI, XO, XON, XIN>
 where
-    XI: Mul<N>,
+    XI: Mul<N, Output = XIN>,
     <XI as Mul<N>>::Output: ArrayLength + Send + Sync,
     XO: Mul<N, Output = XON>,
     <XO as Mul<N>>::Output: ArrayLength + Send + Sync,
@@ -188,7 +188,7 @@ pub fn create_band_node<
     values: &FineTunedValues,
 ) -> An<Band<S, X, N, XI, XO, XON, XIN>>
 where
-    XI: Mul<N>,
+    XI: Mul<N, Output = XIN>,
     <XI as Mul<N>>::Output: ArrayLength + Send + Sync,
     XO: Mul<N, Output = XON>,
     <XO as Mul<N>>::Output: ArrayLength + Send + Sync,

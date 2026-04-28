@@ -8,6 +8,8 @@ pub use envelope::{rhythm_grid_envelope, AdsrShape, RhythmGridEnvelope};
 
 const RHYTHM_GRID_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::RhythmGrid"));
 
+pub const RATIO_SCALE: i64 = 1_000_000;
+
 #[derive(Clone)]
 /// A rhythm grid that outputs a trigger signal (1.0) on the first tick of each beat, and 0.0 otherwise.
 /// The BPM can be dynamically changed by changing the input value. The grid will adjust its internal timing accordingly, ensuring that the trigger signals remain in sync with the new BPM.
@@ -28,8 +30,6 @@ pub struct RhythmGrid<S: Real + Float> {
 }
 
 impl<S: Real + Float> RhythmGrid<S> {
-    const RATIO_SCALE: i64 = 1_000_000;
-
     pub fn new() -> Self {
         Self {
             sample_rate: DEFAULT_SR,
@@ -44,35 +44,29 @@ impl<S: Real + Float> RhythmGrid<S> {
         i64::try_from(value).unwrap_or(i64::MAX)
     }
 
-    fn ratio_from_u64(value: u64) -> Ratio<i64> {
-        Ratio::from_integer(Self::as_i64(value))
-    }
-
     fn ratio_from_positive_f64(value: f64) -> Ratio<i64> {
         if !value.is_finite() || value <= 0.0 {
             return Ratio::from_integer(0);
         }
-        let scaled = (value * Self::RATIO_SCALE as f64).round() as i64;
-        Ratio::new(scaled, Self::RATIO_SCALE)
+        let scaled = (value * RATIO_SCALE as f64).round() as i64;
+        Ratio::new(scaled, RATIO_SCALE)
     }
 
     fn ratio_floor_u64(value: &Ratio<i64>) -> u64 {
-        let numer = *value.numer();
-        let denom = *value.denom();
-        if numer <= 0 {
+        let floored = value.floor().to_integer();
+        if floored <= 0 {
             0
         } else {
-            (numer / denom) as u64
+            floored as u64
         }
     }
 
     fn ratio_ceil_u64(value: &Ratio<i64>) -> u64 {
-        let numer = *value.numer();
-        let denom = *value.denom();
-        if numer <= 0 {
+        let ceiled = value.ceil().to_integer();
+        if ceiled <= 0 {
             0
         } else {
-            ((numer + denom - 1) / denom) as u64
+            ceiled as u64
         }
     }
 
@@ -80,8 +74,9 @@ impl<S: Real + Float> RhythmGrid<S> {
         if old_total == 0 {
             return new_total;
         }
-        let ratio = Self::ratio_from_u64(remaining) * Self::ratio_from_u64(new_total)
-            / Self::ratio_from_u64(old_total);
+        let ratio = Ratio::from_integer(Self::as_i64(remaining))
+            * Ratio::from_integer(Self::as_i64(new_total))
+            / Ratio::from_integer(Self::as_i64(old_total));
         Self::ratio_floor_u64(&ratio)
     }
 
@@ -189,6 +184,20 @@ mod tests {
             .num_samples(num_samples)
             .build()
             .unwrap()
+    }
+
+    #[test]
+    fn ratio_rounding_clamps_non_positive_values() {
+        let positive = Ratio::new(7_i64, 3_i64);
+        let zero = Ratio::new(0_i64, 1_i64);
+        let negative = Ratio::new(-7_i64, 3_i64);
+
+        assert_eq!(RhythmGrid::<f32>::ratio_floor_u64(&positive), 2);
+        assert_eq!(RhythmGrid::<f32>::ratio_ceil_u64(&positive), 3);
+        assert_eq!(RhythmGrid::<f32>::ratio_floor_u64(&zero), 0);
+        assert_eq!(RhythmGrid::<f32>::ratio_ceil_u64(&zero), 0);
+        assert_eq!(RhythmGrid::<f32>::ratio_floor_u64(&negative), 0);
+        assert_eq!(RhythmGrid::<f32>::ratio_ceil_u64(&negative), 0);
     }
 
     // At 100 Hz sample rate, 60 BPM → ticks_per_beat = 100.

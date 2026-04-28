@@ -2,6 +2,7 @@ mod band;
 mod controller;
 mod formant;
 mod generator;
+mod pairing;
 
 use std::ops::Mul;
 
@@ -21,10 +22,10 @@ use crate::{
 use super::grid::rhythm_grid_envelope;
 
 pub struct NodeHandle {
-    channel: BandChannel,
-    key: NodeKey,
-    accentuation: Shared,
-    rhythm: Shared,
+    pub channel: BandChannel,
+    pub key: NodeKey,
+    pub accentuation: Shared,
+    pub rhythm: Shared,
 }
 
 /// Mounts bands of nodes based on the provided instrument configuration.
@@ -51,11 +52,12 @@ pub fn mount_node_bands<S: Real + Float + 'static>(
     net: &mut Net,
     config: &InstrumentConfig,
     values: &FineTunedValues,
-) {
+    excitement_source: NodeId,
+    rhythm_data_source: NodeId,
+) -> Vec<NodeHandle> {
     let (l_bands, r_bands) = config
         .0
         .iter()
-        .cloned()
         .partition::<Vec<_>, _>(|band| band.channel == BandChannel::Left);
 
     let (l_net, l_handles) = create_channel_bands::<S>(&l_bands, values);
@@ -70,6 +72,9 @@ pub fn mount_node_bands<S: Real + Float + 'static>(
     let l_net = net.push(Box::new(l_net));
     let r_net = net.push(Box::new(r_net));
 
+    net.pipe_output(l_net);
+    net.pipe_output(r_net);
+
     let rhythm_data_len = <RhythmGrid<S> as AudioNode>::Outputs::USIZE;
 
     let lr_rhythm_split = net.push(Box::new(multisplit::<
@@ -77,18 +82,61 @@ pub fn mount_node_bands<S: Real + Float + 'static>(
         U2,
     >()));
 
-    net.pipe_output(l_net);
-    net.pipe_output(r_net);
+    net.pipe_all(rhythm_data_source, lr_rhythm_split);
 
     for gi in 0..rhythm_data_len {
-        net.connect_input(gi, lr_rhythm_split, gi);
         net.connect(lr_rhythm_split, gi, l_net, gi);
         net.connect(lr_rhythm_split, gi + rhythm_data_len, r_net, gi);
     }
+
+    for pairing in config
+        .0
+        .iter()
+        .enumerate()
+        .flat_map(|(band_index, band_config)| {
+            let net = match band_config.channel {
+                BandChannel::Left => l_net,
+                BandChannel::Right => r_net,
+            };
+            let prior_channel_nodes = config
+                .0
+                .iter()
+                .take(band_index)
+                .filter(|b| b.channel == band_config.channel)
+                .map(|b| b.nodes.len())
+                .sum::<usize>();
+            band_config
+                .nodes
+                .iter()
+                .enumerate()
+                .map(move |(node_index, n)| pairing::ExcitementPairing {
+                    band_index,
+                    net,
+                    in_band_node_index: node_index,
+                    prior_channel_nodes,
+                    key: n.key,
+                })
+        })
+    {
+        net.connect(
+            excitement_source,
+            pairing.source_hit(),
+            pairing.net,
+            pairing.target_hit(),
+        );
+        net.connect(
+            excitement_source,
+            pairing.source_radius(),
+            pairing.net,
+            pairing.target_radius(),
+        );
+    }
+
+    handles
 }
 
 fn create_channel_bands<S: Real + Float + 'static>(
-    bands: &[BandConfig],
+    bands: &[&BandConfig],
     values: &FineTunedValues,
 ) -> (Net, Vec<NodeHandle>) {
     let num_nodes = bands.iter().map(|b| b.nodes.len()).sum::<usize>();
@@ -163,6 +211,8 @@ fn create_channel_bands<S: Real + Float + 'static>(
                 handles
             });
 
+    net.check();
+
     (net, handles)
 }
 
@@ -215,7 +265,7 @@ where
             >> (reverb_unit() | reverb_unit() | follow(time_to_min60db_s / S::from_f32(4.0)))
     })));
 
-    let band = net.push(Box::new(band::create_band_node::<
+    let an_band = band::create_band_node::<
         S,
         EnvelopedNodeGenerator<S>,
         N,
@@ -234,7 +284,11 @@ where
             )
         },
         values,
-    )));
+    );
+
+    let num_band_outputs = an_band.0.outputs();
+
+    let band = net.push(Box::new(an_band));
 
     let rhythm_data_split = net.push(Box::new(multisplit::<
         <RhythmGrid<S> as AudioNode>::Outputs,
@@ -272,6 +326,10 @@ where
                 rhythm_data_len + ctrl_i + node_i * envelope_node_gen_inputs_len,
             );
         }
+    }
+
+    for bi in 0..num_band_outputs {
+        net.connect_output(band, bi, bi);
     }
 
     MountBandReturn {
@@ -317,6 +375,66 @@ fn adsr_shape_for_node<S: Real + Float + 'static>(node_config: &NodeConfig) -> A
 #[cfg(test)]
 mod tests {
     use super::*;
+    use common::instrument::Scale;
+    use insta_fun::prelude::*;
+
+    fn low_sr_config(num_samples: usize) -> SnapshotConfig {
+        SnapshotConfigBuilder::default()
+            .sample_rate(100.0)
+            .num_samples(num_samples)
+            .build()
+            .unwrap()
+    }
+
+    fn make_instrument_config() -> InstrumentConfig {
+        InstrumentConfig(
+            vec![
+                BandConfig {
+                    channel: BandChannel::Left,
+                    nodes: vec![NodeConfig::new_test_node(220.0)],
+                },
+                BandConfig {
+                    channel: BandChannel::Right,
+                    nodes: vec![NodeConfig::new_test_node(880.0)],
+                },
+            ],
+            Scale::Yo,
+        )
+    }
+
+    #[test]
+    fn mount_node_bands_wiring() {
+        let config = make_instrument_config();
+        let values = FineTunedValues::new();
+        let mut net = Net::new(0, 2);
+        // 3 outputs: grid trigger, ticks per beat, ticks to next beat.
+        // Keep trigger high and tick spacing minimal so at least one event is visible in the snapshot.
+        let rhythm_id = net.push(Box::new(dc(1.0) | dc(1.0) | dc(0.0)));
+        // 4 outputs: 2 nodes × 2 controller inputs (hit + radius).
+        // Non-zero inputs drive controller schedules so envelopes actually fire.
+        let excitement_id = net.push(Box::new(dc(1.0) | dc(0.5) | dc(1.0) | dc(0.5)));
+
+        let handles = mount_node_bands::<f32>(&mut net, &config, &values, excitement_id, rhythm_id);
+
+        assert_eq!(handles.len(), 2, "should have one handle per node");
+        assert_eq!(
+            handles[0].channel,
+            BandChannel::Left,
+            "first handle is left channel"
+        );
+        assert_eq!(
+            handles[1].channel,
+            BandChannel::Right,
+            "second handle is right channel"
+        );
+
+        assert_audio_unit_snapshot!(
+            "mount_node_bands_wiring",
+            net,
+            InputSource::None,
+            low_sr_config(512)
+        );
+    }
 
     #[test]
     fn test_adsr_light_node_flute() {

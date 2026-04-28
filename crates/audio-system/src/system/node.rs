@@ -2,16 +2,16 @@ mod band;
 mod controller;
 mod formant;
 mod generator;
+mod handle;
 mod pairing;
 
 use std::ops::Mul;
 
-use common::{
-    instrument::{BandChannel, BandConfig, Config as InstrumentConfig, NodeConfig},
-    NodeKey,
-};
+use common::instrument::{BandChannel, BandConfig, Config as InstrumentConfig, NodeConfig};
 use fundsp::prelude::*;
 use typenum::Unsigned;
+
+pub use handle::*;
 
 use crate::{
     grid::{AdsrShape, RhythmGrid, RhythmGridEnvelope},
@@ -20,13 +20,6 @@ use crate::{
 };
 
 use super::grid::rhythm_grid_envelope;
-
-pub struct NodeHandle {
-    pub channel: BandChannel,
-    pub key: NodeKey,
-    pub accentuation: Shared,
-    pub rhythm: Shared,
-}
 
 /// Mounts bands of nodes based on the provided instrument configuration.
 ///
@@ -105,6 +98,12 @@ pub fn mount_node_bands<S: Real + Float + 'static>(
                 .filter(|b| b.channel == band_config.channel)
                 .map(|b| b.nodes.len())
                 .sum::<usize>();
+            let prior_global_nodes = config
+                .0
+                .iter()
+                .take(band_index)
+                .map(|b| b.nodes.len())
+                .sum::<usize>();
             band_config
                 .nodes
                 .iter()
@@ -114,6 +113,7 @@ pub fn mount_node_bands<S: Real + Float + 'static>(
                     net,
                     in_band_node_index: node_index,
                     prior_channel_nodes,
+                    prior_global_nodes,
                     key: n.key,
                 })
         })
@@ -132,13 +132,13 @@ pub fn mount_node_bands<S: Real + Float + 'static>(
         );
     }
 
-    handles
+    handles.into_iter().map(|h| h.into_outer()).collect()
 }
 
 fn create_channel_bands<S: Real + Float + 'static>(
     bands: &[&BandConfig],
     values: &FineTunedValues,
-) -> (Net, Vec<NodeHandle>) {
+) -> (Net, Vec<InnerHandle>) {
     let num_nodes = bands.iter().map(|b| b.nodes.len()).sum::<usize>();
     let rhythm_data_len = <RhythmGrid<S> as AudioNode>::Outputs::USIZE;
     let node_inputs_len = <NodeController<S> as AudioNode>::Inputs::USIZE;
@@ -168,13 +168,12 @@ fn create_channel_bands<S: Real + Float + 'static>(
             .iter()
             .enumerate()
             .fold(Vec::new(), |mut handles, (band_index, band_config)| {
-                let handles_inner =
-                    Vec::from_iter(band_config.nodes.iter().map(|node_config| NodeHandle {
-                        channel: band_config.channel,
-                        key: node_config.key,
-                        accentuation: shared(0.0),
-                        rhythm: shared(0.0),
-                    }));
+                let handles_inner = Vec::from_iter(
+                    band_config
+                        .nodes
+                        .iter()
+                        .map(|node_config| InnerHandle::new(node_config.key, band_config.channel)),
+                );
 
                 let (_controllers_stack, _band, _rhythm_data_split) = u_num_it::u_num_it!(
                     [
@@ -228,7 +227,7 @@ type EnvelopedNodeGenerator<S> =
 fn mount_band<S: Real + Float + 'static, N: Size<S> + Size<NodeController<S>>>(
     net: &mut Net,
     band_config: &BandConfig,
-    handles: &[NodeHandle],
+    handles: &[InnerHandle],
     band_index: usize,
     split_grid_data: NodeId,
     values: &FineTunedValues,
@@ -256,12 +255,17 @@ where
     let controllers_stack = net.push(Box::new(stacki::<N, _, _>(|i| {
         let node_config = band_config.nodes[i as usize];
         let handle = &handles[i as usize];
-        let room_size_m3 = S::from_f64(node_config.v_cm3 / 1000.0); // Convert cm^3 to m^3 for reverb parameters.
+        let room_size_m3 = S::from_f64(node_config.v_m3());
         let time_to_min60db_s: S = S::from_f64(node_config.hr_bpm() as f64) / S::from_f64(60.0); // Time to decay to -60dB in seconds, scaled by tempo
 
         let reverb_unit = || reverb4_stereo(convert(room_size_m3), convert(time_to_min60db_s));
 
-        controller::create_node_controller::<S>(node_config, &handle.accentuation, &handle.rhythm)
+        (handle.take_excitement_snoop_hs() | handle.take_excitement_snoop_rad())
+            >> controller::create_node_controller::<S>(
+                node_config,
+                &handle.accentuation,
+                &handle.rhythm,
+            )
             >> (reverb_unit() | reverb_unit() | follow(time_to_min60db_s / S::from_f32(4.0)))
     })));
 
@@ -375,7 +379,7 @@ fn adsr_shape_for_node<S: Real + Float + 'static>(node_config: &NodeConfig) -> A
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::instrument::Scale;
+    use common::{instrument::Scale, NodeKey};
     use insta_fun::prelude::*;
 
     fn low_sr_config(num_samples: usize) -> SnapshotConfig {
@@ -415,6 +419,8 @@ mod tests {
         let excitement_id = net.push(Box::new(dc(1.0) | dc(0.5) | dc(1.0) | dc(0.5)));
 
         let handles = mount_node_bands::<f32>(&mut net, &config, &values, excitement_id, rhythm_id);
+
+        net.check();
 
         assert_eq!(handles.len(), 2, "should have one handle per node");
         assert_eq!(

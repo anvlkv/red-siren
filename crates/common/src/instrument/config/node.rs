@@ -114,8 +114,8 @@ impl NodeConfig {
             phase: 0.0,
             cents: 100.0,
             l_mm: 170.0,
-            w_kg: 0.1,
-            v_cm3: 1.0,
+            w_kg: 1.1,
+            v_cm3: 10.0,
         }
     }
 }
@@ -149,6 +149,7 @@ mod tests {
                             format!("l_mm: {} mm", node.l_mm),
                             format!("w_kg: {} kg", node.w_kg),
                             format!("v_cm3: {} cm³", node.v_cm3),
+                            format!("volume: {} m³", node.v_m3()),
                             format!("hr: {} bpm", hr_bpm),
                             format!("buoyant force: {} N", buoyant_force),
                             format!("body density: {} g/cm³", body_density),

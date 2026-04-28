@@ -11,6 +11,7 @@ pub(super) struct ExcitementPairing {
     pub band_index: usize,
     pub in_band_node_index: usize,
     pub prior_channel_nodes: usize,
+    pub prior_global_nodes: usize,
     pub key: NodeKey,
 }
 
@@ -36,6 +37,6 @@ impl ExcitementPairing {
     }
 
     fn global_node_index(&self) -> usize {
-        self.prior_channel_nodes + self.in_band_node_index
+        self.prior_global_nodes + self.in_band_node_index
     }
 }

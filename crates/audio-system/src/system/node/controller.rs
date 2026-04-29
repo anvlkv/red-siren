@@ -2,6 +2,7 @@ use std::marker::PhantomData;
 
 use common::instrument::NodeConfig;
 use fundsp::prelude::*;
+use num_rational::Ratio;
 
 const CONTROLLER_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::NodeController"));
 const NUM_LEVELS: usize = 11;
@@ -15,20 +16,18 @@ const NUM_LEVELS: usize = 11;
 /// - Hit strength (0.0 to 1.0)
 /// - Radius (0.0 to 1.0)
 ///
-/// ## Outputs: 5
+/// ## Outputs: 3
 ///
 /// ### Scheduler outputs in music time:
 ///
-/// #### Scheduler start outputs (2):
-/// - Divisible [0]
-/// - Divisor [1]
+/// #### Scheduler start output (1):
+/// - Beat ratio [0] (beats from trigger to note-on)
 ///
-/// #### Scheduler duration outputs (2):
-/// - Divisible [2]
-/// - Divisor [3]
+/// #### Scheduler duration output (1):
+/// - Beat ratio [1] (note length in beats)
 ///
 /// ### Accentuation output (1):
-/// - Accentuation value [4] (0.0 or 1.0)
+/// - Accentuation value [2] (0.0 or 1.0)
 pub struct NodeController<S: Real + Float> {
     config: NodeConfig,
     /// Control for whether the current hit is accented or not. A hit is considered accented if the control value is above 0.5.
@@ -93,13 +92,17 @@ impl<S: Real + Float> NodeController<S> {
     fn harmonic_denominator(index: usize, accent: bool) -> f32 {
         Self::HARMONIC_DENOMINATORS[Self::accent_bias(index, accent)] as f32
     }
+
+    fn ratio_to_f32(ratio: Ratio<i64>) -> f32 {
+        *ratio.numer() as f32 / *ratio.denom() as f32
+    }
 }
 
 impl<S: Real + Float> AudioNode for NodeController<S> {
     const ID: u64 = CONTROLLER_ID;
 
     type Inputs = U2;
-    type Outputs = typenum::op!(U2 + U2 + U1);
+    type Outputs = typenum::op!(U1 + U1 + U1);
 
     fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
         let hit_strength = f64::from(input[0].clamp(0.0, 1.0));
@@ -113,7 +116,7 @@ impl<S: Real + Float> AudioNode for NodeController<S> {
         let bpm_drive = Self::bpm_drive(self.config.hr_bpm());
         let density_drive = Self::density_drive(self.config.body_density_g_cm3());
 
-        frame[4] = if accent { 1.0 } else { 0.0 };
+        frame[2] = if accent { 1.0 } else { 0.0 };
 
         if hit_strength != 0.0 {
             let start_divisor_drive =
@@ -133,10 +136,17 @@ impl<S: Real + Float> AudioNode for NodeController<S> {
                 0.45 * duration_physical_drive + 0.35 * hit_strength + 0.20 * rhythm_u;
             let duration_divisible_index = Self::map_index(duration_divisible_drive);
 
-            frame[0] = Self::fibonacci(start_divisible_index);
-            frame[1] = Self::harmonic_denominator(start_divisor_index, accent);
-            frame[2] = Self::harmonic_numerator(duration_divisible_index, accent);
-            frame[3] = Self::fibonacci(duration_divisor_index);
+            let start_ratio = Ratio::new(
+                Self::fibonacci(start_divisible_index) as i64,
+                Self::harmonic_denominator(start_divisor_index, accent) as i64,
+            );
+            let duration_ratio = Ratio::new(
+                Self::harmonic_numerator(duration_divisible_index, accent) as i64,
+                Self::fibonacci(duration_divisor_index) as i64,
+            );
+
+            frame[0] = Self::ratio_to_f32(start_ratio);
+            frame[1] = Self::ratio_to_f32(duration_ratio);
         }
 
         frame
@@ -180,10 +190,8 @@ mod tests {
             .with_inputs(true)
             .input_title("Hit strength")
             .input_title("Radius")
-            .output_title("Start scheduler divisible")
-            .output_title("Start scheduler divisor")
-            .output_title("Duration scheduler divisible")
-            .output_title("Duration scheduler divisor")
+            .output_title("Start scheduler beat ratio")
+            .output_title("Duration scheduler beat ratio")
             .output_title("Accentuation")
             .build()
             .unwrap()
@@ -324,44 +332,32 @@ mod tests {
                         input[1] = radius;
                         let output = controller.tick(&input);
 
-                        // Divisors must never be zero — compute_schedule divides by them.
+                        // Single-ratio outputs must be finite and positive when a hit is emitted.
                         assert!(
-                            output[1] > 0.0,
-                            "start divisor must be non-zero (accent={accent}, rhythm={rhythm}, hit={hit}, radius={radius})"
+                            output[0].is_finite() && output[0] > 0.0,
+                            "start ratio must be finite and positive (accent={accent}, rhythm={rhythm}, hit={hit}, radius={radius})"
                         );
                         assert!(
-                            output[3] > 0.0,
-                            "duration divisor must be non-zero (accent={accent}, rhythm={rhythm}, hit={hit}, radius={radius})"
-                        );
-                        // Duration numerator must be non-zero to produce an audible event.
-                        assert!(
-                            output[2] > 0.0,
-                            "duration divisible must be non-zero (accent={accent}, rhythm={rhythm}, hit={hit}, radius={radius})"
+                            output[1].is_finite() && output[1] > 0.0,
+                            "duration ratio must be finite and positive (accent={accent}, rhythm={rhythm}, hit={hit}, radius={radius})"
                         );
 
                         // Duration must resolve to at least one tick at ticks_per_beat.
-                        let dur_div = output[2] as u64;
-                        let dur_denom = output[3] as u64;
-                        let total_ticks = (ticks_per_beat as f64 * dur_div as f64
-                            / dur_denom as f64)
-                            .round() as u64;
+                        let total_ticks = (ticks_per_beat as f64 * output[1] as f64).ceil() as u64;
                         assert!(
                             total_ticks >= 1,
                             "duration must be at least 1 tick, got {total_ticks} \
-                             (divisible={dur_div}, divisor={dur_denom}, accent={accent}, rhythm={rhythm})"
+                             (duration_ratio={}, accent={accent}, rhythm={rhythm})",
+                            output[1]
                         );
 
                         // Start offset must stay within a practical window.
-                        // Worst case: Fibonacci[9]=89, harmonic_denominator[0]=1 → 89 beats.
-                        let start_div = output[0] as u64;
-                        let start_denom = output[1] as u64;
-                        let start_ticks = (ticks_per_beat as f64 * start_div as f64
-                            / start_denom as f64)
-                            .round() as u64;
+                        let start_ticks = (ticks_per_beat as f64 * output[0] as f64).floor() as u64;
                         assert!(
                             start_ticks <= ticks_per_beat * 100,
                             "start offset must be within 100 beats, got {} beats \
-                             (divisible={start_div}, divisor={start_denom}, accent={accent}, rhythm={rhythm})",
+                             (start_ratio={}, accent={accent}, rhythm={rhythm})",
+                            output[0],
                             start_ticks / ticks_per_beat
                         );
                     }

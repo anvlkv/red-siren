@@ -235,16 +235,16 @@ fn mount_band<S: Real + Float + 'static, N: Size<S> + Size<NodeController<S>>>(
     values: &FineTunedValues,
 ) -> MountBandReturn
 where
-    // Current NodeController arity is U2 -> U5.
-    NodeController<S>: AudioNode<Inputs = U2, Outputs = U5>,
+    // Current NodeController arity is U2 -> U3.
+    NodeController<S>: AudioNode<Inputs = U2, Outputs = U3>,
     U2: Mul<N>,
     <U2 as Mul<N>>::Output: Size<S>,
-    U5: Mul<N>,
-    <U5 as Mul<N>>::Output: Size<S>,
-    // Current EnvelopedNodeGenerator arity is U9 -> U1.
-    EnvelopedNodeGenerator<S>: AudioNode<Inputs = U9, Outputs = U1>,
-    U9: Mul<N>,
-    <U9 as Mul<N>>::Output: Size<S>,
+    U3: Mul<N>,
+    <U3 as Mul<N>>::Output: Size<S>,
+    // Current EnvelopedNodeGenerator arity is U7 -> U1.
+    EnvelopedNodeGenerator<S>: AudioNode<Inputs = U7, Outputs = U1>,
+    U7: Mul<N>,
+    <U7 as Mul<N>>::Output: Size<S>,
     U1: Mul<N>,
     <U1 as Mul<N>>::Output: Size<S>,
     // Current NodeGenerator arity is U2 -> U1
@@ -257,10 +257,8 @@ where
     let controllers_stack = net.push(Box::new(stacki::<N, _, _>(|i| {
         let node_config = band_config.nodes[i as usize];
         let handle = &handles[i as usize];
-        let room_size_m3 = S::from_f64(node_config.v_m3());
         let time_to_min60db_s: S = S::from_f64(node_config.hr_bpm() as f64) / S::from_f64(60.0); // Time to decay to -60dB in seconds, scaled by tempo
-
-        let reverb_unit = || reverb4_stereo(convert(room_size_m3), convert(time_to_min60db_s));
+        let schedule_smoothing = time_to_min60db_s / S::from_f32(4.0);
 
         (handle.take_excitement_snoop_hs() | handle.take_excitement_snoop_rad())
             >> controller::create_node_controller::<S>(
@@ -268,7 +266,9 @@ where
                 &handle.accentuation,
                 &handle.rhythm,
             )
-            >> (reverb_unit() | reverb_unit() | follow(time_to_min60db_s / S::from_f32(4.0)))
+            >> (follow(schedule_smoothing)
+                | follow(schedule_smoothing)
+                | follow(schedule_smoothing))
     })));
 
     let h_set: HashMap<common::NodeKey, &InnerHandle> =

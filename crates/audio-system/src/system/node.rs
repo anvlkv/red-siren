@@ -1,3 +1,4 @@
+mod adsr_shape;
 mod band;
 mod controller;
 mod formant;
@@ -5,16 +6,20 @@ mod generator;
 mod handle;
 mod pairing;
 
+#[cfg(test)]
+mod tests;
+
 use std::{collections::HashMap, ops::Mul};
 
-use common::instrument::{BandChannel, BandConfig, Config as InstrumentConfig, NodeConfig};
+use adsr_shape::*;
+use common::instrument::{BandChannel, BandConfig, Config as InstrumentConfig};
 use fundsp::prelude::*;
 use typenum::Unsigned;
 
 pub use handle::*;
 
 use crate::{
-    grid::{AdsrShape, RhythmGrid, RhythmGridEnvelope},
+    grid::{RhythmGrid, RhythmGridEnvelope},
     node::{controller::NodeController, generator::NodeGenerator},
     values::FineTunedValues,
 };
@@ -56,11 +61,7 @@ pub fn mount_node_bands<S: Real + Float + 'static>(
     let (l_net, l_handles) = create_channel_bands::<S>(&l_bands, values);
     let (r_net, r_handles) = create_channel_bands::<S>(&r_bands, values);
 
-    let handles = {
-        let mut v = Vec::from_iter(l_handles.into_iter().chain(r_handles));
-        v.sort_by_key(|nh| nh.key);
-        v
-    };
+    let handles = sort_inner_handles(l_handles, r_handles);
 
     let l_net = net.push(Box::new(l_net));
     let r_net = net.push(Box::new(r_net));
@@ -68,6 +69,29 @@ pub fn mount_node_bands<S: Real + Float + 'static>(
     net.pipe_output(l_net);
     net.pipe_output(r_net);
 
+    connect_rhythm_to_channel_nets::<S>(net, rhythm_data_source, l_net, r_net);
+
+    let pairings = build_excitement_pairings(config, l_net, r_net);
+    connect_excitement_pairings(net, excitement_source, &pairings);
+
+    handles.into_iter().map(|h| h.into_outer()).collect()
+}
+
+pub(self) fn sort_inner_handles(
+    l_handles: Vec<InnerHandle>,
+    r_handles: Vec<InnerHandle>,
+) -> Vec<InnerHandle> {
+    let mut v = Vec::from_iter(l_handles.into_iter().chain(r_handles));
+    v.sort_by_key(|nh| nh.key);
+    v
+}
+
+pub(self) fn connect_rhythm_to_channel_nets<S: Real + Float + 'static>(
+    net: &mut Net,
+    rhythm_data_source: NodeId,
+    l_net: NodeId,
+    r_net: NodeId,
+) {
     let rhythm_data_len = <RhythmGrid<S> as AudioNode>::Outputs::USIZE;
 
     let lr_rhythm_split = net.push(Box::new(multisplit::<
@@ -81,8 +105,14 @@ pub fn mount_node_bands<S: Real + Float + 'static>(
         net.connect(lr_rhythm_split, gi, l_net, gi);
         net.connect(lr_rhythm_split, gi + rhythm_data_len, r_net, gi);
     }
+}
 
-    for pairing in config
+pub(self) fn build_excitement_pairings(
+    config: &InstrumentConfig,
+    l_net: NodeId,
+    r_net: NodeId,
+) -> Vec<pairing::ExcitementPairing> {
+    config
         .0
         .iter()
         .enumerate()
@@ -117,7 +147,15 @@ pub fn mount_node_bands<S: Real + Float + 'static>(
                     key: n.key,
                 })
         })
-    {
+        .collect()
+}
+
+pub(self) fn connect_excitement_pairings(
+    net: &mut Net,
+    excitement_source: NodeId,
+    pairings: &[pairing::ExcitementPairing],
+) {
+    for pairing in pairings {
         net.connect(
             excitement_source,
             pairing.source_hit(),
@@ -131,8 +169,6 @@ pub fn mount_node_bands<S: Real + Float + 'static>(
             pairing.target_radius(),
         );
     }
-
-    handles.into_iter().map(|h| h.into_outer()).collect()
 }
 
 fn create_channel_bands<S: Real + Float + 'static>(
@@ -257,8 +293,6 @@ where
     let controllers_stack = net.push(Box::new(stacki::<N, _, _>(|i| {
         let node_config = band_config.nodes[i as usize];
         let handle = &handles[i as usize];
-        let time_to_min60db_s: S = S::from_f64(node_config.hr_bpm() as f64) / S::from_f64(60.0); // Time to decay to -60dB in seconds, scaled by tempo
-        let schedule_smoothing = time_to_min60db_s / S::from_f32(4.0);
 
         (handle.take_excitement_snoop_hs() | handle.take_excitement_snoop_rad())
             >> controller::create_node_controller::<S>(
@@ -266,9 +300,6 @@ where
                 &handle.accentuation,
                 &handle.rhythm,
             )
-            >> (follow(schedule_smoothing)
-                | follow(schedule_smoothing)
-                | follow(schedule_smoothing))
     })));
 
     let h_set: HashMap<common::NodeKey, &InnerHandle> =
@@ -310,8 +341,14 @@ where
 
     let num_nodes = N::USIZE;
     let rhythm_data_len = <RhythmGrid<S> as AudioNode>::Outputs::USIZE;
+    let node_ctrl_inputs_len = <NodeController<S> as AudioNode>::Inputs::USIZE;
     let node_ctrl_outputs_len = <NodeController<S> as AudioNode>::Outputs::USIZE;
     let envelope_node_gen_inputs_len = <EnvelopedNodeGenerator<S> as AudioNode>::Inputs::USIZE;
+
+    // Map channel-net excitement inputs (after rhythm inputs) into controller-stack inputs.
+    for ci in 0..(N::USIZE * <NodeController<S> as AudioNode>::Inputs::USIZE) {
+        net.connect_input(rhythm_data_len + ci, controllers_stack, ci);
+    }
 
     for rg_i in 0..rhythm_data_len {
         net.connect(
@@ -331,14 +368,38 @@ where
                 rg_i + node_i * envelope_node_gen_inputs_len,
             );
         }
-        for ctrl_i in 0..node_ctrl_outputs_len {
-            net.connect(
-                controllers_stack,
-                ctrl_i + node_i * node_ctrl_outputs_len,
-                band,
-                rhythm_data_len + ctrl_i + node_i * envelope_node_gen_inputs_len,
-            );
-        }
+
+        let band_node_input_base = node_i * envelope_node_gen_inputs_len;
+        let ctrl_node_output_base = node_i * node_ctrl_outputs_len;
+
+        // RhythmGridEnvelope layout per node:
+        // [0..3): grid data, [3]: start ratio, [4]: duration ratio,
+        // [5]: generator control, [6]: generator accent.
+        net.connect(
+            controllers_stack,
+            ctrl_node_output_base,
+            band,
+            band_node_input_base + rhythm_data_len,
+        );
+        net.connect(
+            controllers_stack,
+            ctrl_node_output_base + 1,
+            band,
+            band_node_input_base + rhythm_data_len + 1,
+        );
+        net.connect(
+            controllers_stack,
+            ctrl_node_output_base + 2,
+            band,
+            band_node_input_base + rhythm_data_len + 3,
+        );
+
+        // Reuse the per-node hit-strength lane as generator control input.
+        net.connect_input(
+            rhythm_data_len + node_i * node_ctrl_inputs_len,
+            band,
+            band_node_input_base + rhythm_data_len + 2,
+        );
     }
 
     for bi in 0..num_band_outputs {
@@ -349,321 +410,5 @@ where
         controllers_stack,
         band,
         rhythm_data_split,
-    }
-}
-
-fn adsr_shape_for_node<S: Real + Float + 'static>(node_config: &NodeConfig) -> AdsrShape<S> {
-    // Generate ADSR shape from physical properties using time-constant model.
-    // All computation in f64, convert outputs to S.
-
-    // Time constant proxy from mass and displaced volume.
-    let tau = (node_config.w_kg * node_config.v_cm3).sqrt();
-    let tau_norm = (tau / 0.5).clamp(0.05, 2.0);
-
-    // Attack/decay/release scale with time constant: lighter nodes are snappier.
-    let attack = (0.08 * tau_norm).clamp(0.01, 0.25);
-
-    let decay = (0.12 * tau_norm + 0.04).clamp(0.05, 0.3);
-
-    // Sustain follows log-volume and anchors around 0.5 at 1 cm^3.
-    let sustain = (0.5 + 0.12 * node_config.v_cm3.log10()).clamp(0.3, 0.9);
-
-    let release = (0.14 * tau_norm + 0.08).clamp(0.1, 0.4);
-
-    // Smoothness: linear mapping from τ to [0.01, 0.99]
-    // Light nodes (sharp linear segments) → low smoothness
-    // Heavy nodes (rounded curves) → high smoothness
-    let smoothness = tau_norm.clamp(0.01, 0.99);
-
-    // Convert outputs to S type
-    AdsrShape {
-        attack: S::from_f64(attack),
-        decay: S::from_f64(decay),
-        sustain: S::from_f64(sustain),
-        release: S::from_f64(release),
-        smoothness: S::from_f64(smoothness),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use common::{instrument::Scale, NodeKey};
-    use insta_fun::prelude::*;
-
-    fn low_sr_config(num_samples: usize) -> SnapshotConfig {
-        SnapshotConfigBuilder::default()
-            .sample_rate(100.0)
-            .num_samples(num_samples)
-            .build()
-            .unwrap()
-    }
-
-    fn make_instrument_config() -> InstrumentConfig {
-        InstrumentConfig(
-            vec![
-                BandConfig {
-                    channel: BandChannel::Left,
-                    nodes: vec![NodeConfig::new_test_node(220.0)],
-                },
-                BandConfig {
-                    channel: BandChannel::Right,
-                    nodes: vec![NodeConfig::new_test_node(880.0)],
-                },
-            ],
-            Scale::Yo,
-        )
-    }
-
-    #[test]
-    fn mount_node_bands_wiring() {
-        let config = make_instrument_config();
-        let values = FineTunedValues::new();
-        let mut net = Net::new(0, 2);
-        // 3 outputs: grid trigger, ticks per beat, ticks to next beat.
-        // Keep trigger high and tick spacing minimal so at least one event is visible in the snapshot.
-        let rhythm_id = net.push(Box::new(dc(1.0) | dc(1.0) | dc(0.0)));
-        // 4 outputs: 2 nodes × 2 controller inputs (hit + radius).
-        // Non-zero inputs drive controller schedules so envelopes actually fire.
-        let excitement_id = net.push(Box::new(dc(1.0) | dc(0.5) | dc(1.0) | dc(0.5)));
-
-        let handles = mount_node_bands::<f32>(&mut net, &config, &values, excitement_id, rhythm_id);
-
-        net.check();
-
-        assert_eq!(handles.len(), 2, "should have one handle per node");
-        assert_eq!(
-            handles[0].channel,
-            BandChannel::Left,
-            "first handle is left channel"
-        );
-        assert_eq!(
-            handles[1].channel,
-            BandChannel::Right,
-            "second handle is right channel"
-        );
-
-        assert_audio_unit_snapshot!(
-            "mount_node_bands_wiring",
-            net,
-            InputSource::None,
-            low_sr_config(512)
-        );
-    }
-
-    #[test]
-    fn test_adsr_light_node_flute() {
-        // Light, small volume node (flute-like)
-        let node = NodeConfig {
-            key: NodeKey(0, 0),
-            frequency: 2000.0,
-            phase: 0.0,
-            cents: 100.0,
-            l_mm: 100.0,
-            w_kg: 0.01,
-            v_cm3: 0.1,
-        };
-        let shape = adsr_shape_for_node::<f32>(&node);
-
-        // Light nodes should have:
-        // - Fast attack (< 0.1)
-        // - Short decay (< 0.15)
-        // - Low sustain (< 0.5 due to small volume)
-        // - Quick release (< 0.2)
-        // - Low smoothness (< 0.2)
-        assert!(
-            shape.attack.to_f32() < 0.1,
-            "attack should be fast for light node"
-        );
-        assert!(
-            shape.decay.to_f32() < 0.15,
-            "decay should be short for light node"
-        );
-        assert!(
-            shape.sustain.to_f32() < 0.5,
-            "sustain should be low for small volume"
-        );
-        assert!(
-            shape.release.to_f32() < 0.2,
-            "release should be quick for light node"
-        );
-        assert!(
-            shape.smoothness.to_f32() < 0.2,
-            "smoothness should be low for light node"
-        );
-    }
-
-    #[test]
-    fn test_adsr_medium_node_bell() {
-        // Medium node (bell-like)
-        let node = NodeConfig {
-            key: NodeKey(0, 1),
-            frequency: 500.0,
-            phase: 0.0,
-            cents: 100.0,
-            l_mm: 170.0,
-            w_kg: 0.1,
-            v_cm3: 1.0,
-        };
-        let shape = adsr_shape_for_node::<f32>(&node);
-
-        // Medium nodes should have balanced ADSR.
-        assert!(shape.attack.to_f32() >= 0.05 && shape.attack.to_f32() <= 0.15);
-        assert!(shape.decay.to_f32() >= 0.08 && shape.decay.to_f32() <= 0.2);
-        assert!(shape.sustain.to_f32() >= 0.45 && shape.sustain.to_f32() <= 0.65);
-        assert!(shape.release.to_f32() >= 0.15 && shape.release.to_f32() <= 0.3);
-        assert!(shape.smoothness.to_f32() >= 0.4 && shape.smoothness.to_f32() <= 0.7);
-    }
-
-    #[test]
-    fn test_adsr_heavy_node_gong() {
-        // Heavy, large volume node (gong-like)
-        let node = NodeConfig {
-            key: NodeKey(0, 2),
-            frequency: 200.0,
-            phase: 0.0,
-            cents: 100.0,
-            l_mm: 250.0,
-            w_kg: 1.0,
-            v_cm3: 10.0,
-        };
-        let shape = adsr_shape_for_node::<f32>(&node);
-
-        // Heavy nodes should have:
-        // - Slower attack (> 0.1)
-        // - Longer decay (> 0.2)
-        // - Higher sustain (due to large volume)
-        // - Long release (> 0.3)
-        // - High smoothness (> 0.6)
-        assert!(
-            shape.attack.to_f32() > 0.1,
-            "attack should be slower for heavy node"
-        );
-        assert!(
-            shape.decay.to_f32() > 0.2,
-            "decay should be longer for heavy node"
-        );
-        assert!(
-            shape.sustain.to_f32() > 0.5,
-            "sustain should be higher for large volume"
-        );
-        assert!(
-            shape.release.to_f32() > 0.3,
-            "release should be long for heavy node"
-        );
-        assert!(
-            shape.smoothness.to_f32() > 0.6,
-            "smoothness should be high for heavy node"
-        );
-    }
-
-    #[test]
-    fn test_adsr_very_light_edge_case() {
-        // Very light node (edge case - should clamp properly)
-        let node = NodeConfig {
-            key: NodeKey(0, 3),
-            frequency: 5000.0,
-            phase: 0.0,
-            cents: 100.0,
-            l_mm: 50.0,
-            w_kg: 0.001,
-            v_cm3: 0.01,
-        };
-        let shape = adsr_shape_for_node::<f32>(&node);
-
-        // Should be clamped to minimum values
-        assert!(shape.attack.to_f32() >= 0.01, "attack minimum clamp");
-        assert!(shape.decay.to_f32() >= 0.05, "decay minimum clamp");
-        assert!(shape.sustain.to_f32() >= 0.3, "sustain minimum clamp");
-        assert!(shape.release.to_f32() >= 0.1, "release minimum clamp");
-        assert!(
-            shape.smoothness.to_f32() >= 0.01,
-            "smoothness minimum clamp"
-        );
-    }
-
-    #[test]
-    fn test_adsr_very_heavy_edge_case() {
-        // Very heavy node (edge case - should clamp properly)
-        let node = NodeConfig {
-            key: NodeKey(0, 4),
-            frequency: 100.0,
-            phase: 0.0,
-            cents: 100.0,
-            l_mm: 300.0,
-            w_kg: 10.0,
-            v_cm3: 100.0,
-        };
-        let shape = adsr_shape_for_node::<f32>(&node);
-
-        // Should be clamped to maximum values
-        assert!(shape.attack.to_f32() <= 0.25, "attack maximum clamp");
-        assert!(shape.decay.to_f32() <= 0.3, "decay maximum clamp");
-        assert!(shape.sustain.to_f32() <= 0.9, "sustain maximum clamp");
-        assert!(shape.release.to_f32() <= 0.4, "release maximum clamp");
-        assert!(
-            shape.smoothness.to_f32() <= 0.99,
-            "smoothness maximum clamp"
-        );
-    }
-
-    #[test]
-    fn test_adsr_extreme_volume_small() {
-        // Small volume node (extreme edge case)
-        let node = NodeConfig {
-            key: NodeKey(0, 5),
-            frequency: 800.0,
-            phase: 0.0,
-            cents: 100.0,
-            l_mm: 80.0,
-            w_kg: 0.1,
-            v_cm3: 0.001,
-        };
-        let shape = adsr_shape_for_node::<f32>(&node);
-
-        // Very small volume should produce very low sustain
-        assert!(
-            shape.sustain.to_f32() < 0.35,
-            "sustain should be minimal for tiny volume"
-        );
-    }
-
-    #[test]
-    fn test_adsr_f64_precision() {
-        // Test with f64 precision
-        let node = NodeConfig {
-            key: NodeKey(0, 6),
-            frequency: 440.0,
-            phase: 0.0,
-            cents: 100.0,
-            l_mm: 170.0,
-            w_kg: 0.1,
-            v_cm3: 1.0,
-        };
-        let shape_f32 = adsr_shape_for_node::<f32>(&node);
-        let shape_f64 = adsr_shape_for_node::<f64>(&node);
-
-        // f32 and f64 should produce similar results (within tolerance)
-        let tolerance = 0.001;
-        assert!(
-            (shape_f32.attack.to_f64() - shape_f64.attack).abs() < tolerance,
-            "attack should be consistent across precision levels"
-        );
-        assert!(
-            (shape_f32.decay.to_f64() - shape_f64.decay).abs() < tolerance,
-            "decay should be consistent across precision levels"
-        );
-        assert!(
-            (shape_f32.sustain.to_f64() - shape_f64.sustain).abs() < tolerance,
-            "sustain should be consistent across precision levels"
-        );
-        assert!(
-            (shape_f32.release.to_f64() - shape_f64.release).abs() < tolerance,
-            "release should be consistent across precision levels"
-        );
-        assert!(
-            (shape_f32.smoothness.to_f64() - shape_f64.smoothness).abs() < tolerance,
-            "smoothness should be consistent across precision levels"
-        );
     }
 }

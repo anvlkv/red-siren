@@ -246,6 +246,11 @@ where
         if tick >= schedule.total_duration {
             return zero;
         }
+
+        // A one-tick schedule must produce an audible value on its only sample.
+        if schedule.total_duration == 1 {
+            return one;
+        }
         let attack_end = schedule.attack;
         let decay_end = attack_end + schedule.decay;
         let release_start = schedule.total_duration.saturating_sub(schedule.release);
@@ -635,6 +640,33 @@ mod tests {
             env,
             input,
             low_sr_config(1500)
+        );
+    }
+
+    // 11 events with both start offset and duration progressively increasing.
+    // Start ratio goes from 0.0 to 2.0 (steps of 0.2), duration from 0.1 to 1.1 beats.
+    // Each pulse arrives 50 ticks before its activating beat trigger.
+    // The combined drift + lengthening of each envelope visualizes the full progression.
+    // Sample rate: 100 Hz, ticks_per_beat: 100, total samples: 2000.
+    #[test]
+    fn envelope_progressive_start_and_duration_0_to_2() {
+        let env = create_rhythm_grid_envelope::<f32, _, _>(dc(1.0f32), AdsrShape::default());
+        let num_events: usize = 11;
+        let beat_ticks: Vec<usize> = (1..=num_events).map(|b| b * 100).collect();
+        let schedule_pulses: Vec<(usize, f32, f32)> = (0..num_events)
+            .map(|i| {
+                let tick = i * 100 + 50; // pulse 50 ticks before the beat
+                let start_ratio = i as f32 * 0.2; // 0.0, 0.2, 0.4, …, 2.0
+                let duration_ratio = 0.1 + i as f32 * 0.1; // 0.1, 0.2, 0.3, …, 1.1 beats
+                (tick, start_ratio, duration_ratio)
+            })
+            .collect();
+        let input = make_input(beat_ticks, schedule_pulses);
+        assert_audio_unit_snapshot!(
+            "envelope_progressive_start_and_duration_0_to_2",
+            env,
+            input,
+            low_sr_config(2000)
         );
     }
 

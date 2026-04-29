@@ -4,7 +4,7 @@ use fundsp::prelude::*;
 use num_rational::Ratio;
 
 mod envelope;
-pub use envelope::{rhythm_grid_envelope, AdsrShape, RhythmGridEnvelope};
+pub use envelope::{create_rhythm_grid_envelope, AdsrShape, RhythmGridEnvelope};
 
 const RHYTHM_GRID_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::RhythmGrid"));
 

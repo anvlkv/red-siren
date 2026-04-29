@@ -5,7 +5,7 @@ mod generator;
 mod handle;
 mod pairing;
 
-use std::ops::Mul;
+use std::{collections::HashMap, ops::Mul};
 
 use common::instrument::{BandChannel, BandConfig, Config as InstrumentConfig, NodeConfig};
 use fundsp::prelude::*;
@@ -19,7 +19,7 @@ use crate::{
     values::FineTunedValues,
 };
 
-use super::grid::rhythm_grid_envelope;
+use super::grid::create_rhythm_grid_envelope;
 
 /// Mounts bands of nodes based on the provided instrument configuration.
 ///
@@ -221,8 +221,10 @@ struct MountBandReturn {
     rhythm_data_split: NodeId,
 }
 
-type EnvelopedNodeGenerator<S> =
-    RhythmGridEnvelope<S, NodeGenerator<S>, <NodeGenerator<S> as AudioNode>::Inputs>;
+type EnvelopedNodeGenerator<S> = Pipe<
+    RhythmGridEnvelope<S, NodeGenerator<S>, <NodeGenerator<S> as AudioNode>::Inputs>,
+    SnoopBackend,
+>;
 
 fn mount_band<S: Real + Float + 'static, N: Size<S> + Size<NodeController<S>>>(
     net: &mut Net,
@@ -269,6 +271,9 @@ where
             >> (reverb_unit() | reverb_unit() | follow(time_to_min60db_s / S::from_f32(4.0)))
     })));
 
+    let h_set: HashMap<common::NodeKey, &InnerHandle> =
+        HashMap::from_iter(handles.iter().map(|h| (h.key, h)));
+
     let an_band = band::create_band_node::<
         S,
         EnvelopedNodeGenerator<S>,
@@ -282,10 +287,14 @@ where
         band_config.clone(),
         |node_config| {
             let shape = adsr_shape_for_node::<S>(&node_config);
-            rhythm_grid_envelope::<S, NodeGenerator<S>, U2>(
+            let inner_handle = h_set
+                .get(&node_config.key)
+                .expect("inner handle for node key");
+
+            create_rhythm_grid_envelope::<S, NodeGenerator<S>, U2>(
                 generator::create_node_generator::<S>(&node_config, values),
                 shape,
-            )
+            ) >> inner_handle.take_output_snoop()
         },
         values,
     );

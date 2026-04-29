@@ -4,22 +4,22 @@ expression: trace
 ---
 [
     PairingSample {
-        key: (
+        _key: (
             0,
             7,
         ),
-        channel: "left",
+        _channel: "left",
         source_hit: 0,
         source_radius: 1,
         target_hit: 3,
         target_radius: 4,
     },
     PairingSample {
-        key: (
+        _key: (
             0,
             3,
         ),
-        channel: "right",
+        _channel: "right",
         source_hit: 2,
         source_radius: 3,
         target_hit: 3,

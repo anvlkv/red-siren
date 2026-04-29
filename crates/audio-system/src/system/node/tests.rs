@@ -16,8 +16,8 @@ use crate::{grid::RhythmGrid, node::controller::NodeController, values::FineTune
 
 #[derive(Debug)]
 struct PairingSample {
-    key: (u8, u8),
-    channel: &'static str,
+    _key: (u8, u8),
+    _channel: &'static str,
     source_hit: usize,
     source_radius: usize,
     target_hit: usize,
@@ -111,8 +111,8 @@ fn pairing_trace(config: &InstrumentConfig) -> Vec<PairingSample> {
     build_excitement_pairings(config, left_net, right_net)
         .into_iter()
         .map(|p| PairingSample {
-            key: (p.key.band(), p.key.key()),
-            channel: channel_name(config.channel_of_key(&p.key).expect("channel for key")),
+            _key: (p.key.band(), p.key.key()),
+            _channel: channel_name(config.channel_of_key(&p.key).expect("channel for key")),
             source_hit: p.source_hit(),
             source_radius: p.source_radius(),
             target_hit: p.target_hit(),
@@ -125,7 +125,7 @@ fn snapshot_config(num_samples: usize) -> SnapshotConfig {
     SnapshotConfigBuilder::default()
         .num_samples(num_samples)
         .warm_up(WarmUp::Seconds(0.25))
-        .chart_layout(Layout::SeparateChannels)
+        .chart_layout(Layout::CombinedPerChannelType)
         .svg_width(640)
         .svg_height_per_channel(160)
         .with_inputs(true)

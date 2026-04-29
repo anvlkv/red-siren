@@ -54,10 +54,14 @@ Radius
 0.0
 </text>
 <polyline fill="none" opacity="0.3" stroke="#4285F4" stroke-width="1" points="49,578 54,578 "/>
-<text x="45" y="450" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="8.064516129032258" opacity="1" fill="#4285F4">
-20.0
+<text x="45" y="482" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="8.064516129032258" opacity="1" fill="#4285F4">
+5.0
 </text>
-<polyline fill="none" opacity="0.3" stroke="#4285F4" stroke-width="1" points="49,450 54,450 "/>
+<polyline fill="none" opacity="0.3" stroke="#4285F4" stroke-width="1" points="49,482 54,482 "/>
+<text x="45" y="386" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="8.064516129032258" opacity="1" fill="#4285F4">
+10.0
+</text>
+<polyline fill="none" opacity="0.3" stroke="#4285F4" stroke-width="1" points="49,386 54,386 "/>
 <polyline fill="none" opacity="0.3" stroke="#4285F4" stroke-width="1" points="55,600 506,600 "/>
 <text x="55" y="610" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="8.064516129032258" opacity="1" fill="#4285F4">
 0.0
@@ -79,9 +83,9 @@ Radius
 8.0
 </text>
 <polyline fill="none" opacity="0.3" stroke="#4285F4" stroke-width="1" points="455,600 455,605 "/>
-<polyline fill="none" opacity="1" stroke="#4285F4" stroke-width="2" points="55,578 105,567 155,578 205,562 255,551 305,578 355,505 405,578 455,360 "/>
-<polyline fill="none" opacity="1" stroke="#EA4335" stroke-width="2" points="55,578 105,576 155,578 205,576 255,578 305,578 355,577 405,578 455,577 "/>
-<polyline fill="none" opacity="1" stroke="#FBBC04" stroke-width="2" points="55,571 105,571 155,571 205,571 255,571 305,571 355,571 405,571 455,571 "/>
+<polyline fill="none" opacity="1" stroke="#4285F4" stroke-width="2" points="55,578 105,495 155,578 205,546 255,360 305,578 355,360 405,578 455,496 "/>
+<polyline fill="none" opacity="1" stroke="#EA4335" stroke-width="2" points="55,578 105,573 155,578 205,570 255,577 305,578 355,575 405,578 455,576 "/>
+<polyline fill="none" opacity="1" stroke="#FBBC04" stroke-width="2" points="55,559 105,559 155,559 205,559 255,559 305,559 355,559 405,559 455,559 "/>
 <rect x="320" y="442" width="182" height="54" opacity="1" fill="#000000" stroke="none"/>
 <rect x="320" y="442" width="182" height="54" opacity="1" fill="none" stroke="#FFFFFF"/>
 <text x="360" y="452" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="8.064516129032258" opacity="1" fill="#FFFFFF">

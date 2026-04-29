@@ -171,7 +171,7 @@ pub(self) fn connect_excitement_pairings(
     }
 }
 
-fn create_channel_bands<S: Real + Float + 'static>(
+pub(self) fn create_channel_bands<S: Real + Float + 'static>(
     bands: &[&BandConfig],
     values: &FineTunedValues,
 ) -> (Net, Vec<InnerHandle>) {
@@ -262,7 +262,7 @@ type EnvelopedNodeGenerator<S> = Pipe<
     SnoopBackend,
 >;
 
-fn mount_band<S: Real + Float + 'static, N: Size<S> + Size<NodeController<S>>>(
+pub(self) fn mount_band<S: Real + Float + 'static, N: Size<S> + Size<NodeController<S>>>(
     net: &mut Net,
     band_config: &BandConfig,
     handles: &[InnerHandle],
@@ -290,49 +290,9 @@ where
     U3: Mul<N>,
     <U3 as Mul<N>>::Output: Size<S>,
 {
-    let controllers_stack = net.push(Box::new(stacki::<N, _, _>(|i| {
-        let node_config = band_config.nodes[i as usize];
-        let handle = &handles[i as usize];
-
-        (handle.take_excitement_snoop_hs() | handle.take_excitement_snoop_rad())
-            >> controller::create_node_controller::<S>(
-                node_config,
-                &handle.accentuation,
-                &handle.rhythm,
-            )
-    })));
-
-    let h_set: HashMap<common::NodeKey, &InnerHandle> =
-        HashMap::from_iter(handles.iter().map(|h| (h.key, h)));
-
-    let an_band = band::create_band_node::<
-        S,
-        EnvelopedNodeGenerator<S>,
-        N,
-        <EnvelopedNodeGenerator<S> as AudioNode>::Inputs,
-        <EnvelopedNodeGenerator<S> as AudioNode>::Outputs,
-        _,
-        _,
-        _,
-    >(
-        band_config.clone(),
-        |node_config| {
-            let shape = adsr_shape_for_node::<S>(&node_config);
-            let inner_handle = h_set
-                .get(&node_config.key)
-                .expect("inner handle for node key");
-
-            create_rhythm_grid_envelope::<S, NodeGenerator<S>, U2>(
-                generator::create_node_generator::<S>(&node_config, values),
-                shape,
-            ) >> inner_handle.take_output_snoop()
-        },
-        values,
-    );
-
-    let num_band_outputs = an_band.0.outputs();
-
-    let band = net.push(Box::new(an_band));
+    let controllers_stack = create_controllers_stack::<S, N>(net, band_config, handles);
+    let (band, num_band_outputs) =
+        create_and_push_band_node::<S, N>(net, band_config, handles, values);
 
     let rhythm_data_split = net.push(Box::new(multisplit::<
         <RhythmGrid<S> as AudioNode>::Outputs,
@@ -411,4 +371,87 @@ where
         band,
         rhythm_data_split,
     }
+}
+
+pub(self) fn create_controllers_stack<
+    S: Real + Float + 'static,
+    N: Size<S> + Size<NodeController<S>>,
+>(
+    net: &mut Net,
+    band_config: &BandConfig,
+    handles: &[InnerHandle],
+) -> NodeId
+where
+    NodeController<S>: AudioNode<Inputs = U2, Outputs = U3>,
+    U2: Mul<N>,
+    <U2 as Mul<N>>::Output: Size<S>,
+    U3: Mul<N>,
+    <U3 as Mul<N>>::Output: Size<S>,
+{
+    net.push(Box::new(stacki::<N, _, _>(|i| {
+        let node_config = band_config.nodes[i as usize];
+        let handle = &handles[i as usize];
+
+        let room_size_m3 = node_config.room_size_m3();
+        let reverb_time_to_min60db = node_config.hr_bpm() as f64 / 60.0;
+
+        (handle.take_excitement_snoop_hs() | handle.take_excitement_snoop_rad())
+            >> controller::create_node_controller::<S>(
+                node_config,
+                &handle.accentuation,
+                &handle.rhythm,
+            )
+            >> (reverb4_stereo(room_size_m3, reverb_time_to_min60db)
+                | follow(reverb_time_to_min60db))
+    })))
+}
+
+pub(self) fn create_and_push_band_node<
+    S: Real + Float + 'static,
+    N: Size<S> + Size<EnvelopedNodeGenerator<S>>,
+>(
+    net: &mut Net,
+    band_config: &BandConfig,
+    handles: &[InnerHandle],
+    values: &FineTunedValues,
+) -> (NodeId, usize)
+where
+    EnvelopedNodeGenerator<S>: AudioNode<Inputs = U7, Outputs = U1>,
+    U7: Mul<N>,
+    <U7 as Mul<N>>::Output: Size<S>,
+    U1: Mul<N>,
+    <U1 as Mul<N>>::Output: Size<S>,
+    NodeGenerator<S>: AudioNode<Inputs = U2, Outputs = U1>,
+{
+    let h_set: HashMap<common::NodeKey, &InnerHandle> =
+        HashMap::from_iter(handles.iter().map(|h| (h.key, h)));
+
+    let an_band = band::create_band_node::<
+        S,
+        EnvelopedNodeGenerator<S>,
+        N,
+        <EnvelopedNodeGenerator<S> as AudioNode>::Inputs,
+        <EnvelopedNodeGenerator<S> as AudioNode>::Outputs,
+        _,
+        _,
+        _,
+    >(
+        band_config.clone(),
+        |node_config| {
+            let shape = adsr_shape_for_node::<S>(&node_config);
+            let inner_handle = h_set
+                .get(&node_config.key)
+                .expect("inner handle for node key");
+
+            create_rhythm_grid_envelope::<S, NodeGenerator<S>, U2>(
+                generator::create_node_generator::<S>(&node_config, values),
+                shape,
+            ) >> inner_handle.take_output_snoop()
+        },
+        values,
+    );
+
+    let num_band_outputs = an_band.0.outputs();
+    let band = net.push(Box::new(an_band));
+    (band, num_band_outputs)
 }

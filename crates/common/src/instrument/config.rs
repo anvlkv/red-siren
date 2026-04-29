@@ -3,10 +3,9 @@ mod channel;
 mod node;
 mod scale;
 
-use mint::Point2;
 use serde::{Deserialize, Serialize};
 
-use crate::{error::InstrumentConfigError, orientation::LayoutOrientation, NodeKey};
+use crate::{error::InstrumentConfigError, NodeKey};
 
 use super::{consts::*, Layout};
 
@@ -151,7 +150,6 @@ impl TryFrom<Layout> for Config {
         // computed properties
         let total_steps = key_registry.total_keys();
         let phase_step = 1.0 / total_steps as f64;
-        let l_step_nodes = layout.key_radius + layout.key_bands_gap;
 
         // Pre-compute frequency range across all bands to anchor mass/volume.
         // Mersenne law: w ∝ 1/f², so log(w) is linear in log(f).
@@ -167,15 +165,6 @@ impl TryFrom<Layout> for Config {
         // track values
         let mut n = 0;
         let mut n_base = 1;
-        let mut l_mm = {
-            let p = layout
-                .orientation
-                .safe_length_start_point(Point2 { x: 0.0, y: 0.0 }, layout.safe_area_padding);
-            (match layout.orientation {
-                LayoutOrientation::Horizontal => p.x,
-                LayoutOrientation::Vertical => p.y,
-            }) + layout.key_pad_main()
-        };
 
         let mut bands = Vec::new();
         let mut target_f_min = None;
@@ -204,8 +193,8 @@ impl TryFrom<Layout> for Config {
                     ((frequency.ln() - f_config_min.ln()) / ln_f_range).clamp(0.0, 1.0)
                 };
 
-                // Mass rises across pitch bands using geometric interpolation.
-                let w_kg = W_MIN_KG * (W_MAX_KG / W_MIN_KG).powf(t);
+                // Mass decreases with frequency (high freq = lighter resonator).
+                let w_kg = W_MAX_KG * (W_MIN_KG / W_MAX_KG).powf(t);
 
                 // Density rises toward high pitch with a custom smoothstep curve.
                 let density_curve = t * t * (3.0 - 2.0 * t);
@@ -214,6 +203,9 @@ impl TryFrom<Layout> for Config {
                 let body_density = BODY_DENSITY_MIN_G_CM3
                     * (BODY_DENSITY_MAX_G_CM3 / BODY_DENSITY_MIN_G_CM3).powf(density_curve);
                 let v_cm3 = (w_kg * 1000.0) / body_density;
+
+                // Acoustic resonator length derived from volume (not spatial position)
+                let l_mm = L_MM_ACOUSTIC_SCALE * v_cm3.cbrt();
 
                 nodes.push(NodeConfig {
                     key,
@@ -225,11 +217,9 @@ impl TryFrom<Layout> for Config {
                     cents,
                 });
 
-                l_mm += l_step_nodes;
                 n += 1;
             }
 
-            l_mm += layout.bands_gap;
             target_f_min = Some(octave_f_base * 2.0);
             n_base = (next_n_base + 1).max(g + 1);
 
@@ -395,7 +385,7 @@ mod tests {
     }
 
     #[test]
-    fn test_physical_progression_increases_with_frequency() {
+    fn test_physical_progression_with_frequency() {
         let epsilon = 1e-12;
 
         for (config, _) in config_test_cases() {
@@ -412,16 +402,44 @@ mod tests {
                 let next = pair[1];
 
                 assert!(
-                    next.w_kg + epsilon >= prev.w_kg,
-                    "mass should be non-decreasing with frequency"
+                    next.w_kg <= prev.w_kg + epsilon,
+                    "mass should be non-increasing with frequency: prev={} next={}",
+                    prev.w_kg,
+                    next.w_kg
                 );
                 assert!(
-                    next.v_cm3 + epsilon >= prev.v_cm3,
-                    "volume should be non-decreasing with frequency"
+                    next.v_cm3 <= prev.v_cm3 + epsilon,
+                    "volume should be non-increasing with frequency: prev={} next={}",
+                    prev.v_cm3,
+                    next.v_cm3
                 );
                 assert!(
                     next.body_density_g_cm3() + epsilon >= prev.body_density_g_cm3(),
                     "density should be non-decreasing with frequency"
+                );
+                assert!(
+                    next.hr_bpm() >= prev.hr_bpm(),
+                    "BPM should be non-decreasing with frequency: prev={} next={}",
+                    prev.hr_bpm(),
+                    next.hr_bpm()
+                );
+                assert!(
+                    prev.room_size_m3() >= prev.v_m3(),
+                    "room size should fit body volume: room={} body={}",
+                    prev.room_size_m3(),
+                    prev.v_m3()
+                );
+                assert!(
+                    next.room_size_m3() >= next.v_m3(),
+                    "room size should fit body volume: room={} body={}",
+                    next.room_size_m3(),
+                    next.v_m3()
+                );
+                assert!(
+                    next.room_size_m3() <= prev.room_size_m3() + epsilon,
+                    "room size should be non-increasing with frequency: prev={} next={}",
+                    prev.room_size_m3(),
+                    next.room_size_m3()
                 );
             }
         }

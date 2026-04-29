@@ -88,9 +88,32 @@ impl NodeConfig {
         self.v_cm3 / 1_000_000.0
     }
 
-    /// Calculate the heart rate in beats per minute based on the mass of the node using an allometric scaling law.
+    /// Calculate the heart rate in beats per minute using an inverse log-volume mapping.
+    /// Small volume (high frequency) → high BPM; large volume (low frequency) → low BPM.
     pub fn hr_bpm(&self) -> u16 {
-        (241.0 * self.w_kg.powf(-0.25)).ceil() as u16
+        // Normalise v_cm3 in log space over the model's volume range
+        let log_v_norm = ((self.v_cm3 / V_NODE_MIN_CM3).ln()
+            / (V_NODE_MAX_CM3 / V_NODE_MIN_CM3).ln())
+        .clamp(0.0, 1.0);
+        // log_v_norm = 0 → smallest volume (highest freq) → BPM_MAX
+        // log_v_norm = 1 → largest volume (lowest freq)  → BPM_MIN
+        let bpm = BPM_MAX as f64 * (BPM_MIN as f64 / BPM_MAX as f64).powf(log_v_norm);
+        bpm.clamp(BPM_MIN as f64, BPM_MAX as f64).ceil() as u16
+    }
+
+    /// Reverb room size derived from node volume.
+    ///
+    /// Uses log-volume interpolation across a bounded room-size range so every node
+    /// gets a distinct room value. Also guarantees the room can contain at least
+    /// the node's own body volume.
+    pub fn room_size_m3(&self) -> f64 {
+        let log_v_norm = ((self.v_cm3 / V_NODE_MIN_CM3).ln()
+            / (V_NODE_MAX_CM3 / V_NODE_MIN_CM3).ln())
+        .clamp(0.0, 1.0);
+
+        let mapped_room = ROOM_SIZE_MIN_M3 * (ROOM_SIZE_MAX_M3 / ROOM_SIZE_MIN_M3).powf(log_v_norm);
+
+        mapped_room.max(self.v_m3())
     }
 
     /// Calculate the buoyant force exerted on the node when submerged in a fluid with the given density (in g/cm³). The force is returned in Newtons.
@@ -108,14 +131,20 @@ impl NodeConfig {
         static NODE_KEY: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
         let key = NODE_KEY.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
+        // Use geometric-mean physical values representative of the acoustic model
+        let w_kg = (W_MIN_KG * W_MAX_KG).sqrt();
+        let density = (BODY_DENSITY_MIN_G_CM3 * BODY_DENSITY_MAX_G_CM3).sqrt();
+        let v_cm3 = (w_kg * 1000.0) / density;
+        let l_mm = L_MM_ACOUSTIC_SCALE * v_cm3.cbrt();
+
         Self {
             key: NodeKey(0, key),
             frequency: f,
             phase: 0.0,
             cents: 100.0,
-            l_mm: 170.0,
-            w_kg: 1.1,
-            v_cm3: 10.0,
+            l_mm,
+            w_kg,
+            v_cm3,
         }
     }
 }
@@ -149,7 +178,7 @@ mod tests {
                             format!("l_mm: {} mm", node.l_mm),
                             format!("w_kg: {} kg", node.w_kg),
                             format!("v_cm3: {} cm³", node.v_cm3),
-                            format!("volume: {} m³", node.v_m3()),
+                            format!("room_size_m3: {} m³", node.room_size_m3()),
                             format!("hr: {} bpm", hr_bpm),
                             format!("buoyant force: {} N", buoyant_force),
                             format!("body density: {} g/cm³", body_density),

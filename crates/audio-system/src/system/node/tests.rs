@@ -3,11 +3,15 @@ use common::{
     NodeKey,
 };
 use fundsp::prelude::*;
-use fundsp::typenum::Unsigned;
+use fundsp::typenum::{Unsigned, U1};
 use insta::assert_debug_snapshot;
 use insta_fun::prelude::*;
 
-use super::{build_excitement_pairings, mount_node_bands, pairing, sort_inner_handles, NodeHandle};
+use super::{
+    build_excitement_pairings, create_and_push_band_node, create_channel_bands,
+    create_controllers_stack, mount_band, mount_node_bands, pairing, sort_inner_handles,
+    NodeHandle,
+};
 use crate::{grid::RhythmGrid, node::controller::NodeController, values::FineTunedValues};
 
 #[derive(Debug)]
@@ -36,16 +40,10 @@ fn total_mount_inputs(config: &InstrumentConfig) -> usize {
     rhythm_inputs_len() + total_excitement_inputs(config)
 }
 
-fn make_node(key: NodeKey, frequency: f64) -> NodeConfig {
-    NodeConfig {
-        key,
-        frequency,
-        phase: 0.0,
-        cents: 100.0,
-        l_mm: 170.0,
-        w_kg: 1.1,
-        v_cm3: 10.0,
-    }
+fn test_node_with_key(key: NodeKey, frequency: f64) -> NodeConfig {
+    let mut node = NodeConfig::new_test_node(frequency);
+    node.key = key;
+    node
 }
 
 fn make_test_config() -> InstrumentConfig {
@@ -54,11 +52,11 @@ fn make_test_config() -> InstrumentConfig {
             BandConfig {
                 channel: BandChannel::Left,
                 // Deliberately unsorted keys to verify mount sorting behavior.
-                nodes: vec![make_node(NodeKey(0, 7), 220.0)],
+                nodes: vec![test_node_with_key(NodeKey(0, 7), 220.0)],
             },
             BandConfig {
                 channel: BandChannel::Right,
-                nodes: vec![make_node(NodeKey(0, 3), 330.0)],
+                nodes: vec![test_node_with_key(NodeKey(0, 3), 330.0)],
             },
         ],
         Scale::Yo,
@@ -126,6 +124,7 @@ fn pairing_trace(config: &InstrumentConfig) -> Vec<PairingSample> {
 fn snapshot_config(num_samples: usize) -> SnapshotConfig {
     SnapshotConfigBuilder::default()
         .num_samples(num_samples)
+        .warm_up(WarmUp::Seconds(0.25))
         .chart_layout(Layout::SeparateChannels)
         .svg_width(640)
         .svg_height_per_channel(160)
@@ -134,106 +133,86 @@ fn snapshot_config(num_samples: usize) -> SnapshotConfig {
         .unwrap()
 }
 
-fn input_constant_drive(config: &InstrumentConfig) -> InputSource {
-    let rhythm_len = rhythm_inputs_len();
-    let ctrl_inputs = excitement_inputs_per_node();
-    let _ = config;
-
-    InputSource::Generator(Box::new(move |_i, ch| {
-        if ch < rhythm_len {
-            match ch {
-                0 => 1.0,  // trigger
-                1 => 64.0, // ticks_per_beat
-                _ => 0.0,  // ticks_to_next
-            }
-        } else {
-            let lane = ch - rhythm_len;
-            let in_node_lane = lane % ctrl_inputs;
-            if in_node_lane == 0 {
-                1.0 // hit
-            } else {
-                1.0 // radius
-            }
-        }
-    }))
-}
-
-fn input_pulsed_drive(config: &InstrumentConfig) -> InputSource {
-    let rhythm_len = rhythm_inputs_len();
-    let ctrl_inputs = excitement_inputs_per_node();
-    let _ = config;
-
+fn wiring_drive_with_channels(num_channels: usize) -> InputSource {
     InputSource::Generator(Box::new(move |i, ch| {
-        if ch < rhythm_len {
-            match ch {
-                0 => {
-                    if i % 64 == 0 {
-                        1.0
+        let period = 96usize;
+        let phase = i % period;
+
+        match ch {
+            // RhythmGrid lanes: trigger, ticks_per_beat, ticks_to_next
+            0 => {
+                if phase == 0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            1 => period as f32,
+            2 => (period - 1 - phase) as f32,
+            // Controller lanes (hit/radius) for per-node excitation inputs
+            _ => {
+                if num_channels <= 3 {
+                    0.0
+                } else {
+                    let lane = ch - 3;
+                    if lane % 2 == 0 {
+                        if ((i + (lane / 2) * 17) % period) == 0 {
+                            1.0
+                        } else {
+                            0.0
+                        }
                     } else {
-                        0.0
+                        0.25 + 0.75 * ((phase as f32) / (period as f32))
                     }
                 }
-                1 => 64.0,
-                _ => (63 - (i % 64)) as f32,
-            }
-        } else {
-            let lane = ch - rhythm_len;
-            let in_node_lane = lane % ctrl_inputs;
-            if in_node_lane == 0 {
-                if i % 64 == 0 {
-                    1.0
-                } else {
-                    0.0
-                }
-            } else {
-                1.0
             }
         }
     }))
 }
 
-fn input_channel_selective_drive(
-    config: &InstrumentConfig,
-    active_channel: BandChannel,
-) -> InputSource {
-    let rhythm_len = rhythm_inputs_len();
-    let ctrl_inputs = excitement_inputs_per_node();
-    let node_channels: Vec<BandChannel> = config
-        .0
-        .iter()
-        .flat_map(|b| b.nodes.iter().map(move |_| b.channel))
-        .collect();
-
-    InputSource::Generator(Box::new(move |_i, ch| {
-        if ch < rhythm_len {
-            match ch {
-                0 => 1.0,
-                1 => 64.0,
-                _ => 0.0,
-            }
-        } else {
-            let lane = ch - rhythm_len;
-            let node_index = lane / ctrl_inputs;
-            let in_node_lane = lane % ctrl_inputs;
-            let is_active = node_channels
-                .get(node_index)
-                .map(|c| *c == active_channel)
-                .unwrap_or(false);
-
-            if in_node_lane == 0 {
-                if is_active {
+fn controller_drive() -> InputSource {
+    // create_controllers_stack takes [hit_strength, radius]
+    InputSource::Generator(Box::new(move |i, ch| {
+        let period = 96usize;
+        let phase = i % period;
+        match ch {
+            0 => {
+                if phase == 0 {
                     1.0
                 } else {
                     0.0
                 }
-            } else {
-                1.0
             }
+            _ => 0.25 + 0.75 * (phase as f32 / period as f32),
         }
     }))
 }
 
-fn input_fully_wired_mocked_drive(config: &InstrumentConfig) -> InputSource {
+fn envelope_band_drive() -> InputSource {
+    // create_and_push_band_node exposes one EnvelopedNodeGenerator input block:
+    // [trigger, ticks_per_beat, ticks_to_next, start_ratio, duration_ratio, control, accent]
+    InputSource::Generator(Box::new(move |i, ch| {
+        let period = 96usize;
+        let phase = i % period;
+        match ch {
+            0 => {
+                if phase == 0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            1 => period as f32,
+            2 => (period - 1 - phase) as f32,
+            3 => 0.0,
+            4 => 0.5,
+            5 => 1.0,
+            _ => 1.0,
+        }
+    }))
+}
+
+fn input_fully_wired_drive(config: &InstrumentConfig) -> InputSource {
     let rhythm_len = rhythm_inputs_len();
     let ctrl_inputs = excitement_inputs_per_node();
     let node_count = std::cmp::Ord::max(config.num_nodes_total(), 1);
@@ -281,6 +260,13 @@ fn input_fully_wired_mocked_drive(config: &InstrumentConfig) -> InputSource {
             }
         }
     }))
+}
+
+fn make_single_node_band(channel: BandChannel, key: NodeKey, frequency: f64) -> BandConfig {
+    BandConfig {
+        channel,
+        nodes: vec![test_node_with_key(key, frequency)],
+    }
 }
 
 #[test]
@@ -363,61 +349,185 @@ fn mount_node_bands_wiring() {
 }
 
 #[test]
-fn mount_node_bands_audio_constant_drive_snapshot() {
-    let (config, net, _handles) = mounted_test_net();
-
-    assert_audio_unit_snapshot!(
-        "mount_node_bands_audio_constant_drive",
-        net,
-        input_constant_drive(&config),
-        snapshot_config(1024)
-    );
-}
-
-#[test]
-fn mount_node_bands_audio_pulsed_drive_snapshot() {
-    let (config, net, _handles) = mounted_test_net();
-
-    assert_audio_unit_snapshot!(
-        "mount_node_bands_audio_pulsed_drive",
-        net,
-        input_pulsed_drive(&config),
-        snapshot_config(2048)
-    );
-}
-
-#[test]
-fn mount_node_bands_audio_left_only_drive_snapshot() {
-    let (config, net, _handles) = mounted_test_net();
-
-    assert_audio_unit_snapshot!(
-        "mount_node_bands_audio_left_only_drive",
-        net,
-        input_channel_selective_drive(&config, BandChannel::Left),
-        snapshot_config(1024)
-    );
-}
-
-#[test]
-fn mount_node_bands_audio_right_only_drive_snapshot() {
-    let (config, net, _handles) = mounted_test_net();
-
-    assert_audio_unit_snapshot!(
-        "mount_node_bands_audio_right_only_drive",
-        net,
-        input_channel_selective_drive(&config, BandChannel::Right),
-        snapshot_config(1024)
-    );
-}
-
-#[test]
 fn mount_node_bands_audio_fully_wired_long_snapshot() {
     let (config, net, _handles) = mounted_test_net();
 
     assert_audio_unit_snapshot!(
         "mount_node_bands_audio_fully_wired_long",
         net,
-        input_fully_wired_mocked_drive(&config),
+        input_fully_wired_drive(&config),
         snapshot_config(8192)
+    );
+}
+
+#[test]
+fn create_channel_bands_contract_for_single_band() {
+    let values = FineTunedValues::new();
+    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 11), 220.0);
+    let bands = vec![&band];
+
+    let (_net, handles) = create_channel_bands::<f32>(&bands, &values);
+
+    assert_eq!(handles.len(), 1);
+    assert_eq!(handles[0].key, NodeKey(0, 11));
+    assert_eq!(handles[0].channel, BandChannel::Left);
+}
+
+#[test]
+fn create_controllers_stack_contract_for_single_node() {
+    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 12), 220.0);
+    let handle = super::InnerHandle::new(NodeKey(0, 12), BandChannel::Left);
+    let handles = vec![handle];
+
+    let mut net = Net::new(2, 1);
+    let controllers_stack = create_controllers_stack::<f32, U1>(&mut net, &band, &handles);
+
+    net.connect_input(0, controllers_stack, 0);
+    net.connect_input(1, controllers_stack, 1);
+    net.connect_output(controllers_stack, 0, 0);
+    net.check();
+}
+
+#[test]
+fn create_controllers_stack_audio_snapshot() {
+    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 15), 220.0);
+    let handle = super::InnerHandle::new(NodeKey(0, 15), BandChannel::Left);
+    let handles = vec![handle];
+
+    let mut net = Net::new(2, 1);
+    let controllers_stack = create_controllers_stack::<f32, U1>(&mut net, &band, &handles);
+    net.connect_input(0, controllers_stack, 0);
+    net.connect_input(1, controllers_stack, 1);
+    net.connect_output(controllers_stack, 0, 0);
+    net.check();
+
+    assert_audio_unit_snapshot!(
+        "create_controllers_stack_single_node",
+        net,
+        controller_drive(),
+        snapshot_config(2048)
+    );
+}
+
+#[test]
+fn create_and_push_band_node_contract_for_single_node() {
+    let values = FineTunedValues::new();
+    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 13), 220.0);
+    let handle = super::InnerHandle::new(NodeKey(0, 13), BandChannel::Left);
+    let handles = vec![handle];
+
+    let band_inputs = <super::EnvelopedNodeGenerator<f32> as AudioNode>::Inputs::USIZE;
+    let mut net = Net::new(band_inputs, 1);
+
+    let (band_node, num_band_outputs) =
+        create_and_push_band_node::<f32, U1>(&mut net, &band, &handles, &values);
+
+    for i in 0..band_inputs {
+        net.connect_input(i, band_node, i);
+    }
+    net.connect_output(band_node, 0, 0);
+    net.check();
+
+    assert_eq!(num_band_outputs, 1);
+}
+
+#[test]
+fn create_and_push_band_node_audio_snapshot() {
+    let values = FineTunedValues::new();
+    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 16), 220.0);
+    let handle = super::InnerHandle::new(NodeKey(0, 16), BandChannel::Left);
+    let handles = vec![handle];
+
+    let band_inputs = <super::EnvelopedNodeGenerator<f32> as AudioNode>::Inputs::USIZE;
+    let mut net = Net::new(band_inputs, 1);
+
+    let (band_node, _num_band_outputs) =
+        create_and_push_band_node::<f32, U1>(&mut net, &band, &handles, &values);
+
+    for i in 0..band_inputs {
+        net.connect_input(i, band_node, i);
+    }
+    net.connect_output(band_node, 0, 0);
+    net.check();
+
+    assert_audio_unit_snapshot!(
+        "create_and_push_band_node_single_node",
+        net,
+        envelope_band_drive(),
+        snapshot_config(4096)
+    );
+}
+
+#[test]
+fn mount_band_contract_for_single_node() {
+    let values = FineTunedValues::new();
+    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 14), 220.0);
+    let handle = super::InnerHandle::new(NodeKey(0, 14), BandChannel::Left);
+    let handles = vec![handle];
+
+    let rhythm_len = rhythm_inputs_len();
+    let ctrl_inputs = excitement_inputs_per_node();
+    let mut net = Net::new(rhythm_len + ctrl_inputs, 1);
+
+    let split_grid_data = net.push(Box::new(multisplit::<
+        <RhythmGrid<f32> as AudioNode>::Outputs,
+        U1,
+    >()));
+    for gi in 0..rhythm_len {
+        net.connect_input(gi, split_grid_data, gi);
+    }
+
+    let mounted = mount_band::<f32, U1>(&mut net, &band, &handles, 0, split_grid_data, &values);
+    net.check();
+
+    assert_ne!(mounted.controllers_stack, mounted.band);
+    assert_ne!(mounted.band, mounted.rhythm_data_split);
+}
+
+#[test]
+fn mount_band_audio_snapshot() {
+    let values = FineTunedValues::new();
+    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 17), 220.0);
+    let handle = super::InnerHandle::new(NodeKey(0, 17), BandChannel::Left);
+    let handles = vec![handle];
+
+    let rhythm_len = rhythm_inputs_len();
+    let ctrl_inputs = excitement_inputs_per_node();
+    let total_inputs = rhythm_len + ctrl_inputs;
+    let mut net = Net::new(total_inputs, 1);
+
+    let split_grid_data = net.push(Box::new(multisplit::<
+        <RhythmGrid<f32> as AudioNode>::Outputs,
+        U1,
+    >()));
+    for gi in 0..rhythm_len {
+        net.connect_input(gi, split_grid_data, gi);
+    }
+
+    let _mounted = mount_band::<f32, U1>(&mut net, &band, &handles, 0, split_grid_data, &values);
+    net.check();
+
+    assert_audio_unit_snapshot!(
+        "mount_band_single_node",
+        net,
+        wiring_drive_with_channels(total_inputs),
+        snapshot_config(4096)
+    );
+}
+
+#[test]
+fn create_channel_bands_audio_snapshot() {
+    let values = FineTunedValues::new();
+    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 18), 220.0);
+    let bands = vec![&band];
+
+    let (net, _handles) = create_channel_bands::<f32>(&bands, &values);
+    let total_inputs = rhythm_inputs_len() + excitement_inputs_per_node();
+
+    assert_audio_unit_snapshot!(
+        "create_channel_bands_single_band",
+        net,
+        wiring_drive_with_channels(total_inputs),
+        snapshot_config(4096)
     );
 }

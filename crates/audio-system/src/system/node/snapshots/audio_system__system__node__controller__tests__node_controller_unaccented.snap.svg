@@ -79,8 +79,8 @@ Radius
 8.0
 </text>
 <polyline fill="none" opacity="0.3" stroke="#4285F4" stroke-width="1" points="455,600 455,605 "/>
-<polyline fill="none" opacity="1" stroke="#4285F4" stroke-width="2" points="55,578 105,495 155,578 205,567 255,360 305,578 355,551 405,578 455,523 "/>
-<polyline fill="none" opacity="1" stroke="#EA4335" stroke-width="2" points="55,578 105,578 155,578 205,577 255,577 305,578 355,576 405,578 455,577 "/>
+<polyline fill="none" opacity="1" stroke="#4285F4" stroke-width="2" points="55,578 105,567 155,578 205,562 255,551 305,578 355,551 405,578 455,360 "/>
+<polyline fill="none" opacity="1" stroke="#EA4335" stroke-width="2" points="55,578 105,578 155,578 205,576 255,577 305,578 355,575 405,578 455,577 "/>
 <polyline fill="none" opacity="1" stroke="#FBBC04" stroke-width="2" points="55,578 105,578 155,578 205,578 255,578 305,578 355,578 405,578 455,578 "/>
 <rect x="320" y="442" width="182" height="54" opacity="1" fill="#000000" stroke="none"/>
 <rect x="320" y="442" width="182" height="54" opacity="1" fill="none" stroke="#FFFFFF"/>

@@ -79,9 +79,36 @@ pub struct Excitor<S: Float + Real> {
     src: ExcitementSource,
     job: Arc<JoinHandle<()>>,
     job_running: Arc<AtomicBool>,
-    data_feed: Sender<S>,
+    input_feed: Arc<ThingBuf<S>>,
+    excitement_feed: Arc<ThingBuf<Complex<S>>>,
     config: Arc<TunerConfig>,
     _sample_type: PhantomData<S>,
+}
+
+impl <S: Float + Real> Excitor<S> {
+    pub fn new(
+        src: ExcitementSource,
+        input_feed: Arc<ThingBuf<S>>,
+        excitement_feed: Arc<ThingBuf<Complex<S>>>,
+        config: Arc<TunerConfig>,
+    ) -> Self {
+        let job_running = Arc::new(AtomicBool::new(true));
+        let job = Arc::new({
+            let job_running = job_running.clone();
+            tokio::task::spawn(async move {
+                while job_running.load(std::sync::atomic::Ordering::SeqCst) {   }
+            })
+        });
+        Self {
+            src,
+            job,
+            job_running,
+            input_feed,
+            excitement_feed,
+            config,
+            _sample_type: PhantomData,
+        }
+    }
 }
 
 impl<S: Float + Real> AudioUnit for Excitor<S> {
@@ -99,10 +126,10 @@ impl<S: Float + Real> AudioUnit for Excitor<S> {
     }
 
     fn inputs(&self) -> usize {
-        match self.src {
+        (match self.src {
             ExcitementSource::Mic => 1,
             _ => 0,
-        }
+        }) + self.config.sensor_data.len() * <super::feedback_pass::FeedbackCatch as AudioNode>::Outputs::USIZE
     }
 
     fn outputs(&self) -> usize {

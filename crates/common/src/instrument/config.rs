@@ -5,40 +5,81 @@ mod scale;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{error::InstrumentConfigError, NodeKey};
+use crate::{NodeKey, error::InstrumentConfigError};
 
-use super::{consts::*, Layout};
+use super::{Layout, consts::*};
 
 pub use band::*;
 pub use channel::*;
 pub use node::*;
 pub use scale::*;
 
+pub const RESONANCE_MIN_HARMONICS: usize = 3;
+pub const RESONANCE_MAX_HARMONICS: usize = 12;
+pub const RESONANCE_MIN_GAMMA: f32 = 0.08;
+pub const RESONANCE_MAX_GAMMA: f32 = 0.35;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ResonanceModel {
+    pub harmonics: usize,
+    pub gamma: f32,
+}
+
+impl Default for ResonanceModel {
+    fn default() -> Self {
+        Self {
+            harmonics: 6,
+            gamma: 0.18,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-/// Instrument configuartion for audio generation
+/// Instrument configuration for audio generation
 pub struct Config(pub Vec<BandConfig>, pub Scale);
 
 impl Config {
+    fn resolve_node_indices(&self, key: &NodeKey) -> Option<(usize, usize)> {
+        let band_idx = key.band() as usize;
+        let key_idx = key.key() as usize;
+
+        // Native path: NodeKey uses zero-based indexing.
+        if self
+            .0
+            .get(band_idx)
+            .and_then(|band| band.nodes.get(key_idx))
+            .is_some()
+        {
+            return Some((band_idx, key_idx));
+        }
+
+        // Compatibility fallback for any legacy one-based callers.
+        let band_idx = key.band().checked_sub(1)? as usize;
+        let key_idx = key.key().checked_sub(1)? as usize;
+        self.0
+            .get(band_idx)
+            .and_then(|band| band.nodes.get(key_idx))
+            .map(|_| (band_idx, key_idx))
+    }
+
     /// Lookup a node by its key, returning None if not found.
     pub fn get_node(&self, key: &NodeKey) -> Option<&NodeConfig> {
-        self.0
-            .get(key.band() as usize - 1)
-            .and_then(|band| band.nodes.get(key.key() as usize - 1))
+        self.resolve_node_indices(key)
+            .and_then(|(band_idx, key_idx)| {
+                self.0
+                    .get(band_idx)
+                    .and_then(|band| band.nodes.get(key_idx))
+            })
     }
 
     /// Lookup the index of a node by its key, returning None if not found.
     ///
     /// The index is a flat index across all bands.
     pub fn get_node_index(&self, key: &NodeKey) -> Option<usize> {
-        self.0
-            .get(key.band() as usize - 1)
-            .and_then(|band| band.nodes.get(key.key() as usize - 1))
-            .map(|_| {
-                let band_idx = key.band() as usize - 1;
-                let key_idx = key.key() as usize - 1;
-                let nodes_per_band = self.0.first().map_or(0, |b| b.nodes.len());
-                band_idx * nodes_per_band + key_idx
-            })
+        self.resolve_node_indices(key).map(|(band_idx, key_idx)| {
+            let nodes_per_band = self.0.first().map_or(0, |b| b.nodes.len());
+            band_idx * nodes_per_band + key_idx
+        })
     }
 
     /// Simultaneous node "power" budget check.
@@ -150,6 +191,72 @@ impl Config {
             .and_then(|g| g.nodes.last())
             .map(|n| n.frequency.max(n.formant_hz(5)))
             .unwrap_or(super::consts::SOFT_MAX_FREQ_HZ)
+    }
+
+    /// Derive a global resonance model from the generated instrument physics.
+    ///
+    /// This model is intentionally computed from config data (not user-edited),
+    /// so the Excitor's harmonic-likeness response follows layout/instrument changes.
+    /// Uses the same physics-driven approach as `TryFrom<Layout>`: normalized frequency
+    /// positions, Mersenne-law mass relationships, and weighted aggregation of physical
+    /// properties to determine resonance parameters.
+    pub fn resonance_model(&self) -> ResonanceModel {
+        let mut nodes: Vec<_> = self.0.iter().flat_map(|band| band.nodes.iter()).collect();
+
+        if nodes.len() < 2 {
+            return ResonanceModel::default();
+        }
+
+        nodes.sort_by(|a, b| a.frequency.partial_cmp(&b.frequency).unwrap());
+
+        let min_f = nodes.first().unwrap().frequency;
+        let max_f = nodes.last().unwrap().frequency;
+        let ln_f_range = (max_f / min_f).ln();
+
+        // Frequency span in octaves: justified by complexity of the resonance field
+        let span_octaves = (max_f / min_f).log2().clamp(0.0, 8.0);
+
+        // HARMONICS: derive from generated instrument structure and resulting span.
+        // - `num_nodes_per_band` captures octave divisions (modal density per octave)
+        // - `num_bands` captures octave count (harmonic stack depth)
+        // - `span_octaves` captures effective realized frequency spread
+        let octave_divisions = self.num_nodes_per_band().max(1) as f64;
+        let octave_count = self.num_bands().max(1) as f64;
+        let harmonics = (2.0 + 0.9 * octave_count + 0.35 * octave_divisions + 0.25 * span_octaves)
+            .round()
+            .clamp(
+                RESONANCE_MIN_HARMONICS as f64,
+                RESONANCE_MAX_HARMONICS as f64,
+            ) as usize;
+
+        // GAMMA: Derive from physical properties using normalized-position approach
+        // (matching the TryFrom<Layout> methodology for consistency).
+        // Lower-frequency instruments (heavier resonators per Mersenne law) have broader resonance curves.
+        let mut mass_weighted_sum = 0.0;
+        for node in &nodes {
+            // Normalize frequency position: t=0 (low freq, heavy) → t=1 (high freq, light)
+            // Same calculation as TryFrom<Layout>
+            let t = if ln_f_range.abs() < f64::EPSILON {
+                0.5
+            } else {
+                ((node.frequency.ln() - min_f.ln()) / ln_f_range).clamp(0.0, 1.0)
+            };
+
+            // Weight by node mass, giving more influence to low-frequency (heavier) nodes
+            // This captures the physical intuition: heavy resonators have broader damping
+            mass_weighted_sum += node.w_kg * (1.0 - t);
+        }
+
+        let avg_weighted_mass = mass_weighted_sum / nodes.len() as f64;
+        let mass_normalized =
+            ((avg_weighted_mass - W_MIN_KG) / (W_MAX_KG - W_MIN_KG)).clamp(0.0, 1.0);
+
+        // Map normalized mass to gamma: heavier instruments → broader coupling bandwidth
+        let gamma = RESONANCE_MIN_GAMMA as f64
+            + mass_normalized * (RESONANCE_MAX_GAMMA as f64 - RESONANCE_MIN_GAMMA as f64);
+        let gamma = (gamma as f32).clamp(RESONANCE_MIN_GAMMA, RESONANCE_MAX_GAMMA);
+
+        ResonanceModel { harmonics, gamma }
     }
 }
 
@@ -312,6 +419,16 @@ mod tests {
     use super::*;
     use crate::instrument::layout::layout_test_cases;
     use insta::assert_json_snapshot;
+    use serde::Serialize;
+
+    #[derive(Debug, Serialize)]
+    struct ResonanceModelSnapshotCase {
+        layout_space_x: f64,
+        layout_space_y: f64,
+        layout_scale: String,
+        harmonics: usize,
+        gamma: f32,
+    }
 
     #[test]
     fn test_config_from_layout_validity() {
@@ -352,9 +469,11 @@ mod tests {
         let valid_node =
             NodeConfig::new_test_node((super::SOFT_MIN_FREQ_HZ + super::SOFT_MAX_FREQ_HZ) / 2.0);
         assert!(valid_node.validate(0).is_ok());
-        assert!(NodeConfig::new_test_node(super::MIN_FREQ_HZ - 1.0)
-            .validate(0)
-            .is_err());
+        assert!(
+            NodeConfig::new_test_node(super::MIN_FREQ_HZ - 1.0)
+                .validate(0)
+                .is_err()
+        );
     }
 
     #[test]
@@ -465,5 +584,41 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_resonance_model_bounds_and_stability() {
+        for (config, _) in config_test_cases() {
+            let a = config.resonance_model();
+            let b = config.resonance_model();
+
+            assert_eq!(a, b, "resonance model should be deterministic");
+            assert!(
+                (RESONANCE_MIN_HARMONICS..=RESONANCE_MAX_HARMONICS).contains(&a.harmonics),
+                "harmonics must stay in configured range"
+            );
+            assert!(
+                (RESONANCE_MIN_GAMMA..=RESONANCE_MAX_GAMMA).contains(&a.gamma),
+                "gamma must stay in configured range"
+            );
+        }
+    }
+
+    #[test]
+    fn test_resonance_model_snapshot() {
+        let cases = config_test_cases()
+            .map(|(config, layout)| {
+                let model = config.resonance_model();
+                ResonanceModelSnapshotCase {
+                    layout_space_x: layout.space.x,
+                    layout_space_y: layout.space.y,
+                    layout_scale: format!("{:?}", layout.scale),
+                    harmonics: model.harmonics,
+                    gamma: model.gamma,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        assert_json_snapshot!("resonance_model_from_layout_cases", cases);
     }
 }

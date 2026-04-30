@@ -3,7 +3,7 @@ use std::{marker::PhantomData, ops::Add};
 use fundsp::{
     numeric_array::ArrayLength,
     prelude::*,
-    typenum::{UInt, UTerm, B0, B1},
+    typenum::{B0, B1, UInt, UTerm},
 };
 use num_rational::Ratio;
 use typenum::op;
@@ -121,20 +121,12 @@ where
 
     fn ratio_floor_u64(value: &Ratio<i64>) -> u64 {
         let floored = value.floor().to_integer();
-        if floored <= 0 {
-            0
-        } else {
-            floored as u64
-        }
+        if floored <= 0 { 0 } else { floored as u64 }
     }
 
     fn ratio_ceil_u64(value: &Ratio<i64>) -> u64 {
         let ceiled = value.ceil().to_integer();
-        if ceiled <= 0 {
-            0
-        } else {
-            ceiled as u64
-        }
+        if ceiled <= 0 { 0 } else { ceiled as u64 }
     }
 
     fn unit_ratio(value: S) -> Ratio<i64> {
@@ -424,8 +416,8 @@ mod tests {
     use super::*;
     use insta_fun::prelude::*;
     use std::sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     };
 
     // At 100 Hz sample rate, 60 BPM → ticks_per_beat = 100.
@@ -454,11 +446,7 @@ mod tests {
                 if let Some(&(_, start_ratio, duration_ratio)) =
                     schedule_pulses.iter().find(|(t, ..)| *t == i)
                 {
-                    if ch == 3 {
-                        start_ratio
-                    } else {
-                        duration_ratio
-                    }
+                    if ch == 3 { start_ratio } else { duration_ratio }
                 } else {
                     f32::NAN
                 }

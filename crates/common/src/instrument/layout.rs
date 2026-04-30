@@ -16,9 +16,9 @@ pub struct Layout {
     pub space: Vector2<f64>,
     /// Whether `Horizontal` or `Vertical` layout is used
     pub orientation: LayoutOrientation,
-    /// Start and end postions of **left** channel string
+    /// Start and end positions of **left** channel string
     pub left_string_position: Line,
-    /// Start and end postions of **right** channel string
+    /// Start and end positions of **right** channel string
     pub right_string_position: Line,
     /// Distance between strings
     pub instrument_breadth: f64,

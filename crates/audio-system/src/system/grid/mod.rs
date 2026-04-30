@@ -4,7 +4,7 @@ use fundsp::prelude::*;
 use num_rational::Ratio;
 
 mod envelope;
-pub use envelope::{create_rhythm_grid_envelope, AdsrShape, RhythmGridEnvelope};
+pub use envelope::{AdsrShape, RhythmGridEnvelope, create_rhythm_grid_envelope};
 
 const RHYTHM_GRID_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::RhythmGrid"));
 
@@ -54,20 +54,12 @@ impl<S: Real + Float> RhythmGrid<S> {
 
     fn ratio_floor_u64(value: &Ratio<i64>) -> u64 {
         let floored = value.floor().to_integer();
-        if floored <= 0 {
-            0
-        } else {
-            floored as u64
-        }
+        if floored <= 0 { 0 } else { floored as u64 }
     }
 
     fn ratio_ceil_u64(value: &Ratio<i64>) -> u64 {
         let ceiled = value.ceil().to_integer();
-        if ceiled <= 0 {
-            0
-        } else {
-            ceiled as u64
-        }
+        if ceiled <= 0 { 0 } else { ceiled as u64 }
     }
 
     fn rescale_remaining_ticks_floor(remaining: u64, new_total: u64, old_total: u64) -> u64 {
@@ -221,13 +213,7 @@ mod tests {
         assert_audio_unit_snapshot!(
             "grid_bpm_change",
             grid,
-            InputSource::Generator(Box::new(|i, _| {
-                if i < 150 {
-                    60.0
-                } else {
-                    120.0
-                }
-            })),
+            InputSource::Generator(Box::new(|i, _| { if i < 150 { 60.0 } else { 120.0 } })),
             low_sr_config(400)
         );
     }

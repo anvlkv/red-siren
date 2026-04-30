@@ -34,14 +34,14 @@ pub struct Band<
 }
 
 impl<
-        S: Real + Float + 'static,
-        X: AudioNode<Outputs = XO, Inputs = XI> + 'static,
-        N: Size<S> + Size<X>,
-        XI: Size<S> + Size<X>,
-        XO: Size<S> + Size<X>,
-        XON: Size<S> + Size<X>,
-        XIN: Size<S> + Size<X>,
-    > Band<S, X, N, XI, XO, XON, XIN>
+    S: Real + Float + 'static,
+    X: AudioNode<Outputs = XO, Inputs = XI> + 'static,
+    N: Size<S> + Size<X>,
+    XI: Size<S> + Size<X>,
+    XO: Size<S> + Size<X>,
+    XON: Size<S> + Size<X>,
+    XIN: Size<S> + Size<X>,
+> Band<S, X, N, XI, XO, XON, XIN>
 where
     XI: Mul<N, Output = XIN>,
     <XI as Mul<N>>::Output: ArrayLength + Send + Sync,
@@ -132,14 +132,14 @@ where
 }
 
 impl<
-        S: Real + Float + 'static,
-        X: AudioNode<Outputs = XO, Inputs = XI> + 'static,
-        N: Size<S> + Size<X>,
-        XI: Size<S> + Size<X>,
-        XO: Size<S> + Size<X>,
-        XON: Size<S> + Size<X>,
-        XIN: Size<S> + Size<X>,
-    > AudioNode for Band<S, X, N, XI, XO, XON, XIN>
+    S: Real + Float + 'static,
+    X: AudioNode<Outputs = XO, Inputs = XI> + 'static,
+    N: Size<S> + Size<X>,
+    XI: Size<S> + Size<X>,
+    XO: Size<S> + Size<X>,
+    XON: Size<S> + Size<X>,
+    XIN: Size<S> + Size<X>,
+> AudioNode for Band<S, X, N, XI, XO, XON, XIN>
 where
     XI: Mul<N, Output = XIN>,
     <XI as Mul<N>>::Output: ArrayLength + Send + Sync,
@@ -223,8 +223,8 @@ mod tests {
             .unwrap()
     }
 
-    fn band_under_test(
-    ) -> An<Band<f32, Binop<FrameMul<U1>, Pipe<Constant<U1>, Sine<f32>>, Pass>, U1, U1, U1, U1, U1>>
+    fn band_under_test()
+    -> An<Band<f32, Binop<FrameMul<U1>, Pipe<Constant<U1>, Sine<f32>>, Pass>, U1, U1, U1, U1, U1>>
     {
         let config = make_band_config();
         let values = FineTunedValues::new();

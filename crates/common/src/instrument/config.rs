@@ -19,6 +19,28 @@ pub use scale::*;
 pub struct Config(pub Vec<BandConfig>, pub Scale);
 
 impl Config {
+    /// Lookup a node by its key, returning None if not found.
+    pub fn get_node(&self, key: &NodeKey) -> Option<&NodeConfig> {
+        self.0
+            .get(key.band() as usize - 1)
+            .and_then(|band| band.nodes.get(key.key() as usize - 1))
+    }
+
+    /// Lookup the index of a node by its key, returning None if not found.
+    ///
+    /// The index is a flat index across all bands.
+    pub fn get_node_index(&self, key: &NodeKey) -> Option<usize> {
+        self.0
+            .get(key.band() as usize - 1)
+            .and_then(|band| band.nodes.get(key.key() as usize - 1))
+            .map(|_| {
+                let band_idx = key.band() as usize - 1;
+                let key_idx = key.key() as usize - 1;
+                let nodes_per_band = self.0.first().map_or(0, |b| b.nodes.len());
+                band_idx * nodes_per_band + key_idx
+            })
+    }
+
     /// Simultaneous node "power" budget check.
     /// Assumption: a worst-case event drives every node at gain 1.0.
     /// We approximate loudness budget by limiting total node count.

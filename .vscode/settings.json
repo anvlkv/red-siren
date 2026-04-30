@@ -1,5 +1,5 @@
 {
-  "editor.inlineSuggest.enabled": false,
+  "editor.inlineSuggest.enabled": true,
   "editor.hover.enabled": "on",
   "editor.hover.delay": 700,
   "editor.hover.sticky": true,

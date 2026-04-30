@@ -17,6 +17,7 @@ log = { workspace = true }
 mint = { workspace = true }
 num-complex = "0.4.6"
 num-rational = "0.4.2"
+ordered-float = "5.3.0"
 parking_lot = "0.12"
 spectrum-analyzer = "1.7.0"
 tokio = { workspace = true, features = ["rt-multi-thread"] }

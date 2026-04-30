@@ -1,8 +1,8 @@
 use mint::Point2;
 use serde::{Deserialize, Serialize};
 
-use crate::tuner::ReflectTunerConstraints;
 use crate::tuner::layout::Layout;
+use crate::tuner::{ReflectTunerConstraints, SensorData};
 use crate::{NodeKey, NodeKeyRegistry};
 
 const DEFAULT_INPUT_NY_THRESHOLD: f32 = 0.75;
@@ -30,15 +30,6 @@ impl Default for Config {
             frequency_range: (None, None),
         }
     }
-}
-
-#[derive(Debug, PartialEq, Clone, Copy, Default, Serialize, Deserialize)]
-pub struct SensorData {
-    pub key: NodeKey,
-    pub min_frequency: f32, // Hz
-    pub max_frequency: f32, // Hz
-    pub min_magnitude: f32, // 0.0 scaled
-    pub max_magnitude: f32, // 1.0 scaled
 }
 
 impl Config {

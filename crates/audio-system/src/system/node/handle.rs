@@ -1,8 +1,8 @@
-use common::{instrument::BandChannel, NodeKey};
+use common::{NodeKey, instrument::BandChannel};
 use fundsp::prelude::*;
 use parking_lot::Mutex;
 
-use crate::feedback_pass::{create_feedback_pass, FeedbackCatch, FeedbackPass};
+use crate::feedback_pass::{FeedbackCatch, FeedbackPass, create_feedback_pass};
 
 pub struct NodeHandle {
     pub channel: BandChannel,

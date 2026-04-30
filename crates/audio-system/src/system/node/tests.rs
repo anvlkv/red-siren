@@ -1,16 +1,15 @@
 use common::{
-    instrument::{BandChannel, BandConfig, Config as InstrumentConfig, NodeConfig, Scale},
     NodeKey,
+    instrument::{BandChannel, BandConfig, Config as InstrumentConfig, NodeConfig, Scale},
 };
 use fundsp::prelude::*;
-use fundsp::typenum::{Unsigned, U1};
+use fundsp::typenum::{U1, Unsigned};
 use insta::assert_debug_snapshot;
 use insta_fun::prelude::*;
 
 use super::{
-    build_excitement_pairings, create_and_push_band_node, create_channel_bands,
+    NodeHandle, build_excitement_pairings, create_and_push_band_node, create_channel_bands,
     create_controllers_stack, mount_band, mount_node_bands, pairing, sort_inner_handles,
-    NodeHandle,
 };
 use crate::{grid::RhythmGrid, node::controller::NodeController, values::FineTunedValues};
 
@@ -260,11 +259,7 @@ fn input_fully_wired_drive(config: &InstrumentConfig) -> InputSource {
                     * (((i + node_index * 31) % (base_period * node_count)) as f32
                         / (base_period * node_count) as f32);
 
-            if in_node_lane == 0 {
-                hit
-            } else {
-                radius
-            }
+            if in_node_lane == 0 { hit } else { radius }
         }
     }))
 }

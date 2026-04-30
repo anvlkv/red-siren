@@ -183,7 +183,9 @@ pub(self) fn create_channel_bands<S: Real + Float + 'static>(
     let mut net = Net::new(rhythm_data_len + num_nodes * node_inputs_len, bands.len());
 
     let split_grid_data = u_num_it::u_num_it!(
-        [1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71],
+        [
+            1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71
+        ],
         match bands.len() {
             U => {
                 type NumBands = NumType;

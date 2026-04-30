@@ -1,0 +1,32 @@
+{
+  "editor.inlineSuggest.enabled": false,
+  "editor.hover.enabled": "on",
+  "editor.hover.delay": 700,
+  "editor.hover.sticky": true,
+  "problems.decorations.enabled": false,
+  "editor.lightbulb.enabled": "off",
+  "editor.inlayHints.enabled": "offUnlessPressed",
+  "editor.parameterHints.enabled": false,
+  "editor.quickSuggestions": {
+    "other": false,
+    "comments": false,
+    "strings": false
+  },
+  "editor.suggestOnTriggerCharacters": false,
+  "github.copilot.nextEditSuggestions.enabled": false,
+  "[rust]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "rust-lang.rust-analyzer"
+  },
+  "rust-analyzer.rustfmt.overrideCommand": [
+    "leptosfmt",
+    "--stdin",
+    "--rustfmt"
+  ],
+  "rust-analyzer.hover.actions.enable": false,
+  "rust-analyzer.procMacro.ignored": {
+    "leptos_macro": ["server"]
+  },
+  "rust-analyzer.cargo.targetDir": true,
+  "rust-analyzer.cargo.features": []
+}

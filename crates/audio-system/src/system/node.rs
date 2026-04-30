@@ -19,6 +19,7 @@ use typenum::Unsigned;
 pub use handle::*;
 
 use crate::{
+    feedback_pass::FeedbackPass,
     grid::{RhythmGrid, RhythmGridEnvelope},
     node::{controller::NodeController, generator::NodeGenerator},
     values::FineTunedValues,
@@ -258,8 +259,11 @@ struct MountBandReturn {
 }
 
 type EnvelopedNodeGenerator<S> = Pipe<
-    RhythmGridEnvelope<S, NodeGenerator<S>, <NodeGenerator<S> as AudioNode>::Inputs>,
-    SnoopBackend,
+    Pipe<
+        RhythmGridEnvelope<S, NodeGenerator<S>, <NodeGenerator<S> as AudioNode>::Inputs>,
+        SnoopBackend,
+    >,
+    FeedbackPass,
 >;
 
 pub(self) fn mount_band<S: Real + Float + 'static, N: Size<S> + Size<NodeController<S>>>(
@@ -447,6 +451,7 @@ where
                 generator::create_node_generator::<S>(&node_config, values),
                 shape,
             ) >> inner_handle.take_output_snoop()
+                >> inner_handle.take_feedback_pass()
         },
         values,
     );

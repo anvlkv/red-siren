@@ -1,7 +1,8 @@
-use std::sync::Mutex;
-
 use common::{instrument::BandChannel, NodeKey};
 use fundsp::prelude::*;
+use parking_lot::Mutex;
+
+use crate::feedback_pass::{create_feedback_pass, FeedbackCatch, FeedbackPass};
 
 pub struct NodeHandle {
     pub channel: BandChannel,
@@ -11,6 +12,7 @@ pub struct NodeHandle {
     pub excitement_snoop_hs: Snoop,
     pub excitement_snoop_rad: Snoop,
     pub output_snoop: Snoop,
+    pub feedback_src: An<FeedbackCatch>,
 }
 
 pub(super) struct InnerHandle {
@@ -18,6 +20,7 @@ pub(super) struct InnerHandle {
     pub key: NodeKey,
     pub accentuation: Shared,
     pub rhythm: Shared,
+    feedback: (An<FeedbackCatch>, Mutex<Option<An<FeedbackPass>>>),
     excitement_snoop_hs: (Snoop, Mutex<Option<An<SnoopBackend>>>),
     excitement_snoop_rad: (Snoop, Mutex<Option<An<SnoopBackend>>>),
     output_snoop: (Snoop, Mutex<Option<An<SnoopBackend>>>),
@@ -31,6 +34,7 @@ impl InnerHandle {
         let excitement_snoop_hs = snoop(Self::SNOOP_CAPACITY_XCT);
         let excitement_snoop_rad = snoop(Self::SNOOP_CAPACITY_XCT);
         let output_snoop = snoop(Self::SNOOP_CAPACITY_OUTPUT);
+        let fb_pass = create_feedback_pass();
         Self {
             channel,
             key,
@@ -45,6 +49,7 @@ impl InnerHandle {
                 Mutex::new(Some(excitement_snoop_rad.1)),
             ),
             output_snoop: (output_snoop.0, Mutex::new(Some(output_snoop.1))),
+            feedback: (fb_pass.1, Mutex::new(Some(fb_pass.0))),
         }
     }
 
@@ -57,6 +62,7 @@ impl InnerHandle {
             excitement_snoop_hs,
             excitement_snoop_rad,
             output_snoop,
+            feedback,
         } = self;
 
         NodeHandle {
@@ -67,21 +73,35 @@ impl InnerHandle {
             excitement_snoop_hs: excitement_snoop_hs.0,
             excitement_snoop_rad: excitement_snoop_rad.0,
             output_snoop: output_snoop.0,
+            feedback_src: feedback.0,
         }
     }
 
     #[must_use]
     pub fn take_excitement_snoop_hs(&self) -> An<SnoopBackend> {
-        self.excitement_snoop_hs.1.lock().unwrap().take().unwrap()
+        self.excitement_snoop_hs
+            .1
+            .lock()
+            .take()
+            .expect("already taken")
     }
 
     #[must_use]
     pub fn take_excitement_snoop_rad(&self) -> An<SnoopBackend> {
-        self.excitement_snoop_rad.1.lock().unwrap().take().unwrap()
+        self.excitement_snoop_rad
+            .1
+            .lock()
+            .take()
+            .expect("already taken")
     }
 
     #[must_use]
     pub fn take_output_snoop(&self) -> An<SnoopBackend> {
-        self.output_snoop.1.lock().unwrap().take().unwrap()
+        self.output_snoop.1.lock().take().expect("already taken")
+    }
+
+    #[must_use]
+    pub fn take_feedback_pass(&self) -> An<FeedbackPass> {
+        self.feedback.1.lock().take().expect("already taken")
     }
 }

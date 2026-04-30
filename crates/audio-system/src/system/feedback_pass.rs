@@ -21,7 +21,13 @@ impl AudioNode for FeedbackPass {
 
     fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
         let value = input[0];
-        self.0.push(value).expect("buffer is full");
+        match self.0.push(value) {
+            Ok(_) => {}
+            Err(v) => {
+                _ = self.0.pop();
+                _ = self.0.push(v.into_inner()).ok();
+            }
+        }
         Frame::from([value])
     }
 }

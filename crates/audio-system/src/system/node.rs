@@ -14,14 +14,15 @@ use std::{collections::HashMap, ops::Mul};
 use adsr_shape::*;
 use common::instrument::{BandChannel, BandConfig, Config as InstrumentConfig};
 use fundsp::prelude::*;
+use generator::NodeGenerator;
 use typenum::Unsigned;
 
+pub use controller::*;
 pub use handle::*;
 
 use crate::{
     feedback_pass::FeedbackPass,
     grid::{RhythmGrid, RhythmGridEnvelope},
-    node::{controller::NodeController, generator::NodeGenerator},
     values::FineTunedValues,
 };
 

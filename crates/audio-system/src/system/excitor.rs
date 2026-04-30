@@ -1,11 +1,23 @@
-use std::sync::Arc;
+use std::{
+    marker::PhantomData,
+    sync::{atomic::AtomicBool, Arc},
+};
 
-use fundsp::{Float, Real, thingbuf::ThingBuf};
+use common::tuner::Config as TunerConfig;
+use fundsp::{
+    prelude::{AudioNode, AudioUnit},
+    thingbuf::{mpsc::Sender, ThingBuf},
+    typenum::Unsigned,
+    Float, Real,
+};
 use num_complex::Complex;
 use spectrum_analyzer::FrequencySpectrum;
+use tokio::task::JoinHandle;
+
+use crate::rt::ExcitementSource;
 
 pub mod control {
-    use fundsp::{Float, Real, prelude::shared, shared::Shared};
+    use fundsp::{prelude::shared, shared::Shared, Float, Real};
     use num_complex::Complex;
 
     #[derive(Clone)]
@@ -58,4 +70,58 @@ pub const FFT_WINDOW_SIZE: usize = 8192;
 
 pub fn snapshot_control<S: Real + Float>(control: &control::Control) -> Complex<S> {
     control.value()
+}
+
+const EXCITOR_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::Excitor"));
+
+#[derive(Clone)]
+pub struct Excitor<S: Float + Real> {
+    src: ExcitementSource,
+    job: Arc<JoinHandle<()>>,
+    job_running: Arc<AtomicBool>,
+    data_feed: Sender<S>,
+    config: Arc<TunerConfig>,
+    _sample_type: PhantomData<S>,
+}
+
+impl<S: Float + Real> AudioUnit for Excitor<S> {
+    fn tick(&mut self, input: &[f32], output: &mut [f32]) {
+        todo!()
+    }
+
+    fn process(
+        &mut self,
+        size: usize,
+        input: &fundsp::prelude::BufferRef,
+        output: &mut fundsp::prelude::BufferMut,
+    ) {
+        todo!()
+    }
+
+    fn inputs(&self) -> usize {
+        match self.src {
+            ExcitementSource::Mic => 1,
+            _ => 0,
+        }
+    }
+
+    fn outputs(&self) -> usize {
+        self.config.sensor_data.len() * <super::node::NodeController<S> as AudioNode>::Inputs::USIZE
+    }
+
+    fn route(
+        &mut self,
+        input: &fundsp::prelude::SignalFrame,
+        frequency: f64,
+    ) -> fundsp::prelude::SignalFrame {
+        todo!()
+    }
+
+    fn get_id(&self) -> u64 {
+        EXCITOR_ID
+    }
+
+    fn footprint(&self) -> usize {
+        todo!()
+    }
 }

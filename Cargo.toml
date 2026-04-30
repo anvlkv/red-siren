@@ -11,9 +11,9 @@ members = [
 audio-system = { path = "crates/audio-system" }
 common = { path = "crates/common" }
 console_error_panic_hook = "0.1.7"
-fastrand = "2.3.0"
+fastrand = "2.4.1"
 fundsp = { version = "0.23", default-features = false, features = ["std"] }
-insta = "1.47.1"
+insta = "1.47.2"
 js-sys = "0.3"
 log = "0.4"
 mint = { version = "0.5.9", features = ["serde"] }
@@ -23,6 +23,6 @@ strum = { version = "0.28.0", features = ["derive"] }
 tauri = { version = "2.10", features = ["rustls-tls"] }
 thiserror = "2.0.18"
 tokio = { version = "1", features = ["rt-multi-thread"] }
-wasm-bindgen = "0.2.115"
-wasm-bindgen-futures = "0.4.65"
+wasm-bindgen = "0.2.120"
+wasm-bindgen-futures = "0.4.70"
 web-sys = "0.3"

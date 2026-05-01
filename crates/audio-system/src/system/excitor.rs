@@ -15,7 +15,7 @@ use common::{
 use fastrand::Rng;
 use fundsp::{prelude::*, thingbuf::ThingBuf, typenum::Unsigned, Float, Real};
 use num_complex::Complex;
-use ordered_float::{FloatCore, OrderedFloat};
+use ordered_float::{self, FloatCore, OrderedFloat};
 use parking_lot::{Mutex, RwLock};
 use spectrum_analyzer::{
     samples_fft_to_spectrum, scaling, windows::hann_window, FrequencyLimit, FrequencySpectrum,
@@ -29,8 +29,19 @@ pub type SpectrumBuffer = Arc<ThingBuf<Arc<FrequencySpectrum>>>;
 
 pub const FFT_WINDOW_SIZE: usize = 8192;
 
-pub fn snapshot_control<S: Real + Float>(control: &control::Control) -> Complex<S> {
-    control.value()
+/// Associates a complex type with its scalar component type.
+/// This trait ensures that C is properly derived from S at the type level.
+pub trait ComplexFor: Clone + Send + Sync {
+    type Scalar;
+}
+
+impl<T: Clone + Send + Sync> ComplexFor for Complex<T> {
+    type Scalar = T;
+}
+
+pub fn snapshot_control<S: Real + Float>(control: &control::Control) -> Complex<OrderedFloat<S>> {
+    let value: Complex<S> = control.value();
+    Complex::new(OrderedFloat(value.re), OrderedFloat(value.im))
 }
 
 const EXCITOR_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::Excitor"));
@@ -50,19 +61,19 @@ impl AnalyzerRuntime {
 }
 
 #[derive(Clone)]
-pub struct Excitor<S: Float + Real + FloatCore + 'static> {
+pub struct Excitor<S: Float + Real + ordered_float::Float + 'static, C = Complex<OrderedFloat<S>>> {
     src: ExcitementSource,
     analyzer_runtime: Arc<AnalyzerRuntime>,
     input_feed: Arc<ThingBuf<f32>>,
-    excitement_feed: Arc<ThingBuf<Vec<Complex<S>>>>,
+    excitement_feed: Arc<ThingBuf<Vec<C>>>,
     tuner_config: Arc<RwLock<TunerConfig>>,
     instrument_config: Arc<RwLock<InstrumentConfig>>,
     frequency_limit: Arc<(AtomicI32, AtomicI32)>,
     _sample_type: PhantomData<S>,
-    rng: Rng,
+    rng: Arc<Mutex<Rng>>,
 }
 
-impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
+impl<S: Float + Real + ordered_float::Float + FloatCore + 'static> Excitor<S> {
     pub fn new(
         src: ExcitementSource,
         tuner_cfg: TunerConfig,
@@ -72,7 +83,7 @@ impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
         let instrument_config = Arc::new(RwLock::new(instrument_cfg.clone()));
         let tuner_config = Arc::new(RwLock::new(tuner_cfg.clone()));
         let input_feed = Arc::new(ThingBuf::<f32>::new(FFT_WINDOW_SIZE + FFT_WINDOW_SIZE / 4));
-        let excitement_feed = Arc::new(ThingBuf::<Vec<Complex<S>>>::new(2));
+        let excitement_feed = Arc::new(ThingBuf::<Vec<Complex<OrderedFloat<S>>>>::new(2));
         let analyzer_runtime = Arc::new(AnalyzerRuntime::new());
         let tuner_constraints = tuner_cfg.constraints();
         let frequency_limit = Arc::new((
@@ -103,7 +114,7 @@ impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
             input_feed,
             excitement_feed,
             frequency_limit,
-            rng,
+            rng: Arc::new(Mutex::new(rng)),
             _sample_type: PhantomData,
         }
     }
@@ -144,7 +155,7 @@ impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
     fn start_analyzer_job(
         analyzer_runtime: Arc<AnalyzerRuntime>,
         input_feed: Arc<ThingBuf<f32>>,
-        excitement_feed: Arc<ThingBuf<Vec<Complex<S>>>>,
+        excitement_feed: Arc<ThingBuf<Vec<Complex<OrderedFloat<S>>>>>,
         tuner_config: Arc<RwLock<TunerConfig>>,
         frequency_limit: Arc<(AtomicI32, AtomicI32)>,
     ) -> JoinHandle<()> {
@@ -225,7 +236,7 @@ impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
     fn excitement_from_spectrum(
         spectrum: &FrequencySpectrum,
         config: &TunerConfig,
-    ) -> Vec<Complex<S>> {
+    ) -> Vec<Complex<OrderedFloat<S>>> {
         let resolution = spectrum.frequency_resolution();
 
         config
@@ -234,8 +245,8 @@ impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
             .map(|sensor_cfg| {
                 let probes = sensor_cfg.probes(resolution);
                 let num_probes = probes.len();
-
                 let center = (num_probes as f32 - 1.0) / 2.0;
+
                 probes
                     .into_iter()
                     .enumerate()
@@ -252,13 +263,26 @@ impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
                             } else {
                                 0.0
                             };
-                            Some(Complex::new(S::from_f32(real), S::from_f32(imaginary)))
+                            Some(Complex::new(
+                                OrderedFloat(S::from_f32(real)),
+                                OrderedFloat(S::from_f32(imaginary)),
+                            ))
                         } else {
                             None
                         }
                     })
-                    .max_by_key(|c| OrderedFloat(c.re))
-                    .unwrap_or(Complex::new(convert(0_f32), convert(0_f32)))
+                    .max_by(|a, b| {
+                        // Compare by magnitude since Complex numbers don't have a natural ordering
+                        let mag_a = a.norm_sqr();
+                        let mag_b = b.norm_sqr();
+                        mag_a
+                            .partial_cmp(&mag_b)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .unwrap_or(Complex::new(
+                        OrderedFloat(convert(0_f32)),
+                        OrderedFloat(convert(0_f32)),
+                    ))
             })
             .collect()
     }
@@ -272,7 +296,7 @@ impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
         tuner_config: &TunerConfig,
         instrument_config: &InstrumentConfig,
         resonance_model: ResonanceModel,
-    ) -> Vec<Complex<S>> {
+    ) -> Vec<Complex<OrderedFloat<S>>> {
         let harmonics = std::cmp::max(resonance_model.harmonics, 1);
         let gamma = resonance_model.gamma.max(f32::EPSILON);
 
@@ -311,7 +335,10 @@ impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
 
                 let nearest_detune = ((base_f - center_f).abs() / half_bw).clamp(0.0, 1.0);
 
-                Complex::new(S::from_f32(strength), S::from_f32(nearest_detune))
+                Complex::new(
+                    OrderedFloat(S::from_f32(strength)),
+                    OrderedFloat(S::from_f32(nearest_detune)),
+                )
             })
             .collect()
     }
@@ -322,11 +349,11 @@ impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
     /// - Heavier instruments (higher gamma) have broader resonance curves and rely more on feedback
     /// - Lighter instruments (lower gamma) have narrower resonance curves and rely more on direct spectrum
     fn summary_excitement(
-        spectrum: Vec<Complex<S>>,
-        feedback: Vec<Complex<S>>,
-        manual: Vec<Complex<S>>,
+        spectrum: Vec<Complex<OrderedFloat<S>>>,
+        feedback: Vec<Complex<OrderedFloat<S>>>,
+        manual: Vec<Complex<OrderedFloat<S>>>,
         resonance_model: ResonanceModel,
-    ) -> Vec<Complex<S>> {
+    ) -> Vec<Complex<OrderedFloat<S>>> {
         // Derive blending weights from resonance bandwidth:
         // Map gamma [MIN_GAMMA, MAX_GAMMA] to feedback weight [0.15, 0.45]
         // This reflects that heavier instruments (higher gamma) have more sympathetic resonance
@@ -338,8 +365,8 @@ impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
         let w_f_f64 = 0.15 + gamma_norm * 0.3; // [0.15, 0.45]
         let w_s_f64 = 1.0 - w_f_f64;
 
-        let w_s = S::from_f64(w_s_f64);
-        let w_f = S::from_f64(w_f_f64);
+        let w_s = OrderedFloat(S::from_f64(w_s_f64));
+        let w_f = OrderedFloat(S::from_f64(w_f_f64));
 
         let primary_src = if !manual.is_empty() { manual } else { spectrum };
 
@@ -351,26 +378,55 @@ impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
     }
 
     /// Derives excitement values directly from the control input (for manual excitation).
-    fn excitement_from_control(control: &[f32]) -> Vec<Complex<S>> {
+    fn excitement_from_control(control: &[f32]) -> Vec<Complex<OrderedFloat<S>>> {
         control
             .chunks(2)
             .map(|chunk| {
                 let real = chunk.get(0).cloned().unwrap_or(0.0);
                 let imaginary = chunk.get(1).cloned().unwrap_or(0.0);
-                Complex::new(S::from_f32(real), S::from_f32(imaginary))
+                Complex::new(
+                    OrderedFloat(S::from_f32(real)),
+                    OrderedFloat(S::from_f32(imaginary)),
+                )
             })
             .collect()
     }
 
     /// Fills the provided buffer with random values in the range [-1.0, 1.0] for entropy excitation.
-    fn fill_entropy(&mut self, buffer: &mut [f32]) {
+    fn fill_entropy(&self, buffer: &mut [f32]) {
+        let mut rng = self.rng.lock();
         buffer.iter_mut().for_each(|sample| {
-            *sample = convert(self.rng.f64() * 2.0 - 1.0); // Random value in [-1.0, 1.0]
+            *sample = convert(rng.f64() * 2.0 - 1.0); // Random value in [-1.0, 1.0]
         });
+    }
+
+    /// Pushes input to the feed based on excitement source.
+    fn push_input_feed(&self, input: &fundsp::prelude::BufferRef, sample: usize) {
+        match self.src {
+            ExcitementSource::Mic => {
+                self.input_feed
+                    .push(input.at_f32(0, sample))
+                    .unwrap_or_else(|e| {
+                        log::warn!("failed to push mic input sample: {e}");
+                    });
+            }
+            ExcitementSource::Entropy => {
+                let entropy_sample = {
+                    let mut rng = self.rng.lock();
+                    convert(rng.f64() * 2.0 - 1.0)
+                };
+                self.input_feed.push(entropy_sample).unwrap_or_else(|e| {
+                    log::warn!("failed to push entropy sample: {e}");
+                });
+            }
+            ExcitementSource::Manual => {
+                // No input feed for manual
+            }
+        }
     }
 }
 
-impl<S: Float + Real + FloatCore + 'static> Drop for Excitor<S> {
+impl<S: Float + Real + ordered_float::Float + 'static, C> Drop for Excitor<S, C> {
     fn drop(&mut self) {
         if Arc::strong_count(&self.analyzer_runtime) == 1 {
             self.analyzer_runtime
@@ -388,7 +444,9 @@ impl<S: Float + Real + FloatCore + 'static> Drop for Excitor<S> {
     }
 }
 
-impl<S: Float + Real + FloatCore + 'static> AudioUnit for Excitor<S> {
+impl<S: Float + Real + ordered_float::Float + FloatCore + 'static> AudioUnit
+    for Excitor<S, Complex<OrderedFloat<S>>>
+{
     fn tick(&mut self, input: &[f32], output: &mut [f32]) {
         let mut entropy_input = [0_f32];
 
@@ -469,13 +527,7 @@ impl<S: Float + Real + FloatCore + 'static> AudioUnit for Excitor<S> {
             for lane in 0..SIMD_LANES {
                 let sample = frame_start + lane;
 
-                if matches!(self.src, ExcitementSource::Mic) {
-                    self.input_feed
-                        .push(input.at_f32(0, sample))
-                        .unwrap_or_else(|e| {
-                            log::warn!("failed to push mic input sample: {e}");
-                        });
-                }
+                self.push_input_feed(input, sample);
 
                 for (channel, value) in feedback_frame.iter_mut().enumerate() {
                     *value = input.at_f32(feedback_offset + channel, sample);
@@ -506,40 +558,21 @@ impl<S: Float + Real + FloatCore + 'static> AudioUnit for Excitor<S> {
             }
         }
 
-        for sample in (simd_frames * SIMD_LANES)..size {
-            if matches!(self.src, ExcitementSource::Mic) {
-                self.input_feed
-                    .push(input.at_f32(0, sample))
-                    .unwrap_or_else(|e| {
-                        log::warn!("failed to push mic input sample: {e}");
-                    });
-            }
-
-            for (channel, value) in feedback_frame.iter_mut().enumerate() {
-                *value = input.at_f32(feedback_offset + channel, sample);
-            }
-            for (channel, value) in control_frame.iter_mut().enumerate() {
-                *value = input.at_f32(control_offset + channel, sample);
-            }
-
-            let excitement_analysis = self.excitement_feed.pop().unwrap_or_default();
-            let feedback_excitement = Self::excitement_from_feedback(
-                &feedback_frame,
-                &tuner_config,
-                &instrument_config,
-                resonance_model,
-            );
-            let manual_excitement = Self::excitement_from_control(&control_frame);
-            let excitement = Self::summary_excitement(
-                excitement_analysis,
-                feedback_excitement,
-                manual_excitement,
-                resonance_model,
-            );
-
-            for (index, exc) in excitement.into_iter().enumerate() {
-                output.set_f32(index * 2, sample, exc.re.to_f32());
-                output.set_f32(index * 2 + 1, sample, exc.im.to_f32());
+        // Process remainder samples using tick()
+        let remainder_start = simd_frames * SIMD_LANES;
+        if remainder_start < size {
+            drop(tuner_config);
+            drop(instrument_config);
+            for sample in remainder_start..size {
+                let mut input_frame = vec![0.0_f32; self.inputs()];
+                for (i, val) in input_frame.iter_mut().enumerate() {
+                    *val = input.at_f32(i, sample);
+                }
+                let mut output_frame = vec![0.0_f32; self.outputs()];
+                self.tick(&input_frame, &mut output_frame);
+                for (i, val) in output_frame.iter().enumerate() {
+                    output.set_f32(i, sample, *val);
+                }
             }
         }
     }
@@ -578,7 +611,7 @@ impl<S: Float + Real + FloatCore + 'static> AudioUnit for Excitor<S> {
     }
 }
 
-pub fn create_excitor<S: Float + Real + FloatCore + 'static>(
+pub fn create_excitor<S: Float + Real + ordered_float::Float + FloatCore + 'static>(
     src: ExcitementSource,
     tuner_cfg: TunerConfig,
     instrument_cfg: InstrumentConfig,
@@ -586,7 +619,7 @@ pub fn create_excitor<S: Float + Real + FloatCore + 'static>(
     Excitor::new(src, tuner_cfg, instrument_cfg, Rng::new())
 }
 
-pub fn create_seeded_excitor<S: Float + Real + FloatCore + 'static>(
+pub fn create_seeded_excitor<S: Float + Real + ordered_float::Float + FloatCore + 'static>(
     src: ExcitementSource,
     tuner_cfg: TunerConfig,
     instrument_cfg: InstrumentConfig,

@@ -1,8 +1,9 @@
-use common::{NodeKey, instrument::BandChannel};
+use common::{instrument::BandChannel, NodeKey};
 use fundsp::prelude::*;
 use parking_lot::Mutex;
 
-use crate::feedback_pass::{FeedbackCatch, FeedbackPass, create_feedback_pass};
+use crate::feedback_pass::{create_feedback_pass, FeedbackCatch, FeedbackPass};
+use crate::system::excitor::control::Control;
 
 pub struct NodeHandle {
     pub channel: BandChannel,
@@ -13,6 +14,7 @@ pub struct NodeHandle {
     pub excitement_snoop_rad: Snoop,
     pub output_snoop: Snoop,
     pub feedback_src: An<FeedbackCatch>,
+    pub control: Control,
 }
 
 pub(super) struct InnerHandle {
@@ -20,6 +22,7 @@ pub(super) struct InnerHandle {
     pub key: NodeKey,
     pub accentuation: Shared,
     pub rhythm: Shared,
+    pub control: Control,
     feedback: (An<FeedbackCatch>, Mutex<Option<An<FeedbackPass>>>),
     excitement_snoop_hs: (Snoop, Mutex<Option<An<SnoopBackend>>>),
     excitement_snoop_rad: (Snoop, Mutex<Option<An<SnoopBackend>>>),
@@ -35,9 +38,15 @@ impl InnerHandle {
         let excitement_snoop_rad = snoop(Self::SNOOP_CAPACITY_XCT);
         let output_snoop = snoop(Self::SNOOP_CAPACITY_OUTPUT);
         let fb_pass = create_feedback_pass();
+        let control = Control {
+            key,
+            real: shared(0.0),
+            imaginary: shared(0.0),
+        };
         Self {
             channel,
             key,
+            control,
             accentuation: shared(0.0),
             rhythm: shared(0.0),
             excitement_snoop_hs: (
@@ -63,10 +72,12 @@ impl InnerHandle {
             excitement_snoop_rad,
             output_snoop,
             feedback,
+            control,
         } = self;
 
         NodeHandle {
             channel,
+            control,
             key,
             accentuation,
             rhythm,

@@ -4,9 +4,9 @@ use std::{collections::HashMap, f32, sync::Arc, thread, time::Duration};
 use common::commands::edit::FineTunedValuesPayload;
 use common::error::ControlError;
 use common::{
-    NodeKey,
     instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, Preset},
     tuner::Config as TunerConfig,
+    NodeKey,
 };
 use fundsp::{prelude::*, typenum::Unsigned as _};
 use parking_lot::RwLock;
@@ -18,7 +18,7 @@ use crate::{
     output_analyzer::OUTPUT_ANALYZER_FFT_WINDOW_SIZE,
     quality::SampleType,
     rt::ExcitementSource,
-    system::excitor::{FFT_WINDOW_SIZE, SpectrumBuffer, control::Control as ExcitementControl},
+    system::excitor::{control::Control as ExcitementControl, SpectrumBuffer, FFT_WINDOW_SIZE},
 };
 
 pub const FADE_DURATION_MS: u64 = 120;
@@ -850,13 +850,15 @@ impl RuntimeSubsystem {
             net.pipe_output(source);
         }
 
-        let siren_excitements = HashMap::<NodeKey, ExcitementControl>::from_iter(
-            layout
-                .registry()
-                .all_keys()
-                .into_iter()
-                .map(|key| (key, ExcitementControl::new(shared(0.0), shared(0.0)))),
-        );
+        let siren_excitements = HashMap::<NodeKey, ExcitementControl>::new();
+
+        // from_iter(
+        //     layout
+        //         .registry()
+        //         .all_keys()
+        //         .into_iter()
+        //         .map(|key| (key, ExcitementControl::new(shared(0.0), shared(0.0)))),
+        // );
 
         CreateInstrumentNetworkReturn {
             excitement_snoops: HashMap::new(),
@@ -898,16 +900,16 @@ impl RuntimeSubsystem {
         let beep_id = net.push(Box::new(sine_hz::<f32>(440.0)));
 
         for node in &nodes {
-            let excitement = ExcitementControl::default();
-            let band_val = preset.get_band_value(&node.key).unwrap_or(0.0);
-            let key_val = preset.get_key_value(&node.key).unwrap_or(0.0);
+            // let excitement = ExcitementControl::default();
+            // let band_val = preset.get_band_value(&node.key).unwrap_or(0.0);
+            // let key_val = preset.get_key_value(&node.key).unwrap_or(0.0);
 
-            let band = shared(band_val);
-            let key = shared(key_val);
+            // let band = shared(band_val);
+            // let key = shared(key_val);
 
-            band_controls.insert(node.key, band);
-            key_controls.insert(node.key, key);
-            siren_excitements.insert(node.key, excitement);
+            // band_controls.insert(node.key, band);
+            // key_controls.insert(node.key, key);
+            // siren_excitements.insert(node.key, excitement);
         }
 
         for _ in 0..num_channels {
@@ -1000,8 +1002,6 @@ impl RuntimeSubsystem {
         instrument_subnet: Net,
         tuner_subnet: Net,
     ) -> CreateMainNetworkReturn {
-        denormal::prevent_denormals();
-
         let mut net = Net::new(1, num_channels);
 
         let instrument_node_id = net.push(Box::new(instrument_subnet));

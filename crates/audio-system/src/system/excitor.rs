@@ -2,9 +2,10 @@ use std::{
     array,
     marker::PhantomData,
     sync::{
-        Arc,
         atomic::{AtomicBool, AtomicI32},
+        Arc,
     },
+    thread::JoinHandle,
 };
 
 use common::{
@@ -12,64 +13,17 @@ use common::{
     tuner::Config as TunerConfig,
 };
 use fastrand::Rng;
-use fundsp::{Float, Real, prelude::*, thingbuf::ThingBuf, typenum::Unsigned};
+use fundsp::{prelude::*, thingbuf::ThingBuf, typenum::Unsigned, Float, Real};
 use num_complex::Complex;
 use ordered_float::{FloatCore, OrderedFloat};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use spectrum_analyzer::{
-    FrequencyLimit, FrequencySpectrum, samples_fft_to_spectrum, scaling, windows::hann_window,
+    samples_fft_to_spectrum, scaling, windows::hann_window, FrequencyLimit, FrequencySpectrum,
 };
-use tokio::task::JoinHandle;
 
 use crate::rt::ExcitementSource;
 
-pub mod control {
-    use fundsp::{Float, Real, prelude::shared, shared::Shared};
-    use num_complex::Complex;
-
-    #[derive(Clone)]
-    pub struct Control {
-        pub real: Shared,
-        pub imaginary: Shared,
-    }
-
-    impl Control {
-        pub fn new(real: Shared, imaginary: Shared) -> Self {
-            Self { real, imaginary }
-        }
-
-        pub fn value<S: Real + Float>(&self) -> Complex<S> {
-            Complex::new(self.primary_value(), self.secondary_value())
-        }
-
-        pub fn primary_value<S: Real + Float>(&self) -> S {
-            S::from_f32(self.real.value())
-        }
-
-        pub fn secondary_value<S: Real + Float>(&self) -> S {
-            S::from_f32(self.imaginary.value())
-        }
-
-        pub fn set_value<S: Real + Float>(&self, (real, imaginary): (S, S)) {
-            self.real.set_value(real.to_f32());
-            self.imaginary.set_value(imaginary.to_f32());
-        }
-
-        pub fn reset(&self) {
-            self.real.set_value(0.0);
-            self.imaginary.set_value(0.0);
-        }
-    }
-
-    impl Default for Control {
-        fn default() -> Self {
-            Self {
-                real: shared(0.0),
-                imaginary: shared(0.0),
-            }
-        }
-    }
-}
+pub mod control;
 
 pub type SpectrumBuffer = Arc<ThingBuf<Arc<FrequencySpectrum>>>;
 
@@ -81,11 +35,24 @@ pub fn snapshot_control<S: Real + Float>(control: &control::Control) -> Complex<
 
 const EXCITOR_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::Excitor"));
 
+struct AnalyzerRuntime {
+    running: AtomicBool,
+    job: Mutex<Option<JoinHandle<()>>>,
+}
+
+impl AnalyzerRuntime {
+    fn new() -> Self {
+        Self {
+            running: AtomicBool::new(true),
+            job: Mutex::new(None),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Excitor<S: Float + Real + FloatCore + 'static> {
     src: ExcitementSource,
-    _analyzer_job: Arc<JoinHandle<()>>,
-    job_running: Arc<AtomicBool>,
+    analyzer_runtime: Arc<AnalyzerRuntime>,
     input_feed: Arc<ThingBuf<f32>>,
     excitement_feed: Arc<ThingBuf<Vec<Complex<S>>>>,
     tuner_config: Arc<RwLock<TunerConfig>>,
@@ -106,7 +73,7 @@ impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
         let tuner_config = Arc::new(RwLock::new(tuner_cfg.clone()));
         let input_feed = Arc::new(ThingBuf::<f32>::new(FFT_WINDOW_SIZE + FFT_WINDOW_SIZE / 4));
         let excitement_feed = Arc::new(ThingBuf::<Vec<Complex<S>>>::new(2));
-        let job_running = Arc::new(AtomicBool::new(true));
+        let analyzer_runtime = Arc::new(AnalyzerRuntime::new());
         let tuner_constraints = tuner_cfg.constraints();
         let frequency_limit = Arc::new((
             AtomicI32::new(
@@ -120,19 +87,19 @@ impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
                     .map_or(-1, |l| l.round() as i32),
             ),
         ));
-        let _analyzer_job = Arc::new(Self::start_analyzer_job(
-            job_running.clone(),
+        let analyzer_job = Self::start_analyzer_job(
+            analyzer_runtime.clone(),
             input_feed.clone(),
             excitement_feed.clone(),
             tuner_config.clone(),
             frequency_limit.clone(),
-        ));
+        );
+        *analyzer_runtime.job.lock() = Some(analyzer_job);
         Self {
             src,
             tuner_config,
             instrument_config,
-            _analyzer_job,
-            job_running,
+            analyzer_runtime,
             input_feed,
             excitement_feed,
             frequency_limit,
@@ -175,14 +142,17 @@ impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
     }
 
     fn start_analyzer_job(
-        job_running: Arc<AtomicBool>,
+        analyzer_runtime: Arc<AnalyzerRuntime>,
         input_feed: Arc<ThingBuf<f32>>,
         excitement_feed: Arc<ThingBuf<Vec<Complex<S>>>>,
         tuner_config: Arc<RwLock<TunerConfig>>,
         frequency_limit: Arc<(AtomicI32, AtomicI32)>,
     ) -> JoinHandle<()> {
-        tokio::task::spawn(async move {
-            while job_running.load(std::sync::atomic::Ordering::SeqCst) {
+        std::thread::spawn(move || {
+            while analyzer_runtime
+                .running
+                .load(std::sync::atomic::Ordering::SeqCst)
+            {
                 if input_feed.len() >= FFT_WINDOW_SIZE {
                     excitement_feed
                         .push_with(|place| {
@@ -417,8 +387,19 @@ impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
 
 impl<S: Float + Real + FloatCore + 'static> Drop for Excitor<S> {
     fn drop(&mut self) {
-        self.job_running
-            .store(false, std::sync::atomic::Ordering::SeqCst);
+        if Arc::strong_count(&self.analyzer_runtime) == 1 {
+            self.analyzer_runtime
+                .running
+                .store(false, std::sync::atomic::Ordering::SeqCst);
+            if let Some(job) = self.analyzer_runtime.job.lock().take() {
+                match job.join() {
+                    Ok(_) => {}
+                    Err(e) => {
+                        log::error!("joining analyzer job failed during drop: {e:?}")
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -713,7 +694,8 @@ mod tests {
 
         let channels = (0..input_channels)
             .map(|ch| {
-                let (start_hz, end_hz) = channel_sweep_bounds_hz(ch, input_channels, sample_rate_hz);
+                let (start_hz, end_hz) =
+                    channel_sweep_bounds_hz(ch, input_channels, sample_rate_hz);
                 let chirp_rate_hz_per_s = if duration_seconds > 0.0 {
                     (end_hz - start_hz) / duration_seconds
                 } else {
@@ -773,7 +755,7 @@ mod tests {
             snapshot_config(
                 processing_mode,
                 WarmUp::SamplesWithInput {
-                    samples: FFT_WINDOW_SIZE-128,
+                    samples: FFT_WINDOW_SIZE - 128,
                     input: std::rc::Rc::new(std::cell::RefCell::new(input(FFT_WINDOW_SIZE - 128))),
                 }
             )

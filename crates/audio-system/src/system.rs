@@ -5,12 +5,13 @@ pub mod excitor;
 pub mod feedback_pass;
 pub mod grid;
 pub mod node;
+pub mod ny_compressor;
 pub mod values;
 
 #[cfg(feature = "editor")]
 use values::FineTunedValues;
 
-use crate::{SampleType, rt::ExcitementSource};
+use crate::{rt::ExcitementSource, SampleType};
 
 /// Mounts the audio output system
 pub fn mount_output_system(

@@ -327,18 +327,6 @@ impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
         manual: Vec<Complex<S>>,
         resonance_model: ResonanceModel,
     ) -> Vec<Complex<S>> {
-        fn clamp_unit<S: Float + Real>(x: S) -> S {
-            let zero = S::from_f32(0.0);
-            let one = S::from_f32(1.0);
-            if x < zero {
-                zero
-            } else if x > one {
-                one
-            } else {
-                x
-            }
-        }
-
         // Derive blending weights from resonance bandwidth:
         // Map gamma [MIN_GAMMA, MAX_GAMMA] to feedback weight [0.15, 0.45]
         // This reflects that heavier instruments (higher gamma) have more sympathetic resonance
@@ -350,19 +338,15 @@ impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
         let w_f_f64 = 0.15 + gamma_norm * 0.3; // [0.15, 0.45]
         let w_s_f64 = 1.0 - w_f_f64;
 
-        let w_s = S::from_f32(w_s_f64 as f32);
-        let w_f = S::from_f32(w_f_f64 as f32);
+        let w_s = S::from_f64(w_s_f64);
+        let w_f = S::from_f64(w_f_f64);
 
         let primary_src = if !manual.is_empty() { manual } else { spectrum };
 
         primary_src
             .into_iter()
             .zip(feedback)
-            .map(|(s, f)| {
-                let re = clamp_unit(s.re * w_s + f.re * w_f);
-                let im = clamp_unit(s.im * w_s + f.im * w_f);
-                Complex::new(re, im)
-            })
+            .map(|(s, f)| s * w_s + f * w_f)
             .collect()
     }
 
@@ -378,9 +362,10 @@ impl<S: Float + Real + FloatCore + 'static> Excitor<S> {
             .collect()
     }
 
+    /// Fills the provided buffer with random values in the range [-1.0, 1.0] for entropy excitation.
     fn fill_entropy(&mut self, buffer: &mut [f32]) {
         buffer.iter_mut().for_each(|sample| {
-            *sample = self.rng.f32() * 2.0 - 1.0; // Random value in [-1.0, 1.0]
+            *sample = convert(self.rng.f64() * 2.0 - 1.0); // Random value in [-1.0, 1.0]
         });
     }
 }
@@ -652,6 +637,7 @@ mod tests {
         SnapshotConfigBuilder::default()
             .sample_rate(44_100.0)
             .num_samples(1280)
+            .with_inputs(true)
             .warm_up(warm_up)
             .processing_mode(processing_mode)
             .show_grid(true)

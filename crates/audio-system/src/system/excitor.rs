@@ -30,7 +30,11 @@ pub type ExcitementData<S> = Complex<OrderedFloat<S>>;
 
 const EXCITOR_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::Excitor"));
 
+#[cfg(not(test))]
 pub const FFT_WINDOW_SIZE: usize = 8192;
+
+#[cfg(test)]
+pub const FFT_WINDOW_SIZE: usize = 256;
 
 /// Associates a complex type with its scalar component type.
 /// This trait ensures that C is properly derived from S at the type level.
@@ -189,11 +193,9 @@ impl<S: Float + Real + ordered_float::Float + FloatCore + 'static> Excitor<S> {
                     );
 
                     let excitement = Self::excitement_from_spectrum(&spectrum, &config);
-                    excitement_feed
-                        .push(excitement)
-                        .unwrap_or_else(|e| {
-                            log::error!("failed to push excitement data: {e}");
-                        });
+                    excitement_feed.push(excitement).unwrap_or_else(|e| {
+                        log::error!("failed to push excitement data: {e}");
+                    });
                     spectrum_buffer
                         .push(Arc::new(spectrum))
                         .unwrap_or_else(|e| {
@@ -712,10 +714,14 @@ mod tests {
         (tuner_config, instrument_config)
     }
 
-    fn snapshot_config(processing_mode: Processing, warm_up: WarmUp) -> SnapshotConfig {
+    fn snapshot_config(
+        processing_mode: Processing,
+        warm_up: WarmUp,
+        num_samples: usize,
+    ) -> SnapshotConfig {
         SnapshotConfigBuilder::default()
             .sample_rate(44_100.0)
-            .num_samples(1280)
+            .num_samples(num_samples)
             .with_inputs(true)
             .warm_up(warm_up)
             .processing_mode(processing_mode)
@@ -813,17 +819,13 @@ mod tests {
         let num_inputs = unit.inputs();
         let input = |size: usize| input_for(src, num_inputs, size, sample_rate_hz);
 
+        let snapshot_samples = FFT_WINDOW_SIZE * 4;
+
         assert_audio_unit_snapshot!(
             name,
             unit,
-            input(1280),
-            snapshot_config(
-                processing_mode,
-                WarmUp::SamplesWithInput {
-                    samples: FFT_WINDOW_SIZE - 128,
-                    input: std::rc::Rc::new(std::cell::RefCell::new(input(FFT_WINDOW_SIZE - 128))),
-                }
-            )
+            input(snapshot_samples),
+            snapshot_config(processing_mode, WarmUp::None, snapshot_samples)
         );
     }
 

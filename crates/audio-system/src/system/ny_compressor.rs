@@ -151,15 +151,15 @@ impl<S: Float + Real + 'static> AudioNode for NewYorkCompressor<S> {
     }
 }
 
-pub fn new_york_compressor<S: Float + Real + 'static>() -> An<NewYorkCompressor<S>> {
+pub fn create_new_york_compressor<S: Float + Real + 'static>() -> An<NewYorkCompressor<S>> {
     An(NewYorkCompressor::new())
 }
 
-pub fn ny_compressor_thr_dry<S: Float + Real + 'static>(
+pub fn create_ny_compressor_thr_dry<S: Float + Real + 'static>(
     threshold: &Shared,
     dry_wet: &Shared,
 ) -> An<Pipe<Stack<Stack<Pass, Var>, Var>, NewYorkCompressor<S>>> {
-    (pass() | var(threshold) | var(dry_wet)) >> new_york_compressor::<S>()
+    (pass() | var(threshold) | var(dry_wet)) >> create_new_york_compressor::<S>()
 }
 
 #[cfg(test)]
@@ -226,7 +226,7 @@ mod tests {
 
         assert_audio_unit_snapshot!(
             "ny_compressor_dry_passthrough",
-            new_york_compressor::<f32>(),
+            create_new_york_compressor::<f32>(),
             InputSource::VecByChannel(vec![audio, threshold, wet]),
             snapshot_config()
         );
@@ -242,7 +242,7 @@ mod tests {
 
         assert_audio_unit_snapshot!(
             "ny_compressor_full_wet_threshold_sweep",
-            new_york_compressor::<f32>(),
+            create_new_york_compressor::<f32>(),
             InputSource::VecByChannel(vec![audio, threshold, wet]),
             snapshot_config()
         );
@@ -256,7 +256,7 @@ mod tests {
 
         assert_audio_unit_snapshot!(
             "ny_compressor_attack_release_transient",
-            new_york_compressor::<f32>(),
+            create_new_york_compressor::<f32>(),
             InputSource::VecByChannel(vec![audio, threshold, wet]),
             snapshot_config()
         );

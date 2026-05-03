@@ -1,11 +1,9 @@
 use std::{num::NonZeroU16, ops::RemAssign, sync::Arc};
 
 use fundsp::prelude::*;
-use num_complex::Complex;
-use ordered_float::OrderedFloat;
 use parking_lot::RwLock;
 
-use crate::excitor::ExcitementData;
+use crate::excitor::{ExcitementData, ExcitementSnapshot};
 
 const METRO_TEMPO_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::MetroTempo"));
 
@@ -23,7 +21,7 @@ pub struct MetroTempo<
     sample_rate_per_second: S,
     ticks_to_next_bpm_change: usize,
     bpm_tables: Arc<RwLock<Vec<Vec<usize>>>>,
-    weight_tables: Arc<RwLock<Vec<ExcitementData<S>>>>,
+    weight_tables: ExcitementSnapshot<S>,
 }
 
 impl<
@@ -38,7 +36,7 @@ impl<
 {
     pub fn new(
         bpm_tables: Arc<RwLock<Vec<Vec<usize>>>>,
-        weight_tables: Arc<RwLock<Vec<ExcitementData<S>>>>,
+        weight_tables: ExcitementSnapshot<S>,
     ) -> Self {
         let beat_rate_per_minute = {
             let bpm_tables = bpm_tables.read();
@@ -208,8 +206,6 @@ impl<
         // Unweighted mean BPM across all nodes; used as fallback and for dynamic range.
         let bpm_total_avg = bpm_total_sum / convert(len_total as f64);
 
-        // --- Option 4: Real-Imag Role Split ---
-        //
         // ExcitementData channel semantics (confirmed from excitor.rs):
         //   re = energy / resonance strength  →  how strongly a node is being excited
         //   im = spectral offset from band center  →  0 = settled/on-target, 1 = fringe/detuned
@@ -376,10 +372,27 @@ impl<
     }
 }
 
+pub fn create_metro_tempo<
+    S: Real
+        + Float
+        + ordered_float::FloatCore
+        + ordered_float::Float
+        + RemAssign
+        + PartialOrd
+        + 'static,
+>(
+    bpm_tables: Arc<RwLock<Vec<Vec<usize>>>>,
+    weight_tables: ExcitementSnapshot<S>,
+) -> An<MetroTempo<S>> {
+    An(MetroTempo::new(bpm_tables, weight_tables))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use insta_fun::prelude::*;
+    use num_complex::Complex;
+    use ordered_float::OrderedFloat;
     use std::sync::Arc;
 
     use parking_lot::RwLock;

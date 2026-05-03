@@ -6,7 +6,7 @@ use fundsp::{prelude::*, thingbuf::ThingBuf};
 
 const FEEDBACK_PASS_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::FeedbackPass"));
 const FEEDBACK_CATCH_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::FeedbackCatch"));
-const FEEDBACK_PASS_BUFFER_SIZE: usize = 128;
+const FEEDBACK_PASS_BUFFER_SIZE: usize = MAX_BUFFER_SIZE * 2; // Buffer size for the feedback pass, allowing for some headroom to prevent overflow in high-latency scenarios.
 
 #[derive(Clone)]
 /// A node that takes an input signal and stores it in a buffer for later retrieval by a corresponding FeedbackCatch node.

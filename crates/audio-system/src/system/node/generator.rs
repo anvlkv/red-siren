@@ -52,9 +52,10 @@ impl<S: Real + Float + 'static> NodeGenerator<S> {
             sine_mix + soft_saw_mix + saw_mix
         })));
 
-        let f_bank = net.push(Box::new(super::formant::create_formant_bank::<S, U5>(
-            config,
-        )));
+        let f_bank = net.push(Box::new(
+            (multipass::<U2>() | values.formants_wet_dry_ratio.clone())
+                >> super::formant::create_formant_bank::<S, U5>(config),
+        ));
         let accent_input = net.push(Box::new(
             (pass() | values.formants_q.clone())
                 >> map(|frame: &Frame<f32, U2>| {
@@ -68,7 +69,6 @@ impl<S: Real + Float + 'static> NodeGenerator<S> {
                     }
                 }),
         ));
-
         net.connect_input(0, src_3x_fade, 3);
         net.connect_input(1, accent_input, 0);
         net.pipe_all(osc, src_3x_fade);

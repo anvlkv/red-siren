@@ -142,10 +142,44 @@ pub fn create_formant<S: Real + Float>(config: &NodeConfig, nth: u8) -> An<Forma
     An(Formant::from_node_config(config, nth))
 }
 
-type FormantBank<S, N> = An<Pipe<Pipe<MultiSplit<U2, N>, MultiStack<N, Formant<S>>>, Join<N>>>;
+type FormantBank<S, N> = Pipe<Pipe<MultiSplit<U2, N>, MultiStack<N, Formant<S>>>, Join<N>>;
 
+/*
+    let wet_dry_mixer: An<WDMixer> = multisplit::<U3, U2>()
+        >> ((pass() | sink() | pass()) | (sink() | pass() | pass()))
+        >> ((pass() * (constant(1.0) - pass())) | (pass() * pass()))
+        >> pass() + pass();
+*/
+type WDMixer = Pipe<
+    Pipe<
+        Pipe<
+            MultiSplit<U3, U2>,
+            Stack<Stack<Stack<Pass, Sink<U1>>, Pass>, Stack<Stack<Sink<U1>, Pass>, Pass>>,
+        >,
+        Stack<
+            Binop<FrameMul<U1>, Pass, Binop<FrameSub<U1>, Constant<U1>, Pass>>,
+            Binop<FrameMul<U1>, Pass, Pass>,
+        >,
+    >,
+    Binop<FrameAdd<U1>, Pass, Pass>,
+>;
+
+pub type FormantBankWD<S, N> = Pipe<
+    Pipe<
+        Stack<Split<U2>, MultiPass<U2>>,
+        Stack<Stack<Pass, Pipe<MultiPass<U2>, FormantBank<S, N>>>, Pass>,
+    >,
+    WDMixer,
+>;
 /// Create a parallel bank of `num_formants` formant filters for `config` (F1..=Fnum_formants).
-pub fn create_formant_bank<S, N>(config: &NodeConfig) -> FormantBank<S, N>
+///
+/// Inputs: 3
+/// - audio signal
+/// - Q factor for all filters
+/// - wet/dry mix (`0.0` = fully dry, `1.0` = fully wet)
+///
+/// The output mix is `dry * (1.0 - wet_dry) + wet * wet_dry`.
+pub fn create_formant_bank<S, N>(config: &NodeConfig) -> An<FormantBankWD<S, N>>
 where
     S: Real + Float + 'static,
     N: Size<S> + Size<Formant<S>> + Size<f32>,
@@ -153,12 +187,23 @@ where
     <U2 as Mul<N>>::Output: Size<f32>,
     U1: Mul<N, Output = N>,
 {
-    multisplit::<U2, N>()
+    let formant_bank: An<FormantBank<S, N>> = multisplit::<U2, N>()
         >> stacki::<N, Formant<S>, _>(|i| {
             let nth = (i + 1) as u8;
             create_formant::<S>(config, nth)
         })
-        >> join::<N>()
+        >> join::<N>();
+
+    // The wet/dry mixer applies the wet/dry ratio to the combined output of the formant filters and mixes it with the dry signal.
+    // [dry, wet, wet_dry] -> [mixed]
+    let wet_dry_mixer: An<WDMixer> = multisplit::<U3, U2>()
+        >> ((pass() | sink() | pass()) | (sink() | pass() | pass()))
+        >> ((pass() * (constant(1.0) - pass())) | (pass() * pass()))
+        >> pass() + pass();
+
+    (split::<U2>() | multipass::<U2>())
+        >> (pass() | (multipass::<U2>() >> formant_bank) | pass())
+        >> wet_dry_mixer
 }
 
 impl<S: Real + Float> AudioNode for Formant<S> {
@@ -215,12 +260,36 @@ mod tests {
             .unwrap()
     }
 
+    fn bank_snapshot_config(num_samples: usize) -> SnapshotConfig {
+        SnapshotConfigBuilder::default()
+            .num_samples(num_samples)
+            .chart_layout(Layout::CombinedPerChannelType)
+            .svg_width(512)
+            .svg_height_per_channel(128)
+            .with_inputs(true)
+            .input_title("Audio")
+            .input_title("Q")
+            .input_title("Wet/Dry")
+            .output_title("Mixed")
+            .build()
+            .unwrap()
+    }
+
     fn impulse_input(len: usize, q: f32) -> InputSource {
         let audio: Vec<f32> = (0..len)
             .map(|i| if i == 0 { 1.0_f32 } else { 0.0 })
             .collect();
         let q_ch: Vec<f32> = vec![q; len];
         InputSource::VecByChannel(vec![audio, q_ch])
+    }
+
+    fn bank_impulse_input(len: usize, q: f32, wet_dry: f32) -> InputSource {
+        let audio: Vec<f32> = (0..len)
+            .map(|i| if i == 0 { 1.0_f32 } else { 0.0 })
+            .collect();
+        let q_ch: Vec<f32> = vec![q; len];
+        let wet_dry_ch: Vec<f32> = vec![wet_dry; len];
+        InputSource::VecByChannel(vec![audio, q_ch, wet_dry_ch])
     }
 
     #[test]
@@ -274,8 +343,20 @@ mod tests {
         assert_audio_unit_snapshot!(
             "formant_bank_5_impulse_response",
             bank,
-            impulse_input(256, DEFAULT_Q),
-            snapshot_config(256)
+            bank_impulse_input(256, DEFAULT_Q, 0.5),
+            bank_snapshot_config(256)
+        );
+    }
+
+    #[test]
+    fn formant_bank_5_impulse_response_dry_only() {
+        let config = make_test_config();
+        let bank = create_formant_bank::<f32, U5>(&config);
+        assert_audio_unit_snapshot!(
+            "formant_bank_5_impulse_response_dry_only",
+            bank,
+            bank_impulse_input(256, DEFAULT_Q, 0.0),
+            bank_snapshot_config(256)
         );
     }
 }

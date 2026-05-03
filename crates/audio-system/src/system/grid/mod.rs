@@ -172,7 +172,7 @@ impl<S: Real + Float> AudioNode for RhythmGrid<S> {
 
 /// Create a rhythm grid node. Outputs 1.0 on the first tick of each beat, 0.0 otherwise.
 /// Input is BPM as a float.
-pub fn rhythm_grid<S: Real + Float>() -> An<RhythmGrid<S>> {
+pub fn create_rhythm_grid<S: Real + Float>() -> An<RhythmGrid<S>> {
     An(RhythmGrid::new())
 }
 
@@ -207,7 +207,7 @@ mod tests {
     // The first trigger fires at tick 100 (not 0), then every 100 ticks after.
     #[test]
     fn grid_steady_60bpm() {
-        let grid = rhythm_grid::<f32>();
+        let grid = create_rhythm_grid::<f32>();
         assert_audio_unit_snapshot!(
             "grid_steady_60bpm",
             grid,
@@ -220,7 +220,7 @@ mod tests {
     // The remaining time in the current beat is rescaled on the BPM change.
     #[test]
     fn grid_bpm_change() {
-        let grid = rhythm_grid::<f32>();
+        let grid = create_rhythm_grid::<f32>();
         assert_audio_unit_snapshot!(
             "grid_bpm_change",
             grid,
@@ -238,7 +238,7 @@ mod tests {
     // Zero BPM input → all outputs are 0.
     #[test]
     fn grid_zero_bpm() {
-        let grid = rhythm_grid::<f32>();
+        let grid = create_rhythm_grid::<f32>();
         assert_audio_unit_snapshot!(
             "grid_zero_bpm",
             grid,

@@ -197,6 +197,13 @@ impl Config {
         self.0.iter().flat_map(|g| g.nodes.iter())
     }
 
+    pub fn bpm_tables(&self) -> Vec<Vec<usize>> {
+        self.0
+            .iter()
+            .map(|b| b.nodes.iter().map(|n| n.hr_bpm() as usize).collect())
+            .collect()
+    }
+
     /// Derive a global resonance model from the generated instrument physics.
     ///
     /// This model is intentionally computed from config data (not user-edited),

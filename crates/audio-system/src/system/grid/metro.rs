@@ -20,7 +20,7 @@ pub struct MetroTempo<
     beat_rate_per_minute: NonZeroU16,
     sample_rate_per_second: S,
     ticks_to_next_bpm_change: usize,
-    bpm_tables: Arc<RwLock<Vec<Vec<usize>>>>,
+    bpm_tables: Vec<Vec<usize>>,
     weight_tables: ExcitementSnapshot<S>,
 }
 
@@ -34,12 +34,8 @@ impl<
             + 'static,
     > MetroTempo<S>
 {
-    pub fn new(
-        bpm_tables: Arc<RwLock<Vec<Vec<usize>>>>,
-        weight_tables: ExcitementSnapshot<S>,
-    ) -> Self {
+    pub fn new(bpm_tables: Vec<Vec<usize>>, weight_tables: ExcitementSnapshot<S>) -> Self {
         let beat_rate_per_minute = {
-            let bpm_tables = bpm_tables.read();
             let weight_tables = weight_tables.read();
 
             Self::compute_weighted_bpm(&bpm_tables, &weight_tables, NonZeroU16::new(120).unwrap())
@@ -344,9 +340,8 @@ impl<
         } else {
             let previous_bpm = self.beat_rate_per_minute;
             self.beat_rate_per_minute = {
-                let bpm_tables = self.bpm_tables.read();
                 let weight_tables = self.weight_tables.read();
-                Self::compute_weighted_bpm(&bpm_tables, &weight_tables, previous_bpm)
+                Self::compute_weighted_bpm(&self.bpm_tables, &weight_tables, previous_bpm)
             };
             let delta_bpm = self.beat_rate_per_minute.get() as isize - previous_bpm.get() as isize;
             self.ticks_to_next_bpm_change = Self::compute_ticks_per_beat(
@@ -381,7 +376,7 @@ pub fn create_metro_tempo<
         + PartialOrd
         + 'static,
 >(
-    bpm_tables: Arc<RwLock<Vec<Vec<usize>>>>,
+    bpm_tables: Vec<Vec<usize>>,
     weight_tables: ExcitementSnapshot<S>,
 ) -> An<MetroTempo<S>> {
     An(MetroTempo::new(bpm_tables, weight_tables))
@@ -426,10 +421,7 @@ mod tests {
         bpm_tables: Vec<Vec<usize>>,
         weight_tables: Vec<ExcitementData<f32>>,
     ) -> MetroTempo<f32> {
-        MetroTempo::new(
-            Arc::new(RwLock::new(bpm_tables)),
-            Arc::new(RwLock::new(weight_tables)),
-        )
+        MetroTempo::new(bpm_tables, Arc::new(RwLock::new(weight_tables)))
     }
 
     #[test]

@@ -718,6 +718,7 @@ mod tests {
         processing_mode: Processing,
         warm_up: WarmUp,
         num_samples: usize,
+        allow_abnormal_samples: bool,
     ) -> SnapshotConfig {
         SnapshotConfigBuilder::default()
             .sample_rate(44_100.0)
@@ -725,6 +726,7 @@ mod tests {
             .with_inputs(true)
             .warm_up(warm_up)
             .processing_mode(processing_mode)
+            .allow_abnormal_samples(allow_abnormal_samples)
             .show_grid(true)
             .svg_width(1024)
             .svg_height_per_channel(512)
@@ -733,76 +735,18 @@ mod tests {
             .expect("snapshot config must be valid")
     }
 
-    fn input_for(
-        src: ExcitementSource,
-        input_channels: usize,
-        size: usize,
-        sample_rate_hz: f32,
-    ) -> InputSource {
-        fn channel_sweep_bounds_hz(
-            channel: usize,
-            num_channels: usize,
-            sample_rate_hz: f32,
-        ) -> (f32, f32) {
-            let min_hz = 20.0_f32;
-            let max_hz = (sample_rate_hz * 0.5 * 0.95).max(min_hz + 1.0);
-
-            if num_channels <= 1 {
-                return (min_hz, max_hz);
-            }
-
-            let band_width = (max_hz - min_hz) / num_channels as f32;
-            let start_hz = min_hz + band_width * channel as f32;
-            let end_hz = (start_hz + band_width).min(max_hz).max(start_hz + 1.0);
-            (start_hz, end_hz)
+    /// Stacks `channels` sine oscillators at 110, 220, 330 … Hz into a single multi-output
+    /// AudioUnit, initialized and ready to wrap in InputSource::AudioUnit.
+    fn sine_driver(channels: usize, sample_rate: f64) -> Box<dyn AudioUnit> {
+        let mut net = Net::new(0, channels);
+        for ch in 0..channels {
+            let node = net.push(Box::new(sine_hz::<f32>(110.0 * (ch as f32 + 1.0))));
+            net.connect_output(node, 0, ch);
         }
-
-        let duration_seconds = if size > 1 {
-            (size as f32 - 1.0) / sample_rate_hz.max(f32::EPSILON)
-        } else {
-            0.0
-        };
-
-        let channels = (0..input_channels)
-            .map(|ch| {
-                let (start_hz, end_hz) =
-                    channel_sweep_bounds_hz(ch, input_channels, sample_rate_hz);
-                let chirp_rate_hz_per_s = if duration_seconds > 0.0 {
-                    (end_hz - start_hz) / duration_seconds
-                } else {
-                    0.0
-                };
-
-                (0..size)
-                    .map(|i| {
-                        let t = if size > 1 {
-                            i as f32 / (size as f32 - 1.0)
-                        } else {
-                            0.0
-                        };
-                        let time_seconds = i as f32 / sample_rate_hz.max(f32::EPSILON);
-                        let phase = 2.0
-                            * std::f32::consts::PI
-                            * (start_hz * time_seconds
-                                + 0.5 * chirp_rate_hz_per_s * time_seconds * time_seconds);
-
-                        match src {
-                            ExcitementSource::Mic => phase.sin() * 0.8,
-                            ExcitementSource::Entropy => phase.cos() * 0.7,
-                            ExcitementSource::Manual => {
-                                if ch % 2 == 0 {
-                                    t
-                                } else {
-                                    1.0 - t
-                                }
-                            }
-                        }
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-
-        InputSource::VecByChannel(channels)
+        let mut unit: Box<dyn AudioUnit> = Box::new(net);
+        unit.set_sample_rate(sample_rate);
+        unit.reset();
+        unit
     }
 
     fn assert_excitor_snapshot(name: &str, src: ExcitementSource, processing_mode: Processing) {
@@ -816,49 +760,97 @@ mod tests {
         let (tuner_config, instrument_config) = test_configs();
         let sample_rate_hz = tuner_config.sample_rate;
         let unit = create_seeded_excitor::<f32>(src, tuner_config, instrument_config, 42);
-        let num_inputs = unit.inputs();
-        let input = |size: usize| input_for(src, num_inputs, size, sample_rate_hz);
+        let input = InputSource::AudioUnit(sine_driver(unit.inputs(), sample_rate_hz as f64));
 
         let snapshot_samples = FFT_WINDOW_SIZE * 4;
 
         assert_audio_unit_snapshot!(
             name,
             unit,
-            input(snapshot_samples),
-            snapshot_config(processing_mode, WarmUp::None, snapshot_samples)
+            input,
+            snapshot_config(processing_mode, WarmUp::None, snapshot_samples, false)
+        );
+    }
+
+    fn assert_excitor_raw_data(src: ExcitementSource, processing_mode: Processing) {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .expect("tokio runtime must be created");
+        let _guard = runtime.enter();
+
+        let (tuner_config, instrument_config) = test_configs();
+        let sample_rate_hz = tuner_config.sample_rate;
+        let snapshot_samples = FFT_WINDOW_SIZE * 4;
+        let unit = create_seeded_excitor::<f32>(src, tuner_config, instrument_config, 42);
+        let expected_outputs = unit.outputs();
+        let expected_inputs = unit.inputs();
+
+        assert_audio_unit_data!(
+            unit,
+            InputSource::AudioUnit(sine_driver(expected_inputs, sample_rate_hz as f64)),
+            snapshot_config(processing_mode, WarmUp::None, snapshot_samples, true) =>
+                |data: &AudioUnitSnapshotData| {
+                    assert_eq!(
+                        data.output_data.len(),
+                        expected_outputs,
+                        "unexpected output channel count"
+                    );
+                    assert_eq!(
+                        data.num_samples,
+                        snapshot_samples,
+                        "unexpected sample count"
+                    );
+
+                    let mut max_range = 0.0_f32;
+                    for (channel, samples) in data.output_data.iter().enumerate() {
+                        assert_eq!(
+                            samples.len(),
+                            snapshot_samples,
+                            "channel {channel} sample count mismatch"
+                        );
+
+                        let mut min = f32::INFINITY;
+                        let mut max = f32::NEG_INFINITY;
+                        for &value in samples {
+                            assert!(value.is_finite(), "non-finite sample found in channel {channel}");
+                            assert!(
+                                value.abs() <= 2.0,
+                                "sample amplitude out of expected bounds in channel {channel}: {value}"
+                            );
+                            min = min.min(value);
+                            max = max.max(value);
+                        }
+                        max_range = max_range.max(max - min);
+                    }
+
+                    assert!(
+                        max_range > 1.0e-4,
+                        "output range should show non-trivial variation"
+                    );
+                }
         );
     }
 
     #[test]
-    fn excitor_mic_tick_snapshot() {
-        assert_excitor_snapshot("excitor_mic_tick", ExcitementSource::Mic, Processing::Tick);
+    fn excitor_mic_tick_data() {
+        assert_excitor_raw_data(ExcitementSource::Mic, Processing::Tick);
     }
 
     #[test]
-    fn excitor_mic_batch_snapshot() {
-        assert_excitor_snapshot(
-            "excitor_mic_batch",
-            ExcitementSource::Mic,
-            Processing::Batch(64),
-        );
+    fn excitor_mic_batch_data() {
+        assert_excitor_raw_data(ExcitementSource::Mic, Processing::Batch(64));
     }
 
     #[test]
-    fn excitor_entropy_tick_snapshot() {
-        assert_excitor_snapshot(
-            "excitor_entropy_tick",
-            ExcitementSource::Entropy,
-            Processing::Tick,
-        );
+    fn excitor_entropy_tick_data() {
+        assert_excitor_raw_data(ExcitementSource::Entropy, Processing::Tick);
     }
 
     #[test]
-    fn excitor_entropy_batch_snapshot() {
-        assert_excitor_snapshot(
-            "excitor_entropy_batch",
-            ExcitementSource::Entropy,
-            Processing::Batch(64),
-        );
+    fn excitor_entropy_batch_data() {
+        assert_excitor_raw_data(ExcitementSource::Entropy, Processing::Batch(64));
     }
 
     #[test]
@@ -910,11 +902,12 @@ mod tests {
 
         let input_len = unit.inputs();
         let output_len = unit.outputs();
+        let mut driver = sine_driver(input_len, 44_100.0);
         let mut input = vec![0.0_f32; input_len];
         let mut output = vec![0.0_f32; output_len];
 
-        for i in 0..(FFT_WINDOW_SIZE + 256) {
-            input[0] = ((i as f32) * 0.01).sin();
+        for _ in 0..(FFT_WINDOW_SIZE + 256) {
+            driver.tick(&[], &mut input);
             unit.tick(&input, &mut output);
         }
 

@@ -5,9 +5,9 @@ mod scale;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{NodeKey, error::InstrumentConfigError};
+use crate::{error::InstrumentConfigError, NodeKey};
 
-use super::{Layout, consts::*};
+use super::{consts::*, Layout};
 
 pub use band::*;
 pub use channel::*;
@@ -191,6 +191,10 @@ impl Config {
             .and_then(|g| g.nodes.last())
             .map(|n| n.frequency.max(n.formant_hz(5)))
             .unwrap_or(super::consts::SOFT_MAX_FREQ_HZ)
+    }
+
+    pub fn nodes_iter(&self) -> impl Iterator<Item = &NodeConfig> {
+        self.0.iter().flat_map(|g| g.nodes.iter())
     }
 
     /// Derive a global resonance model from the generated instrument physics.
@@ -469,11 +473,9 @@ mod tests {
         let valid_node =
             NodeConfig::new_test_node((super::SOFT_MIN_FREQ_HZ + super::SOFT_MAX_FREQ_HZ) / 2.0);
         assert!(valid_node.validate(0).is_ok());
-        assert!(
-            NodeConfig::new_test_node(super::MIN_FREQ_HZ - 1.0)
-                .validate(0)
-                .is_err()
-        );
+        assert!(NodeConfig::new_test_node(super::MIN_FREQ_HZ - 1.0)
+            .validate(0)
+            .is_err());
     }
 
     #[test]

@@ -13,7 +13,6 @@ pub struct NodeHandle {
     pub excitement_snoop_hs: Snoop,
     pub excitement_snoop_rad: Snoop,
     pub output_snoop: Snoop,
-    pub feedback_src: An<FeedbackCatch>,
     pub control: Control,
 }
 
@@ -23,7 +22,10 @@ pub(super) struct InnerHandle {
     pub accentuation: Shared,
     pub rhythm: Shared,
     pub control: Control,
-    feedback: (An<FeedbackCatch>, Mutex<Option<An<FeedbackPass>>>),
+    feedback: (
+        Mutex<Option<An<FeedbackCatch>>>,
+        Mutex<Option<An<FeedbackPass>>>,
+    ),
     excitement_snoop_hs: (Snoop, Mutex<Option<An<SnoopBackend>>>),
     excitement_snoop_rad: (Snoop, Mutex<Option<An<SnoopBackend>>>),
     output_snoop: (Snoop, Mutex<Option<An<SnoopBackend>>>),
@@ -58,7 +60,7 @@ impl InnerHandle {
                 Mutex::new(Some(excitement_snoop_rad.1)),
             ),
             output_snoop: (output_snoop.0, Mutex::new(Some(output_snoop.1))),
-            feedback: (fb_pass.1, Mutex::new(Some(fb_pass.0))),
+            feedback: (Mutex::new(Some(fb_pass.1)), Mutex::new(Some(fb_pass.0))),
         }
     }
 
@@ -75,6 +77,23 @@ impl InnerHandle {
             control,
         } = self;
 
+        assert!(
+            feedback.0.lock().is_none() && feedback.1.lock().is_none(),
+            "Feedback nodes must be taken before converting to NodeHandle"
+        );
+        assert!(
+            excitement_snoop_hs.1.lock().is_none(),
+            "Excitement snoop HS must be taken before converting to NodeHandle"
+        );
+        assert!(
+            excitement_snoop_rad.1.lock().is_none(),
+            "Excitement snoop RAD must be taken before converting to NodeHandle"
+        );
+        assert!(
+            output_snoop.1.lock().is_none(),
+            "Output snoop must be taken before converting to NodeHandle"
+        );
+
         NodeHandle {
             channel,
             control,
@@ -84,7 +103,6 @@ impl InnerHandle {
             excitement_snoop_hs: excitement_snoop_hs.0,
             excitement_snoop_rad: excitement_snoop_rad.0,
             output_snoop: output_snoop.0,
-            feedback_src: feedback.0,
         }
     }
 
@@ -114,5 +132,10 @@ impl InnerHandle {
     #[must_use]
     pub fn take_feedback_pass(&self) -> An<FeedbackPass> {
         self.feedback.1.lock().take().expect("already taken")
+    }
+
+    #[must_use]
+    pub fn take_feedback_catch(&self) -> An<FeedbackCatch> {
+        self.feedback.0.lock().take().expect("already taken")
     }
 }

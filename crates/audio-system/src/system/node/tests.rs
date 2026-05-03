@@ -1,15 +1,16 @@
 use common::{
-    NodeKey,
     instrument::{BandChannel, BandConfig, Config as InstrumentConfig, NodeConfig, Scale},
+    NodeKey,
 };
 use fundsp::prelude::*;
-use fundsp::typenum::{U1, Unsigned};
+use fundsp::typenum::{Unsigned, U1};
 use insta::assert_debug_snapshot;
 use insta_fun::prelude::*;
 
 use super::{
-    NodeHandle, build_excitement_pairings, create_and_push_band_node, create_channel_bands,
+    build_excitement_pairings, create_and_push_band_node, create_channel_bands,
     create_controllers_stack, mount_band, mount_node_bands, pairing, sort_inner_handles,
+    NodeHandle,
 };
 use crate::{grid::RhythmGrid, node::controller::NodeController, values::FineTunedValues};
 
@@ -82,12 +83,15 @@ fn mounted_test_net() -> (InstrumentConfig, Net, Vec<NodeHandle>) {
         net.connect_input(rhythm_inputs_len() + i, excitement_source, i);
     }
 
+    let feedback_target = net.push(Box::new(multisink::<U128>()));
+
     let handles = mount_node_bands::<f32>(
         &mut net,
         &config,
         &values,
         excitement_source,
         rhythm_data_source,
+        feedback_target,
     );
 
     net.check();
@@ -259,7 +263,11 @@ fn input_fully_wired_drive(config: &InstrumentConfig) -> InputSource {
                     * (((i + node_index * 31) % (base_period * node_count)) as f32
                         / (base_period * node_count) as f32);
 
-            if in_node_lane == 0 { hit } else { radius }
+            if in_node_lane == 0 {
+                hit
+            } else {
+                radius
+            }
         }
     }))
 }

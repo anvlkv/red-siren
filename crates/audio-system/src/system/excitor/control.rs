@@ -34,7 +34,7 @@ impl Control {
 
     pub fn control_node(&self) -> ControlNode {
         ControlNode {
-            key: self.key,
+            _key: self.key,
             real: Var::new(&self.real),
             imaginary: Var::new(&self.imaginary),
         }
@@ -45,7 +45,7 @@ const CONTROL_NODE_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::Co
 
 #[derive(Clone)]
 pub struct ControlNode {
-    key: NodeKey,
+    _key: NodeKey,
     real: Var,
     imaginary: Var,
 }

@@ -9,10 +9,16 @@ mod pairing;
 #[cfg(test)]
 mod tests;
 
-use std::{collections::HashMap, ops::Mul};
+use std::{
+    collections::{BTreeMap, HashMap},
+    ops::Mul,
+};
 
 use adsr_shape::*;
-use common::instrument::{BandChannel, BandConfig, Config as InstrumentConfig};
+use common::{
+    instrument::{BandChannel, BandConfig, Config as InstrumentConfig},
+    NodeKey,
+};
 use fundsp::prelude::*;
 use generator::NodeGenerator;
 use typenum::Unsigned;
@@ -54,7 +60,8 @@ pub fn mount_node_bands<S: Real + Float + 'static>(
     values: &FineTunedValues,
     excitement_source: NodeId,
     rhythm_data_source: NodeId,
-) -> Vec<NodeHandle> {
+    feedback_target: NodeId,
+) -> BTreeMap<NodeKey, NodeHandle> {
     let (l_bands, r_bands) = config
         .0
         .iter()
@@ -76,7 +83,12 @@ pub fn mount_node_bands<S: Real + Float + 'static>(
     let pairings = build_excitement_pairings(config, l_net, r_net);
     connect_excitement_pairings(net, excitement_source, &pairings);
 
-    handles.into_iter().map(|h| h.into_outer()).collect()
+    handles.iter().for_each(|h| {
+        let catch_id = net.push(Box::new(h.take_feedback_catch()));
+        net.connect(catch_id, 0, feedback_target, 0);
+    });
+
+    BTreeMap::from_iter(handles.into_iter().map(|h| (h.key, h.into_outer())))
 }
 
 pub(self) fn sort_inner_handles(
@@ -183,9 +195,7 @@ pub(self) fn create_channel_bands<S: Real + Float + 'static>(
     let mut net = Net::new(rhythm_data_len + num_nodes * node_inputs_len, bands.len());
 
     let split_grid_data = u_num_it::u_num_it!(
-        [
-            1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71
-        ],
+        [1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71],
         match bands.len() {
             U => {
                 type NumBands = NumType;

@@ -1,42 +1,91 @@
+use std::ops::RemAssign;
+
 use common::instrument::Config as InstrumentConfig;
+use common::tuner::Config as TunerConfig;
 use fundsp::prelude::*;
 
 pub mod excitor;
 pub mod feedback_pass;
 pub mod grid;
+pub mod handle;
 pub mod node;
 pub mod ny_compressor;
 pub mod values;
 
-#[cfg(feature = "editor")]
 use values::FineTunedValues;
 
-use crate::{rt::ExcitementSource, SampleType};
+use crate::{
+    excitor::{ExcitementSnapshot, SpectrumBuffer},
+    rt::ExcitementSource,
+};
 
-/// Mounts the audio output system
-pub fn mount_output_system(
-    main_net: &mut Net,
+/// Mounts the instrument system
+pub fn mount_system<
+    S: Float
+        + Real
+        + ordered_float::Float
+        + ordered_float::FloatCore
+        + RemAssign
+        + PartialOrd
+        + 'static,
+>(
     num_channels: usize,
-    sample_type: SampleType,
-    config: &InstrumentConfig,
-    input_net_id: Option<NodeId>,
-) -> NodeId {
-    let mut subnet = Net::new(config.num_nodes_total(), num_channels);
+    xct_src: ExcitementSource,
+    instrument_config: &InstrumentConfig,
+    tuner_config: &TunerConfig,
+    _values: &FineTunedValues,
+) -> Net {
+    let net = Net::new(1, num_channels);
 
-    let subnet_id = main_net.push(Box::new(subnet));
+    let (xct, xct_handle) = excitor::create_excitor::<S>(xct_src, tuner_config, instrument_config);
 
-    main_net.pipe_output(subnet_id);
+    let _spectrum_buffer: SpectrumBuffer = xct_handle.analyzer.spectrum_buffer.clone();
+    let _xct_snapshot: ExcitementSnapshot<S> = xct.summary_snapshot();
 
-    if let Some(input_id) = input_net_id {
-        main_net.pipe_all(input_id, subnet_id);
-    }
+    let ny_threshold = shared(0.5);
+    let ny_wet_dry = shared(0.5);
 
-    subnet_id
+    let _ny = ny_compressor::create_ny_compressor_thr_dry::<S>(&ny_threshold, &ny_wet_dry);
+
+    // fn mount_xct_parts(
+    //     xct_src: ExcitementSource,
+    //     instrument_config: InstrumentConfig,
+    //     tuner_config: TunerConfig,
+    //     net: &mut Net,
+    // ) -> (NodeId, , ) {
+
+    //     (net.push(Box::new(xct)), sf, ss)
+    // }
+
+    // let excitor_id = match sample_type {
+    //     SampleType::F32 => subnet.push(Box::new(excitor::create_excitor::<f32>(
+    //         xct_src,
+    //         tuner_config.clone(),
+    //         instrument_config.clone(),
+    //     ))),
+    //     SampleType::F64 => subnet.push(Box::new(excitor::create_excitor::<f64>(
+    //         xct_src,
+    //         tuner_config.clone(),
+    //         instrument_config.clone(),
+    //     ))),
+    // };
+
+    // let ny_id = match sample_type {
+    //     SampleType::F32 => todo!(),
+    //     SampleType::F64 => todo!(),
+    // };
+
+    // let metro_grid_id = match sample_type {
+    //     SampleType::F32 => subnet.push(Box::new(grid::cr)),
+    //     SampleType::F64 => subnet.push(Box::new(grid::cr)),
+    // };
+
+    net
 }
 
 pub fn mount_input_system(
-    main_net: &mut Net,
-    config: &InstrumentConfig,
-    excitment_src: ExcitementSource,
+    _main_net: &mut Net,
+    _config: &InstrumentConfig,
+    _excitment_src: ExcitementSource,
 ) {
 }

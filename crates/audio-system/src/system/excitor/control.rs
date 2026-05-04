@@ -32,12 +32,12 @@ impl Control {
         self.imaginary.set_value(0.0);
     }
 
-    pub fn control_node(&self) -> ControlNode {
-        ControlNode {
+    pub fn control_node(&self) -> An<ControlNode> {
+        An(ControlNode {
             _key: self.key,
             real: Var::new(&self.real),
             imaginary: Var::new(&self.imaginary),
-        }
+        })
     }
 }
 

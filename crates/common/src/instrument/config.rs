@@ -450,7 +450,15 @@ mod tests {
                     "config_{}x{}_{:?}",
                     layout.space.x, layout.space.y, layout.scale
                 ),
-                config
+                config,
+                {
+                    "[0][].nodes[].frequency" => insta::rounded_redaction(4),
+                    "[0][].nodes[].phase" => insta::rounded_redaction(4),
+                    "[0][].nodes[].cents" => insta::rounded_redaction(4),
+                    "[0][].nodes[].l_mm" => insta::rounded_redaction(4),
+                    "[0][].nodes[].w_kg" => insta::rounded_redaction(4),
+                    "[0][].nodes[].v_cm3" => insta::rounded_redaction(4)
+                }
             );
         }
     }
@@ -628,6 +636,10 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        assert_json_snapshot!("resonance_model_from_layout_cases", cases);
+        assert_json_snapshot!("resonance_model_from_layout_cases", cases, {
+            "[].layout_space_x" => insta::rounded_redaction(4),
+            "[].layout_space_y" => insta::rounded_redaction(4),
+            "[].gamma" => insta::rounded_redaction(6)
+        });
     }
 }

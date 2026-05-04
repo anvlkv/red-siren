@@ -16,7 +16,7 @@ tauri = { workspace = true, optional = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-insta = { workspace = true, features = ["json"] }
+insta = { workspace = true, features = ["json", "redactions"] }
 
 [features]
 tauri = ["dep:tauri"]

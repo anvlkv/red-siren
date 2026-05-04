@@ -93,6 +93,7 @@ fn mounted_test_net() -> (InstrumentConfig, Net, Vec<NodeHandle>) {
         rhythm_data_source,
         feedback_target,
     );
+    let handles = handles.into_values().collect::<Vec<_>>();
 
     net.check();
 

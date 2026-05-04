@@ -488,7 +488,21 @@ fn mount_band_contract_for_single_node() {
         net.connect_input(gi, split_grid_data, gi);
     }
 
-    let mounted = mount_band::<f32, U1>(&mut net, &band, &handles, 0, split_grid_data, &values);
+    let join_channel_bands = net.push(Box::new(multijoin::<
+        <super::EnvelopedNodeGenerator<f32> as AudioNode>::Outputs,
+        U1,
+    >()));
+    net.pipe_output(join_channel_bands);
+
+    let mounted = mount_band::<f32, U1>(
+        &mut net,
+        &band,
+        &handles,
+        0,
+        split_grid_data,
+        join_channel_bands,
+        &values,
+    );
     net.check();
 
     assert_ne!(mounted.controllers_stack, mounted.band);
@@ -515,7 +529,21 @@ fn mount_band_audio_snapshot() {
         net.connect_input(gi, split_grid_data, gi);
     }
 
-    let _mounted = mount_band::<f32, U1>(&mut net, &band, &handles, 0, split_grid_data, &values);
+    let join_channel_bands = net.push(Box::new(multijoin::<
+        <super::EnvelopedNodeGenerator<f32> as AudioNode>::Outputs,
+        U1,
+    >()));
+    net.pipe_output(join_channel_bands);
+
+    let _mounted = mount_band::<f32, U1>(
+        &mut net,
+        &band,
+        &handles,
+        0,
+        split_grid_data,
+        join_channel_bands,
+        &values,
+    );
     net.check();
 
     assert_audio_unit_snapshot!(

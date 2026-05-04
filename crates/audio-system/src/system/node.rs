@@ -29,6 +29,7 @@ pub use handle::*;
 use crate::{
     feedback_pass::FeedbackPass,
     grid::{RhythmGrid, RhythmGridEnvelope},
+    node::band::Band,
     values::FineTunedValues,
 };
 
@@ -192,22 +193,33 @@ pub(self) fn create_channel_bands<S: Real + Float + 'static>(
     let num_nodes = bands.iter().map(|b| b.nodes.len()).sum::<usize>();
     let rhythm_data_len = <RhythmGrid<S> as AudioNode>::Outputs::USIZE;
     let node_inputs_len = <NodeController<S> as AudioNode>::Inputs::USIZE;
-    let mut net = Net::new(rhythm_data_len + num_nodes * node_inputs_len, bands.len());
+    let mut net = Net::new(
+        rhythm_data_len + num_nodes * node_inputs_len,
+        <EnvelopedNodeGenerator<S> as AudioNode>::Outputs::USIZE,
+    );
 
-    let split_grid_data = u_num_it::u_num_it!(
+    let (split_grid_data, join_channel_bands) = u_num_it::u_num_it!(
         [1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71],
         match bands.len() {
             U => {
                 type NumBands = NumType;
 
-                net.push(Box::new(multisplit::<
-                    <RhythmGrid<S> as AudioNode>::Outputs,
-                    NumBands,
-                >()))
+                (
+                    net.push(Box::new(multisplit::<
+                        <RhythmGrid<S> as AudioNode>::Outputs,
+                        NumBands,
+                    >())),
+                    net.push(Box::new(multijoin::<
+                        <EnvelopedNodeGenerator<S> as AudioNode>::Outputs,
+                        NumBands,
+                    >())),
+                )
             }
             _ => panic!("Unsupported number of bands: {}", bands.len()),
         }
     );
+
+    net.pipe_output(join_channel_bands);
 
     for gi in 0..rhythm_data_len {
         net.connect_input(gi, split_grid_data, gi);
@@ -244,6 +256,7 @@ pub(self) fn create_channel_bands<S: Real + Float + 'static>(
                                 &handles_inner,
                                 band_index,
                                 split_grid_data,
+                                join_channel_bands,
                                 values,
                             );
                             handles.extend(handles_inner);
@@ -285,6 +298,7 @@ pub(self) fn mount_band<S: Real + Float + 'static, N: Size<S> + Size<NodeControl
     handles: &[InnerHandle],
     band_index: usize,
     split_grid_data: NodeId,
+    join_channel_bands: NodeId,
     values: &FineTunedValues,
 ) -> MountBandReturn
 where
@@ -380,7 +394,12 @@ where
     }
 
     for bi in 0..num_band_outputs {
-        net.connect_output(band, bi, bi);
+        net.connect(
+            band,
+            bi,
+            join_channel_bands,
+            bi + band_index * num_band_outputs,
+        );
     }
 
     MountBandReturn {

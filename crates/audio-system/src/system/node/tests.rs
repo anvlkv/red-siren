@@ -125,17 +125,10 @@ fn pairing_trace(config: &InstrumentConfig) -> Vec<PairingSample> {
         .collect()
 }
 
-fn snapshot_config(num_samples: usize, input: Option<InputSource>) -> SnapshotConfig {
+fn snapshot_config(num_samples: usize) -> SnapshotConfig {
     SnapshotConfigBuilder::default()
         .num_samples(num_samples)
-        .warm_up(if let Some(input) = input {
-            WarmUp::SamplesWithInput {
-                samples: 11025,
-                input: std::rc::Rc::new(std::cell::RefCell::new(input)),
-            }
-        } else {
-            WarmUp::None
-        })
+        .warm_up(WarmUp::Samples(11025))
         .chart_layout(Layout::CombinedPerChannelType)
         .svg_width(640)
         .svg_height_per_channel(160)
@@ -367,7 +360,7 @@ fn mount_node_bands_audio_fully_wired_long_snapshot() {
         "mount_node_bands_audio_fully_wired_long",
         net,
         input_fully_wired_drive(&config),
-        snapshot_config(8192, Some(input_fully_wired_drive(&config)))
+        snapshot_config(8192)
     );
 }
 
@@ -416,7 +409,7 @@ fn create_controllers_stack_audio_snapshot() {
         "create_controllers_stack_single_node",
         net,
         controller_drive(),
-        snapshot_config(2048, Some(controller_drive()))
+        snapshot_config(2048)
     );
 }
 
@@ -465,7 +458,7 @@ fn create_and_push_band_node_audio_snapshot() {
         "create_and_push_band_node_single_node",
         net,
         envelope_band_drive(),
-        snapshot_config(4096, Some(envelope_band_drive()))
+        snapshot_config(4096)
     );
 }
 
@@ -550,7 +543,7 @@ fn mount_band_audio_snapshot() {
         "mount_band_single_node",
         net,
         wiring_drive_with_channels(total_inputs),
-        snapshot_config(4096, Some(wiring_drive_with_channels(total_inputs)))
+        snapshot_config(4096)
     );
 }
 
@@ -567,6 +560,6 @@ fn create_channel_bands_audio_snapshot() {
         "create_channel_bands_single_band",
         net,
         wiring_drive_with_channels(total_inputs),
-        snapshot_config(4096, Some(wiring_drive_with_channels(total_inputs)))
+        snapshot_config(4096)
     );
 }

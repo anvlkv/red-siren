@@ -199,7 +199,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{chart_snapshot_config, constant_input_by_channel, impulse_input};
+    use crate::test_support::{chart_snapshot_config, constant_input_by_channel};
     use common::instrument::BandChannel;
     use fundsp::prelude32::sine_hz;
     use insta_fun::prelude::*;
@@ -250,7 +250,7 @@ mod tests {
         assert_audio_unit_snapshot!(
             "band_sine_stack_with_impulse_input",
             band,
-            impulse_input(256),
+            InputSource::impulse(),
             snapshot_config(256)
         );
     }

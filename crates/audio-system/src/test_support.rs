@@ -63,13 +63,6 @@ pub(crate) fn constant_input_by_channel(num_samples: usize, values: &[f32]) -> I
     InputSource::VecByChannel(channels)
 }
 
-pub(crate) fn impulse_input(num_samples: usize) -> InputSource {
-    let audio = (0..num_samples)
-        .map(|i| if i == 0 { 1.0_f32 } else { 0.0 })
-        .collect::<Vec<_>>();
-    InputSource::VecByChannel(vec![audio])
-}
-
 pub(crate) fn impulse_with_constants_input(
     num_samples: usize,
     constant_channels: &[f32],

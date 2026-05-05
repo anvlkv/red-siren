@@ -124,7 +124,9 @@ impl<S: Real + Float + 'static> AudioNode for NodeGenerator<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{chart_snapshot_config, constant_input_by_channel, linear_ramp_input};
+    use crate::test_support::{
+        chart_snapshot_config, constant_input_by_channel, linear_ramp_input,
+    };
     use insta_fun::prelude::*;
 
     fn make_test_config() -> NodeConfig {
@@ -228,7 +230,7 @@ mod tests {
         };
         assert_audio_unit_snapshot!("node_generator_30s_demo", node.clone(), input(), wav_cfg);
         let chart_cfg = SnapshotConfigBuilder::default()
-            .num_samples(TOTAL) // 1 second
+            .num_samples(3 * SAMPLE_RATE) // one second of each control phase
             .chart_layout(Layout::CombinedPerChannelType)
             .with_inputs(true)
             .input_title("Control")

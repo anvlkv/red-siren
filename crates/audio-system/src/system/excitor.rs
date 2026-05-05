@@ -703,24 +703,23 @@ mod tests {
                 )),
                 processing_snapshot_config(processing_mode, WarmUp::None, snapshot_samples, true) =>
                     |data: &AudioUnitSnapshotData| {
+                        assert_eq!(data.output_data.len(), expected_outputs, "output channel count must match");
+                        assert_eq!(data.num_samples, snapshot_samples, "num samples must match");
                         // Nondeterministic sources can drift run-to-run; keep per-channel
                         // min/max useful and stable with directional buckets.
                         let min_bucket = |value: f32| if value < 0.0 { -1.0 } else { 0.0 };
                         let max_bucket = |value: f32| if value > 0.0 { 1.0 } else { 0.0 };
                         let mut channel_mins = Vec::with_capacity(data.output_data.len());
                         let mut channel_maxes = Vec::with_capacity(data.output_data.len());
-                        let mut non_finite_count: usize = 0;
 
                         for samples in &data.output_data {
                             let mut min = f32::INFINITY;
                             let mut max = f32::NEG_INFINITY;
                             for &value in samples {
-                                if !value.is_finite() {
-                                    non_finite_count += 1;
-                                    continue;
+                                if value.is_finite() {
+                                    min = min.min(value);
+                                    max = max.max(value);
                                 }
-                                min = min.min(value);
-                                max = max.max(value);
                             }
 
                             if min.is_finite() && max.is_finite() {
@@ -733,26 +732,9 @@ mod tests {
                         }
 
                         let abnormal_count: usize = data.abnormalities.iter().map(|ch| ch.len()).sum();
-                        let expected_outputs_match = if data.output_data.len() == expected_outputs {
-                            1.0
-                        } else {
-                            0.0
-                        };
-                        let expected_samples_match = if data.num_samples == snapshot_samples {
-                            1.0
-                        } else {
-                            0.0
-                        };
 
                         insta_fun_meta! {
-                            output_channels: scalar(data.output_data.len()),
-                            expected_output_channels: scalar(expected_outputs),
-                            output_channels_match: scalar(expected_outputs_match),
-                            num_samples: scalar(data.num_samples),
-                            expected_num_samples: scalar(snapshot_samples),
-                            num_samples_match: scalar(expected_samples_match),
                             abnormal_samples: scalar(abnormal_count),
-                            non_finite_samples: scalar(non_finite_count),
                             output_min_per_channel: line(channel_mins),
                             output_max_per_channel: line(channel_maxes),
                         }

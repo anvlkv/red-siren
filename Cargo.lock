@@ -2679,13 +2679,26 @@ dependencies = [
 
 [[package]]
 name = "insta-fun"
-version = "2.3.0"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5dc4a3b12765f1a236f9c459232f5bc9b3f43bce7cfd61ada706624b47aff4a7"
+checksum = "596f124b8bbf47c1f7d927afa69299f68ec2cb6b9136cf70b4970919a02b0a4b"
 dependencies = [
  "derive_builder",
  "fundsp",
+ "insta-fun-meta-macros",
  "plotters",
+]
+
+[[package]]
+name = "insta-fun-meta-macros"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d14704e67e7420bff94a37e6b7b01eb0850a2583dd77976ec7995ec55177906"
+dependencies = [
+ "proc-macro-crate 3.5.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]

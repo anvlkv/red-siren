@@ -195,36 +195,18 @@ pub fn create_mixer<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{low_sr_snapshot_config, stereo_sine_cosine_input};
     use insta_fun::prelude::*;
 
     const SNAP_LEN: usize = 128;
-
-    fn snapshot_config() -> SnapshotConfig {
-        SnapshotConfigBuilder::default()
-            .sample_rate(100.0)
-            .num_samples(SNAP_LEN)
-            .build()
-            .unwrap()
-    }
-
-    /// Stereo input: left = sine, right = cosine (L ≠ R so M and S are non-trivial).
-    fn stereo_input() -> InputSource {
-        let left: Vec<f32> = (0..SNAP_LEN)
-            .map(|i| (2.0 * std::f32::consts::PI * i as f32 / SNAP_LEN as f32).sin())
-            .collect();
-        let right: Vec<f32> = (0..SNAP_LEN)
-            .map(|i| (2.0 * std::f32::consts::PI * i as f32 / SNAP_LEN as f32).cos())
-            .collect();
-        InputSource::VecByChannel(vec![left, right])
-    }
 
     #[test]
     fn mixer_stereo_to_mono() {
         assert_audio_unit_snapshot!(
             "mixer_stereo_to_mono",
             create_mixer::<f32, U2, U1>(),
-            stereo_input(),
-            snapshot_config()
+            stereo_sine_cosine_input(SNAP_LEN),
+            low_sr_snapshot_config(SNAP_LEN)
         );
     }
 
@@ -233,8 +215,8 @@ mod tests {
         assert_audio_unit_snapshot!(
             "mixer_stereo_passthru",
             create_mixer::<f32, U2, U2>(),
-            stereo_input(),
-            snapshot_config()
+            stereo_sine_cosine_input(SNAP_LEN),
+            low_sr_snapshot_config(SNAP_LEN)
         );
     }
 
@@ -243,8 +225,8 @@ mod tests {
         assert_audio_unit_snapshot!(
             "mixer_stereo_to_3ch",
             create_mixer::<f32, U2, U3>(),
-            stereo_input(),
-            snapshot_config()
+            stereo_sine_cosine_input(SNAP_LEN),
+            low_sr_snapshot_config(SNAP_LEN)
         );
     }
 
@@ -253,8 +235,8 @@ mod tests {
         assert_audio_unit_snapshot!(
             "mixer_stereo_to_4ch",
             create_mixer::<f32, U2, U4>(),
-            stereo_input(),
-            snapshot_config()
+            stereo_sine_cosine_input(SNAP_LEN),
+            low_sr_snapshot_config(SNAP_LEN)
         );
     }
 
@@ -263,8 +245,8 @@ mod tests {
         assert_audio_unit_snapshot!(
             "mixer_stereo_to_5ch",
             create_mixer::<f32, U2, U5>(),
-            stereo_input(),
-            snapshot_config()
+            stereo_sine_cosine_input(SNAP_LEN),
+            low_sr_snapshot_config(SNAP_LEN)
         );
     }
 
@@ -273,8 +255,8 @@ mod tests {
         assert_audio_unit_snapshot!(
             "mixer_stereo_to_5_1",
             create_mixer::<f32, U2, U6>(),
-            stereo_input(),
-            snapshot_config()
+            stereo_sine_cosine_input(SNAP_LEN),
+            low_sr_snapshot_config(SNAP_LEN)
         );
     }
 
@@ -283,8 +265,8 @@ mod tests {
         assert_audio_unit_snapshot!(
             "mixer_stereo_to_7_1",
             create_mixer::<f32, U2, U8>(),
-            stereo_input(),
-            snapshot_config()
+            stereo_sine_cosine_input(SNAP_LEN),
+            low_sr_snapshot_config(SNAP_LEN)
         );
     }
 }

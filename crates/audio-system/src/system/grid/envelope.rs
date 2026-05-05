@@ -3,7 +3,7 @@ use std::{marker::PhantomData, ops::Add};
 use fundsp::{
     numeric_array::ArrayLength,
     prelude::*,
-    typenum::{B0, B1, UInt, UTerm},
+    typenum::{UInt, UTerm, B0, B1},
 };
 use num_rational::Ratio;
 use typenum::op;
@@ -121,12 +121,20 @@ where
 
     fn ratio_floor_u64(value: &Ratio<i64>) -> u64 {
         let floored = value.floor().to_integer();
-        if floored <= 0 { 0 } else { floored as u64 }
+        if floored <= 0 {
+            0
+        } else {
+            floored as u64
+        }
     }
 
     fn ratio_ceil_u64(value: &Ratio<i64>) -> u64 {
         let ceiled = value.ceil().to_integer();
-        if ceiled <= 0 { 0 } else { ceiled as u64 }
+        if ceiled <= 0 {
+            0
+        } else {
+            ceiled as u64
+        }
     }
 
     fn unit_ratio(value: S) -> Ratio<i64> {
@@ -416,8 +424,8 @@ mod tests {
     use super::*;
     use insta_fun::prelude::*;
     use std::sync::{
-        Arc,
         atomic::{AtomicUsize, Ordering},
+        Arc,
     };
 
     // At 100 Hz sample rate, 60 BPM → ticks_per_beat = 100.
@@ -431,7 +439,11 @@ mod tests {
     // Channels 3 and 4 carry NaN on ticks where no schedule is being sent; this is the
     // sentinel for "nothing to schedule this tick".  0.0 on channel 3 means immediate
     // start (no beat offset); positive values on channel 4 set the note duration.
-    fn make_input(beat_ticks: Vec<usize>, schedule_pulses: Vec<(usize, f32, f32)>) -> InputSource {
+    fn make_input_with_tpb(
+        beat_ticks: Vec<usize>,
+        schedule_pulses: Vec<(usize, f32, f32)>,
+        ticks_per_beat: f32,
+    ) -> InputSource {
         InputSource::Generator(Box::new(move |i, ch| match ch {
             0 => {
                 if beat_ticks.contains(&i) {
@@ -440,19 +452,27 @@ mod tests {
                     0.0
                 }
             }
-            1 => 100.0,
+            1 => ticks_per_beat,
             2 => 0.0,
             3 | 4 => {
                 if let Some(&(_, start_ratio, duration_ratio)) =
                     schedule_pulses.iter().find(|(t, ..)| *t == i)
                 {
-                    if ch == 3 { start_ratio } else { duration_ratio }
+                    if ch == 3 {
+                        start_ratio
+                    } else {
+                        duration_ratio
+                    }
                 } else {
                     f32::NAN
                 }
             }
             _ => 0.0,
         }))
+    }
+
+    fn make_input(beat_ticks: Vec<usize>, schedule_pulses: Vec<(usize, f32, f32)>) -> InputSource {
+        make_input_with_tpb(beat_ticks, schedule_pulses, 100.0)
     }
 
     fn low_sr_config(num_samples: usize) -> SnapshotConfig {
@@ -655,6 +675,47 @@ mod tests {
             env,
             input,
             low_sr_config(2000)
+        );
+    }
+
+    #[test]
+    fn envelope_duration_range_demo_audio_sine_440() {
+        const SAMPLE_RATE: f64 = 44_100.0;
+        const TICKS_PER_BEAT: f32 = 22_050.0;
+
+        let durations_beats = [0.0625_f32, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0];
+        let beat_spacing = TICKS_PER_BEAT as usize * 10;
+        let first_beat = TICKS_PER_BEAT as usize;
+        let beat_ticks: Vec<usize> = (0..durations_beats.len())
+            .map(|i| first_beat + i * beat_spacing)
+            .collect();
+
+        let schedule_pulses: Vec<(usize, f32, f32)> = beat_ticks
+            .iter()
+            .zip(durations_beats)
+            .map(|(tick, duration)| (*tick, 0.0, duration))
+            .collect();
+
+        let max_duration_samples =
+            (durations_beats[durations_beats.len() - 1] * TICKS_PER_BEAT) as usize;
+        let total_samples = beat_ticks[beat_ticks.len() - 1] + max_duration_samples + first_beat;
+
+        let cfg = SnapshotConfigBuilder::default()
+            .sample_rate(SAMPLE_RATE)
+            .num_samples(total_samples)
+            .output_mode(WavOutput::Wav32)
+            .build()
+            .unwrap();
+
+        let env =
+            create_rhythm_grid_envelope::<f32, _, _>(sine_hz::<f32>(440.0), AdsrShape::default());
+        let input = make_input_with_tpb(beat_ticks, schedule_pulses, TICKS_PER_BEAT);
+
+        assert_audio_unit_snapshot!(
+            "envelope_duration_range_demo_audio_sine_440",
+            env,
+            input,
+            cfg
         );
     }
 

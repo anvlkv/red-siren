@@ -34,14 +34,14 @@ pub struct Band<
 }
 
 impl<
-    S: Real + Float + 'static,
-    X: AudioNode<Outputs = XO, Inputs = XI> + 'static,
-    N: Size<S> + Size<X>,
-    XI: Size<S> + Size<X>,
-    XO: Size<S> + Size<X>,
-    XON: Size<S> + Size<X>,
-    XIN: Size<S> + Size<X>,
-> Band<S, X, N, XI, XO, XON, XIN>
+        S: Real + Float + 'static,
+        X: AudioNode<Outputs = XO, Inputs = XI> + 'static,
+        N: Size<S> + Size<X>,
+        XI: Size<S> + Size<X>,
+        XO: Size<S> + Size<X>,
+        XON: Size<S> + Size<X>,
+        XIN: Size<S> + Size<X>,
+    > Band<S, X, N, XI, XO, XON, XIN>
 where
     XI: Mul<N, Output = XIN>,
     <XI as Mul<N>>::Output: ArrayLength + Send + Sync,
@@ -132,14 +132,14 @@ where
 }
 
 impl<
-    S: Real + Float + 'static,
-    X: AudioNode<Outputs = XO, Inputs = XI> + 'static,
-    N: Size<S> + Size<X>,
-    XI: Size<S> + Size<X>,
-    XO: Size<S> + Size<X>,
-    XON: Size<S> + Size<X>,
-    XIN: Size<S> + Size<X>,
-> AudioNode for Band<S, X, N, XI, XO, XON, XIN>
+        S: Real + Float + 'static,
+        X: AudioNode<Outputs = XO, Inputs = XI> + 'static,
+        N: Size<S> + Size<X>,
+        XI: Size<S> + Size<X>,
+        XO: Size<S> + Size<X>,
+        XON: Size<S> + Size<X>,
+        XIN: Size<S> + Size<X>,
+    > AudioNode for Band<S, X, N, XI, XO, XON, XIN>
 where
     XI: Mul<N, Output = XIN>,
     <XI as Mul<N>>::Output: ArrayLength + Send + Sync,
@@ -199,6 +199,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{chart_snapshot_config, constant_input_by_channel, impulse_input};
     use common::instrument::BandChannel;
     use fundsp::prelude32::sine_hz;
     use insta_fun::prelude::*;
@@ -211,20 +212,11 @@ mod tests {
     }
 
     fn snapshot_config(num_samples: usize) -> SnapshotConfig {
-        SnapshotConfigBuilder::default()
-            .num_samples(num_samples)
-            .chart_layout(Layout::CombinedPerChannelType)
-            .svg_width(512)
-            .svg_height_per_channel(128)
-            .with_inputs(true)
-            .input_title("Audio In")
-            .output_title("Band Out")
-            .build()
-            .unwrap()
+        chart_snapshot_config(num_samples, &["Audio In"], &["Band Out"])
     }
 
-    fn band_under_test()
-    -> An<Band<f32, Binop<FrameMul<U1>, Pipe<Constant<U1>, Sine<f32>>, Pass>, U1, U1, U1, U1, U1>>
+    fn band_under_test(
+    ) -> An<Band<f32, Binop<FrameMul<U1>, Pipe<Constant<U1>, Sine<f32>>, Pass>, U1, U1, U1, U1, U1>>
     {
         let config = make_band_config();
         let values = FineTunedValues::new();
@@ -241,24 +233,13 @@ mod tests {
         >(config, func, &values)
     }
 
-    fn steady_input(len: usize, value: f32) -> InputSource {
-        InputSource::VecByChannel(vec![vec![value; len]])
-    }
-
-    fn impulse_input(len: usize) -> InputSource {
-        let audio: Vec<f32> = (0..len)
-            .map(|i| if i == 0 { 1.0_f32 } else { 0.0 })
-            .collect();
-        InputSource::VecByChannel(vec![audio])
-    }
-
     #[test]
     fn band_sine_stack_with_steady_input() {
         let band = band_under_test();
         assert_audio_unit_snapshot!(
             "band_sine_stack_with_steady_input",
             band,
-            steady_input(256, 1.0),
+            constant_input_by_channel(256, &[1.0]),
             snapshot_config(256)
         );
     }

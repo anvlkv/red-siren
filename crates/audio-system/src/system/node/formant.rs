@@ -240,6 +240,7 @@ impl<S: Real + Float> AudioNode for Formant<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{chart_snapshot_config, impulse_with_constants_input};
     use insta_fun::prelude::*;
 
     fn make_test_config() -> NodeConfig {
@@ -247,49 +248,19 @@ mod tests {
     }
 
     fn snapshot_config(num_samples: usize) -> SnapshotConfig {
-        SnapshotConfigBuilder::default()
-            .num_samples(num_samples)
-            .chart_layout(Layout::CombinedPerChannelType)
-            .svg_width(512)
-            .svg_height_per_channel(128)
-            .with_inputs(true)
-            .input_title("Audio")
-            .input_title("Q")
-            .output_title("Filtered")
-            .build()
-            .unwrap()
+        chart_snapshot_config(num_samples, &["Audio", "Q"], &["Filtered"])
     }
 
     fn bank_snapshot_config(num_samples: usize) -> SnapshotConfig {
-        SnapshotConfigBuilder::default()
-            .num_samples(num_samples)
-            .chart_layout(Layout::CombinedPerChannelType)
-            .svg_width(512)
-            .svg_height_per_channel(128)
-            .with_inputs(true)
-            .input_title("Audio")
-            .input_title("Q")
-            .input_title("Wet/Dry")
-            .output_title("Mixed")
-            .build()
-            .unwrap()
+        chart_snapshot_config(num_samples, &["Audio", "Q", "Wet/Dry"], &["Mixed"])
     }
 
     fn impulse_input(len: usize, q: f32) -> InputSource {
-        let audio: Vec<f32> = (0..len)
-            .map(|i| if i == 0 { 1.0_f32 } else { 0.0 })
-            .collect();
-        let q_ch: Vec<f32> = vec![q; len];
-        InputSource::VecByChannel(vec![audio, q_ch])
+        impulse_with_constants_input(len, &[q])
     }
 
     fn bank_impulse_input(len: usize, q: f32, wet_dry: f32) -> InputSource {
-        let audio: Vec<f32> = (0..len)
-            .map(|i| if i == 0 { 1.0_f32 } else { 0.0 })
-            .collect();
-        let q_ch: Vec<f32> = vec![q; len];
-        let wet_dry_ch: Vec<f32> = vec![wet_dry; len];
-        InputSource::VecByChannel(vec![audio, q_ch, wet_dry_ch])
+        impulse_with_constants_input(len, &[q, wet_dry])
     }
 
     #[test]

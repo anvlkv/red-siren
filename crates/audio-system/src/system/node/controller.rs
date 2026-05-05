@@ -172,6 +172,7 @@ pub fn create_node_controller<S: Real + Float>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::chart_snapshot_config;
     use insta_fun::prelude::*;
 
     fn input_data() -> InputSource {
@@ -182,19 +183,15 @@ mod tests {
     }
 
     fn snapshot_config(num_samples: usize) -> SnapshotConfig {
-        SnapshotConfigBuilder::default()
-            .num_samples(num_samples)
-            .chart_layout(Layout::CombinedPerChannelType)
-            .svg_width(512)
-            .svg_height_per_channel(128)
-            .with_inputs(true)
-            .input_title("Hit strength")
-            .input_title("Radius")
-            .output_title("Start scheduler beat ratio")
-            .output_title("Duration scheduler beat ratio")
-            .output_title("Accentuation")
-            .build()
-            .unwrap()
+        chart_snapshot_config(
+            num_samples,
+            &["Hit strength", "Radius"],
+            &[
+                "Start scheduler beat ratio",
+                "Duration scheduler beat ratio",
+                "Accentuation",
+            ],
+        )
     }
 
     #[test]

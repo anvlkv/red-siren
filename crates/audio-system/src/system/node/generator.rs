@@ -124,6 +124,7 @@ impl<S: Real + Float + 'static> AudioNode for NodeGenerator<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{chart_snapshot_config, constant_input_by_channel, linear_ramp_input};
     use insta_fun::prelude::*;
 
     fn make_test_config() -> NodeConfig {
@@ -131,27 +132,15 @@ mod tests {
     }
 
     fn snapshot_config(num_samples: usize) -> SnapshotConfig {
-        SnapshotConfigBuilder::default()
-            .num_samples(num_samples)
-            .chart_layout(Layout::CombinedPerChannelType)
-            .svg_width(512)
-            .svg_height_per_channel(128)
-            .with_inputs(true)
-            .input_title("Control")
-            .input_title("Accent")
-            .output_title("Audio Out")
-            .build()
-            .unwrap()
+        chart_snapshot_config(num_samples, &["Control", "Accent"], &["Audio Out"])
     }
 
     fn steady_input(len: usize, control: f32, accent: f32) -> InputSource {
-        InputSource::VecByChannel(vec![vec![control; len], vec![accent; len]])
+        constant_input_by_channel(len, &[control, accent])
     }
 
     fn control_sweep_input(len: usize) -> InputSource {
-        let control: Vec<f32> = (0..len)
-            .map(|i| -1.0 + (i as f32 / std::cmp::Ord::max(len - 1, 1) as f32) * 2.0)
-            .collect();
+        let control = linear_ramp_input(-1.0, 1.0, len);
         InputSource::VecByChannel(vec![control, vec![0.0; len]])
     }
 

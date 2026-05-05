@@ -1,5 +1,10 @@
+use std::{cell::RefCell, rc::Rc};
+
 use common::{
-    instrument::{BandChannel, BandConfig, Config as InstrumentConfig, NodeConfig, Scale},
+    instrument::{
+        layout_node_with_key, BandChannel, BandConfig, Config as InstrumentConfig, NodeConfig,
+        Scale,
+    },
     NodeKey,
 };
 use fundsp::prelude::*;
@@ -40,23 +45,38 @@ fn total_mount_inputs(config: &InstrumentConfig) -> usize {
     rhythm_inputs_len() + total_excitement_inputs(config)
 }
 
-fn test_node_with_key(key: NodeKey, frequency: f64) -> NodeConfig {
-    let mut node = NodeConfig::new_test_node(frequency);
-    node.key = key;
-    node
+const REVERB_SNAPSHOT_WARMUP_SAMPLES: usize = 44_100;
+
+fn assert_reverb_parameters_adequate(node: &NodeConfig) {
+    let room_size_m3 = node.room_size_m3();
+    let reverb_time_to_min60db = node.hr_bpm() as f64 / 60.0;
+
+    assert!(
+        room_size_m3 <= 20.0,
+        "layout node room size too large for snapshot visibility: {room_size_m3:.3} m^3"
+    );
+    assert!(
+        reverb_time_to_min60db >= 2.5,
+        "layout node reverb time too short for smoothing behavior: {reverb_time_to_min60db:.3} s"
+    );
 }
 
 fn make_test_config() -> InstrumentConfig {
+    let left = layout_node_with_key(NodeKey(0, 7), 0);
+    let right = layout_node_with_key(NodeKey(0, 3), 1);
+    assert_reverb_parameters_adequate(&left);
+    assert_reverb_parameters_adequate(&right);
+
     InstrumentConfig(
         vec![
             BandConfig {
                 channel: BandChannel::Left,
                 // Deliberately unsorted keys to verify mount sorting behavior.
-                nodes: vec![test_node_with_key(NodeKey(0, 7), 220.0)],
+                nodes: vec![left],
             },
             BandConfig {
                 channel: BandChannel::Right,
-                nodes: vec![test_node_with_key(NodeKey(0, 3), 330.0)],
+                nodes: vec![right],
             },
         ],
         Scale::Yo,
@@ -125,16 +145,30 @@ fn pairing_trace(config: &InstrumentConfig) -> Vec<PairingSample> {
         .collect()
 }
 
-fn snapshot_config(num_samples: usize) -> SnapshotConfig {
+fn snapshot_config(num_samples: usize, warm_up: WarmUp) -> SnapshotConfig {
     SnapshotConfigBuilder::default()
         .num_samples(num_samples)
-        .warm_up(WarmUp::Samples(11025))
+        .warm_up(warm_up)
         .chart_layout(Layout::CombinedPerChannelType)
         .svg_width(640)
         .svg_height_per_channel(160)
         .with_inputs(true)
         .build()
         .unwrap()
+}
+
+fn baseline_snapshot_config(num_samples: usize) -> SnapshotConfig {
+    snapshot_config(num_samples, WarmUp::Samples(11_025))
+}
+
+fn reverb_snapshot_config(num_samples: usize, warmup_input: InputSource) -> SnapshotConfig {
+    snapshot_config(
+        num_samples,
+        WarmUp::SamplesWithInput {
+            samples: REVERB_SNAPSHOT_WARMUP_SAMPLES,
+            input: Rc::new(RefCell::new(warmup_input)),
+        },
+    )
 }
 
 fn wiring_drive_with_channels(num_channels: usize) -> InputSource {
@@ -266,10 +300,10 @@ fn input_fully_wired_drive(config: &InstrumentConfig) -> InputSource {
     }))
 }
 
-fn make_single_node_band(channel: BandChannel, key: NodeKey, frequency: f64) -> BandConfig {
+fn make_single_node_band(channel: BandChannel, key: NodeKey, layout_seed: usize) -> BandConfig {
     BandConfig {
         channel,
-        nodes: vec![test_node_with_key(key, frequency)],
+        nodes: vec![layout_node_with_key(key, layout_seed)],
     }
 }
 
@@ -355,19 +389,21 @@ fn mount_node_bands_wiring() {
 #[test]
 fn mount_node_bands_audio_fully_wired_long_snapshot() {
     let (config, net, _handles) = mounted_test_net();
+    let warmup_drive = input_fully_wired_drive(&config);
+    let drive = input_fully_wired_drive(&config);
 
     assert_audio_unit_snapshot!(
         "mount_node_bands_audio_fully_wired_long",
         net,
-        input_fully_wired_drive(&config),
-        snapshot_config(8192)
+        drive,
+        reverb_snapshot_config(8192, warmup_drive)
     );
 }
 
 #[test]
 fn create_channel_bands_contract_for_single_band() {
     let values = FineTunedValues::new();
-    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 11), 220.0);
+    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 11), 0);
     let bands = vec![&band];
 
     let (_net, handles) = create_channel_bands::<f32>(&bands, &values);
@@ -379,7 +415,7 @@ fn create_channel_bands_contract_for_single_band() {
 
 #[test]
 fn create_controllers_stack_contract_for_single_node() {
-    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 12), 220.0);
+    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 12), 1);
     let handle = super::InnerHandle::new(NodeKey(0, 12), BandChannel::Left);
     let handles = vec![handle];
 
@@ -394,7 +430,9 @@ fn create_controllers_stack_contract_for_single_node() {
 
 #[test]
 fn create_controllers_stack_audio_snapshot() {
-    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 15), 220.0);
+    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 15), 2);
+    assert_reverb_parameters_adequate(&band.nodes[0]);
+
     let handle = super::InnerHandle::new(NodeKey(0, 15), BandChannel::Left);
     let handles = vec![handle];
 
@@ -409,14 +447,14 @@ fn create_controllers_stack_audio_snapshot() {
         "create_controllers_stack_single_node",
         net,
         controller_drive(),
-        snapshot_config(2048)
+        reverb_snapshot_config(2048, controller_drive())
     );
 }
 
 #[test]
 fn create_and_push_band_node_contract_for_single_node() {
     let values = FineTunedValues::new();
-    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 13), 220.0);
+    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 13), 2);
     let handle = super::InnerHandle::new(NodeKey(0, 13), BandChannel::Left);
     let handles = vec![handle];
 
@@ -438,7 +476,7 @@ fn create_and_push_band_node_contract_for_single_node() {
 #[test]
 fn create_and_push_band_node_audio_snapshot() {
     let values = FineTunedValues::new();
-    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 16), 220.0);
+    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 16), 1);
     let handle = super::InnerHandle::new(NodeKey(0, 16), BandChannel::Left);
     let handles = vec![handle];
 
@@ -458,14 +496,14 @@ fn create_and_push_band_node_audio_snapshot() {
         "create_and_push_band_node_single_node",
         net,
         envelope_band_drive(),
-        snapshot_config(4096)
+        baseline_snapshot_config(4096)
     );
 }
 
 #[test]
 fn mount_band_contract_for_single_node() {
     let values = FineTunedValues::new();
-    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 14), 220.0);
+    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 14), 0);
     let handle = super::InnerHandle::new(NodeKey(0, 14), BandChannel::Left);
     let handles = vec![handle];
 
@@ -505,7 +543,9 @@ fn mount_band_contract_for_single_node() {
 #[test]
 fn mount_band_audio_snapshot() {
     let values = FineTunedValues::new();
-    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 17), 220.0);
+    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 17), 0);
+    assert_reverb_parameters_adequate(&band.nodes[0]);
+
     let handle = super::InnerHandle::new(NodeKey(0, 17), BandChannel::Left);
     let handles = vec![handle];
 
@@ -539,27 +579,34 @@ fn mount_band_audio_snapshot() {
     );
     net.check();
 
+    let warmup_drive = wiring_drive_with_channels(total_inputs);
+    let drive = wiring_drive_with_channels(total_inputs);
+
     assert_audio_unit_snapshot!(
         "mount_band_single_node",
         net,
-        wiring_drive_with_channels(total_inputs),
-        snapshot_config(4096)
+        drive,
+        reverb_snapshot_config(4096, warmup_drive)
     );
 }
 
 #[test]
 fn create_channel_bands_audio_snapshot() {
     let values = FineTunedValues::new();
-    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 18), 220.0);
+    let band = make_single_node_band(BandChannel::Left, NodeKey(0, 18), 2);
+    assert_reverb_parameters_adequate(&band.nodes[0]);
+
     let bands = vec![&band];
 
     let (net, _handles) = create_channel_bands::<f32>(&bands, &values);
     let total_inputs = rhythm_inputs_len() + excitement_inputs_per_node();
+    let warmup_drive = wiring_drive_with_channels(total_inputs);
+    let drive = wiring_drive_with_channels(total_inputs);
 
     assert_audio_unit_snapshot!(
         "create_channel_bands_single_band",
         net,
-        wiring_drive_with_channels(total_inputs),
-        snapshot_config(4096)
+        drive,
+        reverb_snapshot_config(4096, warmup_drive)
     );
 }

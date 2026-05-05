@@ -425,6 +425,46 @@ pub fn config_test_cases() -> impl Iterator<Item = (Config, Layout)> {
         .filter_map(|l| Config::try_from(l).ok().map(|c| (c, l)))
 }
 
+#[cfg(any(test, feature = "test"))]
+pub fn representative_layout_configs() -> Vec<Config> {
+    let all = config_test_cases()
+        .map(|(config, _layout)| config)
+        .collect::<Vec<_>>();
+
+    assert!(
+        all.len() >= 3,
+        "expected at least three layout-derived config test cases"
+    );
+
+    vec![
+        all[0].clone(),
+        all[all.len() / 2].clone(),
+        all[all.len() - 1].clone(),
+    ]
+}
+
+#[cfg(any(test, feature = "test"))]
+pub fn layout_single_node(seed: usize) -> NodeConfig {
+    let config = representative_layout_configs()
+        .into_iter()
+        .nth(seed % 3)
+        .expect("representative layout config");
+
+    config
+        .0
+        .iter()
+        .flat_map(|band| band.nodes.iter().copied())
+        .min_by(|a, b| a.room_size_m3().total_cmp(&b.room_size_m3()))
+        .expect("layout config must contain at least one node")
+}
+
+#[cfg(any(test, feature = "test"))]
+pub fn layout_node_with_key(key: NodeKey, seed: usize) -> NodeConfig {
+    let mut node = layout_single_node(seed);
+    node.key = key;
+    node
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

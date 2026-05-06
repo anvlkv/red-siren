@@ -1,4 +1,4 @@
-use std::{collections::HashMap, f32, sync::Arc, thread, time::Duration};
+use std::{f32, sync::Arc, thread, time::Duration};
 
 #[cfg(feature = "editor")]
 use common::commands::edit::FineTunedValuesPayload;
@@ -13,25 +13,18 @@ use parking_lot::RwLock;
 use u_num_it::u_num_it;
 
 #[cfg(feature = "editor")]
-use crate::system::values::{FineTunedSharedValues, FineTunedValues};
+use crate::system::values::FineTunedSharedValues;
 use crate::{
     output_analyzer::OUTPUT_ANALYZER_FFT_WINDOW_SIZE,
     quality::SampleType,
     rt::ExcitementSource,
-    system::excitor::{control::Control as ExcitementControl, SpectrumBuffer, FFT_WINDOW_SIZE},
+    system::{
+        create_system, excitor::SpectrumBuffer, handle::SystemHandle, values::FineTunedValues,
+    },
 };
 
 pub const FADE_DURATION_MS: u64 = 120;
-const INPUT_SNOOP_SIZE: usize = FFT_WINDOW_SIZE;
 const FOLLOW_RESPONSE_SECS: f32 = FADE_DURATION_MS as f32 / 1000.0;
-
-#[derive(Clone)]
-struct SensorControls {
-    min_frequency: Shared,
-    max_frequency: Shared,
-    min_magnitude: Shared,
-    max_magnitude: Shared,
-}
 
 #[derive(Clone)]
 pub struct RuntimeSubsystem {
@@ -40,25 +33,12 @@ pub struct RuntimeSubsystem {
     sample_rate: Arc<RwLock<f64>>,
     dsp_net: Arc<RwLock<Net>>,
     dsp_primary_node_id: Arc<RwLock<NodeId>>,
-    dsp_tuner_node_id: Arc<RwLock<NodeId>>,
     gain_param: Arc<Shared>,
 
     processed_output_snoops: Arc<RwLock<(Snoop, Snoop)>>,
-    input_snoop: Arc<RwLock<Option<Snoop>>>,
-    node_excitement_snoops: Arc<RwLock<HashMap<NodeKey, (Snoop, Snoop)>>>,
-    node_output_snoops: Arc<RwLock<HashMap<NodeKey, Snoop>>>,
+    system_handle: Arc<RwLock<SystemHandle>>,
 
     pub(crate) preset: Arc<RwLock<Preset>>,
-    node_band_controls: Arc<RwLock<HashMap<NodeKey, Shared>>>,
-    node_key_controls: Arc<RwLock<HashMap<NodeKey, Shared>>>,
-    node_sensor_controls: Arc<RwLock<HashMap<NodeKey, SensorControls>>>,
-    siren_excitements: Arc<RwLock<HashMap<NodeKey, ExcitementControl>>>,
-
-    tuner_tap_gain_param: Arc<Shared>,
-    tuner_freq_range: Arc<(Shared, Shared)>,
-    tuner_ny_threshold: Arc<Shared>,
-    tuner_ny_wet_ratio: Arc<Shared>,
-    spectrum_data_thb: SpectrumBuffer,
 
     pub(crate) layout: Arc<RwLock<InstrumentLayout>>,
     pub(crate) config: Arc<RwLock<InstrumentConfig>>,
@@ -71,26 +51,14 @@ pub struct RuntimeSubsystem {
 
 struct CreateMainNetworkReturn {
     gain_param: Shared,
-    tuner_tap_gain: Shared,
     processed_output_snoop_l: Snoop,
     processed_output_snoop_r: Snoop,
     instrument_node_id: NodeId,
-    tuner_node_id: NodeId,
     net: Net,
 }
 
 struct CreateInstrumentNetworkReturn {
-    excitement_snoops: HashMap<NodeKey, (Snoop, Snoop)>,
-    output_snoops: HashMap<NodeKey, Snoop>,
-    band_controls: HashMap<NodeKey, Shared>,
-    key_controls: HashMap<NodeKey, Shared>,
-    siren_excitements: HashMap<NodeKey, ExcitementControl>,
-    net: Net,
-}
-
-struct CreateTunerNetworkReturn {
-    input_snoop: Option<Snoop>,
-    handles: HashMap<NodeKey, SensorControls>,
+    system_handle: SystemHandle,
     net: Net,
 }
 
@@ -113,53 +81,26 @@ impl RuntimeSubsystem {
         #[cfg(feature = "editor")]
         let fine_tuned_values = Self::snapshot_fine_tuned_values(&fine_tuned_shared_values);
 
-        let CreateInstrumentNetworkReturn {
-            band_controls,
-            key_controls,
-            siren_excitements,
-            excitement_snoops,
-            output_snoops,
-            net,
-        } = Self::create_instrument_network(
+        let CreateInstrumentNetworkReturn { system_handle, net } = Self::create_instrument_network(
             num_channels,
             sample_rate,
             sample_type,
+            source,
             &config,
+            &tuner_config,
             &preset,
+            &spectrum_data_thb,
             #[cfg(feature = "editor")]
             &fine_tuned_values,
-        );
-        let tuner_freq_range = Arc::new((
-            shared(tuner_config.frequency_range.0.unwrap_or(f32::NEG_INFINITY)),
-            shared(tuner_config.frequency_range.1.unwrap_or(f32::INFINITY)),
-        ));
-        let tuner_ny_threshold = Arc::new(shared(tuner_config.ny_threshold));
-        let tuner_ny_wet_ratio = Arc::new(shared(tuner_config.ny_wet_ratio));
-        let CreateTunerNetworkReturn {
-            input_snoop,
-            handles: sensor_controls,
-            net: tuner_net,
-        } = Self::create_tuner_network(
-            sample_rate,
-            sample_type,
-            source,
-            &tuner_config,
-            siren_excitements.clone(),
-            &spectrum_data_thb,
-            (&tuner_freq_range.0, &tuner_freq_range.1),
-            &tuner_ny_threshold,
-            &tuner_ny_wet_ratio,
         );
 
         let CreateMainNetworkReturn {
             gain_param,
-            tuner_tap_gain,
             processed_output_snoop_l,
             processed_output_snoop_r,
             instrument_node_id,
-            tuner_node_id,
             net: dsp_net,
-        } = Self::create_main_network(num_channels, sample_rate, net, tuner_net);
+        } = Self::create_main_network(num_channels, sample_rate, net);
 
         Self {
             sample_type,
@@ -167,28 +108,15 @@ impl RuntimeSubsystem {
             sample_rate: Arc::new(RwLock::new(sample_rate)),
             dsp_net: Arc::new(RwLock::new(dsp_net)),
             dsp_primary_node_id: Arc::new(RwLock::new(instrument_node_id)),
-            dsp_tuner_node_id: Arc::new(RwLock::new(tuner_node_id)),
             gain_param: Arc::new(gain_param),
 
             processed_output_snoops: Arc::new(RwLock::new((
                 processed_output_snoop_l,
                 processed_output_snoop_r,
             ))),
-            input_snoop: Arc::new(RwLock::new(input_snoop)),
-            node_excitement_snoops: Arc::new(RwLock::new(excitement_snoops)),
-            node_output_snoops: Arc::new(RwLock::new(output_snoops)),
+            system_handle: Arc::new(RwLock::new(system_handle)),
 
             preset: Arc::new(RwLock::new(preset)),
-            node_band_controls: Arc::new(RwLock::new(band_controls)),
-            node_key_controls: Arc::new(RwLock::new(key_controls)),
-            node_sensor_controls: Arc::new(RwLock::new(sensor_controls)),
-            siren_excitements: Arc::new(RwLock::new(siren_excitements)),
-
-            tuner_tap_gain_param: Arc::new(tuner_tap_gain),
-            tuner_freq_range,
-            tuner_ny_threshold,
-            tuner_ny_wet_ratio,
-            spectrum_data_thb,
 
             layout: Arc::new(RwLock::new(layout)),
             config: Arc::new(RwLock::new(config)),
@@ -211,46 +139,30 @@ impl RuntimeSubsystem {
         #[cfg(feature = "editor")]
         let fine_tuned_shared_values = Arc::new(RwLock::new(FineTunedSharedValues::new()));
 
-        let CreateInstrumentNetworkReturn {
-            band_controls,
-            key_controls,
-            siren_excitements,
-            excitement_snoops,
-            output_snoops,
-            net,
-        } = Self::create_instrument_dummy(num_channels, &layout);
-        let source = ExcitementSource::Mic;
-        let tuner_freq_range = Arc::new((
-            shared(tuner_config.frequency_range.0.unwrap_or(f32::NEG_INFINITY)),
-            shared(tuner_config.frequency_range.1.unwrap_or(f32::INFINITY)),
-        ));
-        let tuner_ny_threshold = Arc::new(shared(tuner_config.ny_threshold));
-        let tuner_ny_wet_ratio = Arc::new(shared(tuner_config.ny_wet_ratio));
-        let CreateTunerNetworkReturn {
-            input_snoop,
-            handles: sensor_controls,
-            net: tuner_net,
-        } = Self::create_tuner_network(
+        #[cfg(feature = "editor")]
+        let fine_tuned_values = Self::snapshot_fine_tuned_values(&fine_tuned_shared_values);
+
+        let CreateInstrumentNetworkReturn { system_handle, net } = Self::create_instrument_network(
+            num_channels,
             sample_rate,
             sample_type,
-            source,
+            ExcitementSource::Mic,
+            &InstrumentConfig::default(),
             &tuner_config,
-            siren_excitements.clone(),
+            &Preset::default(),
             &spectrum_data_thb,
-            (&tuner_freq_range.0, &tuner_freq_range.1),
-            &tuner_ny_threshold,
-            &tuner_ny_wet_ratio,
+            #[cfg(feature = "editor")]
+            &fine_tuned_values,
         );
+        let source = ExcitementSource::Mic;
 
         let CreateMainNetworkReturn {
             gain_param,
-            tuner_tap_gain,
             processed_output_snoop_l,
             processed_output_snoop_r,
             instrument_node_id,
-            tuner_node_id,
             net: dsp_net,
-        } = Self::create_main_network(num_channels, sample_rate, net, tuner_net);
+        } = Self::create_main_network(num_channels, sample_rate, net);
 
         Self {
             sample_type,
@@ -258,28 +170,15 @@ impl RuntimeSubsystem {
             sample_rate: Arc::new(RwLock::new(sample_rate)),
             dsp_net: Arc::new(RwLock::new(dsp_net)),
             dsp_primary_node_id: Arc::new(RwLock::new(instrument_node_id)),
-            dsp_tuner_node_id: Arc::new(RwLock::new(tuner_node_id)),
             gain_param: Arc::new(gain_param),
 
             processed_output_snoops: Arc::new(RwLock::new((
                 processed_output_snoop_l,
                 processed_output_snoop_r,
             ))),
-            input_snoop: Arc::new(RwLock::new(input_snoop)),
-            node_excitement_snoops: Arc::new(RwLock::new(excitement_snoops)),
-            node_output_snoops: Arc::new(RwLock::new(output_snoops)),
+            system_handle: Arc::new(RwLock::new(system_handle)),
 
             preset: Arc::new(RwLock::new(Default::default())),
-            node_band_controls: Arc::new(RwLock::new(band_controls)),
-            node_key_controls: Arc::new(RwLock::new(key_controls)),
-            node_sensor_controls: Arc::new(RwLock::new(sensor_controls)),
-            siren_excitements: Arc::new(RwLock::new(siren_excitements)),
-
-            tuner_tap_gain_param: Arc::new(tuner_tap_gain),
-            tuner_freq_range,
-            tuner_ny_threshold,
-            tuner_ny_wet_ratio,
-            spectrum_data_thb,
 
             layout: Arc::new(RwLock::new(layout)),
             config: Arc::new(RwLock::new(Default::default())),
@@ -292,6 +191,7 @@ impl RuntimeSubsystem {
     }
 
     #[allow(dead_code)]
+    #[deprecated(note = "Sample-type restarts are handled at runtime controller level")]
     pub fn restart_with_sample_type(&self, sample_type: SampleType) -> Self {
         self.fade_out();
         RuntimeSubsystem::new(
@@ -300,7 +200,12 @@ impl RuntimeSubsystem {
             *self.source.read(),
             self.tuner_config.read().clone(),
             self.get_preset(),
-            self.spectrum_data_thb.clone(),
+            self.system_handle
+                .read()
+                .excitor_handle
+                .analyzer
+                .spectrum_buffer
+                .clone(),
             sample_type,
             self.num_channels as usize,
             *self.sample_rate.read(),
@@ -313,7 +218,6 @@ impl RuntimeSubsystem {
             sample_type,
             num_channels,
             sample_rate,
-            spectrum_data_thb,
             layout,
             config,
             tuner_config: old_tuner_config,
@@ -322,7 +226,12 @@ impl RuntimeSubsystem {
         let tuner_only = RuntimeSubsystem::new_with_tuner_only(
             *layout.read(),
             tuner_config.unwrap_or_else(|| old_tuner_config.read().clone()),
-            spectrum_data_thb.clone(),
+            self.system_handle
+                .read()
+                .excitor_handle
+                .analyzer
+                .spectrum_buffer
+                .clone(),
             sample_type,
             num_channels as usize,
             *sample_rate.read(),
@@ -335,27 +244,63 @@ impl RuntimeSubsystem {
     }
 
     pub fn update_tuner_config(&self, tuner_config: &TunerConfig) {
-        // 1. Update Nyquist Shared params in the live signal graph (zero DSP rebuild).
-        self.tuner_ny_threshold.set_value(tuner_config.ny_threshold);
-        self.tuner_ny_wet_ratio.set_value(tuner_config.ny_wet_ratio);
+        let system_handle = self.system_handle.read();
 
-        // 2. Update frequency-range Shared params.
-        self.tuner_freq_range
+        // 1. Update Nyquist Shared params in the live signal graph (zero DSP rebuild).
+        system_handle
+            .input_ny_thr
+            .set_value(tuner_config.ny_threshold);
+        system_handle
+            .input_ny_wd
+            .set_value(tuner_config.ny_wet_ratio);
+
+        // 2. Update analyzer atomics used by the excitor analyzer worker.
+        system_handle
+            .excitor_handle
+            .analyzer
+            .frequency_limit
             .0
-            .set_value(tuner_config.frequency_range.0.unwrap_or(f32::NEG_INFINITY));
-        self.tuner_freq_range
+            .store(
+                tuner_config
+                    .frequency_range
+                    .0
+                    .map_or(-1, |f| f.round() as i32),
+                std::sync::atomic::Ordering::SeqCst,
+            );
+        system_handle
+            .excitor_handle
+            .analyzer
+            .frequency_limit
             .1
-            .set_value(tuner_config.frequency_range.1.unwrap_or(f32::INFINITY));
+            .store(
+                tuner_config
+                    .frequency_range
+                    .1
+                    .map_or(-1, |f| f.round() as i32),
+                std::sync::atomic::Ordering::SeqCst,
+            );
+        system_handle.excitor_handle.analyzer.fft_size.store(
+            tuner_config.fft_size as u32,
+            std::sync::atomic::Ordering::SeqCst,
+        );
+        system_handle.excitor_handle.analyzer.sample_rate.store(
+            tuner_config.sample_rate.round() as u32,
+            std::sync::atomic::Ordering::SeqCst,
+        );
 
         // 3. Push updated sensor bounds into the per-node Shared params.
         {
-            let handles = self.node_sensor_controls.read();
             for sensor in &tuner_config.sensor_data {
-                if let Some(h) = handles.get(&sensor.key) {
-                    h.min_frequency.set_value(sensor.min_frequency);
-                    h.max_frequency.set_value(sensor.max_frequency);
-                    h.min_magnitude.set_value(sensor.min_magnitude);
-                    h.max_magnitude.set_value(sensor.max_magnitude);
+                if let Some(h) = system_handle
+                    .excitor_handle
+                    .analyzer
+                    .sensors
+                    .get(&sensor.key)
+                {
+                    h.min_freq.set_value(sensor.min_frequency);
+                    h.max_freq.set_value(sensor.max_frequency);
+                    h.min_mag.set_value(sensor.min_magnitude);
+                    h.max_mag.set_value(sensor.max_magnitude);
                 }
             }
         }
@@ -372,6 +317,7 @@ impl RuntimeSubsystem {
         self.dsp_net.write().backend()
     }
 
+    #[deprecated(note = "Sample-rate updates are applied by rebuilding the runtime graph")]
     pub fn update_sample_rate(&mut self, sample_rate: f64) {
         {
             let mut dsp_lock = self.dsp_net.write();
@@ -394,39 +340,37 @@ impl RuntimeSubsystem {
             let instrument_net = {
                 let config = self.config.read();
                 let CreateInstrumentNetworkReturn {
-                    band_controls,
-                    key_controls,
-                    siren_excitements,
-                    excitement_snoops,
-                    output_snoops,
-                    net,
+                    system_handle, net, ..
                 } = Self::create_instrument_network(
                     self.num_channels as usize,
                     *self.sample_rate.read(),
                     self.sample_type,
+                    *self.source.read(),
                     &config,
+                    &self.tuner_config.read(),
                     &new_preset,
+                    &self
+                        .system_handle
+                        .read()
+                        .excitor_handle
+                        .analyzer
+                        .spectrum_buffer,
                     #[cfg(feature = "editor")]
                     &Self::snapshot_fine_tuned_values(&self.fine_tuned_shared_values),
                 );
 
-                *self.node_band_controls.write() = band_controls;
-                *self.node_key_controls.write() = key_controls;
-                *self.siren_excitements.write() = siren_excitements;
-                *self.node_excitement_snoops.write() = excitement_snoops;
-                *self.node_output_snoops.write() = output_snoops;
+                *self.system_handle.write() = system_handle;
                 net
             };
             self.replace_network(instrument_net, &self.dsp_primary_node_id.read());
         } else {
-            self.node_band_controls.write().iter().for_each(|(k, v)| {
+            let system_handle = self.system_handle.read();
+            system_handle.node_handles.iter().for_each(|(k, node)| {
                 if let Some(val) = new_preset.get_band_value(k) {
-                    v.set_value(val);
+                    node.accentuation.set_value(val);
                 }
-            });
-            self.node_key_controls.write().iter().for_each(|(k, v)| {
                 if let Some(val) = new_preset.get_key_value(k) {
-                    v.set_value(val);
+                    node.rhythm.set_value(val);
                 }
             });
         }
@@ -438,9 +382,9 @@ impl RuntimeSubsystem {
 
     pub fn set_band_control(&self, key: NodeKey, value: f32) -> common::error::Result<()> {
         self.preset.write().set_band_value(&key, value);
-        let controls = self.node_band_controls.read();
-        if let Some(control) = controls.get(&key) {
-            control.set_value(value);
+        let system_handle = self.system_handle.read();
+        if let Some(node) = system_handle.node_handles.get(&key) {
+            node.accentuation.set_value(value);
             Ok(())
         } else {
             Err(ControlError::NodeNotFound { key }.into())
@@ -448,9 +392,9 @@ impl RuntimeSubsystem {
     }
 
     pub fn get_band_control(&self, key: NodeKey) -> common::error::Result<f32> {
-        let controls = self.node_band_controls.read();
-        if let Some(control) = controls.get(&key) {
-            Ok(control.value())
+        let system_handle = self.system_handle.read();
+        if let Some(node) = system_handle.node_handles.get(&key) {
+            Ok(node.accentuation.value())
         } else {
             Err(ControlError::NodeNotFound { key }.into())
         }
@@ -458,9 +402,9 @@ impl RuntimeSubsystem {
 
     pub fn set_key_control(&self, key: NodeKey, value: f32) -> common::error::Result<()> {
         self.preset.write().set_key_value(&key, value);
-        let controls = self.node_key_controls.read();
-        if let Some(control) = controls.get(&key) {
-            control.set_value(value);
+        let system_handle = self.system_handle.read();
+        if let Some(node) = system_handle.node_handles.get(&key) {
+            node.rhythm.set_value(value);
             Ok(())
         } else {
             Err(ControlError::NodeNotFound { key }.into())
@@ -468,22 +412,25 @@ impl RuntimeSubsystem {
     }
 
     pub fn get_key_control(&self, key: NodeKey) -> common::error::Result<f32> {
-        let controls = self.node_key_controls.read();
-        if let Some(control) = controls.get(&key) {
-            Ok(control.value())
+        let system_handle = self.system_handle.read();
+        if let Some(node) = system_handle.node_handles.get(&key) {
+            Ok(node.rhythm.value())
         } else {
             Err(ControlError::NodeNotFound { key }.into())
         }
     }
 
+    #[deprecated(
+        note = "Use node control handles through hit/release APIs or direct control mapping"
+    )]
     pub fn set_siren_excite(
         &self,
         key: NodeKey,
         real: f32,
         imag: f32,
     ) -> common::error::Result<()> {
-        let controls = self.siren_excitements.read();
-        if let Some(control) = controls.get(&key) {
+        let system_handle = self.system_handle.read();
+        if let Some(control) = system_handle.excitor_handle.controls.get(&key) {
             control.set_value((real, imag));
             Ok(())
         } else {
@@ -505,8 +452,18 @@ impl RuntimeSubsystem {
             excite_real,
             excite_imag
         );
-        // Set excite values (ignore NodeNotFound — node may not be wired yet)
-        let excite_result = self.set_siren_excite(key, excite_real, excite_imag);
+        // Set excite values (ignore NodeNotFound — node may not be wired yet).
+        let excite_result = {
+            let system_handle = self.system_handle.read();
+            system_handle
+                .excitor_handle
+                .controls
+                .get(&key)
+                .map(|control| {
+                    control.set_value((excite_real, excite_imag));
+                })
+                .ok_or(ControlError::NodeNotFound { key })
+        };
         log::debug!(
             "rt_subsystem::hit_test_node: set_siren_excite result={:?}",
             excite_result
@@ -528,7 +485,17 @@ impl RuntimeSubsystem {
 
     pub fn release_test_node(&self, key: NodeKey) -> common::error::Result<()> {
         log::debug!("rt_subsystem::release_test_node: key={:?}", key);
-        let excite_result = self.set_siren_excite(key, 0.0, 0.0);
+        let excite_result = {
+            let system_handle = self.system_handle.read();
+            system_handle
+                .excitor_handle
+                .controls
+                .get(&key)
+                .map(|control| {
+                    control.set_value((0.0, 0.0));
+                })
+                .ok_or(ControlError::NodeNotFound { key })
+        };
         log::debug!(
             "rt_subsystem::release_test_node: set_siren_excite(0,0) result={:?}",
             excite_result
@@ -546,9 +513,16 @@ impl RuntimeSubsystem {
     /// Read the latest output samples for a single node.
     /// `Snoop::update()` pulls buffered samples from the DSP thread.
     pub fn snapshot_output_snoop(&self, key: NodeKey) -> Vec<f32> {
-        let mut snoops = self.node_output_snoops.write();
         let mut out = Vec::new();
-        if let Some(snoop) = snoops.get_mut(&key) {
+        let snoop = {
+            self.system_handle
+                .read()
+                .node_handles
+                .get(&key)
+                .map(|n| n.output_snoop.clone())
+        };
+        if let Some(snoop) = snoop {
+            let mut snoop = snoop.lock();
             snoop.update();
             let cap = snoop.capacity();
             out.reserve(cap);
@@ -562,7 +536,13 @@ impl RuntimeSubsystem {
 
     /// Read the latest output samples for every node, keyed by [`NodeKey`].
     pub fn snapshot_all_output_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
-        let keys: Vec<NodeKey> = self.node_output_snoops.read().keys().copied().collect();
+        let keys: Vec<NodeKey> = self
+            .system_handle
+            .read()
+            .node_handles
+            .keys()
+            .copied()
+            .collect();
         keys.into_iter()
             .map(|k| {
                 let snap = self.snapshot_output_snoop(k);
@@ -573,9 +553,19 @@ impl RuntimeSubsystem {
 
     /// Read the latest excitement `(primary, secondary)` samples for a single node.
     pub fn snapshot_excitement_snoop(&self, key: NodeKey) -> Vec<(f32, f32)> {
-        let mut snoops = self.node_excitement_snoops.write();
         let mut out = Vec::new();
-        if let Some((primary, secondary)) = snoops.get_mut(&key) {
+        let snoops = {
+            self.system_handle.read().node_handles.get(&key).map(|n| {
+                (
+                    n.excitement_snoop_hs.clone(),
+                    n.excitement_snoop_rad.clone(),
+                )
+            })
+        };
+        if let Some(snoops) = snoops {
+            let (hs, rad) = snoops;
+            let mut primary = hs.lock();
+            let mut secondary = rad.lock();
             primary.update();
             secondary.update();
             let cap = primary.capacity();
@@ -594,7 +584,13 @@ impl RuntimeSubsystem {
 
     /// Read the latest excitement samples for every node.
     pub fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<(f32, f32)>)> {
-        let keys: Vec<NodeKey> = self.node_excitement_snoops.read().keys().copied().collect();
+        let keys: Vec<NodeKey> = self
+            .system_handle
+            .read()
+            .node_handles
+            .keys()
+            .copied()
+            .collect();
         keys.into_iter()
             .map(|k| {
                 let snap = self.snapshot_excitement_snoop(k);
@@ -606,20 +602,16 @@ impl RuntimeSubsystem {
     /// Read the latest microphone input samples.
     /// Returns an empty `Vec` when the excitement source is not [`ExcitementSource::Mic`].
     pub fn snapshot_input_snoop(&self) -> Vec<f32> {
-        let mut guard = self.input_snoop.write();
-        guard
-            .as_mut()
-            .map(|snoop| {
-                snoop.update();
-                let cap = snoop.capacity();
-                let mut out = Vec::with_capacity(cap);
-                for rev in (0..cap).rev() {
-                    let s = snoop.at(rev);
-                    out.push(if s.is_normal() || s == 0.0 { s } else { 0.0 });
-                }
-                out
-            })
-            .unwrap_or_default()
+        let handle = self.system_handle.read();
+        let mut snoop = handle.excitor_handle.analyzer.input_snoop.lock();
+        snoop.update();
+        let cap = snoop.capacity();
+        let mut out = Vec::with_capacity(cap);
+        for rev in (0..cap).rev() {
+            let s = snoop.at(rev);
+            out.push(if s.is_normal() || s == 0.0 { s } else { 0.0 });
+        }
+        out
     }
 
     /// Take an FFT snapshot of the processed stereo output.
@@ -630,8 +622,9 @@ impl RuntimeSubsystem {
         &self,
     ) -> common::error::Result<Option<super::ProcessedOutputSpectrumSnapshot>> {
         let sample_rate = *self.sample_rate.read();
-        let min_hz = self.tuner_freq_range.0.value();
-        let max_hz = self.tuner_freq_range.1.value();
+        let tuner_config = self.tuner_config.read();
+        let min_hz = tuner_config.frequency_range.0.unwrap_or(f32::NEG_INFINITY);
+        let max_hz = tuner_config.frequency_range.1.unwrap_or(f32::INFINITY);
 
         let mut l_window = [0.0_f32; OUTPUT_ANALYZER_FFT_WINDOW_SIZE];
         let mut r_window = [0.0_f32; OUTPUT_ANALYZER_FFT_WINDOW_SIZE];
@@ -663,27 +656,55 @@ impl RuntimeSubsystem {
 
     // ── Tuner tap & excitements ──────────────────────────────────────────
 
-    /// Route tuner audio into the output mix (tap gain → 1.0).
+    /// Remap tuner tap to the input Nyquist wet/dry ratio (1.0 = fully audible).
     pub fn start_tap_tuner_audio(&self) {
-        self.tuner_tap_gain_param.set_value(1.0);
+        self.system_handle.read().input_ny_wd.set_value(1.0);
     }
 
-    /// Mute the tuner audio tap (tap gain → 0.0).
+    /// Remap tuner tap to mute input Nyquist wet/dry contribution (0.0 = muted).
     pub fn stop_tap_tuner_audio(&self) {
-        self.tuner_tap_gain_param.set_value(0.0);
+        self.system_handle.read().input_ny_wd.set_value(0.0);
     }
 
     /// Return the instantaneous primary excitement level for every node.
     /// Results are sorted by [`NodeKey`] for a stable ordering.
     pub fn poll_tuner_excitements(&self) -> Vec<(NodeKey, f32)> {
-        let mut data: Vec<(NodeKey, f32)> = self
-            .siren_excitements
-            .read()
+        let system_handle = self.system_handle.read();
+        let mut data: Vec<(NodeKey, f32)> = system_handle
+            .excitor_handle
+            .controls
             .iter()
             .map(|(k, v)| (*k, v.primary_value::<f32>()))
             .collect();
         data.sort_by_key(|(k, _)| *k);
         data
+    }
+
+    pub fn poll_tuner_spectrum(&self) -> Option<common::tuner::SpectrumSnapshot> {
+        self.system_handle
+            .read()
+            .excitor_handle
+            .analyzer
+            .spectrum_buffer
+            .pop()
+            .map(|spectrum| {
+                common::tuner::SpectrumSnapshot(
+                    spectrum
+                        .data()
+                        .iter()
+                        .map(|(freq, mag)| (freq.val(), mag.val()))
+                        .collect(),
+                )
+            })
+    }
+
+    pub fn tuner_spectrum_buffer(&self) -> SpectrumBuffer {
+        self.system_handle
+            .read()
+            .excitor_handle
+            .analyzer
+            .spectrum_buffer
+            .clone()
     }
 
     #[cfg(feature = "editor")]
@@ -733,27 +754,26 @@ impl RuntimeSubsystem {
                 Self::snapshot_fine_tuned_values(&self.fine_tuned_shared_values);
 
             let CreateInstrumentNetworkReturn {
-                excitement_snoops,
-                output_snoops,
-                band_controls,
-                key_controls,
-                siren_excitements,
-                net,
+                system_handle, net, ..
             } = Self::create_instrument_network(
                 self.num_channels as usize,
                 *self.sample_rate.read(),
                 self.sample_type,
+                *self.source.read(),
                 &config_lock,
+                &tuner_config_lock,
                 &preset,
+                &self
+                    .system_handle
+                    .read()
+                    .excitor_handle
+                    .analyzer
+                    .spectrum_buffer,
                 #[cfg(feature = "editor")]
                 &fine_tuned_values,
             );
 
-            *self.node_band_controls.write() = band_controls;
-            *self.node_key_controls.write() = key_controls;
-            *self.siren_excitements.write() = siren_excitements;
-            *self.node_excitement_snoops.write() = excitement_snoops;
-            *self.node_output_snoops.write() = output_snoops;
+            *self.system_handle.write() = system_handle;
             net
         };
 
@@ -775,32 +795,14 @@ impl RuntimeSubsystem {
     ///
     /// Handles fade/commit via [`Self::replace_network`] so the audio transition is
     /// seamless when the stream is running.
+    #[deprecated(
+        note = "Tuner/source routing is managed by system::create_system; use runtime source restart path"
+    )]
     pub fn replace_tuner_for_source(&self, source: ExcitementSource) {
-        let siren_excitements = self.siren_excitements.read().clone();
-        let tuner_config = self.tuner_config.read().clone();
-        let sample_rate = *self.sample_rate.read();
-
-        let CreateTunerNetworkReturn {
-            input_snoop,
-            handles,
-            net,
-        } = Self::create_tuner_network(
-            sample_rate,
-            self.sample_type,
-            source,
-            &tuner_config,
-            siren_excitements,
-            &self.spectrum_data_thb,
-            (&self.tuner_freq_range.0, &self.tuner_freq_range.1),
-            &self.tuner_ny_threshold,
-            &self.tuner_ny_wet_ratio,
+        log::warn!(
+            "replace_tuner_for_source is deprecated; source change is applied on next runtime rebuild"
         );
-
-        *self.input_snoop.write() = input_snoop;
-        *self.node_sensor_controls.write() = handles;
         *self.source.write() = source;
-
-        self.replace_network(net, &self.dsp_tuner_node_id.read());
     }
 
     fn replace_network(&self, unit: Net, id: &NodeId) {
@@ -840,167 +842,58 @@ impl RuntimeSubsystem {
         }
     }
 
-    fn create_instrument_dummy(
-        num_channels: usize,
-        layout: &InstrumentLayout,
-    ) -> CreateInstrumentNetworkReturn {
-        let mut net = Net::new(0, num_channels);
-        for _ in 0..num_channels {
-            let source = net.push(Box::new(zero()));
-            net.pipe_output(source);
-        }
-
-        let siren_excitements = HashMap::<NodeKey, ExcitementControl>::new();
-
-        // from_iter(
-        //     layout
-        //         .registry()
-        //         .all_keys()
-        //         .into_iter()
-        //         .map(|key| (key, ExcitementControl::new(shared(0.0), shared(0.0)))),
-        // );
-
-        CreateInstrumentNetworkReturn {
-            excitement_snoops: HashMap::new(),
-            output_snoops: HashMap::new(),
-            band_controls: HashMap::new(),
-            key_controls: HashMap::new(),
-            siren_excitements,
-            net,
-        }
-    }
-
     fn create_instrument_network(
         num_channels: usize,
         sample_rate: f64,
-        _sample_type: SampleType,
+        sample_type: SampleType,
+        source: ExcitementSource,
         config: &InstrumentConfig,
+        tuner_config: &TunerConfig,
         preset: &Preset,
+        _spectrum_data_thb: &SpectrumBuffer,
         #[cfg(feature = "editor")] fine_tuned_values: &FineTunedValues,
     ) -> CreateInstrumentNetworkReturn {
-        log::info!(
-            "Creating network with {} bands, {} keys per band",
-            config.num_bands(),
-            config.0.first().map(|g| g.nodes.len()).unwrap_or(0)
-        );
+        let values = {
+            #[cfg(feature = "editor")]
+            {
+                fine_tuned_values.clone()
+            }
+            #[cfg(not(feature = "editor"))]
+            {
+                FineTunedValues::new()
+            }
+        };
 
-        #[cfg(feature = "editor")]
-        let _ = fine_tuned_values;
+        let seed = None;
+        let (mut net, system_handle) = match sample_type {
+            SampleType::F32 => {
+                create_system::<f32>(num_channels, source, config, tuner_config, &values, seed)
+            }
+            SampleType::F64 => {
+                create_system::<f64>(num_channels, source, config, tuner_config, &values, seed)
+            }
+        };
 
-        // Collect all nodes across all bands so control maps remain populated.
-        let nodes: Vec<_> = config.0.iter().flat_map(|band| band.nodes.iter()).collect();
-
-        let mut siren_excitements = HashMap::<NodeKey, ExcitementControl>::new();
-        let mut band_controls = HashMap::new();
-        let mut key_controls = HashMap::new();
-
-        // Minimal skeleton: one always-on sine beep duplicated to every output channel.
-        let mut net = Net::new(0, num_channels);
-
-        let beep_id = net.push(Box::new(sine_hz::<f32>(440.0)));
-
-        for node in &nodes {
-            // let excitement = ExcitementControl::default();
-            // let band_val = preset.get_band_value(&node.key).unwrap_or(0.0);
-            // let key_val = preset.get_key_value(&node.key).unwrap_or(0.0);
-
-            // let band = shared(band_val);
-            // let key = shared(key_val);
-
-            // band_controls.insert(node.key, band);
-            // key_controls.insert(node.key, key);
-            // siren_excitements.insert(node.key, excitement);
-        }
-
-        for _ in 0..num_channels {
-            let tap_id = net.push(Box::new(pass()));
-            net.connect(beep_id, 0, tap_id, 0);
-            net.pipe_output(tap_id);
+        for (key, node) in system_handle.node_handles.iter() {
+            if let Some(val) = preset.get_band_value(key) {
+                node.accentuation.set_value(val);
+            }
+            if let Some(val) = preset.get_key_value(key) {
+                node.rhythm.set_value(val);
+            }
         }
 
         net.set_sample_rate(sample_rate);
         net.allocate();
         net.check();
 
-        log::debug!("created instrument network: {}", net.display());
-
-        CreateInstrumentNetworkReturn {
-            excitement_snoops: HashMap::new(),
-            output_snoops: HashMap::new(),
-            band_controls,
-            key_controls,
-            siren_excitements,
-            net,
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn create_tuner_network(
-        sample_rate: f64,
-        _sample_type: SampleType,
-        source: ExcitementSource,
-        tuner_config: &TunerConfig,
-        _siren_excitements: HashMap<NodeKey, ExcitementControl>,
-        _spectrum_data_thb: &SpectrumBuffer,
-        _tuner_freq_range: (&Shared, &Shared),
-        _tuner_ny_threshold: &Shared,
-        _tuner_ny_wet_ratio: &Shared,
-    ) -> CreateTunerNetworkReturn {
-        log::info!("Creating tuner network");
-
-        let mut net = Net::new(1, 1);
-
-        let (snoop_be, input_snoop) = match source {
-            ExcitementSource::Entropy => (None, None),
-            ExcitementSource::Mic => {
-                let (snoop, be) = snoop(INPUT_SNOOP_SIZE);
-                (Some(be), Some(snoop))
-            }
-            ExcitementSource::Manual => (None, None),
-        };
-
-        let tuner_node_id = match (source, snoop_be) {
-            (ExcitementSource::Mic, Some(snoop_backend)) => {
-                let mut input_net = Net::new(1, 1);
-                let snoop_id = input_net.push(Box::new(snoop_backend));
-                input_net.connect_input(0, snoop_id, 0);
-                input_net.pipe_output(snoop_id);
-                net.push(Box::new(input_net))
-            }
-            _ => net.push(Box::new(pass())),
-        };
-
-        net.connect_input(0, tuner_node_id, 0);
-        net.pipe_output(tuner_node_id);
-
-        let handles = HashMap::from_iter(tuner_config.sensor_data.iter().map(|sensor| {
-            (
-                sensor.key,
-                SensorControls {
-                    min_frequency: shared(sensor.min_frequency),
-                    max_frequency: shared(sensor.max_frequency),
-                    min_magnitude: shared(sensor.min_magnitude),
-                    max_magnitude: shared(sensor.max_magnitude),
-                },
-            )
-        }));
-
-        net.set_sample_rate(sample_rate);
-        net.allocate();
-        net.check();
-
-        CreateTunerNetworkReturn {
-            input_snoop,
-            handles,
-            net,
-        }
+        CreateInstrumentNetworkReturn { system_handle, net }
     }
 
     fn create_main_network(
         num_channels: usize,
         sample_rate: f64,
         instrument_subnet: Net,
-        tuner_subnet: Net,
     ) -> CreateMainNetworkReturn {
         let mut net = Net::new(1, num_channels);
 
@@ -1012,7 +905,6 @@ impl RuntimeSubsystem {
             snoop(OUTPUT_ANALYZER_FFT_WINDOW_SIZE);
         // Insert smoothed gain after main node for fade in/out.
         let gain_param = shared(1.0f32);
-        let tuner_tap_gain = shared(0.0f32);
         let processed_output_snoops_id = u_num_it!(
             1..=7,
             match num_channels {
@@ -1064,22 +956,13 @@ impl RuntimeSubsystem {
             }
         );
 
-        let tuner_node_id = net.push(Box::new(
-            tuner_subnet >> (var(&tuner_tap_gain) * delay(0.25)),
-        ));
-
         let gain_id = u_num_it!(
             1..=7,
             match num_channels {
                 U => {
                     net.push(Box::new(
-                        (multipass::<NumType>() | split::<NumType>())
-                            >> multijoin::<NumType, U2>()
-                            >> mul(Frame::<f32, NumType>::splat(2.0))
-                            >> ((var(&gain_param)
-                                >> follow(FOLLOW_RESPONSE_SECS)
-                                >> split::<NumType>())
-                                * multipass::<NumType>()),
+                        (var(&gain_param) >> follow(FOLLOW_RESPONSE_SECS) >> split::<NumType>())
+                            * multipass::<NumType>(),
                     ))
                 }
                 _ => {
@@ -1090,13 +973,8 @@ impl RuntimeSubsystem {
 
         net.pipe_all(instrument_node_id, processed_output_snoops_id);
         net.pipe_all(processed_output_snoops_id, gain_id);
-        // Connect the tuner's single output to the last input of gain_id (index = num_channels).
-        // We must NOT use pipe_all here: pipe_all iterates over ALL target inputs starting from 0
-        // and cycles the source outputs via `channel % source_outputs`, which would overwrite the
-        // num_channels instrument inputs that were just wired by the previous pipe_all call.
-        net.connect(tuner_node_id, 0, gain_id, num_channels);
         net.pipe_output(gain_id);
-        net.pipe_input(tuner_node_id);
+        net.pipe_input(instrument_node_id);
 
         net.set_sample_rate(sample_rate);
         net.allocate();
@@ -1104,11 +982,9 @@ impl RuntimeSubsystem {
 
         CreateMainNetworkReturn {
             gain_param,
-            tuner_tap_gain,
             processed_output_snoop_l,
             processed_output_snoop_r,
             instrument_node_id,
-            tuner_node_id,
             net,
         }
     }

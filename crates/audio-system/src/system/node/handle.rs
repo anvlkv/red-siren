@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use common::{instrument::BandChannel, NodeKey};
 use fundsp::prelude::*;
 use parking_lot::Mutex;
@@ -10,9 +12,9 @@ pub struct NodeHandle {
     pub key: NodeKey,
     pub accentuation: Shared,
     pub rhythm: Shared,
-    pub excitement_snoop_hs: Snoop,
-    pub excitement_snoop_rad: Snoop,
-    pub output_snoop: Snoop,
+    pub excitement_snoop_hs: Arc<Mutex<Snoop>>,
+    pub excitement_snoop_rad: Arc<Mutex<Snoop>>,
+    pub output_snoop: Arc<Mutex<Snoop>>,
     pub control: Control,
 }
 
@@ -100,9 +102,9 @@ impl InnerHandle {
             key,
             accentuation,
             rhythm,
-            excitement_snoop_hs: excitement_snoop_hs.0,
-            excitement_snoop_rad: excitement_snoop_rad.0,
-            output_snoop: output_snoop.0,
+            excitement_snoop_hs: Arc::new(Mutex::new(excitement_snoop_hs.0)),
+            excitement_snoop_rad: Arc::new(Mutex::new(excitement_snoop_rad.0)),
+            output_snoop: Arc::new(Mutex::new(output_snoop.0)),
         }
     }
 

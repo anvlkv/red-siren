@@ -10,6 +10,7 @@ use common::tuner::Config as TunerConfig;
 use common::NodeKey;
 use common::{instrument::Config as InstrumentConfig, tuner::SensorData};
 use fundsp::{prelude::*, thingbuf::ThingBuf};
+use parking_lot::Mutex;
 use spectrum_analyzer::FrequencyLimit;
 
 use crate::excitor::{control::Control, SpectrumBuffer};
@@ -28,9 +29,19 @@ pub struct AnalyzerHandle {
     pub fft_size: Arc<AtomicU32>,
     pub spectrum_buffer: SpectrumBuffer,
     pub sample_rate: Arc<AtomicU32>,
+    pub input_snoop: Arc<Mutex<Snoop>>,
+    input_snoop_backend: Arc<Mutex<Option<An<SnoopBackend>>>>,
 }
 
 impl AnalyzerHandle {
+    #[must_use]
+    pub fn take_input_snoop_backend(&self) -> An<SnoopBackend> {
+        self.input_snoop_backend
+            .lock()
+            .take()
+            .expect("input snoop backend already taken")
+    }
+
     pub fn update_frequency_limit(&self, min_frequency: Option<f32>, max_frequency: Option<f32>) {
         self.frequency_limit.0.store(
             min_frequency.map_or(-1, |l| l.round() as i32),
@@ -112,6 +123,8 @@ impl ExcitorHandle {
 
         let fft_size = Arc::new(AtomicU32::new(tuner_config.fft_size as u32));
 
+        let (input_snoop, input_snoop_backend) = snoop(super::FFT_WINDOW_SIZE);
+
         let spectrum_buffer = SpectrumBuffer::new(ThingBuf::new(MAX_BUFFER_SIZE));
 
         let sample_rate = Arc::new(AtomicU32::new(tuner_config.sample_rate.round() as u32));
@@ -122,6 +135,8 @@ impl ExcitorHandle {
             fft_size,
             spectrum_buffer,
             sample_rate,
+            input_snoop: Arc::new(Mutex::new(input_snoop)),
+            input_snoop_backend: Arc::new(Mutex::new(Some(input_snoop_backend))),
         };
 
         let controls = Arc::new(

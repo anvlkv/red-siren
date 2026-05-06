@@ -65,6 +65,7 @@ impl AnalyzerRuntime {
 #[derive(Clone)]
 pub struct Excitor<S: Float + Real + ordered_float::Float + 'static, C = ExcitementData<S>> {
     src: ExcitementSource,
+    snoop_be: An<SnoopBackend>,
     resonance_model: ResonanceModel,
     instrument_config: InstrumentConfig,
     analyzer_runtime: Arc<AnalyzerRuntime>,
@@ -100,8 +101,11 @@ impl<S: Float + Real + ordered_float::Float + FloatCore + 'static> Excitor<S> {
 
         let resonance_model = instrument_cfg.resonance_model();
 
+        let snoop_be = handle.analyzer.take_input_snoop_backend();
+
         Self {
             src,
+            snoop_be,
             resonance_model,
             instrument_config: instrument_cfg.clone(),
             handle,
@@ -403,28 +407,6 @@ impl<S: Float + Real + ordered_float::Float + FloatCore + 'static> Excitor<S> {
             *sample = self.entropy_sample();
         });
     }
-
-    /// Pushes input to the feed based on excitement source.
-    fn push_input_feed(&self, input: &fundsp::prelude::BufferRef, sample: usize) {
-        match self.src {
-            ExcitementSource::Mic => {
-                self.input_feed
-                    .push(input.at_f32(0, sample))
-                    .unwrap_or_else(|e| {
-                        log::warn!("failed to push mic input sample: {e}");
-                    });
-            }
-            ExcitementSource::Entropy => {
-                let entropy_sample = self.entropy_sample();
-                self.input_feed.push(entropy_sample).unwrap_or_else(|e| {
-                    log::warn!("failed to push entropy sample: {e}");
-                });
-            }
-            ExcitementSource::Manual => {
-                // No input feed for manual
-            }
-        }
-    }
 }
 
 impl<S: Float + Real + ordered_float::Float + 'static, C> Drop for Excitor<S, C> {
@@ -460,6 +442,19 @@ impl<S: Float + Real + ordered_float::Float + FloatCore + 'static> AudioUnit
             }
             ExcitementSource::Manual => (&input[..0], &input[..num_sensors], &input[num_sensors..]),
         };
+
+        match self.src {
+            ExcitementSource::Mic => {
+                _ = self.snoop_be.tick(Frame::from_slice(mic_input));
+            }
+            ExcitementSource::Entropy => {
+                _ = self
+                    .snoop_be
+                    .tick(Frame::from_slice(entropy_input.as_slice()));
+            }
+            ExcitementSource::Manual => {}
+        }
+
         for &sample in mic_input {
             self.input_feed.push(sample).unwrap_or_else(|e| {
                 log::warn!("failed to push mic input sample: {e}");
@@ -497,6 +492,8 @@ impl<S: Float + Real + ordered_float::Float + FloatCore + 'static> AudioUnit
 
         let mut feedback_frame = vec![0.0_f32; sensor_count];
         let mut control_frame = vec![0.0_f32; control_channels];
+        let mut snoop_in_buf = fundsp::buffer::BufferVec::new(1);
+        let mut snoop_out_buf = fundsp::buffer::BufferVec::new(1);
 
         let simd_frames = size / SIMD_LANES;
         for frame in 0..simd_frames {
@@ -504,7 +501,34 @@ impl<S: Float + Real + ordered_float::Float + FloatCore + 'static> AudioUnit
             for lane in 0..SIMD_LANES {
                 let sample = frame_start + lane;
 
-                self.push_input_feed(input, sample);
+                // Feed analyzer input and snoop backend from the same sample source.
+                match self.src {
+                    ExcitementSource::Mic => {
+                        let mic_sample = input.at_f32(0, sample);
+                        self.input_feed.push(mic_sample).unwrap_or_else(|e| {
+                            log::warn!("failed to push mic input sample: {e}");
+                        });
+                        snoop_in_buf.buffer_mut().set_f32(0, 0, mic_sample);
+                        _ = self.snoop_be.process(
+                            1,
+                            &snoop_in_buf.buffer_ref(),
+                            &mut snoop_out_buf.buffer_mut(),
+                        );
+                    }
+                    ExcitementSource::Entropy => {
+                        let entropy_sample = self.entropy_sample();
+                        self.input_feed.push(entropy_sample).unwrap_or_else(|e| {
+                            log::warn!("failed to push entropy sample: {e}");
+                        });
+                        snoop_in_buf.buffer_mut().set_f32(0, 0, entropy_sample);
+                        _ = self.snoop_be.process(
+                            1,
+                            &snoop_in_buf.buffer_ref(),
+                            &mut snoop_out_buf.buffer_mut(),
+                        );
+                    }
+                    ExcitementSource::Manual => {}
+                }
 
                 for (channel, value) in feedback_frame.iter_mut().enumerate() {
                     *value = input.at_f32(feedback_offset + channel, sample);

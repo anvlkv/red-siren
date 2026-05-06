@@ -1,8 +1,8 @@
 use std::{
     f32,
     sync::{
-        Arc,
         mpsc::{self, Sender},
+        Arc,
     },
     thread,
     time::Duration,
@@ -11,18 +11,18 @@ use std::{
 #[cfg(feature = "editor")]
 use common::commands::edit::FineTunedValuesPayload;
 use common::{
-    NodeKey,
-    error::{ControlError, InstrumentError, Result},
-};
-use common::{
     device::DeviceData,
     error::AppError,
     instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, Preset},
 };
+use common::{
+    error::{ControlError, InstrumentError, Result},
+    NodeKey,
+};
 use common::{instrument::PlaybackQuality, tuner::Config as TunerConfig};
 use cpal::{
-    Device, DeviceId, HostId, StreamConfig, SupportedStreamConfig,
     traits::{DeviceTrait, HostTrait},
+    Device, DeviceId, HostId, StreamConfig, SupportedStreamConfig,
 };
 use fundsp::prelude::*;
 use fundsp::{thingbuf::ThingBuf, typenum::Unsigned};
@@ -33,15 +33,15 @@ use u_num_it::u_num_it;
 use crate::{
     quality::{PlaybackQualityGate, SampleType},
     rt::{
-        AudioRuntime, ExcitementSource,
-        cpal::stream::{PlaybackCallbackConfig, playback_callback, spawn_owned_input_stream},
+        cpal::stream::{playback_callback, spawn_owned_input_stream, PlaybackCallbackConfig},
         rt_subsystem::RuntimeSubsystem,
         telemetry::TelemetrySender,
+        AudioRuntime, ExcitementSource,
     },
     system::excitor::SpectrumBuffer,
 };
 
-use super::stream::{Control, spawn_owned_output_stream};
+use super::stream::{spawn_owned_output_stream, Control};
 
 const CONTROL_INVOKE_TIMEOUT_MS: u64 = 500;
 
@@ -118,6 +118,7 @@ impl CpalController {
                 sample_rate as f64,
             )
         };
+        let spectrum_buffer = runtime.tuner_spectrum_buffer();
 
         Self {
             runtime: RwLock::new(runtime),
@@ -397,9 +398,11 @@ impl CpalController {
                     num_channels,
                     stream_cfg.sample_rate as f64,
                 );
+                let spectrum_buffer = sys.tuner_spectrum_buffer();
 
                 let backend = sys.backend();
                 *self.runtime.write() = sys;
+                *self.spectrum_buffer.write() = spectrum_buffer;
                 backend
             };
 
@@ -749,7 +752,7 @@ impl AudioRuntime for CpalController {
     }
 
     fn snapshot_input_snoop(&self) -> Vec<f32> {
-        self.runtime.read().snapshot_input_snoop()
+        Vec::new()
     }
 
     fn set_band_control(&self, key: common::NodeKey, value: f32) -> common::error::Result<()> {
@@ -795,6 +798,7 @@ impl AudioRuntime for CpalController {
 
         let mut rt = self.runtime.write();
         *rt = rt.restart_with_tuner_only(Some(tuner_config.clone()));
+        *self.spectrum_buffer.write() = rt.tuner_spectrum_buffer();
 
         if self.input_thread.read().is_none() {
             self.start_input_stream()?;
@@ -804,15 +808,7 @@ impl AudioRuntime for CpalController {
     }
 
     fn poll_tuner_spectrum(&self) -> Option<common::tuner::SpectrumSnapshot> {
-        self.spectrum_buffer.read().pop().map(|spectrum| {
-            common::tuner::SpectrumSnapshot(
-                spectrum
-                    .data()
-                    .iter()
-                    .map(|(freq, mag)| (freq.val(), mag.val()))
-                    .collect(),
-            )
-        })
+        self.runtime.read().poll_tuner_spectrum()
     }
 
     fn start_tap_tuner_audio(&self) -> common::error::Result<()> {

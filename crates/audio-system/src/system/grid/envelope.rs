@@ -10,6 +10,8 @@ use typenum::op;
 
 use crate::grid::AdsrShape;
 
+use super::rhythm::RATIO_SCALE;
+
 const RHYTHM_GRID_ENVELOPE_ID: u64 =
     crate::util::hash_str(concat!(module_path!(), "::RhythmGridEnvelope"));
 
@@ -115,8 +117,8 @@ where
             return Ratio::from_integer(0);
         }
         let clamped = raw.min(1.0);
-        let scaled = (clamped * super::RATIO_SCALE as f64).round() as i64;
-        Ratio::new(scaled, super::RATIO_SCALE)
+        let scaled = (clamped * RATIO_SCALE as f64).round() as i64;
+        Ratio::new(scaled, RATIO_SCALE)
     }
 
     fn nonneg_ratio(value: S) -> Ratio<i64> {
@@ -124,8 +126,8 @@ where
         if !raw.is_finite() || raw <= 0.0 {
             return Ratio::from_integer(0);
         }
-        let scaled = (raw * super::RATIO_SCALE as f64).round() as i64;
-        Ratio::new(std::cmp::Ord::max(scaled, 0), super::RATIO_SCALE)
+        let scaled = (raw * RATIO_SCALE as f64).round() as i64;
+        Ratio::new(std::cmp::Ord::max(scaled, 0), RATIO_SCALE)
     }
 
     /// Returns a beat-ratio for duration inputs: accepts only positive, finite values.
@@ -134,11 +136,11 @@ where
         if !value.is_finite() || value <= 0.0 {
             return None;
         }
-        let scaled = (value as f64 * super::RATIO_SCALE as f64).round() as i64;
+        let scaled = (value as f64 * RATIO_SCALE as f64).round() as i64;
         if scaled <= 0 {
             return None;
         }
-        Some(Ratio::new(scaled, super::RATIO_SCALE))
+        Some(Ratio::new(scaled, RATIO_SCALE))
     }
 
     /// Returns a beat-ratio for start inputs: accepts `0.0` (immediate) and positive finite
@@ -147,11 +149,8 @@ where
         if !value.is_finite() || value < 0.0 {
             return None;
         }
-        let scaled = (value as f64 * super::RATIO_SCALE as f64).round() as i64;
-        Some(Ratio::new(
-            std::cmp::Ord::max(scaled, 0),
-            super::RATIO_SCALE,
-        ))
+        let scaled = (value as f64 * RATIO_SCALE as f64).round() as i64;
+        Some(Ratio::new(std::cmp::Ord::max(scaled, 0), RATIO_SCALE))
     }
 
     fn compute_schedule(

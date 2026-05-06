@@ -1,4 +1,3 @@
-mod adsr_shape;
 mod band;
 mod controller;
 mod formant;
@@ -14,7 +13,6 @@ use std::{
     ops::Mul,
 };
 
-use adsr_shape::*;
 use common::{
     instrument::{BandChannel, BandConfig, Config as InstrumentConfig},
     NodeKey,
@@ -28,8 +26,7 @@ pub use handle::*;
 
 use crate::{
     feedback_pass::FeedbackPass,
-    grid::{RhythmGrid, RhythmGridEnvelope},
-    node::band::Band,
+    grid::{adsr_shape_for_node, RhythmGrid, RhythmGridEnvelope},
     values::FineTunedValues,
 };
 

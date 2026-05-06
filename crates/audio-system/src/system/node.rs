@@ -467,7 +467,6 @@ where
         <EnvelopedNodeGenerator<S> as AudioNode>::Outputs,
         _,
         _,
-        _,
     >(
         band_config.clone(),
         |node_config| {

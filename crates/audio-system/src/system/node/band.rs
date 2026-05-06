@@ -14,13 +14,12 @@ pub struct Band<
     N: Size<S> + Size<X>,
     XI: Size<S> + Size<X>,
     XO: Size<S> + Size<X>,
-    XON: Size<S> + Size<X>,
     XIN: Size<S> + Size<X>,
 > where
     XI: Mul<N, Output = XIN>,
     <XI as Mul<N>>::Output: ArrayLength + Send + Sync,
-    XO: Mul<N, Output = XON>,
-    <XO as Mul<N>>::Output: ArrayLength + Send + Sync,
+    XO: Mul<N>,
+    <XO as Mul<N>>::Output: Size<S> + Size<X> + ArrayLength + Send + Sync,
 {
     inner: Net,
     _config: BandConfig,
@@ -29,7 +28,7 @@ pub struct Band<
     _num_inputs_per_node: PhantomData<XI>,
     _num_outputs_per_node: PhantomData<XO>,
     _num_inputs: PhantomData<XIN>,
-    _num_outputs: PhantomData<XON>,
+    _num_outputs: PhantomData<<XO as Mul<N>>::Output>,
     _node_type: PhantomData<X>,
 }
 
@@ -39,14 +38,13 @@ impl<
         N: Size<S> + Size<X>,
         XI: Size<S> + Size<X>,
         XO: Size<S> + Size<X>,
-        XON: Size<S> + Size<X>,
         XIN: Size<S> + Size<X>,
-    > Band<S, X, N, XI, XO, XON, XIN>
+    > Band<S, X, N, XI, XO, XIN>
 where
     XI: Mul<N, Output = XIN>,
     <XI as Mul<N>>::Output: ArrayLength + Send + Sync,
-    XO: Mul<N, Output = XON>,
-    <XO as Mul<N>>::Output: ArrayLength + Send + Sync,
+    XO: Mul<N>,
+    <XO as Mul<N>>::Output: Size<S> + Size<X> + ArrayLength + Send + Sync,
 {
     pub fn new<G: Fn(NodeConfig) -> An<X>>(
         config: BandConfig,
@@ -60,7 +58,8 @@ where
         let min_freq = config.nodes.first().map(|n| n.frequency).unwrap_or(0.0);
 
         let band_stack = net.push(Box::new(
-            stacki::<N, X, _>(|i| generator(config.nodes[i as usize])) >> join::<XON>(),
+            stacki::<N, X, _>(|i| generator(config.nodes[i as usize]))
+                >> join::<<XO as Mul<N>>::Output>(),
         ));
 
         let filter_input = split::<U3>()
@@ -137,21 +136,20 @@ impl<
         N: Size<S> + Size<X>,
         XI: Size<S> + Size<X>,
         XO: Size<S> + Size<X>,
-        XON: Size<S> + Size<X>,
         XIN: Size<S> + Size<X>,
-    > AudioNode for Band<S, X, N, XI, XO, XON, XIN>
+    > AudioNode for Band<S, X, N, XI, XO, XIN>
 where
     XI: Mul<N, Output = XIN>,
     <XI as Mul<N>>::Output: ArrayLength + Send + Sync,
-    XO: Mul<N, Output = XON>,
-    <XO as Mul<N>>::Output: ArrayLength + Send + Sync,
+    XO: Mul<N>,
+    <XO as Mul<N>>::Output: Size<S> + Size<X> + ArrayLength + Send + Sync,
 {
     const ID: u64 = BAND_NODE_ID;
     type Inputs = XIN;
-    type Outputs = XON;
+    type Outputs = XO;
 
     fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
-        let mut output = Frame::<f32, Self::Outputs>::default();
+        let mut output = Frame::<f32, XO>::default();
         self.inner.tick(input, &mut output);
         output
     }
@@ -179,19 +177,18 @@ pub fn create_band_node<
     N: Size<S> + Size<X>,
     XI: Size<S> + Size<X>,
     XO: Size<S> + Size<X>,
-    XON: Size<S> + Size<X>,
     XIN: Size<S> + Size<X>,
     G: Fn(NodeConfig) -> An<X>,
 >(
     config: BandConfig,
     generator: G,
     values: &FineTunedValues,
-) -> An<Band<S, X, N, XI, XO, XON, XIN>>
+) -> An<Band<S, X, N, XI, XO, XIN>>
 where
     XI: Mul<N, Output = XIN>,
     <XI as Mul<N>>::Output: ArrayLength + Send + Sync,
-    XO: Mul<N, Output = XON>,
-    <XO as Mul<N>>::Output: ArrayLength + Send + Sync,
+    XO: Mul<N>,
+    <XO as Mul<N>>::Output: Size<S> + Size<X> + ArrayLength + Send + Sync,
 {
     An(Band::new(config, generator, values))
 }
@@ -216,7 +213,7 @@ mod tests {
     }
 
     fn band_under_test(
-    ) -> An<Band<f32, Binop<FrameMul<U1>, Pipe<Constant<U1>, Sine<f32>>, Pass>, U1, U1, U1, U1, U1>>
+    ) -> An<Band<f32, Binop<FrameMul<U1>, Pipe<Constant<U1>, Sine<f32>>, Pass>, U1, U1, U1, U1>>
     {
         let config = make_band_config();
         let values = FineTunedValues::new();
@@ -224,7 +221,6 @@ mod tests {
         create_band_node::<
             f32,
             Binop<FrameMul<U1>, Pipe<Constant<U1>, Sine<f32>>, Pass>,
-            U1,
             U1,
             U1,
             U1,

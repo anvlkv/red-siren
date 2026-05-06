@@ -5,9 +5,11 @@ use num_rational::Ratio;
 
 mod envelope;
 mod metro;
+mod shape;
 
 pub use envelope::*;
 pub use metro::*;
+pub use shape::*;
 
 const RHYTHM_GRID_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::RhythmGrid"));
 

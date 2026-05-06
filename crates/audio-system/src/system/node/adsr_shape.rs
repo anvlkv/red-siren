@@ -26,6 +26,11 @@ pub fn adsr_shape_for_node<S: Real + Float + 'static>(node_config: &NodeConfig) 
     // Heavy nodes (rounded curves) → high smoothness
     let smoothness = tau_norm.clamp(0.01, 0.99);
 
+    // Tail curvature (decay + release) tracks the same physical time-constant axis:
+    // lighter/smaller nodes drop faster early (< 1.0),
+    // heavier/larger nodes drop slower early and steeper late (> 1.0).
+    let decay_exponent = (0.6 + 0.8 * tau_norm).clamp(0.5, 2.2);
+
     // Convert outputs to S type
     AdsrShape {
         attack: S::from_f64(attack),
@@ -33,6 +38,7 @@ pub fn adsr_shape_for_node<S: Real + Float + 'static>(node_config: &NodeConfig) 
         sustain: S::from_f64(sustain),
         release: S::from_f64(release),
         smoothness: S::from_f64(smoothness),
+        decay_exponent: S::from_f64(decay_exponent),
     }
 }
 
@@ -82,6 +88,10 @@ mod tests {
             shape.smoothness.to_f32() < 0.2,
             "smoothness should be low for light node"
         );
+        assert!(
+            shape.decay_exponent.to_f32() < 0.8,
+            "decay exponent should be low for light node"
+        );
     }
 
     #[test]
@@ -104,6 +114,7 @@ mod tests {
         assert!(shape.sustain.to_f32() >= 0.45 && shape.sustain.to_f32() <= 0.65);
         assert!(shape.release.to_f32() >= 0.15 && shape.release.to_f32() <= 0.3);
         assert!(shape.smoothness.to_f32() >= 0.4 && shape.smoothness.to_f32() <= 0.7);
+        assert!(shape.decay_exponent.to_f32() >= 1.0 && shape.decay_exponent.to_f32() <= 1.3);
     }
 
     #[test]
@@ -146,6 +157,10 @@ mod tests {
             shape.smoothness.to_f32() > 0.6,
             "smoothness should be high for heavy node"
         );
+        assert!(
+            shape.decay_exponent.to_f32() > 1.8,
+            "decay exponent should be high for heavy node"
+        );
     }
 
     #[test]
@@ -171,6 +186,10 @@ mod tests {
             shape.smoothness.to_f32() >= 0.01,
             "smoothness minimum clamp"
         );
+        assert!(
+            shape.decay_exponent.to_f32() >= 0.5,
+            "decay exponent minimum clamp"
+        );
     }
 
     #[test]
@@ -195,6 +214,10 @@ mod tests {
         assert!(
             shape.smoothness.to_f32() <= 0.99,
             "smoothness maximum clamp"
+        );
+        assert!(
+            shape.decay_exponent.to_f32() <= 2.2,
+            "decay exponent maximum clamp"
         );
     }
 
@@ -255,6 +278,10 @@ mod tests {
         assert!(
             (shape_f32.smoothness.to_f64() - shape_f64.smoothness).abs() < tolerance,
             "smoothness should be consistent across precision levels"
+        );
+        assert!(
+            (shape_f32.decay_exponent.to_f64() - shape_f64.decay_exponent).abs() < tolerance,
+            "decay_exponent should be consistent across precision levels"
         );
     }
 }

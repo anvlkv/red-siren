@@ -8,39 +8,10 @@ use fundsp::{
 use num_rational::Ratio;
 use typenum::op;
 
+use crate::grid::AdsrShape;
+
 const RHYTHM_GRID_ENVELOPE_ID: u64 =
     crate::util::hash_str(concat!(module_path!(), "::RhythmGridEnvelope"));
-
-/// ADSR shape parameters expressed as fractions of the total note duration.
-///
-/// `attack`, `decay`, and `release` are ratios in `[0.0, 1.0]` of the total duration.
-/// `sustain` is an amplitude level in `[0.0, 1.0]`.
-#[derive(Clone)]
-pub struct AdsrShape<S: Real + Float + 'static> {
-    /// Fraction of total duration spent in attack (0 → 1). Default: 0.05
-    pub attack: S,
-    /// Fraction of total duration spent in decay (1 → sustain). Default: 0.10
-    pub decay: S,
-    /// Sustain amplitude level. Default: 0.7
-    pub sustain: S,
-    /// Fraction of total duration spent in release (sustain → 0). Default: 0.20
-    pub release: S,
-    /// Blend factor for rounded stage curves in [0.0, 1.0].
-    /// 0.0 = linear ADSR segments, 1.0 = fully smoothed (smoothstep).
-    pub smoothness: S,
-}
-
-impl<S: Real + Float + 'static> Default for AdsrShape<S> {
-    fn default() -> Self {
-        Self {
-            attack: S::from_f32(0.05),
-            decay: S::from_f32(0.10),
-            sustain: S::from_f32(0.7),
-            release: S::from_f32(0.20),
-            smoothness: S::from_f32(0.0),
-        }
-    }
-}
 
 #[derive(Clone)]
 struct Schedule<S: Real + Float + 'static> {
@@ -51,6 +22,7 @@ struct Schedule<S: Real + Float + 'static> {
     release: u64,
     total_duration: u64,
     smoothness: S,
+    decay_exponent: S,
 }
 
 #[derive(Clone)]
@@ -147,6 +119,15 @@ where
         Ratio::new(scaled, super::RATIO_SCALE)
     }
 
+    fn nonneg_ratio(value: S) -> Ratio<i64> {
+        let raw = value.to_f64();
+        if !raw.is_finite() || raw <= 0.0 {
+            return Ratio::from_integer(0);
+        }
+        let scaled = (raw * super::RATIO_SCALE as f64).round() as i64;
+        Ratio::new(std::cmp::Ord::max(scaled, 0), super::RATIO_SCALE)
+    }
+
     /// Returns a beat-ratio for duration inputs: accepts only positive, finite values.
     /// `NaN` or `<= 0.0` are treated as "no schedule" and return `None`.
     fn positive_beat_ratio(value: f32) -> Option<Ratio<i64>> {
@@ -173,33 +154,6 @@ where
         ))
     }
 
-    fn smooth_progress(t: S, smoothness: S) -> S {
-        let zero = S::zero();
-        let one = S::one();
-        let two = S::from_f64(2.0);
-        let three = S::from_f64(3.0);
-
-        // Clamp t to [0, 1]
-        let t = if t < zero {
-            zero
-        } else if t > one {
-            one
-        } else {
-            t
-        };
-        // Clamp s to [0, 1]
-        let s = if smoothness < zero {
-            zero
-        } else if smoothness > one {
-            one
-        } else {
-            smoothness
-        };
-
-        let smoothstep = t * t * (three - two * t);
-        t + (smoothstep - t) * s
-    }
-
     fn compute_schedule(
         adsr: &AdsrShape<S>,
         ticks_per_beat: u64,
@@ -221,7 +175,7 @@ where
             1,
         );
         let decay = Ord::max(
-            Self::ratio_floor_u64(&(total_ticks_ratio * Self::unit_ratio(adsr.decay))),
+            Self::ratio_floor_u64(&(total_ticks_ratio * Self::nonneg_ratio(adsr.decay))),
             1,
         );
         let release = Ord::max(
@@ -236,6 +190,7 @@ where
             release,
             total_duration: total_ticks,
             smoothness: adsr.smoothness,
+            decay_exponent: adsr.decay_exponent,
         }
     }
 
@@ -257,11 +212,11 @@ where
         if tick < attack_end {
             // attack: 0 → 1
             let t = S::from_f64(tick as f64 / schedule.attack as f64);
-            Self::smooth_progress(t, schedule.smoothness)
+            AdsrShape::<S>::smooth_progress(t, schedule.smoothness)
         } else if tick < decay_end {
             // decay: 1 → sustain
             let t = S::from_f64((tick - attack_end) as f64 / schedule.decay as f64);
-            let p = Self::smooth_progress(t, schedule.smoothness);
+            let p = AdsrShape::<S>::tail_progress(t, schedule.smoothness, schedule.decay_exponent);
             one - p * (one - schedule.sustain)
         } else if tick < release_start {
             // sustain
@@ -269,7 +224,7 @@ where
         } else {
             // release: sustain → 0
             let t = S::from_f64((tick - release_start) as f64 / schedule.release as f64);
-            let p = Self::smooth_progress(t, schedule.smoothness);
+            let p = AdsrShape::<S>::tail_progress(t, schedule.smoothness, schedule.decay_exponent);
             schedule.sustain * (one - p)
         }
     }
@@ -550,6 +505,7 @@ mod tests {
             sustain: 0.5,
             release: 0.25,
             smoothness: 0.9,
+            decay_exponent: 1.0,
         };
         let env = create_rhythm_grid_envelope::<f32, _, _>(dc(1.0f32), adsr);
         let input = make_input(vec![100], vec![(0, 0.0, 1.0)]);
@@ -558,6 +514,67 @@ mod tests {
             env,
             input,
             low_sr_config(300)
+        );
+    }
+
+    // Tail exponent bends both decay and release while smoothness still handles rounding.
+    #[test]
+    fn envelope_curved_decay_exponent() {
+        let adsr = AdsrShape {
+            attack: 0.2,
+            decay: 0.5,
+            sustain: 0.3,
+            release: 0.2,
+            smoothness: 0.6,
+            decay_exponent: 2.0,
+        };
+        let env = create_rhythm_grid_envelope::<f32, _, _>(dc(1.0f32), adsr);
+        let input = make_input(vec![100], vec![(0, 0.0, 1.0)]);
+        assert_audio_unit_snapshot!(
+            "envelope_curved_decay_exponent",
+            env,
+            input,
+            low_sr_config(300)
+        );
+    }
+
+    #[test]
+    fn envelope_curved_tail_exponent_low() {
+        let adsr = AdsrShape {
+            attack: 0.15,
+            decay: 0.45,
+            sustain: 0.35,
+            release: 0.35,
+            smoothness: 0.6,
+            decay_exponent: 0.6,
+        };
+        let env = create_rhythm_grid_envelope::<f32, _, _>(dc(1.0f32), adsr);
+        let input = make_input(vec![100], vec![(0, 0.0, 1.0)]);
+        assert_audio_unit_snapshot!(
+            "envelope_curved_tail_exponent_low",
+            env,
+            input,
+            low_sr_config(320)
+        );
+    }
+
+    #[test]
+    fn envelope_curved_tail_exponent_high() {
+        let adsr = AdsrShape {
+            attack: 0.15,
+            decay: 0.45,
+            sustain: 0.35,
+            release: 0.35,
+            smoothness: 0.6,
+            decay_exponent: 2.2,
+        };
+        let env = create_rhythm_grid_envelope::<f32, _, _>(dc(1.0f32), adsr);
+        let input = make_input(vec![100], vec![(0, 0.0, 1.0)]);
+        assert_audio_unit_snapshot!(
+            "envelope_curved_tail_exponent_high",
+            env,
+            input,
+            low_sr_config(320)
         );
     }
 
@@ -591,6 +608,25 @@ mod tests {
         );
     }
 
+    #[test]
+    fn schedule_allows_decay_ratio_above_one() {
+        let adsr = AdsrShape {
+            attack: 0.1,
+            decay: 2.5,
+            sustain: 0.5,
+            release: 0.1,
+            smoothness: 0.0,
+            decay_exponent: 1.0,
+        };
+
+        let mut env = RhythmGridEnvelope::new(dc(1.0f32), adsr);
+        let _ = env.step_envelope(1.0, 100, 0.0, 1.0);
+
+        assert_eq!(env.active.len(), 1);
+        assert_eq!(env.active[0].schedule.total_duration, 100);
+        assert_eq!(env.active[0].schedule.decay, 250);
+    }
+
     // One-minute schedule at 60 BPM: 60 beat-aligned pulses over 6000 ticks.
     #[test]
     fn envelope_long_snapshot_one_minute_60bpm() {
@@ -616,6 +652,7 @@ mod tests {
             sustain: 1.0,
             release: 0.40,
             smoothness: 0.0,
+            decay_exponent: 1.0,
         };
         let env = create_rhythm_grid_envelope::<f32, _, _>(dc(1.0f32), adsr);
         let input = make_input(vec![100], vec![(0, 0.0, 1.0)]);

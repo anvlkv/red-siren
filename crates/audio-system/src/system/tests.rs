@@ -3,7 +3,10 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use common::instrument::{config::representative_layout_configs, Config as InstrumentConfig};
+use common::instrument::{
+    config::{config_test_cases, representative_layout_configs},
+    Config as InstrumentConfig,
+};
 use common::tuner::{Config as TunerConfig, SensorData};
 use fundsp::prelude::*;
 use insta_fun::prelude::*;
@@ -208,4 +211,57 @@ fn system_mic_batch_last_layout() {
     let configs = representative_layout_configs();
     let last = configs.len() - 1;
     assert_system_meta("layout_last", &configs[last], true);
+}
+
+#[test]
+fn system_builds_for_all_layout_test_cases() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .expect("tokio runtime must be created");
+    let _guard = runtime.enter();
+
+    let values = FineTunedValues::new();
+
+    for (instrument_config, _layout) in config_test_cases() {
+        let tuner_config = tuner_config_for(&instrument_config);
+
+        let (_net, _handle) = create_system::<f32>(
+            2,
+            ExcitementSource::Mic,
+            &instrument_config,
+            &tuner_config,
+            &values,
+            Some(42),
+        );
+    }
+}
+
+#[test]
+fn system_builds_for_supported_output_channel_counts() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .expect("tokio runtime must be created");
+    let _guard = runtime.enter();
+
+    let instrument_config = representative_layout_configs()
+        .into_iter()
+        .last()
+        .expect("representative layout config");
+    let tuner_config = tuner_config_for(&instrument_config);
+    let values = FineTunedValues::new();
+
+    for num_channels in 1..=8 {
+        let (_net, _handle) = create_system::<f32>(
+            num_channels,
+            ExcitementSource::Mic,
+            &instrument_config,
+            &tuner_config,
+            &values,
+            Some(42),
+        );
+    }
 }

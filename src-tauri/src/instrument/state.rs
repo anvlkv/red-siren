@@ -12,7 +12,7 @@ use common::error::{AppError, InstrumentError, Result};
 use common::instrument::{
     Config as InstrumentConfig, Layout as InstrumentLayout, PlaybackQuality, Preset,
 };
-use common::tuner::Config as TunerConfig;
+use common::tuner::{Config as TunerConfig, Layout as TunerLayout};
 use mint::Vector2;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -137,7 +137,10 @@ impl InstrumentState {
 
     pub fn start_playback(&self) -> common::error::Result<bool> {
         let tuner_state = self.app.state::<crate::tuner::TunerState>();
-        let tuner_config = tuner_state.tuner_config();
+        let layout_snapshot = *self.inner.layout.read();
+        let tuner_config = tuner_state
+            .update_layout(TunerLayout::from(layout_snapshot), layout_snapshot.registry())?
+            .unwrap_or_else(|| tuner_state.tuner_config());
         {
             log::trace!("InstrumentState.start_playback()");
             if *self.inner.playing.read() {

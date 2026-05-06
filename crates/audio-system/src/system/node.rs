@@ -81,9 +81,9 @@ pub fn mount_node_bands<S: Real + Float + 'static>(
     let pairings = build_excitement_pairings(config, l_net, r_net);
     connect_excitement_pairings(net, excitement_source, &pairings);
 
-    handles.iter().for_each(|h| {
+    handles.iter().enumerate().for_each(|(i, h)| {
         let catch_id = net.push(Box::new(h.take_feedback_catch()));
-        net.connect(catch_id, 0, feedback_target, 0);
+        net.connect(catch_id, 0, feedback_target, i);
     });
 
     BTreeMap::from_iter(handles.into_iter().map(|h| (h.key, h.into_outer())))

@@ -13,6 +13,9 @@ pub mod node;
 pub mod ny_compressor;
 pub mod values;
 
+#[cfg(test)]
+mod tests;
+
 use values::FineTunedValues;
 
 use crate::{

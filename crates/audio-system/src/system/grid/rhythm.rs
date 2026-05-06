@@ -175,9 +175,10 @@ mod tests {
     use super::*;
     use insta_fun::prelude::*;
 
-    fn low_sr_config(num_samples: usize) -> SnapshotConfig {
+    fn low_sr_config(num_samples: usize, output_assertion: OutputAssertion) -> SnapshotConfig {
         SnapshotConfigBuilder::default()
             .sample_rate(100.0)
+            .output_assertion(output_assertion)
             .num_samples(num_samples)
             .build()
             .unwrap()
@@ -206,7 +207,7 @@ mod tests {
             "grid_steady_60bpm",
             grid,
             InputSource::Flat(vec![60.0]),
-            low_sr_config(400)
+            low_sr_config(400, OutputAssertion::NonZero)
         );
     }
 
@@ -225,7 +226,7 @@ mod tests {
                     120.0
                 }
             })),
-            low_sr_config(400)
+            low_sr_config(400, OutputAssertion::NonZero)
         );
     }
 
@@ -237,7 +238,7 @@ mod tests {
             "grid_zero_bpm",
             grid,
             InputSource::Flat(vec![0.0]),
-            low_sr_config(200)
+            low_sr_config(200, OutputAssertion::Skip)
         );
     }
 }

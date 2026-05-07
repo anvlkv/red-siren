@@ -12,14 +12,14 @@ pub fn Permissions() -> impl IntoView {
         trigger: mic_permission_trigger,
         data: _mic_permission_data,
     } = use_invoke::<MicPermissionPayload, (), bool>(
-        common::commands::health::GRANT_MIC_PREMISSION,
+        common::commands::health::GRANT_MIC_PERMISSION,
     );
 
     Effect::new(move |_| {
         if let Some(err) = mic_permission_error() {
             log::error!(
                 "Error invoking {}: {}",
-                common::commands::health::GRANT_MIC_PREMISSION,
+                common::commands::health::GRANT_MIC_PERMISSION,
                 err
             );
 

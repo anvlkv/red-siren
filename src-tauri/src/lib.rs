@@ -1,5 +1,7 @@
 #![feature(duration_millis_float)]
 
+use tauri::Manager;
+
 mod app_bus;
 mod health;
 mod instrument;
@@ -69,7 +71,7 @@ pub fn run() {
         setup::open_in_new_window,
         setup::go_back,
         health::health_on_gui_ready,
-        health::health_grant_mic_premission,
+        health::health_grant_mic_permission,
         health::health_setup_state,
         intro::intro_pause,
         intro::intro_resume,
@@ -124,6 +126,16 @@ pub fn run() {
     builder = builder.setup(|app| {
         let config = app.config();
         log::debug!("App starting with config: {config:#?}");
+        log::info!("App app_data_dir: {:?}", app.path().app_data_dir().unwrap());
+        log::info!("App app_log_dir: {:?}", app.path().app_log_dir().unwrap());
+        log::info!(
+            "App app_config_dir: {:?}",
+            app.path().app_config_dir().unwrap()
+        );
+        log::info!(
+            "App app_cache_dir: {:?}",
+            app.path().app_cache_dir().unwrap()
+        );
 
         if let Err(e) = windows::ensure_startup_windows(app.handle()) {
             log::error!("failed to create startup windows: {}", e);

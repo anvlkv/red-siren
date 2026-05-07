@@ -39,6 +39,12 @@ pub fn create_system<
     values: &FineTunedValues,
     seed: Option<u64>,
 ) -> (Net, SystemHandle) {
+    assert_eq!(
+        instrument_config.num_nodes_total(),
+        tuner_config.sensor_data.len(),
+        "number of nodes and sensors must match"
+    );
+
     let (subnet, handle) =
         create_instrument_system::<S>(xct_src, instrument_config, tuner_config, values, seed);
 
@@ -137,11 +143,16 @@ fn create_instrument_system<
     net.connect_input(0, ny, 0);
 
     match xct_src {
-        ExcitementSource::Entropy => {}
+        ExcitementSource::Entropy => {
+            let ny_sink = net.push(Box::new(multisink::<U1>()));
+            net.connect(ny, 0, ny_sink, 0);
+        }
         ExcitementSource::Mic => {
             net.connect(ny, 0, xct, 0);
         }
         ExcitementSource::Manual => {
+            let ny_sink = net.push(Box::new(multisink::<U1>()));
+            net.connect(ny, 0, ny_sink, 0);
             handle
                 .excitor_handle
                 .controls

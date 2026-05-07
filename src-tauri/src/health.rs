@@ -61,7 +61,7 @@ pub fn setup(app: &mut App) -> common::error::Result<()> {
 }
 
 #[tauri::command]
-pub async fn health_grant_mic_premission(
+pub async fn health_grant_mic_permission(
     app: AppHandle,
     state: State<'_, Mutex<SetupState>>,
     prompt: bool,

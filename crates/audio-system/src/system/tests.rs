@@ -265,3 +265,55 @@ fn system_builds_for_supported_output_channel_counts() {
         );
     }
 }
+
+#[test]
+fn system_builds_for_entropy_source() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .expect("tokio runtime must be created");
+    let _guard = runtime.enter();
+
+    let instrument_config = representative_layout_configs()
+        .into_iter()
+        .last()
+        .expect("representative layout config");
+    let tuner_config = tuner_config_for(&instrument_config);
+    let values = FineTunedValues::new();
+
+    let (_net, _handle) = create_system::<f32>(
+        2,
+        ExcitementSource::Entropy,
+        &instrument_config,
+        &tuner_config,
+        &values,
+        Some(42),
+    );
+}
+
+#[test]
+fn system_builds_for_manual_source() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .expect("tokio runtime must be created");
+    let _guard = runtime.enter();
+
+    let instrument_config = representative_layout_configs()
+        .into_iter()
+        .last()
+        .expect("representative layout config");
+    let tuner_config = tuner_config_for(&instrument_config);
+    let values = FineTunedValues::new();
+
+    let (_net, _handle) = create_system::<f32>(
+        2,
+        ExcitementSource::Manual,
+        &instrument_config,
+        &tuner_config,
+        &values,
+        Some(42),
+    );
+}

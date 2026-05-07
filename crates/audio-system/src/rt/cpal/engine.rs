@@ -12,14 +12,11 @@ use std::{
 use common::commands::edit::FineTunedValuesPayload;
 use common::{
     device::DeviceData,
-    error::AppError,
-    instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, Preset},
-};
-use common::{
-    error::{ControlError, InstrumentError, Result},
+    error::{AppError, ControlError, InstrumentError, Result},
+    instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, PlaybackQuality, Preset},
+    tuner::{Config as TunerConfig, Layout as TunerLayout},
     NodeKey,
 };
-use common::{instrument::PlaybackQuality, tuner::Config as TunerConfig};
 use cpal::{
     traits::{DeviceTrait, HostTrait},
     Device, DeviceId, HostId, StreamConfig, SupportedStreamConfig,
@@ -39,6 +36,7 @@ use crate::{
         AudioRuntime, ExcitementSource,
     },
     system::excitor::SpectrumBuffer,
+    FFT_WINDOW_SIZE,
 };
 
 use super::stream::{spawn_owned_output_stream, Control};
@@ -92,6 +90,17 @@ impl CpalController {
             log::error!("Failed to derive instrument config from default layout: {err}");
             InstrumentConfig::default()
         });
+        let tuner_layout = TunerLayout::from(layout);
+        let tuner_config = TunerConfig::new(
+            tuner_layout,
+            input_device
+                .as_ref()
+                .and_then(|d| d.default_input_config().ok())
+                .map(|c| c.sample_rate() as f32)
+                .unwrap_or(DEFAULT_SR as f32),
+            FFT_WINDOW_SIZE,
+            layout.registry(),
+        );
 
         let output_config = output_device
             .as_ref()
@@ -110,7 +119,7 @@ impl CpalController {
                 layout,
                 config,
                 ExcitementSource::default(),
-                TunerConfig::default(),
+                tuner_config,
                 preset,
                 spectrum_buffer.clone(),
                 sample_type,

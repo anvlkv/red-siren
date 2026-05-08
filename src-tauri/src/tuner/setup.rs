@@ -1,3 +1,4 @@
+use crate::instrument::InstrumentState;
 use crate::persistence::persistence::{load_json_or_default, save_json};
 use common::error::Result;
 use common::tuner::{Config, Layout as TunerLayout};
@@ -15,8 +16,31 @@ pub fn save_tuner_config(app: &AppHandle, config: Config) -> Result<()> {
 
 /// Setup tuner: manage state, restore persisted config, wire event listeners, persist on change.
 pub fn setup(app: &mut App) -> Result<()> {
-    // Restore persisted config if present
-    let config: Config = load_json_or_default(app.handle(), TUNER_STORE_NAME, TUNER_CONFIG_KEY)?;
+    // Restore persisted config if present, then rebase it on the current instrument layout.
+    let persisted_config: Config =
+        load_json_or_default(app.handle(), TUNER_STORE_NAME, TUNER_CONFIG_KEY)?;
+    let config = if let Some(instrument) = app.try_state::<InstrumentState>() {
+        let instrument_layout = instrument.layout();
+        let registry = instrument_layout.registry();
+        let tuner_layout: TunerLayout = instrument_layout.into();
+
+        Config::new_from_previous(
+            tuner_layout,
+            instrument.sample_rate() as f32,
+            audio_system::FFT_WINDOW_SIZE,
+            registry,
+            &persisted_config,
+        )
+    } else {
+        log::warn!(
+            "Instrument state unavailable during tuner setup; using persisted tuner config as-is"
+        );
+        persisted_config.clone()
+    };
+
+    if config != persisted_config {
+        save_tuner_config(app.handle(), config.clone())?;
+    }
 
     // Emit current config so UI picks it up
     app.emit(common::events::tuner::CONFIG, config.clone())?;

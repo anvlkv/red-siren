@@ -51,6 +51,17 @@ impl TunerState {
         self.tuner_config.read().clone()
     }
 
+    pub fn ensure_config_from_instrument_layout(&self) -> Result<Config> {
+        let instrument = self.app.state::<InstrumentState>();
+        let instrument_layout = instrument.layout();
+        let registry = instrument_layout.registry();
+        let tuner_layout: TunerLayout = instrument_layout.into();
+
+        Ok(self
+            .update_layout(tuner_layout, registry)?
+            .unwrap_or_else(|| self.tuner_config()))
+    }
+
     pub fn tuner_layout(&self) -> Option<TunerLayout> {
         self.current_layout.read().iter().copied().next()
     }
@@ -250,6 +261,7 @@ impl TunerState {
     /// to using the existing stream without owning it.
     pub fn start_tuner_stream(&self) -> Result<()> {
         let instrument = self.app.state::<InstrumentState>();
+        let tuner_config = self.ensure_config_from_instrument_layout()?;
 
         log::debug!(
             "tuner.start_tuner_stream: begin (playing={}, src={:?})",
@@ -268,7 +280,7 @@ impl TunerState {
             log::debug!(
                 "tuner.start_tuner_stream: controller not playing; starting tuner-only stream now"
             );
-            instrument.start_tuner_only_stream(&self.tuner_config())?;
+            instrument.start_tuner_only_stream(&tuner_config)?;
             *self.tuner_stream_active.write() = true;
             log::debug!("tuner.start_tuner_stream: started tuner-only stream (owned=true)");
         } else {
@@ -282,7 +294,7 @@ impl TunerState {
                     "tuner.start_tuner_stream: retry {attempt}/10 (playing={still_playing})"
                 );
                 if !still_playing {
-                    match instrument.start_tuner_only_stream(&self.tuner_config()) {
+                    match instrument.start_tuner_only_stream(&tuner_config) {
                         Ok(()) => {
                             owned = true;
                             log::debug!(

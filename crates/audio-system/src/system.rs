@@ -39,9 +39,19 @@ pub fn create_system<
     values: &FineTunedValues,
     seed: Option<u64>,
 ) -> (Net, SystemHandle) {
+    let node_count = instrument_config.num_nodes_total();
+    let sensor_count = tuner_config.sensor_data.len();
+    if node_count != sensor_count {
+        log::error!(
+            "create_system invariant violated: nodes={} sensors={} (tuner config is inconsistent with instrument layout)",
+            node_count,
+            sensor_count
+        );
+    }
+
     assert_eq!(
-        instrument_config.num_nodes_total(),
-        tuner_config.sensor_data.len(),
+        node_count,
+        sensor_count,
         "number of nodes and sensors must match"
     );
 

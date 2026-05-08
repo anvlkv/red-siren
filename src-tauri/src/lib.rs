@@ -150,11 +150,11 @@ pub fn run() {
         if let Err(e) = intro::setup(app) {
             log::error!("intro::setup failed: {}", e);
         }
-        if let Err(e) = tuner::setup(app) {
-            log::error!("tuner::setup failed: {}", e);
-        }
         if let Err(e) = instrument::setup(app) {
             log::error!("instrument::setup failed: {}", e);
+        }
+        if let Err(e) = tuner::setup(app) {
+            log::error!("tuner::setup failed: {}", e);
         }
 
         // Setup AppBus last

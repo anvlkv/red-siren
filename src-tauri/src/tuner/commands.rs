@@ -9,7 +9,7 @@ use super::TunerState;
 
 #[tauri::command]
 pub fn tuner_config(state: State<'_, TunerState>) -> Result<Config> {
-    Ok(state.tuner_config())
+    state.ensure_config_from_instrument_layout()
 }
 
 #[tauri::command]

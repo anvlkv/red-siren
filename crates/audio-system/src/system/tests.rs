@@ -5,14 +5,158 @@ use std::rc::Rc;
 
 use common::instrument::{
     config::{config_test_cases, representative_layout_configs},
-    Config as InstrumentConfig,
+    Config as InstrumentConfig, NodeConfig,
 };
 use common::tuner::{Config as TunerConfig, SensorData};
 use fundsp::prelude::*;
 use insta_fun::prelude::*;
+use ordered_float::OrderedFloat;
 
 use crate::rt::ExcitementSource;
 use crate::system::{create_system, excitor::FFT_WINDOW_SIZE, values::FineTunedValues};
+
+use super::grid::{adsr_shape_for_node, create_rhythm_grid, create_rhythm_grid_envelope};
+use super::node::create_node_controller;
+
+const DURATION_HARMONIC_NUMERATORS: [u16; 11] = [1, 9, 5, 4, 3, 5, 15, 2, 7, 11, 13];
+const DURATION_FIBONACCI_DENOMINATORS: [u16; 11] = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144];
+
+fn ratio_grid_wav_snapshot_config(num_samples: usize, sample_rate: f64) -> SnapshotConfig {
+    SnapshotConfigBuilder::default()
+        .sample_rate(sample_rate)
+        .num_samples(num_samples)
+        .output_assertion(OutputAssertion::Skip)
+        .allow_abnormal_samples(true)
+        .output_mode(WavOutput::Wav32)
+        .build()
+        .expect("snapshot config must be valid")
+}
+
+fn duration_lattice_ratios() -> Vec<f32> {
+    let mut ratios = Vec::with_capacity(
+        DURATION_HARMONIC_NUMERATORS.len() * DURATION_FIBONACCI_DENOMINATORS.len(),
+    );
+    for &den in &DURATION_FIBONACCI_DENOMINATORS {
+        for &num in &DURATION_HARMONIC_NUMERATORS {
+            ratios.push(num as f32 / den as f32);
+        }
+    }
+    ratios
+}
+
+fn sequential_schedule_input(
+    starts: Vec<f32>,
+    durations: Vec<f32>,
+    ticks_per_beat: usize,
+) -> InputSource {
+    InputSource::Generator(Box::new(move |i, ch| {
+        if i > 0 && i % ticks_per_beat == 0 {
+            let event_index = i / ticks_per_beat - 1;
+            if event_index < durations.len() {
+                if ch == 0 {
+                    return starts[event_index];
+                }
+                if ch == 1 {
+                    return durations[event_index];
+                }
+            }
+        }
+        f32::NAN
+    }))
+}
+
+fn realistic_hit_radius_events() -> Vec<(f32, f32)> {
+    let mut events = Vec::new();
+
+    for step in 0..=16 {
+        let x = step as f32 / 16.0;
+        events.push((0.15 + 0.85 * x, 0.15 + 0.85 * x));
+    }
+
+    for step in 0..=16 {
+        let x = step as f32 / 16.0;
+        events.push((0.20 + 0.70 * x, 0.90 - 0.70 * x));
+    }
+
+    events.extend_from_slice(&[
+        (1.0, 0.15),
+        (0.85, 0.20),
+        (0.65, 0.25),
+        (0.45, 0.30),
+        (0.30, 0.45),
+        (0.20, 0.65),
+        (0.15, 0.85),
+        (0.10, 1.0),
+    ]);
+
+    events
+}
+
+fn beat_aligned_hit_radius_input(events: Vec<(f32, f32)>, ticks_per_beat: usize) -> InputSource {
+    InputSource::Generator(Box::new(move |i, ch| {
+        if i > 0 && i % ticks_per_beat == 0 {
+            let event_index = i / ticks_per_beat - 1;
+            if event_index < events.len() {
+                let (hit, radius) = events[event_index];
+                if ch == 0 {
+                    return hit;
+                }
+                if ch == 1 {
+                    return radius;
+                }
+            }
+        }
+        0.0
+    }))
+}
+
+fn scheduler_grid_envelope_unit(bpm: f32) -> impl AudioUnit {
+    let node_config = NodeConfig::new_test_node(220.0);
+    let env = create_rhythm_grid_envelope::<f32, _, _>(
+        sine_hz::<f32>(110.0),
+        adsr_shape_for_node::<f32>(&node_config),
+    );
+    ((dc(bpm) >> create_rhythm_grid::<f32>()) | pass() | pass()) >> env
+}
+
+fn controller_grid_envelope_net(
+    bpm: f32,
+    accentuation: f32,
+    rhythm: f32,
+    node_config: NodeConfig,
+) -> Net {
+    let mut net = Net::new(2, 1);
+
+    let bpm_src = net.push(Box::new(dc(bpm)));
+    let grid = net.push(Box::new(create_rhythm_grid::<f32>()));
+
+    let shared_accentuation = Shared::new(accentuation);
+    let shared_rhythm = Shared::new(rhythm);
+    let controller = net.push(Box::new(create_node_controller::<f32>(
+        node_config.clone(),
+        &shared_accentuation,
+        &shared_rhythm,
+    )));
+    let env = net.push(Box::new(create_rhythm_grid_envelope::<f32, _, _>(
+        sine_hz::<f32>(110.0),
+        adsr_shape_for_node::<f32>(&node_config),
+    )));
+
+    net.connect(bpm_src, 0, grid, 0);
+
+    net.connect_input(0, controller, 0);
+    net.connect_input(1, controller, 1);
+
+    net.connect(grid, 0, env, 0);
+    net.connect(grid, 1, env, 1);
+    net.connect(grid, 2, env, 2);
+    net.connect(controller, 0, env, 3);
+    net.connect(controller, 1, env, 4);
+
+    net.pipe_output(env);
+    net.check();
+    net
+}
 
 fn tuner_config_for(instrument_config: &InstrumentConfig) -> TunerConfig {
     let sensor_data = instrument_config
@@ -315,5 +459,62 @@ fn system_builds_for_manual_source() {
         &tuner_config,
         &values,
         Some(42),
+    );
+}
+
+#[test]
+fn system_duration_ratio_lattice_grid_adsr_wav() {
+    const SAMPLE_RATE: f64 = 2_000.0;
+    const BPM: f32 = 240.0;
+
+    let ticks_per_beat = (SAMPLE_RATE * 60.0 / BPM as f64).round() as usize;
+    let durations = duration_lattice_ratios();
+    let starts = vec![0.0; durations.len()];
+
+    assert_eq!(durations.len(), 121);
+    assert!(durations.iter().all(|d| d.is_finite() && *d > 0.0));
+
+    let max_duration = durations.iter().copied().fold(0.0_f32, f32::max);
+    let num_samples = (durations.len() + 2) * ticks_per_beat
+        + (max_duration * ticks_per_beat as f32).ceil() as usize;
+
+    let unit = scheduler_grid_envelope_unit(BPM);
+    let input = sequential_schedule_input(starts, durations, ticks_per_beat);
+
+    assert_audio_unit_snapshot!(
+        "system_duration_ratio_lattice_grid_adsr_wav",
+        unit,
+        input,
+        ratio_grid_wav_snapshot_config(num_samples, SAMPLE_RATE)
+    );
+}
+
+#[test]
+fn system_duration_ratio_controller_realistic_grid_adsr_wav() {
+    const SAMPLE_RATE: f64 = 2_000.0;
+    const BPM: f32 = 240.0;
+
+    let ticks_per_beat = (SAMPLE_RATE * 60.0 / BPM as f64).round() as usize;
+    let events = realistic_hit_radius_events();
+
+    let distinct_pairs = events
+        .iter()
+        .map(|(hit, radius)| (OrderedFloat(*hit), OrderedFloat(*radius)))
+        .collect::<std::collections::BTreeSet<_>>();
+    assert!(
+        distinct_pairs.len() >= 20,
+        "expected broad realistic hit/radius coverage"
+    );
+
+    let num_samples = (events.len() + 6) * ticks_per_beat;
+
+    let unit = controller_grid_envelope_net(BPM, 0.0, 0.0, NodeConfig::new_test_node(220.0));
+    let input = beat_aligned_hit_radius_input(events, ticks_per_beat);
+
+    assert_audio_unit_snapshot!(
+        "system_duration_ratio_controller_realistic_grid_adsr_wav",
+        unit,
+        input,
+        ratio_grid_wav_snapshot_config(num_samples, SAMPLE_RATE)
     );
 }

@@ -385,6 +385,7 @@ pub fn create_metro_tempo<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use common::instrument::config::representative_layout_configs;
     use insta_fun::prelude::*;
     use num_complex::Complex;
     use ordered_float::OrderedFloat;
@@ -422,6 +423,18 @@ mod tests {
         weight_tables: Vec<ExcitementData<f32>>,
     ) -> MetroTempo<f32> {
         MetroTempo::new(bpm_tables, Arc::new(RwLock::new(weight_tables)))
+    }
+
+    fn metro_tempo_for_layout_snapshot(index: usize) -> MetroTempo<f32> {
+        let config = representative_layout_configs()
+            .into_iter()
+            .nth(index)
+            .expect("representative layout config must exist");
+        let bpm_tables = config.bpm_tables();
+        let num_nodes: usize = bpm_tables.iter().map(|band| band.len()).sum();
+        let calm: Vec<ExcitementData<f32>> =
+            vec![Complex::new(OrderedFloat(1.0_f32), OrderedFloat(0.0_f32)); num_nodes];
+        metro_tempo_for_snapshot(bpm_tables, calm)
     }
 
     #[test]
@@ -489,6 +502,42 @@ mod tests {
 
         assert_audio_unit_snapshot!(
             "metro_tempo_agitated_weights",
+            metro,
+            InputSource::None,
+            snapshot_config(320)
+        );
+    }
+
+    #[test]
+    fn metro_tempo_audio_snapshot_layout_representative_first() {
+        let metro = An(metro_tempo_for_layout_snapshot(0));
+
+        assert_audio_unit_snapshot!(
+            "metro_tempo_layout_representative_first",
+            metro,
+            InputSource::None,
+            snapshot_config(320)
+        );
+    }
+
+    #[test]
+    fn metro_tempo_audio_snapshot_layout_representative_mid() {
+        let metro = An(metro_tempo_for_layout_snapshot(1));
+
+        assert_audio_unit_snapshot!(
+            "metro_tempo_layout_representative_mid",
+            metro,
+            InputSource::None,
+            snapshot_config(320)
+        );
+    }
+
+    #[test]
+    fn metro_tempo_audio_snapshot_layout_representative_last() {
+        let metro = An(metro_tempo_for_layout_snapshot(2));
+
+        assert_audio_unit_snapshot!(
+            "metro_tempo_layout_representative_last",
             metro,
             InputSource::None,
             snapshot_config(320)

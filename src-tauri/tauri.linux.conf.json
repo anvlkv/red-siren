@@ -1,0 +1,16 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Red Siren",
+  "identifier": "com.anvlkv.redsiren",
+  "app": {
+    "windows": [
+      {
+        "label": "splashscreen",
+        "decorations": false,
+        "url": "splashscreen.html",
+        "shadow": true
+      }
+    ]
+  },
+  "bundle": {}
+}

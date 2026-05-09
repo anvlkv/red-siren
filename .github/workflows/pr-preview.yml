@@ -1,0 +1,245 @@
+name: PR Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+jobs:
+  build-desktop-preview:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (ubuntu only)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Add node_modules/.bin to PATH
+        run: echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH
+
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.4.0
+        with:
+          version: "latest"
+
+      - name: Install Tauri CLI
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: tauri-cli
+          version: "^2.0"
+          cache-key: tauri-cli-v2
+
+      - name: Build desktop app
+        run: cargo tauri build
+
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-ubuntu-desktop-${{ github.event.pull_request.number }}
+          path: target/release/bundle/
+          if-no-files-found: warn
+          retention-days: 7
+
+  build-android-preview:
+    runs-on: ubuntu-latest
+    outputs:
+      built: ${{ steps.evaluate.outputs.built }}
+    steps:
+      - name: Evaluate Android signing secrets
+        id: evaluate
+        run: |
+          if [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ] || [ -z "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ] || [ -z "${{ secrets.ANDROID_KEY_ALIAS }}" ] || [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ]; then
+            echo "built=false" >> $GITHUB_OUTPUT
+            echo "Android signing secrets missing. Skipping Android preview job steps."
+          else
+            echo "built=true" >> $GITHUB_OUTPUT
+          fi
+      - if: steps.evaluate.outputs.built == 'true'
+        uses: actions/checkout@v4
+      - name: Rust cache
+        if: steps.evaluate.outputs.built == 'true'
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Setup Node.js
+        if: steps.evaluate.outputs.built == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+
+      - name: Install frontend dependencies
+        if: steps.evaluate.outputs.built == 'true'
+        run: npm ci
+
+      - name: Add node_modules/.bin to PATH
+        if: steps.evaluate.outputs.built == 'true'
+        run: echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH
+
+      - name: Install Trunk
+        if: steps.evaluate.outputs.built == 'true'
+        uses: jetli/trunk-action@v0.4.0
+        with:
+          version: "latest"
+
+      - name: Install Tauri CLI
+        if: steps.evaluate.outputs.built == 'true'
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: tauri-cli
+          version: "^2.0"
+          cache-key: tauri-cli-v2
+
+      - name: Setup Java
+        if: steps.evaluate.outputs.built == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Setup Android SDK
+        if: steps.evaluate.outputs.built == 'true'
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        if: steps.evaluate.outputs.built == 'true'
+        run: |
+          ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "ndk;25.1.8937393"
+
+      - name: Setup Android environment
+        if: steps.evaluate.outputs.built == 'true'
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.1.8937393" >> $GITHUB_ENV
+
+      - name: Check Android keystore availability
+        id: set-built
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "KEYSTORE_AVAILABLE=true" >> $GITHUB_ENV
+            echo "built=true" >> $GITHUB_OUTPUT
+          else
+            echo "KEYSTORE_AVAILABLE=false" >> $GITHUB_ENV
+            echo "built=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Android signing keystore
+        if: env.KEYSTORE_AVAILABLE == 'true' && steps.evaluate.outputs.built == 'true'
+        run: |
+          printf '%s' "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode --ignore-garbage > ${{ runner.temp }}/keystore.jks
+          echo "ANDROID_KEYSTORE_PATH=${{ runner.temp }}/keystore.jks" >> $GITHUB_ENV
+
+      - name: Initialize Android platform
+        if: steps.evaluate.outputs.built == 'true'
+        run: cargo tauri android init
+
+      - name: Build Android app
+        if: env.KEYSTORE_AVAILABLE == 'true' && steps.evaluate.outputs.built == 'true'
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: cargo tauri android build --apk
+
+      - name: Upload Android artifacts
+        if: env.KEYSTORE_AVAILABLE == 'true' && steps.evaluate.outputs.built == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-android-mobile-${{ github.event.pull_request.number }}
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: warn
+          retention-days: 7
+
+  create-preview-release:
+    needs: [build-desktop-preview, build-android-preview]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release-url: ${{ steps.create-release.outputs.html_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Delete existing preview release
+        run: |
+          TAG_NAME="preview-pr-${{ github.event.pull_request.number }}"
+          # Check if release exists and delete it
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Deleting existing preview release: $TAG_NAME"
+            gh release delete "$TAG_NAME" --yes
+          fi
+          # Delete tag if it exists
+          if git ls-remote --tags origin | grep -q "refs/tags/$TAG_NAME"; then
+            echo "Deleting existing tag: $TAG_NAME"
+            git push --delete origin "$TAG_NAME" || true
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create preview release
+        id: create-release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: preview-pr-${{ github.event.pull_request.number }}
+          name: "Preview: PR #${{ github.event.pull_request.number }}"
+          body: |
+            Preview build for PR #${{ github.event.pull_request.number }} (commit ${{ github.event.pull_request.head.sha }})
+            Artifacts: Linux desktop bundles and Android APK (if available).
+
+          files: |
+            artifacts/**/appimage/*.AppImage
+            artifacts/**/deb/*.deb
+            artifacts/**/rpm/*.rpm
+            artifacts/**/*.apk
+          draft: true
+          prerelease: true
+          fail_on_unmatched_files: false
+          generate_release_notes: false
+
+  comment-on-pr:
+    needs: [create-preview-release, build-android-preview]
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const tagName = `preview-pr-${prNumber}`;
+            const releaseUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/${tagName}`;
+            const androidBuilt = "${{ needs.build-android-preview.outputs.built }}" === "true";
+            const commit = context.payload.pull_request.head.sha.substring(0,7);
+            let comment = `Preview build: PR #${prNumber} (${commit})\n${releaseUrl}\n\nArtifacts:\n- Linux desktop\n`;
+            if (androidBuilt) comment += "- Android APK\n";
+
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: comment
+            });

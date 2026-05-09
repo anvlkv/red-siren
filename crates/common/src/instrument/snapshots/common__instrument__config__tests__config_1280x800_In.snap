@@ -1,0 +1,91 @@
+---
+source: crates/common/src/instrument/config.rs
+expression: config
+---
+[
+  [
+    {
+      "channel": "Right",
+      "nodes": [
+        {
+          "key": [
+            0,
+            0
+          ],
+          "frequency": 159.4388,
+          "phase": 0.0,
+          "cents": 491.4811,
+          "l_mm": 400.0056,
+          "w_kg": 0.4,
+          "v_cm3": 200.0
+        },
+        {
+          "key": [
+            0,
+            1
+          ],
+          "frequency": 191.6166,
+          "phase": 0.1667,
+          "cents": 809.745,
+          "l_mm": 292.0357,
+          "w_kg": 0.2427,
+          "v_cm3": 77.8287
+        },
+        {
+          "key": [
+            0,
+            2
+          ],
+          "frequency": 240.0667,
+          "phase": 0.3333,
+          "cents": 1200.0,
+          "l_mm": 148.3286,
+          "w_kg": 0.1315,
+          "v_cm3": 10.1978
+        }
+      ]
+    },
+    {
+      "channel": "Left",
+      "nodes": [
+        {
+          "key": [
+            1,
+            0
+          ],
+          "frequency": 318.8872,
+          "phase": 0.5,
+          "cents": 491.4811,
+          "l_mm": 53.9358,
+          "w_kg": 0.0608,
+          "v_cm3": 0.4903
+        },
+        {
+          "key": [
+            1,
+            1
+          ],
+          "frequency": 383.2447,
+          "phase": 0.6667,
+          "cents": 809.745,
+          "l_mm": 30.4561,
+          "w_kg": 0.0369,
+          "v_cm3": 0.0883
+        },
+        {
+          "key": [
+            1,
+            2
+          ],
+          "frequency": 480.1478,
+          "phase": 0.8333,
+          "cents": 1200.0,
+          "l_mm": 20.0003,
+          "w_kg": 0.02,
+          "v_cm3": 0.025
+        }
+      ]
+    }
+  ],
+  "In"
+]

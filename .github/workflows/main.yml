@@ -1,0 +1,255 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-desktop:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest"
+            args: "--target aarch64-apple-darwin --target x86_64-apple-darwin"
+          - platform: "ubuntu-22.04"
+            args: ""
+          - platform: "windows-latest"
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Add node_modules/.bin to PATH
+        run: echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH
+
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.4.0
+        with:
+          version: "latest"
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: "Red Siren v__VERSION__"
+          releaseBody: "See the assets to download this version and install."
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  build-android:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Add node_modules/.bin to PATH
+        run: echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH
+
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.4.0
+        with:
+          version: "latest"
+
+      - name: Install Tauri CLI
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: tauri-cli
+          version: "^2.0"
+          cache-key: tauri-cli-v2
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: |
+          ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "ndk;25.1.8937393"
+
+      - name: Setup Android environment
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.1.8937393" >> $GITHUB_ENV
+
+      - name: Check Android keystore availability
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "KEYSTORE_AVAILABLE=true" >> $GITHUB_ENV
+          else
+            echo "KEYSTORE_AVAILABLE=false" >> $GITHUB_ENV
+          fi
+
+      - name: Setup Android signing keystore
+        if: env.KEYSTORE_AVAILABLE == 'true'
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > ${{ runner.temp }}/keystore.jks
+          echo "ANDROID_KEYSTORE_PATH=${{ runner.temp }}/keystore.jks" >> $GITHUB_ENV
+
+      - name: Initialize Android platform
+        run: cargo tauri android init
+
+      - name: Build Android release
+        if: env.KEYSTORE_AVAILABLE == 'true'
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: cargo tauri android build --apk --aab --release
+
+      - name: Upload Android artifacts to release
+        if: env.KEYSTORE_AVAILABLE == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.run_number }}
+          name: "Red Siren v${{ github.run_number }}"
+          body: "Automated release from main branch"
+          files: |
+            src-tauri/gen/android/app/build/outputs/apk/release/*.apk
+            src-tauri/gen/android/app/build/outputs/bundle/release/*.aab
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: false
+          generate_release_notes: true
+          make_latest: true
+
+  build-ios:
+    permissions:
+      contents: write
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Add node_modules/.bin to PATH
+        run: echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH
+
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.4.0
+        with:
+          version: "latest"
+
+      - name: Install Tauri CLI
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: tauri-cli
+          version: "^2.0"
+          cache-key: tauri-cli-v2
+
+      - name: Check Apple certificate availability
+        run: |
+          if [ -n "${{ secrets.APPLE_CERTIFICATE }}" ]; then
+            echo "APPLE_CERT_AVAILABLE=true" >> $GITHUB_ENV
+          else
+            echo "APPLE_CERT_AVAILABLE=false" >> $GITHUB_ENV
+          fi
+
+      - name: Import Code-Signing Certificates
+        if: env.APPLE_CERT_AVAILABLE == 'true'
+        uses: Apple-Actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+
+      - name: Initialize iOS platform
+        run: cargo tauri ios init
+
+      - name: Build iOS release
+        if: env.APPLE_CERT_AVAILABLE == 'true'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+        run: cargo tauri ios build --release
+
+      - name: Check Apple API key availability
+        run: |
+          if [ -n "${{ secrets.APPLE_API_KEY }}" ]; then
+            echo "APPLE_API_AVAILABLE=true" >> $GITHUB_ENV
+          else
+            echo "APPLE_API_AVAILABLE=false" >> $GITHUB_ENV
+          fi
+
+      - name: Upload to App Store Connect
+        if: env.APPLE_API_AVAILABLE == 'true'
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          IPA_PATH=$(find src-tauri/gen/apple/build -name "*.ipa" | head -n 1)
+          if [ -n "$IPA_PATH" ]; then
+            xcrun altool --upload-app --type ios --file "$IPA_PATH" \
+              --apiKey "$APPLE_API_KEY" \
+              --apiIssuer "$APPLE_API_ISSUER"
+          fi
+
+      - name: Upload iOS artifacts to release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.run_number }}
+          name: "Red Siren v${{ github.run_number }}"
+          body: "Automated release from main branch"
+          files: src-tauri/gen/apple/build/**/*.ipa
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: false
+          generate_release_notes: true
+          make_latest: true

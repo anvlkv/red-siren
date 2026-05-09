@@ -1,0 +1,28 @@
+---
+source: crates/audio-system/src/system/node/tests.rs
+expression: trace
+---
+[
+    PairingSample {
+        _key: (
+            0,
+            7,
+        ),
+        _channel: "left",
+        source_hit: 0,
+        source_radius: 1,
+        target_hit: 3,
+        target_radius: 4,
+    },
+    PairingSample {
+        _key: (
+            0,
+            3,
+        ),
+        _channel: "right",
+        source_hit: 2,
+        source_radius: 3,
+        target_hit: 3,
+        target_radius: 4,
+    },
+]

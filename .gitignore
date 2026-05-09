@@ -24,9 +24,21 @@ dioxusin
 **/xcuserdata/
 **/UserInterfaceState.xcuserstate
 
-*.snap.new
+*.snap.new*
 
 iOS/Pods/
 
-.vscode/
 .idea/
+
+_*
+
+node_modules/
+
+*.log
+
+references/
+actionlint
+red-siren-test-release.jks
+.env
+secrets/
+*.pkg

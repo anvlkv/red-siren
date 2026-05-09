@@ -1,0 +1,5 @@
+---
+source: crates/audio-system/src/system/feedback_pass.rs
+extension: svg
+snapshot_kind: binary
+---

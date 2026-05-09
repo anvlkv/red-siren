@@ -1,0 +1,991 @@
+use std::{f32, sync::Arc, thread, time::Duration};
+
+#[cfg(feature = "editor")]
+use common::commands::edit::FineTunedValuesPayload;
+use common::error::ControlError;
+use common::{
+    instrument::{Config as InstrumentConfig, Layout as InstrumentLayout, Preset},
+    tuner::Config as TunerConfig,
+    NodeKey,
+};
+use fundsp::{prelude::*, typenum::Unsigned as _};
+use parking_lot::RwLock;
+use u_num_it::u_num_it;
+
+#[cfg(feature = "editor")]
+use crate::system::values::FineTunedSharedValues;
+use crate::{
+    output_analyzer::OUTPUT_ANALYZER_FFT_WINDOW_SIZE,
+    quality::SampleType,
+    rt::ExcitementSource,
+    system::{
+        create_system, excitor::SpectrumBuffer, handle::SystemHandle, values::FineTunedValues,
+    },
+};
+
+pub const FADE_DURATION_MS: u64 = 120;
+const FOLLOW_RESPONSE_SECS: f32 = FADE_DURATION_MS as f32 / 1000.0;
+
+#[derive(Clone)]
+pub struct RuntimeSubsystem {
+    sample_type: SampleType,
+    num_channels: u8,
+    sample_rate: Arc<RwLock<f64>>,
+    dsp_net: Arc<RwLock<Net>>,
+    dsp_primary_node_id: Arc<RwLock<NodeId>>,
+    gain_param: Arc<Shared>,
+
+    processed_output_snoops: Arc<RwLock<(Snoop, Snoop)>>,
+    system_handle: Arc<RwLock<SystemHandle>>,
+
+    pub(crate) preset: Arc<RwLock<Preset>>,
+
+    pub(crate) layout: Arc<RwLock<InstrumentLayout>>,
+    pub(crate) config: Arc<RwLock<InstrumentConfig>>,
+    pub(crate) source: Arc<RwLock<ExcitementSource>>,
+    pub(crate) tuner_config: Arc<RwLock<TunerConfig>>,
+
+    #[cfg(feature = "editor")]
+    fine_tuned_shared_values: Arc<RwLock<FineTunedSharedValues>>,
+}
+
+struct CreateMainNetworkReturn {
+    gain_param: Shared,
+    processed_output_snoop_l: Snoop,
+    processed_output_snoop_r: Snoop,
+    instrument_node_id: NodeId,
+    net: Net,
+}
+
+struct CreateInstrumentNetworkReturn {
+    system_handle: SystemHandle,
+    net: Net,
+}
+
+impl RuntimeSubsystem {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        layout: InstrumentLayout,
+        config: InstrumentConfig,
+        source: ExcitementSource,
+        tuner_config: TunerConfig,
+        preset: Preset,
+        spectrum_data_thb: SpectrumBuffer,
+        sample_type: SampleType,
+        num_channels: usize,
+        sample_rate: f64,
+    ) -> Self {
+        #[cfg(feature = "editor")]
+        let fine_tuned_shared_values = Arc::new(RwLock::new(FineTunedSharedValues::new()));
+
+        #[cfg(feature = "editor")]
+        let fine_tuned_values = Self::snapshot_fine_tuned_values(&fine_tuned_shared_values);
+
+        let CreateInstrumentNetworkReturn { system_handle, net } = Self::create_instrument_network(
+            num_channels,
+            sample_rate,
+            sample_type,
+            source,
+            &config,
+            &tuner_config,
+            &preset,
+            &spectrum_data_thb,
+            #[cfg(feature = "editor")]
+            &fine_tuned_values,
+        );
+
+        let CreateMainNetworkReturn {
+            gain_param,
+            processed_output_snoop_l,
+            processed_output_snoop_r,
+            instrument_node_id,
+            net: dsp_net,
+        } = Self::create_main_network(num_channels, sample_rate, net);
+
+        Self {
+            sample_type,
+            num_channels: num_channels as u8,
+            sample_rate: Arc::new(RwLock::new(sample_rate)),
+            dsp_net: Arc::new(RwLock::new(dsp_net)),
+            dsp_primary_node_id: Arc::new(RwLock::new(instrument_node_id)),
+            gain_param: Arc::new(gain_param),
+
+            processed_output_snoops: Arc::new(RwLock::new((
+                processed_output_snoop_l,
+                processed_output_snoop_r,
+            ))),
+            system_handle: Arc::new(RwLock::new(system_handle)),
+
+            preset: Arc::new(RwLock::new(preset)),
+
+            layout: Arc::new(RwLock::new(layout)),
+            config: Arc::new(RwLock::new(config)),
+            source: Arc::new(RwLock::new(source)),
+            tuner_config: Arc::new(RwLock::new(tuner_config)),
+
+            #[cfg(feature = "editor")]
+            fine_tuned_shared_values,
+        }
+    }
+
+    pub fn new_with_tuner_only(
+        layout: InstrumentLayout,
+        tuner_config: TunerConfig,
+        spectrum_data_thb: SpectrumBuffer,
+        sample_type: SampleType,
+        num_channels: usize,
+        sample_rate: f64,
+    ) -> Self {
+        #[cfg(feature = "editor")]
+        let fine_tuned_shared_values = Arc::new(RwLock::new(FineTunedSharedValues::new()));
+
+        #[cfg(feature = "editor")]
+        let fine_tuned_values = Self::snapshot_fine_tuned_values(&fine_tuned_shared_values);
+
+        let CreateInstrumentNetworkReturn { system_handle, net } = Self::create_instrument_network(
+            num_channels,
+            sample_rate,
+            sample_type,
+            ExcitementSource::Mic,
+            &InstrumentConfig::default(),
+            &tuner_config,
+            &Preset::default(),
+            &spectrum_data_thb,
+            #[cfg(feature = "editor")]
+            &fine_tuned_values,
+        );
+        let source = ExcitementSource::Mic;
+
+        let CreateMainNetworkReturn {
+            gain_param,
+            processed_output_snoop_l,
+            processed_output_snoop_r,
+            instrument_node_id,
+            net: dsp_net,
+        } = Self::create_main_network(num_channels, sample_rate, net);
+
+        Self {
+            sample_type,
+            num_channels: num_channels as u8,
+            sample_rate: Arc::new(RwLock::new(sample_rate)),
+            dsp_net: Arc::new(RwLock::new(dsp_net)),
+            dsp_primary_node_id: Arc::new(RwLock::new(instrument_node_id)),
+            gain_param: Arc::new(gain_param),
+
+            processed_output_snoops: Arc::new(RwLock::new((
+                processed_output_snoop_l,
+                processed_output_snoop_r,
+            ))),
+            system_handle: Arc::new(RwLock::new(system_handle)),
+
+            preset: Arc::new(RwLock::new(Default::default())),
+
+            layout: Arc::new(RwLock::new(layout)),
+            config: Arc::new(RwLock::new(Default::default())),
+            source: Arc::new(RwLock::new(source)),
+            tuner_config: Arc::new(RwLock::new(tuner_config)),
+
+            #[cfg(feature = "editor")]
+            fine_tuned_shared_values,
+        }
+    }
+
+    #[allow(dead_code)]
+    #[deprecated(note = "Sample-type restarts are handled at runtime controller level")]
+    pub fn restart_with_sample_type(&self, sample_type: SampleType) -> Self {
+        self.fade_out();
+        RuntimeSubsystem::new(
+            *self.layout.read(),
+            self.config.read().clone(),
+            *self.source.read(),
+            self.tuner_config.read().clone(),
+            self.get_preset(),
+            self.system_handle
+                .read()
+                .excitor_handle
+                .analyzer
+                .spectrum_buffer
+                .clone(),
+            sample_type,
+            self.num_channels as usize,
+            *self.sample_rate.read(),
+        )
+    }
+
+    pub fn restart_with_tuner_only(&self, tuner_config: Option<TunerConfig>) -> Self {
+        self.fade_out();
+        let Self {
+            sample_type,
+            num_channels,
+            sample_rate,
+            layout,
+            config,
+            tuner_config: old_tuner_config,
+            ..
+        } = self.clone();
+        let tuner_only = RuntimeSubsystem::new_with_tuner_only(
+            *layout.read(),
+            tuner_config.unwrap_or_else(|| old_tuner_config.read().clone()),
+            self.system_handle
+                .read()
+                .excitor_handle
+                .analyzer
+                .spectrum_buffer
+                .clone(),
+            sample_type,
+            num_channels as usize,
+            *sample_rate.read(),
+        );
+        Self {
+            layout,
+            config,
+            ..tuner_only
+        }
+    }
+
+    pub fn update_tuner_config(&self, tuner_config: &TunerConfig) {
+        let system_handle = self.system_handle.read();
+
+        // 1. Update Nyquist Shared params in the live signal graph (zero DSP rebuild).
+        system_handle
+            .input_ny_thr
+            .set_value(tuner_config.ny_threshold);
+        system_handle
+            .input_ny_wd
+            .set_value(tuner_config.ny_wet_ratio);
+
+        // 2. Update analyzer atomics used by the excitor analyzer worker.
+        system_handle
+            .excitor_handle
+            .analyzer
+            .frequency_limit
+            .0
+            .store(
+                tuner_config
+                    .frequency_range
+                    .0
+                    .map_or(-1, |f| f.round() as i32),
+                std::sync::atomic::Ordering::SeqCst,
+            );
+        system_handle
+            .excitor_handle
+            .analyzer
+            .frequency_limit
+            .1
+            .store(
+                tuner_config
+                    .frequency_range
+                    .1
+                    .map_or(-1, |f| f.round() as i32),
+                std::sync::atomic::Ordering::SeqCst,
+            );
+        system_handle.excitor_handle.analyzer.fft_size.store(
+            tuner_config.fft_size as u32,
+            std::sync::atomic::Ordering::SeqCst,
+        );
+        system_handle.excitor_handle.analyzer.sample_rate.store(
+            tuner_config.sample_rate.round() as u32,
+            std::sync::atomic::Ordering::SeqCst,
+        );
+
+        // 3. Push updated sensor bounds into the per-node Shared params.
+        {
+            for sensor in &tuner_config.sensor_data {
+                if let Some(h) = system_handle
+                    .excitor_handle
+                    .analyzer
+                    .sensors
+                    .get(&sensor.key)
+                {
+                    h.min_freq.set_value(sensor.min_frequency);
+                    h.max_freq.set_value(sensor.max_frequency);
+                    h.min_mag.set_value(sensor.min_magnitude);
+                    h.max_mag.set_value(sensor.max_magnitude);
+                }
+            }
+        }
+
+        // 4. Store updated config.
+        *self.tuner_config.write() = tuner_config.clone();
+    }
+
+    /// backend() must be called before any commit()-based operations (e.g.
+    /// update_sample_rate). Net::backend() moves vertices to the backend and
+    /// sets has_backend(); commit() asserts has_backend() and panics otherwise.
+    #[must_use]
+    pub fn backend(&self) -> NetBackend {
+        self.dsp_net.write().backend()
+    }
+
+    #[deprecated(note = "Sample-rate updates are applied by rebuilding the runtime graph")]
+    pub fn update_sample_rate(&mut self, sample_rate: f64) {
+        {
+            let mut dsp_lock = self.dsp_net.write();
+            dsp_lock.set_sample_rate(sample_rate);
+            dsp_lock.commit();
+        }
+        *self.sample_rate.write() = sample_rate;
+    }
+
+    pub fn update_preset(&self, new_preset: Preset) {
+        let should_update_nets = {
+            let mut preset_lock = self.preset.write();
+            let update = new_preset.keys().any(|k| !preset_lock.has(k))
+                && preset_lock.keys().any(|k| !new_preset.has(k));
+            *preset_lock = new_preset.clone();
+            update
+        };
+
+        if should_update_nets {
+            let instrument_net = {
+                let config = self.config.read();
+                let CreateInstrumentNetworkReturn {
+                    system_handle, net, ..
+                } = Self::create_instrument_network(
+                    self.num_channels as usize,
+                    *self.sample_rate.read(),
+                    self.sample_type,
+                    *self.source.read(),
+                    &config,
+                    &self.tuner_config.read(),
+                    &new_preset,
+                    &self
+                        .system_handle
+                        .read()
+                        .excitor_handle
+                        .analyzer
+                        .spectrum_buffer,
+                    #[cfg(feature = "editor")]
+                    &Self::snapshot_fine_tuned_values(&self.fine_tuned_shared_values),
+                );
+
+                *self.system_handle.write() = system_handle;
+                net
+            };
+            self.replace_network(instrument_net, &self.dsp_primary_node_id.read());
+        } else {
+            let system_handle = self.system_handle.read();
+            system_handle.node_handles.iter().for_each(|(k, node)| {
+                if let Some(val) = new_preset.get_band_value(k) {
+                    node.accentuation.set_value(val);
+                }
+                if let Some(val) = new_preset.get_key_value(k) {
+                    node.rhythm.set_value(val);
+                }
+            });
+        }
+    }
+
+    pub fn get_preset(&self) -> Preset {
+        self.preset.read().clone()
+    }
+
+    pub fn set_band_control(&self, key: NodeKey, value: f32) -> common::error::Result<()> {
+        self.preset.write().set_band_value(&key, value);
+        let system_handle = self.system_handle.read();
+        if let Some(node) = system_handle.node_handles.get(&key) {
+            node.accentuation.set_value(value);
+            Ok(())
+        } else {
+            Err(ControlError::NodeNotFound { key }.into())
+        }
+    }
+
+    pub fn get_band_control(&self, key: NodeKey) -> common::error::Result<f32> {
+        let system_handle = self.system_handle.read();
+        if let Some(node) = system_handle.node_handles.get(&key) {
+            Ok(node.accentuation.value())
+        } else {
+            Err(ControlError::NodeNotFound { key }.into())
+        }
+    }
+
+    pub fn set_key_control(&self, key: NodeKey, value: f32) -> common::error::Result<()> {
+        self.preset.write().set_key_value(&key, value);
+        let system_handle = self.system_handle.read();
+        if let Some(node) = system_handle.node_handles.get(&key) {
+            node.rhythm.set_value(value);
+            Ok(())
+        } else {
+            Err(ControlError::NodeNotFound { key }.into())
+        }
+    }
+
+    pub fn get_key_control(&self, key: NodeKey) -> common::error::Result<f32> {
+        let system_handle = self.system_handle.read();
+        if let Some(node) = system_handle.node_handles.get(&key) {
+            Ok(node.rhythm.value())
+        } else {
+            Err(ControlError::NodeNotFound { key }.into())
+        }
+    }
+
+    #[deprecated(
+        note = "Use node control handles through hit/release APIs or direct control mapping"
+    )]
+    pub fn set_siren_excite(
+        &self,
+        key: NodeKey,
+        real: f32,
+        imag: f32,
+    ) -> common::error::Result<()> {
+        let system_handle = self.system_handle.read();
+        if let Some(control) = system_handle.excitor_handle.controls.get(&key) {
+            control.set_value((real, imag));
+            Ok(())
+        } else {
+            Err(ControlError::NodeNotFound { key }.into())
+        }
+    }
+
+    pub fn hit_test_node(
+        &self,
+        key: NodeKey,
+        frequency: f32,
+        excite_real: f32,
+        excite_imag: f32,
+    ) -> common::error::Result<()> {
+        log::debug!(
+            "rt_subsystem::hit_test_node: key={:?}, freq={}, re={}, im={}",
+            key,
+            frequency,
+            excite_real,
+            excite_imag
+        );
+        // Set excite values (ignore NodeNotFound — node may not be wired yet).
+        let excite_result = {
+            let system_handle = self.system_handle.read();
+            system_handle
+                .excitor_handle
+                .controls
+                .get(&key)
+                .map(|control| {
+                    control.set_value((excite_real, excite_imag));
+                })
+                .ok_or(ControlError::NodeNotFound { key })
+        };
+        log::debug!(
+            "rt_subsystem::hit_test_node: set_siren_excite result={:?}",
+            excite_result
+        );
+        // Set frequency via band control (ignore NodeNotFound)
+        let band_result = self.set_band_control(key, frequency);
+        log::debug!(
+            "rt_subsystem::hit_test_node: set_band_control result={:?}",
+            band_result
+        );
+        // Press the key
+        let key_result = self.set_key_control(key, 1.0).or_else(|_| Ok(()));
+        log::debug!(
+            "rt_subsystem::hit_test_node: set_key_control(1.0) result={:?}",
+            key_result
+        );
+        key_result
+    }
+
+    pub fn release_test_node(&self, key: NodeKey) -> common::error::Result<()> {
+        log::debug!("rt_subsystem::release_test_node: key={:?}", key);
+        let excite_result = {
+            let system_handle = self.system_handle.read();
+            system_handle
+                .excitor_handle
+                .controls
+                .get(&key)
+                .map(|control| {
+                    control.set_value((0.0, 0.0));
+                })
+                .ok_or(ControlError::NodeNotFound { key })
+        };
+        log::debug!(
+            "rt_subsystem::release_test_node: set_siren_excite(0,0) result={:?}",
+            excite_result
+        );
+        let key_result = self.set_key_control(key, 0.0).or_else(|_| Ok(()));
+        log::debug!(
+            "rt_subsystem::release_test_node: set_key_control(0.0) result={:?}",
+            key_result
+        );
+        key_result
+    }
+
+    // ── Snoop snapshots ──────────────────────────────────────────────────
+
+    /// Read the latest output samples for a single node.
+    /// `Snoop::update()` pulls buffered samples from the DSP thread.
+    pub fn snapshot_output_snoop(&self, key: NodeKey) -> Vec<f32> {
+        let mut out = Vec::new();
+        let snoop = {
+            self.system_handle
+                .read()
+                .node_handles
+                .get(&key)
+                .map(|n| n.output_snoop.clone())
+        };
+        if let Some(snoop) = snoop {
+            let mut snoop = snoop.lock();
+            snoop.update();
+            let cap = snoop.capacity();
+            out.reserve(cap);
+            for rev in (0..cap).rev() {
+                let s = snoop.at(rev);
+                out.push(if s.is_normal() || s == 0.0 { s } else { 0.0 });
+            }
+        }
+        out
+    }
+
+    /// Read the latest output samples for every node, keyed by [`NodeKey`].
+    pub fn snapshot_all_output_snoops(&self) -> Vec<(NodeKey, Vec<f32>)> {
+        let keys: Vec<NodeKey> = self
+            .system_handle
+            .read()
+            .node_handles
+            .keys()
+            .copied()
+            .collect();
+        keys.into_iter()
+            .map(|k| {
+                let snap = self.snapshot_output_snoop(k);
+                (k, snap)
+            })
+            .collect()
+    }
+
+    /// Read the latest excitement `(primary, secondary)` samples for a single node.
+    pub fn snapshot_excitement_snoop(&self, key: NodeKey) -> Vec<(f32, f32)> {
+        let mut out = Vec::new();
+        let snoops = {
+            self.system_handle.read().node_handles.get(&key).map(|n| {
+                (
+                    n.excitement_snoop_hs.clone(),
+                    n.excitement_snoop_rad.clone(),
+                )
+            })
+        };
+        if let Some(snoops) = snoops {
+            let (hs, rad) = snoops;
+            let mut primary = hs.lock();
+            let mut secondary = rad.lock();
+            primary.update();
+            secondary.update();
+            let cap = primary.capacity();
+            out.reserve(cap);
+            for rev in (0..cap).rev() {
+                let p = primary.at(rev);
+                let s = secondary.at(rev);
+                out.push((
+                    if p.is_normal() || p == 0.0 { p } else { 0.0 },
+                    if s.is_normal() || s == 0.0 { s } else { 0.0 },
+                ));
+            }
+        }
+        out
+    }
+
+    /// Read the latest excitement samples for every node.
+    pub fn snapshot_all_excitement_snoops(&self) -> Vec<(NodeKey, Vec<(f32, f32)>)> {
+        let keys: Vec<NodeKey> = self
+            .system_handle
+            .read()
+            .node_handles
+            .keys()
+            .copied()
+            .collect();
+        keys.into_iter()
+            .map(|k| {
+                let snap = self.snapshot_excitement_snoop(k);
+                (k, snap)
+            })
+            .collect()
+    }
+
+    /// Read the latest microphone input samples.
+    /// Returns an empty `Vec` when the excitement source is not [`ExcitementSource::Mic`].
+    pub fn snapshot_input_snoop(&self) -> Vec<f32> {
+        let handle = self.system_handle.read();
+        let mut snoop = handle.excitor_handle.analyzer.input_snoop.lock();
+        snoop.update();
+        let cap = snoop.capacity();
+        let mut out = Vec::with_capacity(cap);
+        for rev in (0..cap).rev() {
+            let s = snoop.at(rev);
+            out.push(if s.is_normal() || s == 0.0 { s } else { 0.0 });
+        }
+        out
+    }
+
+    /// Take an FFT snapshot of the processed stereo output.
+    ///
+    /// Returns `None` when not enough samples have accumulated yet
+    /// (needs a full [`OUTPUT_ANALYZER_FFT_WINDOW_SIZE`] frame).
+    pub fn snapshot_processed_output_spectrum(
+        &self,
+    ) -> common::error::Result<Option<super::ProcessedOutputSpectrumSnapshot>> {
+        let sample_rate = *self.sample_rate.read();
+        let tuner_config = self.tuner_config.read();
+        let min_hz = tuner_config.frequency_range.0.unwrap_or(f32::NEG_INFINITY);
+        let max_hz = tuner_config.frequency_range.1.unwrap_or(f32::INFINITY);
+
+        let mut l_window = [0.0_f32; OUTPUT_ANALYZER_FFT_WINDOW_SIZE];
+        let mut r_window = [0.0_f32; OUTPUT_ANALYZER_FFT_WINDOW_SIZE];
+
+        let filled = {
+            let mut guard = self.processed_output_snoops.write();
+            let (l, r) = &mut *guard;
+            l.update();
+            r.update();
+            // at(0) = most recent; at(cap-1) = oldest.
+            // Fill oldest-first so the FFT window is time-ordered.
+            let cap = std::cmp::Ord::min(l.capacity(), OUTPUT_ANALYZER_FFT_WINDOW_SIZE);
+            for i in 0..cap {
+                let rev = cap - 1 - i;
+                l_window[i] = l.at(rev);
+                r_window[i] = r.at(rev);
+            }
+            cap
+        };
+
+        if filled < OUTPUT_ANALYZER_FFT_WINDOW_SIZE {
+            return Ok(None);
+        }
+
+        let left = crate::output_analyzer::analyze(l_window, sample_rate, min_hz, max_hz)?;
+        let right = crate::output_analyzer::analyze(r_window, sample_rate, min_hz, max_hz)?;
+        Ok(Some((left, right)))
+    }
+
+    // ── Tuner tap & excitements ──────────────────────────────────────────
+
+    /// Remap tuner tap to the input Nyquist wet/dry ratio (1.0 = fully audible).
+    pub fn start_tap_tuner_audio(&self) {
+        self.system_handle.read().input_ny_wd.set_value(1.0);
+    }
+
+    /// Remap tuner tap to mute input Nyquist wet/dry contribution (0.0 = muted).
+    pub fn stop_tap_tuner_audio(&self) {
+        self.system_handle.read().input_ny_wd.set_value(0.0);
+    }
+
+    /// Return the instantaneous primary excitement level for every node.
+    /// Results are sorted by [`NodeKey`] for a stable ordering.
+    pub fn poll_tuner_excitements(&self) -> Vec<(NodeKey, f32)> {
+        let system_handle = self.system_handle.read();
+        let mut data: Vec<(NodeKey, f32)> = system_handle
+            .excitor_handle
+            .controls
+            .iter()
+            .map(|(k, v)| (*k, v.primary_value::<f32>()))
+            .collect();
+        data.sort_by_key(|(k, _)| *k);
+        data
+    }
+
+    pub fn poll_tuner_spectrum(&self) -> Option<common::tuner::SpectrumSnapshot> {
+        self.system_handle
+            .read()
+            .excitor_handle
+            .analyzer
+            .spectrum_buffer
+            .pop()
+            .map(|spectrum| {
+                common::tuner::SpectrumSnapshot(
+                    spectrum
+                        .data()
+                        .iter()
+                        .map(|(freq, mag)| (freq.val(), mag.val()))
+                        .collect(),
+                )
+            })
+    }
+
+    pub fn tuner_spectrum_buffer(&self) -> SpectrumBuffer {
+        self.system_handle
+            .read()
+            .excitor_handle
+            .analyzer
+            .spectrum_buffer
+            .clone()
+    }
+
+    #[cfg(feature = "editor")]
+    pub fn get_finetuned_values(&self) -> common::error::Result<FineTunedValuesPayload> {
+        let shared = self.fine_tuned_shared_values.read();
+        Ok(Self::fine_tuned_values_payload(&*shared))
+    }
+
+    #[cfg(feature = "editor")]
+    pub fn set_finetuned_values(
+        &self,
+        payload: FineTunedValuesPayload,
+    ) -> common::error::Result<()> {
+        {
+            let shared = self.fine_tuned_shared_values.write();
+            shared.formants_q.set_value(payload.formants_q);
+        }
+
+        let (config, layout, tuner) = {
+            let config = self.config.read().clone();
+            let layout = self.layout.read().clone();
+            let tuner = self.tuner_config.read().clone();
+            (config, layout, tuner)
+        };
+        self.update_configurations(&config, &layout, &tuner);
+        Ok(())
+    }
+
+    pub fn update_configurations(
+        &self,
+        instrument_config: &InstrumentConfig,
+        instrument_layout: &InstrumentLayout,
+        tuner_config: &TunerConfig,
+    ) {
+        let instrument_net = {
+            let mut layout_lock = self.layout.write();
+            let mut config_lock = self.config.write();
+            let mut tuner_config_lock = self.tuner_config.write();
+
+            *layout_lock = *instrument_layout;
+            *config_lock = instrument_config.clone();
+            *tuner_config_lock = tuner_config.clone();
+
+            let preset = self.preset.read();
+            #[cfg(feature = "editor")]
+            let fine_tuned_values =
+                Self::snapshot_fine_tuned_values(&self.fine_tuned_shared_values);
+
+            let CreateInstrumentNetworkReturn {
+                system_handle, net, ..
+            } = Self::create_instrument_network(
+                self.num_channels as usize,
+                *self.sample_rate.read(),
+                self.sample_type,
+                *self.source.read(),
+                &config_lock,
+                &tuner_config_lock,
+                &preset,
+                &self
+                    .system_handle
+                    .read()
+                    .excitor_handle
+                    .analyzer
+                    .spectrum_buffer,
+                #[cfg(feature = "editor")]
+                &fine_tuned_values,
+            );
+
+            *self.system_handle.write() = system_handle;
+            net
+        };
+
+        self.replace_network(instrument_net, &self.dsp_primary_node_id.read());
+    }
+
+    pub fn fade_out(&self) {
+        self.gain_param.set_value(0.0);
+        thread::sleep(Duration::from_millis(FADE_DURATION_MS));
+    }
+
+    pub fn fade_in(&self) {
+        self.gain_param.set_value(1.0);
+        thread::sleep(Duration::from_millis(FADE_DURATION_MS));
+    }
+
+    /// Replace only the tuner sub-network (1-in/1-out node) without rebuilding the
+    /// instrument network or restarting the CPAL stream.
+    ///
+    /// Handles fade/commit via [`Self::replace_network`] so the audio transition is
+    /// seamless when the stream is running.
+    #[deprecated(
+        note = "Tuner/source routing is managed by system::create_system; use runtime source restart path"
+    )]
+    pub fn replace_tuner_for_source(&self, source: ExcitementSource) {
+        log::warn!(
+            "replace_tuner_for_source is deprecated; source change is applied on next runtime rebuild"
+        );
+        *self.source.write() = source;
+    }
+
+    fn replace_network(&self, unit: Net, id: &NodeId) {
+        let mut dsp_lock = self.dsp_net.write();
+        if dsp_lock.has_backend() {
+            // Only fade and commit when the backend (audio stream) is live.
+            // Fading without a backend is a no-op but costs 2 × FADE_DURATION_MS.
+            drop(dsp_lock);
+            self.fade_out();
+            {
+                let mut dsp_lock = self.dsp_net.write();
+                dsp_lock.replace(*id, Box::new(unit));
+                dsp_lock.commit();
+            }
+            self.fade_in();
+        } else {
+            // Backend not yet attached (stream not started or already stopped).
+            // Update the network locally so it is correct the next time the
+            // stream starts and calls `sys.backend()`.
+            log::debug!("replace_network: no backend attached – updating net node without commit");
+            dsp_lock.replace(*id, Box::new(unit));
+            // No commit; the next start_output_stream will build a fresh
+            // RuntimeSubsystem from the stored layout/config anyway.
+        }
+    }
+
+    #[cfg(feature = "editor")]
+    fn snapshot_fine_tuned_values(shared: &Arc<RwLock<FineTunedSharedValues>>) -> FineTunedValues {
+        let guard = shared.read();
+        FineTunedValues::new(&*guard)
+    }
+
+    #[cfg(feature = "editor")]
+    fn fine_tuned_values_payload(shared: &FineTunedSharedValues) -> FineTunedValuesPayload {
+        FineTunedValuesPayload {
+            formants_q: shared.formants_q.value(),
+        }
+    }
+
+    fn create_instrument_network(
+        num_channels: usize,
+        sample_rate: f64,
+        sample_type: SampleType,
+        source: ExcitementSource,
+        config: &InstrumentConfig,
+        tuner_config: &TunerConfig,
+        preset: &Preset,
+        _spectrum_data_thb: &SpectrumBuffer,
+        #[cfg(feature = "editor")] fine_tuned_values: &FineTunedValues,
+    ) -> CreateInstrumentNetworkReturn {
+        let values = {
+            #[cfg(feature = "editor")]
+            {
+                fine_tuned_values.clone()
+            }
+            #[cfg(not(feature = "editor"))]
+            {
+                FineTunedValues::new()
+            }
+        };
+
+        let seed = None;
+        let (mut net, system_handle) = match sample_type {
+            SampleType::F32 => {
+                create_system::<f32>(num_channels, source, config, tuner_config, &values, seed)
+            }
+            SampleType::F64 => {
+                create_system::<f64>(num_channels, source, config, tuner_config, &values, seed)
+            }
+        };
+
+        for (key, node) in system_handle.node_handles.iter() {
+            if let Some(val) = preset.get_band_value(key) {
+                node.accentuation.set_value(val);
+            }
+            if let Some(val) = preset.get_key_value(key) {
+                node.rhythm.set_value(val);
+            }
+        }
+
+        net.set_sample_rate(sample_rate);
+        net.allocate();
+        net.check();
+
+        CreateInstrumentNetworkReturn { system_handle, net }
+    }
+
+    fn create_main_network(
+        num_channels: usize,
+        sample_rate: f64,
+        instrument_subnet: Net,
+    ) -> CreateMainNetworkReturn {
+        let mut net = Net::new(1, num_channels);
+
+        let instrument_node_id = net.push(Box::new(instrument_subnet));
+
+        let (processed_output_snoop_l, processed_output_snoop_backend_l) =
+            snoop(OUTPUT_ANALYZER_FFT_WINDOW_SIZE);
+        let (processed_output_snoop_r, processed_output_snoop_backend_r) =
+            snoop(OUTPUT_ANALYZER_FFT_WINDOW_SIZE);
+        // Insert smoothed gain after main node for fade in/out.
+        let gain_param = shared(1.0f32);
+        let processed_output_snoops_id = u_num_it!(
+            1..=7,
+            match num_channels {
+                1 => {
+                    net.push(Box::new(
+                        split::<U2>()
+                            >> (processed_output_snoop_backend_l
+                                | processed_output_snoop_backend_r)
+                            >> join::<U2>(),
+                    ))
+                }
+                2 => {
+                    net.push(Box::new(
+                        processed_output_snoop_backend_l | processed_output_snoop_backend_r,
+                    ))
+                }
+                U => {
+                    net.push(Box::new(
+                        multisplit::<NumType, U2>()
+                            >> (multipass::<NumType>()
+                                | An(Map::new(
+                                    |frame: &Frame<f32, NumType>| -> Frame<f32, U2> {
+                                        let mut join_frame = frame.as_slice().chunks(2).fold(
+                                            Frame::<f32, U2>::splat(0.0),
+                                            |mut acc, frame| {
+                                                let f1 = frame.first().unwrap_or(&0.0);
+                                                let f2 = frame.get(1).unwrap_or(f1);
+                                                acc[0] += f1;
+                                                acc[1] += f2;
+                                                acc
+                                            },
+                                        );
+
+                                        join_frame[0] /= (NumType::USIZE as f32) / 2.0;
+                                        join_frame[1] /= (NumType::USIZE as f32) / 2.0;
+                                        join_frame
+                                    },
+                                    Routing::Join,
+                                )))
+                            >> (multipass::<NumType>()
+                                | ((processed_output_snoop_backend_l
+                                    | processed_output_snoop_backend_r)
+                                    >> multisink::<U2>())),
+                    ))
+                }
+                _ => {
+                    panic!("Unexpected number of channels: {num_channels}. Supported 1..=7");
+                }
+            }
+        );
+
+        let gain_id = u_num_it!(
+            1..=7,
+            match num_channels {
+                U => {
+                    net.push(Box::new(
+                        (var(&gain_param) >> follow(FOLLOW_RESPONSE_SECS) >> split::<NumType>())
+                            * multipass::<NumType>(),
+                    ))
+                }
+                _ => {
+                    panic!("Unexpected number of channels: {num_channels}. Supported 1..=7");
+                }
+            }
+        );
+
+        net.pipe_all(instrument_node_id, processed_output_snoops_id);
+        net.pipe_all(processed_output_snoops_id, gain_id);
+        net.pipe_output(gain_id);
+        net.pipe_input(instrument_node_id);
+
+        net.set_sample_rate(sample_rate);
+        net.allocate();
+        net.check();
+
+        CreateMainNetworkReturn {
+            gain_param,
+            processed_output_snoop_l,
+            processed_output_snoop_r,
+            instrument_node_id,
+            net,
+        }
+    }
+}

@@ -1,0 +1,285 @@
+/* Instrument animations (foundation, staged sequence)
+   - Animation-only utilities; all layout/visual styling stays in Tailwind
+   - Keyframes use CSS variables; component sets per-element values via style attribute
+   - Stages per docs/animation.md: 1, 1.5 (crossfade+glare), 2 (normalize+collapse), 3 (place), 4 (bands expand)
+   - Keys move breadth-axis first (still stacked), then length-axis (unstack)
+   - Bands: glare as random radiuses via per-element vars; remain circles until Stage 4
+   - Strings animate per band (<g>), with rotation/scale/translation to match flute constants
+   - View Transition: leave animations prepared for the instrument scene
+*/
+
+/* Tunables (defaults) */
+:root {
+    /* Global ease + timing */
+    --inst-instrument-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+    /* Appear (crossfade runs only until Stage 1.5, then opacity stays) */
+    --inst-appear-duration: 1400ms;
+    --inst-crossfade-duration: 500ms; /* Set by instrument.rs from INTRO_FADE_DURATION_MS */
+
+    --inst-appear-opacity-from: 0;
+    --inst-appear-opacity-to: 1;
+
+    /* View transitions */
+    --inst-vt-leave-duration: 700ms;
+    --inst-vt-leave-ease: var(--inst-instrument-ease);
+    --inst-vt-leave-shift-x: 100vw;
+    --inst-vt-leave-shift-y: 100vh;
+
+    --inst-vt-leave-scale: 0.94;
+    --inst-band-glare-max-peak: 1.35;
+}
+
+/* -------------------------------------------------------------------------------------------------
+   KEYS — staged sequence
+   - Stage 1 -> 1.5: crossfade only (duration from --inst-crossfade-duration)
+   - Then: move along breadth axis only (still stacked)
+   - Then: unstack along length (main) axis
+   - Finally: arrive to final position
+-------------------------------------------------------------------------------------------------- */
+@keyframes instrument-crossfade-opacity {
+    from {
+        opacity: var(--inst-appear-opacity-from);
+    }
+    to {
+        opacity: var(--inst-appear-opacity-to);
+    }
+}
+@keyframes instrument-key-move-seq {
+    0% {
+        transform: translate(var(--inst-key-k1-tx), var(--inst-key-k1-ty))
+            scale(var(--inst-key-k1-scale));
+    }
+    55% {
+        transform: translate(
+                var(--inst-key-breadth-tx),
+                var(--inst-key-breadth-ty)
+            )
+            scale(var(--inst-key-k2-scale));
+    }
+    85% {
+        transform: translate(
+                var(--inst-key-length-tx),
+                var(--inst-key-length-ty)
+            )
+            scale(1);
+    }
+    100% {
+        transform: translate(0, 0) scale(1);
+    }
+}
+
+/* Utility classes to apply the above key animations */
+.instrument-key--appear {
+    /* movement starts after crossfade; scene handles opacity */
+    animation-name: instrument-key-move-seq;
+    animation-duration: var(--inst-appear-duration);
+    animation-delay: var(--inst-crossfade-duration);
+    animation-timing-function: var(--inst-instrument-ease);
+    animation-fill-mode: both;
+    will-change: transform, opacity;
+}
+
+/* -------------------------------------------------------------------------------------------------
+   BANDS — staged sequence with glare and late expansion (Stage 4)
+   - Stage 1 -> 1.5: crossfade only (duration from --inst-crossfade-duration)
+   - Then: glare (uniform overscale), still no translation
+   - Then: breadth-axis motion (still stacked), remain circle (square)
+   - Finally: final place + expand to actual rectangular dimensions (no longer square)
+-------------------------------------------------------------------------------------------------- */
+@keyframes instrument-band-glare {
+    from {
+        transform: scale(var(--inst-band-glare-scale));
+    }
+    to {
+        transform: scale(
+            min(
+                var(--inst-band-glare-scale-peak),
+                var(--inst-band-glare-max-peak)
+            )
+        );
+    }
+}
+@keyframes instrument-band-move-seq {
+    0% {
+        transform: scale(1);
+        width: var(--inst-band-k1-width);
+        height: var(--inst-band-k1-height);
+    }
+    85% {
+        transform: scale(1);
+        width: var(--inst-band-k1-width);
+        height: var(--inst-band-k1-height);
+    }
+    100% {
+        transform: scale(1);
+        width: var(--inst-band-final-width);
+        height: var(--inst-band-final-height);
+    }
+}
+
+.instrument-band--appear {
+    /* 1) glare during crossfade; 2) move+expand after crossfade; scene handles opacity */
+    animation-name: instrument-band-glare, instrument-band-move-seq;
+    animation-duration:
+        var(--inst-crossfade-duration), var(--inst-appear-duration);
+    animation-delay: 0s, var(--inst-crossfade-duration);
+    animation-timing-function:
+        var(--inst-instrument-ease), var(--inst-instrument-ease);
+    animation-fill-mode: both, both;
+    transform-origin: center;
+    will-change: transform, opacity, width, height;
+}
+
+/* -------------------------------------------------------------------------------------------------
+   STRINGS (per band) — staged sequence with rotation normalization
+   - Stage 1 -> 1.5: crossfade only (duration from --inst-crossfade-duration)
+   - Then: rotation to normal (0deg) and scale normalize; still offset (collapsed along axis)
+   - Finally: translate to final position
+-------------------------------------------------------------------------------------------------- */
+@keyframes instrument-strings-move-to-rest {
+    from {
+        transform: translate(
+                var(--inst-strings-k1-tx),
+                var(--inst-strings-k1-ty)
+            )
+            rotate(var(--inst-strings-k1-rot))
+            scale(
+                var(--inst-strings-k1-scale-x),
+                var(--inst-strings-k1-scale-y)
+            );
+    }
+    to {
+        transform: translate(0, 0) rotate(0deg) scale(1);
+    }
+}
+
+.instrument-strings-band--appear,
+.instrument-strings-root--appear {
+    transform-box: view-box;
+    /* movement starts after crossfade; scene handles opacity */
+    animation-name: instrument-strings-move-to-rest;
+    animation-duration: var(--inst-appear-duration);
+    animation-delay: var(--inst-crossfade-duration);
+    animation-timing-function: var(--inst-instrument-ease);
+    animation-fill-mode: both;
+    will-change: transform, opacity;
+}
+
+/* -------------------------------------------------------------------------------------------------
+   VIEW TRANSITIONS — leave animations for the instrument scene.
+   Apply one of these classes to the instrument scene container to assign a VT name.
+   Then the ::view-transition-old(...) rule will animate the leaving snapshot.
+-------------------------------------------------------------------------------------------------- */
+.instrument-scene--vt-left {
+    view-transition-name: instrument-leave-left;
+}
+.instrument-scene--vt-right {
+    view-transition-name: instrument-leave-right;
+}
+.instrument-scene--vt-top {
+    view-transition-name: instrument-leave-top;
+}
+.instrument-scene--vt-bottom {
+    view-transition-name: instrument-leave-bottom;
+}
+
+/* Leave keyframes */
+@keyframes instrument-vt-leave-to-left {
+    from {
+        opacity: 1;
+        transform: translate(0, 0) scale(1);
+    }
+    to {
+        opacity: 0.94;
+        transform: translate(calc(-1 * var(--inst-vt-leave-shift-x)), 0)
+            scale(var(--inst-vt-leave-scale));
+    }
+}
+@keyframes instrument-vt-leave-to-right {
+    from {
+        opacity: 1;
+        transform: translate(0, 0) scale(1);
+    }
+    to {
+        opacity: 0.94;
+        transform: translate(var(--inst-vt-leave-shift-x), 0)
+            scale(var(--inst-vt-leave-scale));
+    }
+}
+@keyframes instrument-vt-leave-to-top {
+    from {
+        opacity: 1;
+        transform: translate(0, 0) scale(1);
+    }
+    to {
+        opacity: 0.94;
+        transform: translate(0, calc(-1 * var(--inst-vt-leave-shift-y)))
+            scale(var(--inst-vt-leave-scale));
+    }
+}
+@keyframes instrument-vt-leave-to-bottom {
+    from {
+        opacity: 1;
+        transform: translate(0, 0) scale(1);
+    }
+    to {
+        opacity: 0.94;
+        transform: translate(0, var(--inst-vt-leave-shift-y))
+            scale(var(--inst-vt-leave-scale));
+    }
+}
+
+/* Map VT names to animations */
+::view-transition-old(instrument-leave-left) {
+    animation-name: instrument-vt-leave-to-left;
+    animation-duration: var(--inst-vt-leave-duration);
+    animation-delay: 0s;
+    animation-timing-function: var(--inst-vt-leave-ease);
+    animation-fill-mode: both;
+}
+::view-transition-old(instrument-leave-right) {
+    animation-name: instrument-vt-leave-to-right;
+    animation-duration: var(--inst-vt-leave-duration);
+    animation-delay: 0s;
+    animation-timing-function: var(--inst-vt-leave-ease);
+    animation-fill-mode: both;
+}
+::view-transition-old(instrument-leave-top) {
+    animation-name: instrument-vt-leave-to-top;
+    animation-duration: var(--inst-vt-leave-duration);
+    animation-delay: 0s;
+    animation-timing-function: var(--inst-vt-leave-ease);
+    animation-fill-mode: both;
+}
+::view-transition-old(instrument-leave-bottom) {
+    animation-name: instrument-vt-leave-to-bottom;
+    animation-duration: var(--inst-vt-leave-duration);
+    animation-delay: 0s;
+    animation-timing-function: var(--inst-vt-leave-ease);
+    animation-fill-mode: both;
+}
+
+/* -------------------------------------------------------------------------------------------------
+   Accessibility
+-------------------------------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+    .instrument-key--appear,
+    .instrument-band--appear,
+    .instrument-strings-band--appear {
+        animation: none !important;
+    }
+
+    ::view-transition-old(instrument-leave-left),
+    ::view-transition-old(instrument-leave-right),
+    ::view-transition-old(instrument-leave-top),
+    ::view-transition-old(instrument-leave-bottom) {
+        animation: none !important;
+    }
+}
+
+/* Instrument scene crossfade-in (style_sheet const: INSTRUMENT_SCENE_ENTER) */
+.instrument-scene--enter {
+    animation: instrument-crossfade-opacity var(--inst-crossfade-duration)
+        linear both;
+}

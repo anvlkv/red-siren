@@ -1,0 +1,10 @@
+/crates/frontend
+/public
+/Cargo.toml
+/docs/**/*.*
+/references/**/*.*
+/.zed
+/.github
+/scripts
+*.log
+/*.md

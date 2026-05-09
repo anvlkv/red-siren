@@ -1,0 +1,90 @@
+use crate::components::{Button, ContentPage, Icon, UiPlacement, UiVariant};
+use common::commands::health::MicPermissionPayload;
+use leptos::prelude::*;
+use tauri_use::{use_invoke, UseTauriReturn};
+
+#[component]
+pub fn Permissions() -> impl IntoView {
+    let (prompted, set_prompted) = signal(false);
+
+    let UseTauriReturn {
+        error: mic_permission_error,
+        trigger: mic_permission_trigger,
+        data: _mic_permission_data,
+    } = use_invoke::<MicPermissionPayload, (), bool>(
+        common::commands::health::GRANT_MIC_PERMISSION,
+    );
+
+    Effect::new(move |_| {
+        if let Some(err) = mic_permission_error() {
+            log::error!(
+                "Error invoking {}: {}",
+                common::commands::health::GRANT_MIC_PERMISSION,
+                err
+            );
+
+            set_prompted(false);
+        }
+    });
+
+    view! {
+        <ContentPage title="Permissions" card_animation_direction=UiPlacement::Left>
+            <div class="flex flex-col items-center justify-center gap-6">
+                <h2 class="md:text-2xl text-lg text-bold max-w-md lg:max-w-[42ch] italic">
+                    "Why grant microphone access"
+                </h2>
+                <p class="md:text-xl text-base max-w-md lg:max-w-[42ch] ">
+                    "Granting mic access lets Red Siren respond to your noise in real time. Audio is processed locally — nothing is recorded or sent off‑device. It can run without mic access, but tuning and responsiveness will be reduced"
+                </p>
+                <h3 class="md:text-2xl text-lg text-bold max-w-md lg:max-w-[42ch] italic">
+                    "How to enable it"
+                </h3>
+                <p class="md:text-xl text-base max-w-md lg:max-w-[42ch] ">
+                    "When the system prompt appears, choose Allow. If you previously denied access, re-enable it in System Settings → Privacy & Security → Microphone for the app, then restart the app and try again."
+                </p>
+                <div class="grid grid-cols-2 justify-items-stretch gap-4 w-full">
+                    <Button
+                        on:click=move |_| {
+                            mic_permission_trigger(
+                                Some((
+                                    MicPermissionPayload {
+                                        prompt: true,
+                                    },
+                                    (),
+                                )),
+                            );
+                            set_prompted(true)
+                        }
+                        class="relative pl-14"
+                        attr:aria-label="Allow mic access"
+                        disabled=prompted
+                    >
+                        <span class="absolute left-4 md:text-4xl text-2xl">
+                            <Icon name="mic" />
+                        </span>
+                        "Allow"
+                    </Button>
+                    <Button
+                        variant=UiVariant::Outline
+                        on:click=move |_| {
+                            mic_permission_trigger(
+                                Some((
+                                    MicPermissionPayload {
+                                        prompt: false,
+                                    },
+                                    (),
+                                )),
+                            );
+                            set_prompted(true)
+                        }
+                        attr:aria-label="Skip mic access"
+                        disabled=prompted
+                    >
+                        "Skip"
+                        <strong class="ml-2 opacity-75">"(Limited)"</strong>
+                    </Button>
+                </div>
+            </div>
+        </ContentPage>
+    }
+}

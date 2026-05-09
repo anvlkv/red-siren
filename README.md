@@ -1,83 +1,51 @@
-# Red Siren (work in progress...)
+# Red Siren
 
-<p>Red Siren is a noise chime.</p>
-<dl>
-    <dt>Red</dt>
-        <dd>The color red and its many meanings.</dd>
-    <dt>Siren</dt>
-        <dd>Siren - the mythical creature, but also the alarm.</dd>
-    <dt>is</dt>
-        <dd>It exists right now.</dd>
-    <dt>a</dt>
-        <dd>It's a choice, one of many, and therefore any.</dd>
-    <dt>noise</dt>
-        <dd>Random or unwanted sounds.</dd>
-    <dt>chime</dt>
-        <dd>The musical instrument.</dd>
-</dl>
+Red Siren is a noise chime. It pulls the present into focus—a siren's call, loud, brief, true.
 
-## Artistic project
 
-This is an artistic project by a.nvlkv. May it serve the awakening by making the listeners more aware of the noises in their evironment.
+## Requirements
 
-## Development
+- [Tauri CLI](https://v2.tauri.app/start/prerequisites/): `cargo install tauri-cli`
+- [Trunk](https://trunkrs.dev/): `cargo install trunk`
+- Node dependencies: `npm install`
+- Rust targets: `rustup target add wasm32-unknown-unknown`
 
-Shared and AuCore are distinct crux cores communicating via current shell's `play` and `resolve` capabilities.
-
-iOS and Android shells are using cores via `bindgen` package.
-
-Web version uses Shared app_core as is (rust), and AuCore via the `worklet` package.
-
-### Cores, types and bindgen
-
-```
-cargo build --package app_core  
+### Mobile targets (optional)
+```bash
+rustup target add aarch64-apple-ios x86_64-apple-ios aarch64-apple-ios-sim
+rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
 ```
 
-```
-cargo build --package aucore  
-```
+## Commands
 
-```
-cargo build --package typegen
-```
+```bash
+# Development
+cargo tauri dev
 
-```
-cargo build --package bindgen
-```
+# Build
+cargo tauri build
 
-### Web (leptos)
+# iOS
+cargo tauri ios dev
+cargo tauri ios build
 
-```
-cd web-leptos
-cargo leptos watch
-```
-
-#### Web (audio worklet)
-
-Requires [pnpm](https://pnpm.io).
-Requires [wasm-pack](https://github.com/rustwasm/wasm-pack).
-
-```
-cd web-leptos/worklet
-pnpm run build
+# Android
+cargo tauri android dev
+cargo tauri android build
 ```
 
-### iOS
+---
 
-Open `iOS/RedSiren.xcworkspace` with Xcode.
+This work is licensed under a
+[Creative Commons Attribution-ShareAlike 4.0 International License][cc-by-sa].
 
-Requires [cocoapods](https://cocoapods.org/).
+[![CC BY-SA 4.0][cc-by-sa-image]][cc-by-sa]
 
-Run `pod update` in `iOS` directory.
+[cc-by-sa]: http://creativecommons.org/licenses/by-sa/4.0/
+[cc-by-sa-image]: https://licensebuttons.net/l/by-sa/4.0/88x31.png
 
-Rebuild `bindgen` upon interface changes.
+---
 
-### Android
+This software was developed with assistance from AI coding tools: GitHub Copilot, Claude.
 
-Open `Android/` with Android studio.
-
-Requires [cargo ndk](https://github.com/bbqsrc/cargo-ndk).
-
-Clean build upon rust code changes.
-
+While AI suggestions were used during development, all code has been reviewed, tested, and modified by human developers. Users are responsible for verifying the code meets their requirements.

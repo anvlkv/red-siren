@@ -1,0 +1,5 @@
+---
+source: crates/audio-system/src/system/node/controller.rs
+extension: svg
+snapshot_kind: binary
+---

@@ -1,0 +1,122 @@
+name: tauri-app
+options:
+  bundleIdPrefix: com.anvlkv.redsiren
+  deploymentTarget:
+    iOS: 15.6
+fileGroups: [../../src]
+configs:
+  debug: debug
+  release: release
+settingGroups:
+  app:
+    base:
+      PRODUCT_NAME: Red Siren
+      PRODUCT_BUNDLE_IDENTIFIER: com.anvlkv.redsiren
+      DEVELOPMENT_TEAM: M59X77GZ2V
+      CODE_SIGN_STYLE: Automatic
+      MARKETING_VERSION: 0.1.0
+      CURRENT_PROJECT_VERSION: 1
+targetTemplates:
+  app:
+    type: application
+    sources:
+      - path: Sources
+    scheme:
+      environmentVariables:
+        RUST_BACKTRACE: full
+        RUST_LOG: info
+    settings:
+      groups: [app]
+targets:
+  tauri-app_iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: Assets.xcassets
+
+      - path: tauri-app_iOS
+      - path: assets
+        buildPhase: resources
+        type: folder
+      - path: LaunchScreen.storyboard
+    info:
+      path: tauri-app_iOS/Info.plist
+      properties:
+        LSRequiresIPhoneOS: true
+        UILaunchStoryboardName: LaunchScreen
+        UIRequiredDeviceCapabilities: [arm64, metal]
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        CFBundleShortVersionString: 0.1.0
+        CFBundleVersion: "0.1.0"
+        CFBundleName: Red Siren
+        CFBundleDisplayName: Red Siren
+        LSApplicationCategoryType: public.app-category.music
+        ITSAppUsesNonExemptEncryption: false
+    entitlements:
+      path: tauri-app_iOS/tauri-app_iOS.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.files.user-selected.read-write: true
+        com.apple.security.device.audio-input: true
+        com.apple.security.device.microphone: true
+    scheme:
+      environmentVariables:
+        RUST_BACKTRACE: full
+        RUST_LOG: info
+    settings:
+      base:
+        ENABLE_BITCODE: false
+        ARCHS: [arm64, x86_64]
+        VALID_ARCHS: arm64  x86_64
+        LIBRARY_SEARCH_PATHS[arch=x86_64]: $(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)
+        LIBRARY_SEARCH_PATHS[arch=arm64]: $(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)
+        ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: true
+        CLANG_ENABLE_MODULES: true
+        SWIFT_VERSION: 5.0
+        LD_RUNPATH_SEARCH_PATHS: $(inherited) @executable_path/Frameworks
+        OTHER_LDFLAGS: $(inherited) -lapp
+        EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
+        TARGETED_DEVICE_FAMILY: 1,2
+        SUPPORTS_MACCATALYST: false
+        IPHONEOS_DEPLOYMENT_TARGET: 15.6
+      configs:
+        debug:
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY[sdk=iphoneos*]: Apple Development
+          CODE_SIGN_IDENTITY[sdk=iphonesimulator*]: ""
+        release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY[sdk=iphoneos*]: "Apple Distribution: Aleksandr Novolokov (M59X77GZ2V)"
+          CODE_SIGN_IDENTITY[sdk=iphonesimulator*]: ""
+          PROVISIONING_PROFILE_SPECIFIER: Red Siren
+          PROVISIONING_PROFILE: 70ddb7f1-4c06-4c80-a74d-39fd6dca77ee
+
+      groups: [app]
+    dependencies:
+      - sdk: CoreGraphics.framework
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
+      - sdk: QuartzCore.framework
+      - sdk: Security.framework
+      - sdk: UIKit.framework
+      - sdk: CoreAudio.framework
+      - sdk: AudioToolbox.framework
+      - sdk: AVFoundation.framework
+      - sdk: WebKit.framework
+    preBuildScripts:
+      - script: cargo tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
+        name: Build Rust Code
+        basedOnDependencyAnalysis: false
+        outputFiles:
+          - $(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a
+          - $(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a

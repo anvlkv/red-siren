@@ -1,0 +1,98 @@
+[
+  {
+    "label": "Xcode — list devices",
+    "command": "xcrun xctrace list devices",
+    "reveal": "always",
+  },
+  {
+    "label": "Start Tauri [dev server]",
+    "command": "cargo tauri dev --features devtools",
+    "env": {
+      "RUST_BACKTRACE": "1",
+      "RUST_LOG": "tauri-app=trace",
+    },
+    "reveal": "always",
+    "use_new_terminal": true,
+  },
+  {
+    "label": "Build in **release** mode with devtools",
+    "command": "cargo tauri build --bundles app --features devtools",
+    "env": {
+      "RUST_BACKTRACE": "1",
+    },
+    "reveal": "always",
+  },
+  {
+    "label": "Build in **debug** mode with devtools",
+    "command": "cargo tauri build --debug --bundles app --features devtools",
+    "env": {
+      "RUST_BACKTRACE": "1",
+    },
+    "reveal": "always",
+  },
+  {
+    "label": "Build in release mode",
+    "command": "cargo tauri build --bundles app",
+    "env": {
+      "RUST_BACKTRACE": "1",
+    },
+    "reveal": "never",
+  },
+  {
+    "label": "Clean",
+    "command": "cargo clean",
+    "reveal": "never",
+  },
+  {
+    "label": "Run crate audio-system tests",
+    "command": "cargo insta test --unreferenced=delete -p audio-system",
+    "env": {
+      "RUST_BACKTRACE": "1",
+    },
+    "reveal": "always",
+  },
+  {
+    "label": "Run all tests, update snapshots",
+    "command": "cargo insta test --unreferenced=delete",
+    "env": {
+      "RUST_BACKTRACE": "1",
+      "INSTA_UPDATE": "always",
+    },
+    "reveal": "always",
+  },
+  {
+    "label": "Run crate common tests",
+    "command": "cargo insta test --unreferenced=delete -p common",
+    "env": {
+      "RUST_BACKTRACE": "1",
+    },
+    "reveal": "always",
+  },
+  {
+    "label": "Cargo docs",
+    "command": "cargo doc --target-dir docs/rust --workspace",
+    "reveal": "never",
+  },
+  {
+    "label": "Docs static server",
+    "command": "open http://localhost:1984/tauri_app_ui/index.html & python3 -m http.server --directory docs/rust/doc 1984",
+    "reveal": "never",
+  },
+  {
+    "label": "Build for Mac App Store",
+    "command": "bash scripts/mac-appstore.sh",
+    "env": {
+      "RUST_BACKTRACE": "1",
+    },
+    "reveal": "always",
+    "use_new_terminal": true,
+  },
+  {
+    "label": "Clippy fix",
+    "command": "cargo clippy --fix --allow-dirty",
+    "env": {
+      "RUST_BACKTRACE": "1",
+    },
+    "reveal": "always",
+  },
+]

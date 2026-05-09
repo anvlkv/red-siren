@@ -1,0 +1,47 @@
+---
+source: crates/common/src/instrument/layout.rs
+expression: layout
+---
+{
+  "space": [
+    1600.0,
+    900.0
+  ],
+  "orientation": "Horizontal",
+  "left_string_position": [
+    [
+      0.0,
+      393.3
+    ],
+    [
+      1600.0,
+      393.3
+    ]
+  ],
+  "right_string_position": [
+    [
+      0.0,
+      506.7
+    ],
+    [
+      1600.0,
+      506.7
+    ]
+  ],
+  "instrument_breadth": 113.4,
+  "key_radius": 24.259961383505427,
+  "key_band_length": 375.3,
+  "key_band_breadth": 90.0,
+  "safe_area_padding": {
+    "top": 18.0,
+    "right": 18.0,
+    "bottom": 18.0,
+    "left": 18.0
+  },
+  "key_bands_gap": 16.50337509082002,
+  "bands_gap": 19.804050108984022,
+  "num_keys_per_band": 5,
+  "num_bands": 2,
+  "first_band_channel": "Right",
+  "scale": "Yo"
+}

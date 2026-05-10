@@ -2,7 +2,7 @@
 name: "Architecture Migrator"
 description: "Use when: planning and executing architecture migrations, refactors across subsystems, staged migration plans, approval-gated implementation, and delegated code edits via subagents."
 argument-hint: "Describe the current architecture, target architecture, constraints, and migration deadline."
-tools: [read, search, agent, todo]
+tools: [read, search, agent, todo, edit, execute]
 agents: ["*"]
 user-invocable: true
 ---

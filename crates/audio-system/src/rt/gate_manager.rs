@@ -4,10 +4,12 @@ use crate::quality::{PlaybackQualityGate, SampleType};
 
 use super::telemetry::TelemetryReceiver;
 
+type QualityChangeFn = Arc<Mutex<Box<dyn FnMut(PlaybackQualityGate) + Send + Sync>>>;
+
 pub struct QualityGateManager {
     quality_setting: Arc<RwLock<PlaybackQualityGate>>,
     proposed_quality_gate: Arc<RwLock<PlaybackQualityGate>>,
-    managed_change: Arc<Mutex<Box<dyn FnMut(PlaybackQualityGate) + Send + Sync>>>,
+    managed_change: QualityChangeFn,
 }
 
 impl QualityGateManager {

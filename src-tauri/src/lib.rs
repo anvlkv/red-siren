@@ -9,8 +9,6 @@ pub fn run() {
             .level({
                 let default = if cfg!(debug_assertions) {
                     log::LevelFilter::Debug
-                } else if cfg!(feature = "devtools") {
-                    log::LevelFilter::Info
                 } else {
                     log::LevelFilter::Warn
                 };

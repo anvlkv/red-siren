@@ -105,11 +105,3 @@ pub enum HealthError {
     #[error("health state poisoned")]
     StatePoisoned,
 }
-
-// -------- Feature-gated conversions --------
-#[cfg(feature = "tauri")]
-impl From<tauri::Error> for AppError {
-    fn from(value: tauri::Error) -> Self {
-        AppError::Tauri(value.to_string())
-    }
-}

@@ -5,10 +5,10 @@
   "app": {
     "windows": [
       {
-        "label": "splashscreen",
-        "decorations": false,
-        "url": "splashscreen.html",
-        "shadow": true
+        "label": "main",
+        "url": "/",
+        "title": "Red Siren",
+        "visible": true
       }
     ]
   },

@@ -51,6 +51,8 @@
 :root {
     --scrollbar-size: 10px;
     --scrollbar-radius: 999px;
+    --app-bg: var(--color-red);
+    --app-fg: #1f080b;
 
     --scrollbar-bg: transparent;
     --scrollbar-thumb: var(--color-gray);
@@ -72,10 +74,41 @@
     --scrollbar-corner: transparent;
 }
 
+@media (prefers-color-scheme: dark) {
+    :root {
+        --app-bg: var(--color-black);
+        --app-fg: #f6d9dc;
+    }
+}
+
 /* Firefox fallback */
 html {
+    min-height: 100%;
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-bg);
+}
+
+body {
+    min-height: 100vh;
+    margin: 0;
+    background: var(--app-bg);
+    color: var(--app-fg);
+}
+
+body,
+button,
+input,
+textarea,
+select {
+    font-family: "Rosarivo", cursive, serif;
+}
+
+.reset-shell {
+    min-height: 100vh;
+}
+
+.reset-home {
+    min-height: 100vh;
 }
 
 /* WebKit scrollbars (Chrome, Edge, Safari) */

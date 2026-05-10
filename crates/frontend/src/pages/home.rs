@@ -1,37 +1,16 @@
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    OnceLock,
-};
-
 use leptos::prelude::*;
-
-use crate::components::{ContentPage, Menu, UiPlacement};
-
-static FIRST_APPEARANCE: OnceLock<AtomicBool> = OnceLock::new();
 
 #[component]
 pub fn Home() -> impl IntoView {
-    let first_appearance = FIRST_APPEARANCE.get_or_init(|| AtomicBool::new(true));
-    let initial_first = first_appearance.load(Ordering::Relaxed);
-    let (card_animation_direction, _set_card_animation_direction) =
-        signal(Some(if initial_first {
-            UiPlacement::Bottom
-        } else {
-            UiPlacement::Left
-        }));
-
-    Effect::new(move |_| {
-        first_appearance.store(false, Ordering::Relaxed);
-    });
-
     view! {
-        <ContentPage
-            title="Red Siren"
-            no_back_button=true
-            card_animation_direction
-            first_appear=initial_first
-        >
-            <Menu />
-        </ContentPage>
+        <section class="reset-home flex items-center justify-center px-6 py-12">
+            <div class="mx-auto flex max-w-3xl flex-col gap-5 text-center">
+                <p class="text-xs uppercase tracking-[0.45em] sm:text-sm">"Architecture reset"</p>
+                <h1 class="text-5xl leading-none sm:text-7xl">"Red Siren"</h1>
+                <p class="text-base leading-7 sm:text-lg">
+                    "Phase 1 keeps the app runnable while the previous instrument, tuner, and intro flows are cleared out."
+                </p>
+            </div>
+        </section>
     }
 }

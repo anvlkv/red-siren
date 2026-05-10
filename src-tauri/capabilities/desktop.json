@@ -9,7 +9,8 @@
     "main"
   ],
   "permissions": [
-    "window-state:default",
-    "store:default"
+    "core:default",
+    "opener:default",
+    "log:default"
   ]
 }

@@ -2,11 +2,10 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main", "secondary:*"],
+  "windows": ["main"],
   "permissions": [
     "core:default",
     "opener:default",
-    "log:default",
-    "store:default"
+    "log:default"
   ]
 }

@@ -1,18 +1,12 @@
 mod app;
-mod components;
 mod pages;
 mod routes;
-mod util;
 
-use app::*;
+use app::App;
 use leptos::prelude::*;
 
 fn main() {
     console_error_panic_hook::set_once();
-
-    util::log::init_tauri_logger();
-
-    log::info!("Mounting app");
 
     leptos_styling::init();
 

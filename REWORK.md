@@ -559,3 +559,39 @@ Status: complete
 | `src-tauri/gen/android/**` | Keep | Generated Android project tree remains required for mobile build/distribution workflows. |
 | `src-tauri/gen/apple/**` | Keep | Generated Apple project tree remains required for iOS/macOS build/distribution workflows. |
 | `src-tauri/icons/**` | Keep | Cross-platform app icon set remains required for desktop/mobile bundles and stores. |
+
+## Post-rework fixups
+
+Status: complete
+
+### Feature flag and dead-code cleanup batch
+
+| File | Action | Notes |
+|------|--------|-------|
+| `crates/audio-system/src/rt/gate_manager.rs` | Stub | Extracted `QualityChangeFn` type alias to silence `clippy::type_complexity` warning. |
+| `crates/common/src/error.rs` | Stub | Removed stale `From<tauri::Error>` impl (references unlinked `tauri` crate) and updated doc comment. |
+| `crates/common/src/lib.rs` | Keep | Already exposes only generic primitives; no change needed. |
+| `src-tauri/src/lib.rs` | Stub | Removed `cfg!(feature = "devtools")` branch; log level now uses `debug_assertions` only. |
+
+### Common crate dead-file removal batch
+
+Files below were present on disk but never compiled (not declared in any `mod.rs`). Removed to match the stated Phase 3 scope.
+
+| File | Action | Notes |
+|------|--------|-------|
+| `crates/common/src/instrument/` (entire tree) | Delete | Was already excluded from compilation; removed from disk. Restore: `https://raw.githubusercontent.com/anvlkv/red-siren/refs/heads/feature/tauri/crates/common/src/instrument/` |
+| `crates/common/src/navigation/mod.rs` | Delete | Was already excluded from compilation; removed from disk. Restore: `https://raw.githubusercontent.com/anvlkv/red-siren/refs/heads/feature/tauri/crates/common/src/navigation/mod.rs` |
+| `crates/common/src/navigation/routes.rs` | Delete | Was already excluded from compilation; removed from disk. Restore: `https://raw.githubusercontent.com/anvlkv/red-siren/refs/heads/feature/tauri/crates/common/src/navigation/routes.rs` |
+| `crates/common/src/tuner/` (entire tree) | Delete | Was already excluded from compilation; removed from disk. Restore: `https://raw.githubusercontent.com/anvlkv/red-siren/refs/heads/feature/tauri/crates/common/src/tuner/` |
+| `crates/common/src/node_key.rs` | Delete | Was already excluded from compilation; removed from disk. Restore: `https://raw.githubusercontent.com/anvlkv/red-siren/refs/heads/feature/tauri/crates/common/src/node_key.rs` |
+| `crates/common/src/test_util.rs` | Delete | Was already excluded from compilation; removed from disk. Restore: `https://raw.githubusercontent.com/anvlkv/red-siren/refs/heads/feature/tauri/crates/common/src/test_util.rs` |
+| `crates/common/src/commands/edit.rs` | Delete | Was already excluded from compilation; removed from disk. Restore: `https://raw.githubusercontent.com/anvlkv/red-siren/refs/heads/feature/tauri/crates/common/src/commands/edit.rs` |
+| `crates/common/src/commands/instrument.rs` | Delete | Was already excluded from compilation; removed from disk. Restore: `https://raw.githubusercontent.com/anvlkv/red-siren/refs/heads/feature/tauri/crates/common/src/commands/instrument.rs` |
+| `crates/common/src/commands/intro.rs` | Delete | Was already excluded from compilation; removed from disk. Restore: `https://raw.githubusercontent.com/anvlkv/red-siren/refs/heads/feature/tauri/crates/common/src/commands/intro.rs` |
+| `crates/common/src/commands/test_node.rs` | Delete | Was already excluded from compilation; removed from disk. Restore: `https://raw.githubusercontent.com/anvlkv/red-siren/refs/heads/feature/tauri/crates/common/src/commands/test_node.rs` |
+| `crates/common/src/commands/tuner.rs` | Delete | Was already excluded from compilation; removed from disk. Restore: `https://raw.githubusercontent.com/anvlkv/red-siren/refs/heads/feature/tauri/crates/common/src/commands/tuner.rs` |
+| `crates/common/src/events/instrument.rs` | Delete | Was already excluded from compilation; removed from disk. Restore: `https://raw.githubusercontent.com/anvlkv/red-siren/refs/heads/feature/tauri/crates/common/src/events/instrument.rs` |
+| `crates/common/src/events/intro.rs` | Delete | Was already excluded from compilation; removed from disk. Restore: `https://raw.githubusercontent.com/anvlkv/red-siren/refs/heads/feature/tauri/crates/common/src/events/intro.rs` |
+| `crates/common/src/events/navigation.rs` | Delete | Was already excluded from compilation; removed from disk. Restore: `https://raw.githubusercontent.com/anvlkv/red-siren/refs/heads/feature/tauri/crates/common/src/events/navigation.rs` |
+| `crates/common/src/events/navigation_payloads.rs` | Delete | Was already excluded from compilation; removed from disk. Restore: `https://raw.githubusercontent.com/anvlkv/red-siren/refs/heads/feature/tauri/crates/common/src/events/navigation_payloads.rs` |
+| `crates/common/src/events/tuner.rs` | Delete | Was already excluded from compilation; removed from disk. Restore: `https://raw.githubusercontent.com/anvlkv/red-siren/refs/heads/feature/tauri/crates/common/src/events/tuner.rs` |

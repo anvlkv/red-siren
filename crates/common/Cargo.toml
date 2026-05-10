@@ -16,3 +16,6 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["json", "redactions"] }
+
+[features]
+test-util = []

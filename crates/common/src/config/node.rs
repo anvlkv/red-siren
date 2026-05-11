@@ -51,6 +51,9 @@ enum PathSegment {
     },
 }
 
+const EPS_COORD: f64 = 1e-9;
+const EPS_INNER_AXIS_Y: f64 = 1e-6;
+
 impl PathSegment {
     fn length(self) -> f64 {
         match self {
@@ -106,6 +109,14 @@ impl PathSegment {
 }
 
 impl NodePhysics {
+    fn theta_at_index(index: usize, samples: usize) -> f64 {
+        index as f64 / samples as f64
+    }
+
+    fn sweep_abs_deg_to_rad(deg: f64) -> f64 {
+        Self::deg_to_rad(deg.abs())
+    }
+
     fn rim_segment_index(&self) -> Option<usize> {
         let segments = self.build_outer_segments();
         if segments.is_empty() {
@@ -127,7 +138,11 @@ impl NodePhysics {
         }
     }
 
-    fn arc_midpoint_x_for_turn(pen: PenState, radius: f64, sweep_rad: f64, turn_sign: f64) -> f64 {
+    fn arc_center_and_radial_start(
+        pen: PenState,
+        radius: f64,
+        turn_sign: f64,
+    ) -> (Point2<f64>, Point2<f64>) {
         let center = Point2 {
             x: pen.point.x + turn_sign * radius * (-pen.tangent_angle.sin()),
             y: pen.point.y + turn_sign * radius * pen.tangent_angle.cos(),
@@ -136,8 +151,80 @@ impl NodePhysics {
             x: pen.point.x - center.x,
             y: pen.point.y - center.y,
         };
+        (center, radial_start)
+    }
+
+    fn append_arc_segment(
+        segments: &mut Vec<PathSegment>,
+        pen: &mut PenState,
+        radius: f64,
+        sweep_rad_abs: f64,
+        effective_turn_sign: f64,
+    ) {
+        let (center, radial_start) =
+            Self::arc_center_and_radial_start(*pen, radius, effective_turn_sign);
+        let sweep_cw = effective_turn_sign * sweep_rad_abs;
+
+        segments.push(PathSegment::Arc {
+            center,
+            radial_start,
+            radius,
+            sweep_cw,
+            tangent_angle_start: pen.tangent_angle,
+        });
+
+        let radial_end = Self::rotate_cw(radial_start, sweep_cw);
+        pen.point = Point2 {
+            x: center.x + radial_end.x,
+            y: center.y + radial_end.y,
+        };
+        pen.tangent_angle += sweep_cw;
+    }
+
+    fn arc_midpoint_x_for_turn(pen: PenState, radius: f64, sweep_rad: f64, turn_sign: f64) -> f64 {
+        let (center, radial_start) = Self::arc_center_and_radial_start(pen, radius, turn_sign);
         let mid = Self::rotate_cw(radial_start, turn_sign * sweep_rad * 0.5);
         center.x + mid.x
+    }
+
+    fn rim_scale_for_segment(rim_idx: Option<usize>, seg_idx: usize, seg_u: f64) -> f64 {
+        match rim_idx {
+            Some(idx) if seg_idx == idx => 1.0 - seg_u.clamp(0.0, 1.0),
+            _ => 1.0,
+        }
+    }
+
+    fn apply_rim_taper(outer: Point2<f64>, inner: Point2<f64>, rim_scale: f64) -> Point2<f64> {
+        if rim_scale >= 1.0 {
+            return inner;
+        }
+
+        Point2 {
+            x: outer.x + (inner.x - outer.x) * rim_scale,
+            y: outer.y + (inner.y - outer.y) * rim_scale,
+        }
+    }
+
+    fn compute_inner_point(
+        &self,
+        outer: Point2<f64>,
+        tangent: Point2<f64>,
+        previous_inner: Option<Point2<f64>>,
+        rim_scale: f64,
+        clamp_x_to_axis: bool,
+    ) -> Point2<f64> {
+        let normal = Self::inward_normal_for_tangent(tangent, previous_inner, outer);
+        let thickness = self.wall_thickness_m.max(0.0);
+        let mut inner = Point2 {
+            x: outer.x + normal.x * thickness,
+            y: outer.y + normal.y * thickness,
+        };
+
+        if clamp_x_to_axis && inner.x < 0.0 {
+            inner.x = 0.0;
+        }
+
+        Self::apply_rim_taper(outer, inner, rim_scale)
     }
 
     // Choose the arc turn direction based on requested concavity relative to the axis (x=0).
@@ -206,8 +293,8 @@ impl NodePhysics {
         }
 
         // 3) Arc r1
-        let sweep1 = Self::deg_to_rad(self.r1_sweep.abs());
-        if self.r1 > 0.0 && sweep1 > 0.0 && self.r1_sweep != 0.0 {
+        let sweep1 = Self::sweep_abs_deg_to_rad(self.r1_sweep);
+        if self.r1 > 0.0 && sweep1 > 0.0 {
             let turn_sign = Self::choose_turn_sign(pen, self.r1, sweep1, self.is_r1_concave, false);
             // Negative r1_sweep flips the arc direction to point upward (toward -y)
             let effective_turn_sign = if self.r1_sweep < 0.0 {
@@ -215,37 +302,20 @@ impl NodePhysics {
             } else {
                 turn_sign
             };
-            let center = Point2 {
-                x: pen.point.x + effective_turn_sign * self.r1 * (-pen.tangent_angle.sin()),
-                y: pen.point.y + effective_turn_sign * self.r1 * pen.tangent_angle.cos(),
-            };
-            let radial_start = Point2 {
-                x: pen.point.x - center.x,
-                y: pen.point.y - center.y,
-            };
-            let sweep_cw = effective_turn_sign * sweep1;
-
-            segments.push(PathSegment::Arc {
-                center,
-                radial_start,
-                radius: self.r1,
-                sweep_cw,
-                tangent_angle_start: pen.tangent_angle,
-            });
-
-            let radial_end = Self::rotate_cw(radial_start, sweep_cw);
-            pen.point = Point2 {
-                x: center.x + radial_end.x,
-                y: center.y + radial_end.y,
-            };
-            pen.tangent_angle += sweep_cw;
+            Self::append_arc_segment(
+                &mut segments,
+                &mut pen,
+                self.r1,
+                sweep1,
+                effective_turn_sign,
+            );
         }
 
         // 4..6) Middle tangent line (material length accounting)
-        let sweep2 = Self::deg_to_rad(self.r2_sweep.abs());
+        let sweep2 = Self::sweep_abs_deg_to_rad(self.r2_sweep);
         let used = self.r0.max(0.0)
-            + self.r1.max(0.0) * sweep1.abs()
-            + self.r2.max(0.0) * sweep2.abs()
+            + self.r1.max(0.0) * sweep1
+            + self.r2.max(0.0) * sweep2
             + self.rim_breadth.max(0.0);
         let middle_len = (self.base_length_m - used).max(0.0);
         if middle_len > 0.0 {
@@ -261,7 +331,7 @@ impl NodePhysics {
         }
 
         // 7) Arc r2
-        if self.r2 > 0.0 && sweep2 > 0.0 && self.r2_sweep != 0.0 {
+        if self.r2 > 0.0 && sweep2 > 0.0 {
             // R2 direction is explicit: concave bends inward, convex bends outward.
             // Keep deterministic sign here so shape presets can intentionally oppose.
             let turn_sign = if self.is_r2_concave { 1.0 } else { -1.0 };
@@ -271,30 +341,13 @@ impl NodePhysics {
             } else {
                 turn_sign
             };
-            let center = Point2 {
-                x: pen.point.x + effective_turn_sign * self.r2 * (-pen.tangent_angle.sin()),
-                y: pen.point.y + effective_turn_sign * self.r2 * pen.tangent_angle.cos(),
-            };
-            let radial_start = Point2 {
-                x: pen.point.x - center.x,
-                y: pen.point.y - center.y,
-            };
-            let sweep_cw = effective_turn_sign * sweep2;
-
-            segments.push(PathSegment::Arc {
-                center,
-                radial_start,
-                radius: self.r2,
-                sweep_cw,
-                tangent_angle_start: pen.tangent_angle,
-            });
-
-            let radial_end = Self::rotate_cw(radial_start, sweep_cw);
-            pen.point = Point2 {
-                x: center.x + radial_end.x,
-                y: center.y + radial_end.y,
-            };
-            pen.tangent_angle += sweep_cw;
+            Self::append_arc_segment(
+                &mut segments,
+                &mut pen,
+                self.r2,
+                sweep2,
+                effective_turn_sign,
+            );
         }
 
         // 8..9) Rim line
@@ -403,34 +456,11 @@ impl NodePhysics {
         }
     }
 
-    fn inner_from_outer(&self, outer: Point2<f64>, tangent: Point2<f64>) -> Point2<f64> {
-        let n = Self::inward_normal_for_tangent(tangent, None, outer);
-
-        let mut inner = Point2 {
-            x: outer.x + n.x * self.wall_thickness_m.max(0.0),
-            y: outer.y + n.y * self.wall_thickness_m.max(0.0),
-        };
-        if inner.x < 0.0 {
-            inner.x = 0.0;
-        }
-        inner
-    }
-
     pub fn points_at(&self, theta: f64) -> (Point2<f64>, Point2<f64>) {
+        let rim_idx = self.rim_segment_index();
         let (outer, tangent, seg_idx, seg_u) = self.eval_outer_by_theta(theta);
-        let rim_scale = match self.rim_segment_index() {
-            Some(rim_idx) if seg_idx == rim_idx => 1.0 - seg_u.clamp(0.0, 1.0),
-            _ => 1.0,
-        };
-        let mut inner = self.inner_from_outer(outer, tangent);
-
-        if rim_scale < 1.0 {
-            // Taper shell thickness to zero across the rim so the very last rim point is sharp.
-            inner = Point2 {
-                x: outer.x + (inner.x - outer.x) * rim_scale,
-                y: outer.y + (inner.y - outer.y) * rim_scale,
-            };
-        }
+        let rim_scale = Self::rim_scale_for_segment(rim_idx, seg_idx, seg_u);
+        let inner = self.compute_inner_point(outer, tangent, None, rim_scale, true);
 
         (outer, inner)
     }
@@ -450,10 +480,11 @@ impl NodePhysics {
     pub fn outline(&self, num_samples_per_side: usize) -> Vec<Point2<f64>> {
         let samples = num_samples_per_side.max(1);
         let mut points = Vec::with_capacity((samples + 1) * 2 + 2);
+        let rim_idx = self.rim_segment_index();
 
         // Outer profile sampled forward by normalized material-length theta.
         for i in 0..=samples {
-            let theta = i as f64 / samples as f64;
+            let theta = Self::theta_at_index(i, samples);
             let (outer, _) = self.points_at(theta);
             points.push(outer);
         }
@@ -462,25 +493,10 @@ impl NodePhysics {
         let mut inner_rev = Vec::with_capacity(samples + 1);
         let mut previous_inner = None;
         for i in (0..=samples).rev() {
-            let theta = i as f64 / samples as f64;
+            let theta = Self::theta_at_index(i, samples);
             let (outer, tangent, seg_idx, seg_u) = self.eval_outer_by_theta(theta);
-            let rim_scale = match self.rim_segment_index() {
-                Some(rim_idx) if seg_idx == rim_idx => 1.0 - seg_u.clamp(0.0, 1.0),
-                _ => 1.0,
-            };
-
-            let chosen_normal = Self::inward_normal_for_tangent(tangent, previous_inner, outer);
-            let mut inner = Point2 {
-                x: outer.x + chosen_normal.x * self.wall_thickness_m.max(0.0),
-                y: outer.y + chosen_normal.y * self.wall_thickness_m.max(0.0),
-            };
-
-            if rim_scale < 1.0 {
-                inner = Point2 {
-                    x: outer.x + (inner.x - outer.x) * rim_scale,
-                    y: outer.y + (inner.y - outer.y) * rim_scale,
-                };
-            }
+            let rim_scale = Self::rim_scale_for_segment(rim_idx, seg_idx, seg_u);
+            let inner = self.compute_inner_point(outer, tangent, previous_inner, rim_scale, false);
 
             previous_inner = Some(inner);
             inner_rev.push(inner);
@@ -489,8 +505,8 @@ impl NodePhysics {
         if !points.is_empty() && !inner_rev.is_empty() {
             let last = points[points.len() - 1];
             let first_inner = inner_rev[0];
-            let dedup =
-                (last.x - first_inner.x).abs() < 1e-9 && (last.y - first_inner.y).abs() < 1e-9;
+            let dedup = (last.x - first_inner.x).abs() < EPS_COORD
+                && (last.y - first_inner.y).abs() < EPS_COORD;
             if dedup {
                 points.extend_from_slice(&inner_rev[1..]);
             } else {
@@ -501,7 +517,9 @@ impl NodePhysics {
         // Close from inner axis back to origin.
         let last_is_inner_axis = points
             .last()
-            .map(|p| p.x.abs() < 1e-9 && (p.y - self.wall_thickness_m).abs() < 1e-6)
+            .map(|p| {
+                p.x.abs() < EPS_COORD && (p.y - self.wall_thickness_m).abs() < EPS_INNER_AXIS_Y
+            })
             .unwrap_or(false);
         if !last_is_inner_axis {
             points.push(Point2 {
@@ -512,7 +530,7 @@ impl NodePhysics {
 
         let last_is_origin = points
             .last()
-            .map(|p| p.x.abs() < 1e-9 && p.y.abs() < 1e-9)
+            .map(|p| p.x.abs() < EPS_COORD && p.y.abs() < EPS_COORD)
             .unwrap_or(false);
         if !last_is_origin {
             points.push(Point2 { x: 0.0, y: 0.0 });

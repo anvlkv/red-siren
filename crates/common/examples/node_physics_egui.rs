@@ -108,12 +108,6 @@ impl eframe::App for NodePhysicsApp {
                 ui.separator();
                 ui.label("Material metadata");
                 ui.add(
-                    egui::DragValue::new(&mut self.node.mass_kg)
-                        .speed(0.01)
-                        .range(0.0..=10_000.0)
-                        .prefix("mass_kg "),
-                );
-                ui.add(
                     egui::DragValue::new(&mut self.node.material_density_kg_per_m3)
                         .speed(1.0)
                         .range(0.0..=100_000.0)
@@ -126,6 +120,10 @@ impl eframe::App for NodePhysicsApp {
                 );
 
                 sanitize_node(&mut self.node);
+                let computed_samples = self.samples_per_side.max(1);
+                let inner_volume_m3 = self.node.inner_volume_m3(computed_samples);
+                let material_volume_m3 = self.node.material_volume_m3(computed_samples);
+                let mass_kg = self.node.mass_kg();
 
                 let (thickness_start, thickness_mid, thickness_end) = (
                     self.node.thickness_at(0.0),
@@ -133,6 +131,9 @@ impl eframe::App for NodePhysicsApp {
                     self.node.thickness_at(1.0),
                 );
                 ui.separator();
+                ui.label(format!("inner_volume_m3 {:.6}", inner_volume_m3));
+                ui.label(format!("material_volume_m3 {:.6}", material_volume_m3));
+                ui.label(format!("mass_kg {:.4}", mass_kg));
                 ui.label(format!(
                     "thickness: u=0.0 -> {:.4}, u=0.5 -> {:.4}, u=1.0 -> {:.4}",
                     thickness_start, thickness_mid, thickness_end
@@ -189,7 +190,6 @@ impl eframe::App for NodePhysicsApp {
 }
 
 fn sanitize_node(node: &mut NodePhysics) {
-    node.mass_kg = node.mass_kg.max(0.0);
     node.material_density_kg_per_m3 = node.material_density_kg_per_m3.max(0.0);
     node.wall_thickness_m = node.wall_thickness_m.max(0.0);
     node.rim_breadth = node.rim_breadth.max(0.0);
@@ -280,7 +280,6 @@ fn draw_axes(
 
 fn demo_node(shoulder_curves_inward: bool, rim_curves_inward: bool) -> NodePhysics {
     NodePhysics {
-        mass_kg: 1.0,
         material_density_kg_per_m3: 1_000.0,
         wall_thickness_m: 0.05,
         rim_breadth: 0.1,

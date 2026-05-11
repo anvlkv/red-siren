@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 pub struct NodePhysics {
-    /// Mass of the node in kg
-    pub mass_kg: f64,
-    /// Density of the material in kg/m^3
+    /// Density of the material in kg/m^3.
+    ///
+    /// Node mass is derived from this density and the computed material volume.
     pub material_density_kg_per_m3: f64,
     /// Thickness of the walls in meters
     pub wall_thickness_m: f64,
@@ -52,6 +52,7 @@ enum PathSegment {
 }
 
 const EPS_COORD: f64 = 1e-9;
+const MASS_VOLUME_SAMPLES: usize = 256;
 
 impl PathSegment {
     fn length(self) -> f64 {
@@ -110,6 +111,31 @@ impl PathSegment {
 impl NodePhysics {
     fn u_at_index(index: usize, samples: usize) -> f64 {
         index as f64 / samples as f64
+    }
+
+    fn revolved_solid_volume_m3<F>(&self, num_samples: usize, profile_point: F) -> f64
+    where
+        F: Fn(Point2<f64>, Point2<f64>) -> Point2<f64>,
+    {
+        let samples = num_samples.max(1);
+        let (prev_outer, prev_inner) = self.sample_outer_inner_at(0.0);
+        let mut prev_profile = profile_point(prev_outer, prev_inner);
+        let mut volume_m3 = 0.0;
+
+        for i in 1..=samples {
+            let u = Self::u_at_index(i, samples);
+            let (outer, inner) = self.sample_outer_inner_at(u);
+            let profile = profile_point(outer, inner);
+            let dy = profile.y - prev_profile.y;
+            let prev_area = std::f64::consts::PI * prev_profile.x.max(0.0).powi(2);
+            let area = std::f64::consts::PI * profile.x.max(0.0).powi(2);
+
+            volume_m3 += 0.5 * (prev_area + area) * dy;
+
+            prev_profile = profile;
+        }
+
+        volume_m3.abs()
     }
 
     fn sweep_abs_deg_to_rad(deg: f64) -> f64 {
@@ -556,6 +582,27 @@ impl NodePhysics {
 
         points
     }
+
+    /// Computes the volume of the node's inner cavity in cubic meters, excluding material thickness.
+    ///
+    /// Takes into account the fact that inner profile is only 1/2 of the cross-section and the node is revolved around the y-axis.
+    pub fn inner_volume_m3(&self, num_samples: usize) -> f64 {
+        self.revolved_solid_volume_m3(num_samples, |_, inner| inner)
+    }
+
+    /// Computes the volume of the node's material in cubic meters.
+    ///
+    /// Takes into account the fact that inner profile is only 1/2 of the cross-section and the node is revolved around the y-axis.
+    ///
+    /// Only accounts for the actual material ie thickness.
+    pub fn material_volume_m3(&self, num_samples: usize) -> f64 {
+        let outer_volume_m3 = self.revolved_solid_volume_m3(num_samples, |outer, _| outer);
+        (outer_volume_m3 - self.inner_volume_m3(num_samples)).max(0.0)
+    }
+
+    pub fn mass_kg(&self) -> f64 {
+        self.material_density_kg_per_m3.max(0.0) * self.material_volume_m3(MASS_VOLUME_SAMPLES)
+    }
 }
 
 #[cfg(test)]
@@ -566,7 +613,6 @@ mod tests {
 
     fn demo_node(shoulder_curves_inward: bool, rim_curves_inward: bool) -> NodePhysics {
         NodePhysics {
-            mass_kg: 1.0,
             material_density_kg_per_m3: 1_000.0,
             wall_thickness_m: 0.05,
             rim_breadth: 0.1,
@@ -700,5 +746,37 @@ mod tests {
 
         let paths: Vec<&[Point2<f64>]> = all_paths.iter().map(Vec::as_slice).collect();
         crate::assert_paths_points_2d_snapshot!("node_outlines_shape_variations", &paths);
+    }
+
+    #[test]
+    fn volume_methods_return_finite_positive_values() {
+        let node = demo_node(false, false);
+
+        let inner_volume = node.inner_volume_m3(128);
+        let material_volume = node.material_volume_m3(128);
+
+        assert!(inner_volume.is_finite());
+        assert!(material_volume.is_finite());
+        assert!(inner_volume > 0.0);
+        assert!(material_volume > 0.0);
+    }
+
+    #[test]
+    fn zero_wall_thickness_has_no_material_volume() {
+        let node = NodePhysics {
+            wall_thickness_m: 0.0,
+            ..demo_node(false, false)
+        };
+
+        assert!(node.material_volume_m3(128) <= EPS_COORD);
+    }
+
+    #[test]
+    fn derived_mass_matches_density_times_material_volume() {
+        let node = demo_node(true, false);
+        let expected_mass =
+            node.material_density_kg_per_m3 * node.material_volume_m3(MASS_VOLUME_SAMPLES);
+
+        assert!((node.mass_kg() - expected_mass).abs() <= EPS_COORD);
     }
 }

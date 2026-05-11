@@ -11,20 +11,20 @@ pub struct NodePhysics {
     pub wall_thickness_m: f64,
     /// Rim breadth
     pub rim_breadth: f64,
-    /// R0 radius of the node's base ie the base along X axis in meters
-    pub r0: f64,
-    /// Base fillet radius of the node in meters
-    pub r1: f64,
-    /// R1 sweep angle in degrees (0 = no arc, 90 = quarter circle, 180 = half circle)
-    pub r1_sweep: f64,
-    /// Rim curve radius of the node in meters
-    pub r2: f64,
-    /// R2 sweep angle in degrees (0 = no arc, 90 = quarter circle, 180 = half circle)
-    pub r2_sweep: f64,
-    /// R1 Curves inward, _Like the inside of a bowl_?
-    pub is_r1_concave: bool,
-    /// R2 Curves inward, _Like the inside of a bowl_?
-    pub is_r2_concave: bool,
+    /// Radius of the base segment in meters.
+    pub base_radius_m: f64,
+    /// Radius of the shoulder arc in meters.
+    pub shoulder_radius_m: f64,
+    /// Shoulder sweep angle in degrees (0 = no arc, 90 = quarter circle, 180 = half circle)
+    pub shoulder_sweep_deg: f64,
+    /// Radius of the rim arc in meters.
+    pub rim_radius_m: f64,
+    /// Rim sweep angle in degrees (0 = no arc, 90 = quarter circle, 180 = half circle)
+    pub rim_sweep_deg: f64,
+    /// Shoulder curves inward toward the axis when true.
+    pub shoulder_curves_inward: bool,
+    /// Rim curves inward toward the axis when true.
+    pub rim_curves_inward: bool,
     /// Length of the node base material in meters
     pub base_length_m: f64,
 }
@@ -52,7 +52,6 @@ enum PathSegment {
 }
 
 const EPS_COORD: f64 = 1e-9;
-const EPS_INNER_AXIS_Y: f64 = 1e-6;
 
 impl PathSegment {
     fn length(self) -> f64 {
@@ -109,7 +108,7 @@ impl PathSegment {
 }
 
 impl NodePhysics {
-    fn theta_at_index(index: usize, samples: usize) -> f64 {
+    fn u_at_index(index: usize, samples: usize) -> f64 {
         index as f64 / samples as f64
     }
 
@@ -231,17 +230,17 @@ impl NodePhysics {
     // concave=true -> inward bend (smaller x); concave=false -> outward bend (larger x).
     // When enforce_forward_end is true, prefer an end tangent with non-negative x component
     // so the following rim line does not flip backward.
-    fn choose_turn_sign(
+    fn choose_arc_turn_sign(
         pen: PenState,
         radius: f64,
         sweep_rad: f64,
-        is_concave: bool,
+        curves_inward: bool,
         enforce_forward_end: bool,
     ) -> f64 {
         let x_plus = Self::arc_midpoint_x_for_turn(pen, radius, sweep_rad, 1.0);
         let x_minus = Self::arc_midpoint_x_for_turn(pen, radius, sweep_rad, -1.0);
 
-        let preferred = if is_concave {
+        let preferred = if curves_inward {
             if x_plus <= x_minus {
                 1.0
             } else {
@@ -279,25 +278,38 @@ impl NodePhysics {
             tangent_angle: 0.0,
         };
 
-        // 1..2) Base line
-        if self.r0 > 0.0 {
+        // Base line.
+        if self.base_radius_m > 0.0 {
             segments.push(PathSegment::Line {
                 start: pen.point,
-                length: self.r0,
+                length: self.base_radius_m,
                 tangent_angle: pen.tangent_angle,
             });
             pen.point = Point2 {
-                x: pen.point.x + self.r0,
+                x: pen.point.x + self.base_radius_m,
                 y: pen.point.y,
             };
         }
 
-        // 3) Arc r1
-        let sweep1 = Self::sweep_abs_deg_to_rad(self.r1_sweep);
-        if self.r1 > 0.0 && sweep1 > 0.0 {
-            let turn_sign = Self::choose_turn_sign(pen, self.r1, sweep1, self.is_r1_concave, false);
-            // Negative r1_sweep flips the arc direction to point upward (toward -y)
-            let effective_turn_sign = if self.r1_sweep < 0.0 {
+        // Shoulder arc.
+        let shoulder_sweep = Self::sweep_abs_deg_to_rad(self.shoulder_sweep_deg);
+        if self.shoulder_radius_m > 0.0 && shoulder_sweep > 0.0 {
+            // `effective_turn_sign` is negated for negative sweeps, so invert the
+            // preference before selection to preserve the requested concavity.
+            let shoulder_curves_inward = if self.shoulder_sweep_deg < 0.0 {
+                !self.shoulder_curves_inward
+            } else {
+                self.shoulder_curves_inward
+            };
+            let turn_sign = Self::choose_arc_turn_sign(
+                pen,
+                self.shoulder_radius_m,
+                shoulder_sweep,
+                shoulder_curves_inward,
+                false,
+            );
+            // Negative sweeps flip the arc direction in screen space.
+            let effective_turn_sign = if self.shoulder_sweep_deg < 0.0 {
                 -turn_sign
             } else {
                 turn_sign
@@ -305,17 +317,17 @@ impl NodePhysics {
             Self::append_arc_segment(
                 &mut segments,
                 &mut pen,
-                self.r1,
-                sweep1,
+                self.shoulder_radius_m,
+                shoulder_sweep,
                 effective_turn_sign,
             );
         }
 
         // 4..6) Middle tangent line (material length accounting)
-        let sweep2 = Self::sweep_abs_deg_to_rad(self.r2_sweep);
-        let used = self.r0.max(0.0)
-            + self.r1.max(0.0) * sweep1
-            + self.r2.max(0.0) * sweep2
+        let rim_sweep = Self::sweep_abs_deg_to_rad(self.rim_sweep_deg);
+        let used = self.base_radius_m.max(0.0)
+            + self.shoulder_radius_m.max(0.0) * shoulder_sweep
+            + self.rim_radius_m.max(0.0) * rim_sweep
             + self.rim_breadth.max(0.0);
         let middle_len = (self.base_length_m - used).max(0.0);
         if middle_len > 0.0 {
@@ -330,13 +342,24 @@ impl NodePhysics {
             };
         }
 
-        // 7) Arc r2
-        if self.r2 > 0.0 && sweep2 > 0.0 {
-            // R2 direction is explicit: concave bends inward, convex bends outward.
-            // Keep deterministic sign here so shape presets can intentionally oppose.
-            let turn_sign = if self.is_r2_concave { 1.0 } else { -1.0 };
-            // Negative r2_sweep flips the arc direction to point upward (toward -y)
-            let effective_turn_sign = if self.r2_sweep < 0.0 {
+        // Rim arc.
+        if self.rim_radius_m > 0.0 && rim_sweep > 0.0 {
+            // `effective_turn_sign` is negated for negative sweeps, so invert the
+            // preference before selection to preserve the requested concavity.
+            let rim_curves_inward = if self.rim_sweep_deg < 0.0 {
+                !self.rim_curves_inward
+            } else {
+                self.rim_curves_inward
+            };
+            let turn_sign = Self::choose_arc_turn_sign(
+                pen,
+                self.rim_radius_m,
+                rim_sweep,
+                rim_curves_inward,
+                false,
+            );
+            // Negative sweeps flip the arc direction in screen space.
+            let effective_turn_sign = if self.rim_sweep_deg < 0.0 {
                 -turn_sign
             } else {
                 turn_sign
@@ -344,8 +367,8 @@ impl NodePhysics {
             Self::append_arc_segment(
                 &mut segments,
                 &mut pen,
-                self.r2,
-                sweep2,
+                self.rim_radius_m,
+                rim_sweep,
                 effective_turn_sign,
             );
         }
@@ -456,17 +479,17 @@ impl NodePhysics {
         }
     }
 
-    pub fn points_at(&self, theta: f64) -> (Point2<f64>, Point2<f64>) {
+    pub fn sample_outer_inner_at(&self, u: f64) -> (Point2<f64>, Point2<f64>) {
         let rim_idx = self.rim_segment_index();
-        let (outer, tangent, seg_idx, seg_u) = self.eval_outer_by_theta(theta);
+        let (outer, tangent, seg_idx, seg_u) = self.eval_outer_by_theta(u);
         let rim_scale = Self::rim_scale_for_segment(rim_idx, seg_idx, seg_u);
         let inner = self.compute_inner_point(outer, tangent, None, rim_scale, true);
 
         (outer, inner)
     }
 
-    pub fn thickness_at(&self, theta: f64) -> f64 {
-        let (outer, inner) = self.points_at(theta);
+    pub fn thickness_at(&self, u: f64) -> f64 {
+        let (outer, inner) = self.sample_outer_inner_at(u);
         let dx = outer.x - inner.x;
         let dy = outer.y - inner.y;
         (dx * dx + dy * dy).sqrt()
@@ -477,15 +500,15 @@ impl NodePhysics {
     /// Coordinate system:
     /// - `x`: radius (positive away from center axis)
     /// - `y`: height (increasing downward)
-    pub fn outline(&self, num_samples_per_side: usize) -> Vec<Point2<f64>> {
+    pub fn shell_outline(&self, num_samples_per_side: usize) -> Vec<Point2<f64>> {
         let samples = num_samples_per_side.max(1);
         let mut points = Vec::with_capacity((samples + 1) * 2 + 2);
         let rim_idx = self.rim_segment_index();
 
         // Outer profile sampled forward by normalized material-length theta.
         for i in 0..=samples {
-            let theta = Self::theta_at_index(i, samples);
-            let (outer, _) = self.points_at(theta);
+            let u = Self::u_at_index(i, samples);
+            let (outer, _) = self.sample_outer_inner_at(u);
             points.push(outer);
         }
 
@@ -493,8 +516,8 @@ impl NodePhysics {
         let mut inner_rev = Vec::with_capacity(samples + 1);
         let mut previous_inner = None;
         for i in (0..=samples).rev() {
-            let theta = Self::theta_at_index(i, samples);
-            let (outer, tangent, seg_idx, seg_u) = self.eval_outer_by_theta(theta);
+            let u = Self::u_at_index(i, samples);
+            let (outer, tangent, seg_idx, seg_u) = self.eval_outer_by_theta(u);
             let rim_scale = Self::rim_scale_for_segment(rim_idx, seg_idx, seg_u);
             let inner = self.compute_inner_point(outer, tangent, previous_inner, rim_scale, false);
 
@@ -514,18 +537,13 @@ impl NodePhysics {
             }
         }
 
-        // Close from inner axis back to origin.
-        let last_is_inner_axis = points
-            .last()
-            .map(|p| {
-                p.x.abs() < EPS_COORD && (p.y - self.wall_thickness_m).abs() < EPS_INNER_AXIS_Y
-            })
-            .unwrap_or(false);
-        if !last_is_inner_axis {
-            points.push(Point2 {
-                x: 0.0,
-                y: self.wall_thickness_m,
-            });
+        // Project the final inner point to the axis at its current height,
+        // then close to origin. Using a fixed y here can create visible notches
+        // for steep presets where the inner path ends far from wall_thickness_m.
+        if let Some(last) = points.last().copied() {
+            if last.x.abs() >= EPS_COORD {
+                points.push(Point2 { x: 0.0, y: last.y });
+            }
         }
 
         let last_is_origin = points
@@ -546,19 +564,19 @@ mod tests {
 
     use super::*;
 
-    fn demo_node(is_r1_concave: bool, is_r2_concave: bool) -> NodePhysics {
+    fn demo_node(shoulder_curves_inward: bool, rim_curves_inward: bool) -> NodePhysics {
         NodePhysics {
             mass_kg: 1.0,
             material_density_kg_per_m3: 1_000.0,
             wall_thickness_m: 0.05,
             rim_breadth: 0.1,
-            r0: 0.25,
-            r1: 0.2,
-            r1_sweep: 35.0,
-            r2: 0.18,
-            r2_sweep: 35.0,
-            is_r1_concave,
-            is_r2_concave,
+            base_radius_m: 0.25,
+            shoulder_radius_m: 0.2,
+            shoulder_sweep_deg: 35.0,
+            rim_radius_m: 0.18,
+            rim_sweep_deg: 35.0,
+            shoulder_curves_inward,
+            rim_curves_inward,
             base_length_m: 1.0,
         }
     }
@@ -579,14 +597,14 @@ mod tests {
             (
                 "bowl_upwards",
                 NodePhysics {
-                    r0: 0.22,
-                    r1: 0.24,
-                    r2: 0.14,
-                    r1_sweep: -45.0,
-                    r2_sweep: -42.0,
+                    base_radius_m: 0.22,
+                    shoulder_radius_m: 0.24,
+                    rim_radius_m: 0.14,
+                    shoulder_sweep_deg: -45.0,
+                    rim_sweep_deg: -42.0,
                     rim_breadth: 0.10,
-                    is_r1_concave: true,
-                    is_r2_concave: false,
+                    shoulder_curves_inward: true,
+                    rim_curves_inward: false,
                     base_length_m: 2.04,
                     ..demo_node(false, false)
                 },
@@ -594,14 +612,14 @@ mod tests {
             (
                 "bell_downwards",
                 NodePhysics {
-                    r0: 0.24,
-                    r1: 0.16,
-                    r2: 0.20,
-                    r1_sweep: 58.0,
-                    r2_sweep: 52.0,
+                    base_radius_m: 0.24,
+                    shoulder_radius_m: 0.16,
+                    rim_radius_m: 0.20,
+                    shoulder_sweep_deg: 58.0,
+                    rim_sweep_deg: 52.0,
                     rim_breadth: 0.10,
-                    is_r1_concave: false,
-                    is_r2_concave: true,
+                    shoulder_curves_inward: false,
+                    rim_curves_inward: true,
                     base_length_m: 1.10,
                     ..demo_node(false, false)
                 },
@@ -609,14 +627,14 @@ mod tests {
             (
                 "bell_with_outward_rim",
                 NodePhysics {
-                    r0: 0.24,
-                    r1: 0.16,
-                    r2: 0.24,
-                    r1_sweep: 56.0,
-                    r2_sweep: 82.0,
+                    base_radius_m: 0.24,
+                    shoulder_radius_m: 0.16,
+                    rim_radius_m: 0.24,
+                    shoulder_sweep_deg: 56.0,
+                    rim_sweep_deg: 82.0,
                     rim_breadth: 0.14,
-                    is_r1_concave: false,
-                    is_r2_concave: false,
+                    shoulder_curves_inward: false,
+                    rim_curves_inward: false,
                     base_length_m: 1.16,
                     ..demo_node(false, false)
                 },
@@ -624,14 +642,14 @@ mod tests {
             (
                 "bowl_with_inward_rim",
                 NodePhysics {
-                    r0: 0.22,
-                    r1: 0.22,
-                    r2: 0.20,
-                    r1_sweep: -44.0,
-                    r2_sweep: -72.0,
+                    base_radius_m: 0.22,
+                    shoulder_radius_m: 0.22,
+                    rim_radius_m: 0.20,
+                    shoulder_sweep_deg: -44.0,
+                    rim_sweep_deg: -72.0,
                     rim_breadth: 0.10,
-                    is_r1_concave: true,
-                    is_r2_concave: true,
+                    shoulder_curves_inward: true,
+                    rim_curves_inward: true,
                     base_length_m: 1.06,
                     ..demo_node(false, false)
                 },
@@ -641,13 +659,13 @@ mod tests {
                 NodePhysics {
                     wall_thickness_m: 0.04,
                     rim_breadth: 0.07,
-                    r0: 0.28,
-                    r1: 0.36,
-                    r2: 0.34,
-                    r1_sweep: 12.0,
-                    r2_sweep: 14.0,
-                    is_r1_concave: false,
-                    is_r2_concave: false,
+                    base_radius_m: 0.28,
+                    shoulder_radius_m: 0.36,
+                    rim_radius_m: 0.34,
+                    shoulder_sweep_deg: 12.0,
+                    rim_sweep_deg: 14.0,
+                    shoulder_curves_inward: false,
+                    rim_curves_inward: false,
                     base_length_m: 1.14,
                     ..demo_node(false, false)
                 },
@@ -657,13 +675,13 @@ mod tests {
                 NodePhysics {
                     wall_thickness_m: 0.025,
                     rim_breadth: 0.05,
-                    r0: 0.32,
-                    r1: 0.44,
-                    r2: 0.42,
-                    r1_sweep: -6.0,
-                    r2_sweep: -8.0,
-                    is_r1_concave: true,
-                    is_r2_concave: false,
+                    base_radius_m: 0.32,
+                    shoulder_radius_m: 0.44,
+                    rim_radius_m: 0.42,
+                    shoulder_sweep_deg: -6.0,
+                    rim_sweep_deg: -8.0,
+                    shoulder_curves_inward: true,
+                    rim_curves_inward: false,
                     base_length_m: 1.20,
                     ..demo_node(false, false)
                 },
@@ -675,7 +693,7 @@ mod tests {
         let spacing = 1.6;
 
         for (_, node) in variants {
-            let outline = node.outline(20);
+            let outline = node.shell_outline(20);
             all_paths.push(translated(&outline, cursor_x, 0.0));
             cursor_x += spacing;
         }

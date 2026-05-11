@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "camelCase")]
 /// Distances from screen edges to safe area
 pub struct SafeArea {
-    pub top: f64,
-    pub right: f64,
-    pub bottom: f64,
-    pub left: f64,
+    pub top: i64,
+    pub right: i64,
+    pub bottom: i64,
+    pub left: i64,
 }
 
 impl Default for SafeArea {
@@ -22,4 +22,4 @@ impl Default for SafeArea {
 }
 
 /// Default safe area insets
-pub const DEFAULT_SAFE_AREA: f64 = 18.0;
+pub const DEFAULT_SAFE_AREA: i64 = 18;

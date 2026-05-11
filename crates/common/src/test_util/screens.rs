@@ -24,20 +24,20 @@ pub const TABLET_SCREEN_SIZES: [(u32, u32); 5] = [
 ];
 
 /// Safe area insets (pixels) for common mobile layouts (portrait).
-pub const MOBILE_SAFE_AREA_INSETS: [(f64, f64, f64, f64); 3] = [
+pub const MOBILE_SAFE_AREA_INSETS: [(i64, i64, i64, i64); 3] = [
     // (top, right, bottom, left)
-    (44.0, 0.0, 34.0, 0.0), // iPhone X, 11, 12, 13, 14, 15 series w/ notch
-    (24.0, 0.0, 16.0, 0.0), // Typical Android (navigation bar, status bar)
-    (0.0, 0.0, 0.0, 0.0),   // Devices without a notch or special gesture area
+    (44, 0, 34, 0), // iPhone X, 11, 12, 13, 14, 15 series w/ notch
+    (24, 0, 16, 0), // Typical Android (navigation bar, status bar)
+    (0, 0, 0, 0),   // Devices without a notch or special gesture area
 ];
 
 /// Safe area insets (pixels) for common tablet layouts (portrait).
-pub const TABLET_SAFE_AREA_INSETS: [(f64, f64, f64, f64); 2] = [
-    (24.0, 0.0, 20.0, 0.0), // Typical iPad Pro with home indicator area
-    (0.0, 0.0, 0.0, 0.0),   // Older iPads, Android tablets, no system gesture zone
+pub const TABLET_SAFE_AREA_INSETS: [(i64, i64, i64, i64); 2] = [
+    (24, 0, 20, 0), // Typical iPad Pro with home indicator area
+    (0, 0, 0, 0),   // Older iPads, Android tablets, no system gesture zone
 ];
 
-pub fn test_cases() -> impl Iterator<Item = (&'static (u32, u32), &'static (f64, f64, f64, f64))> {
+pub fn test_cases() -> impl Iterator<Item = (&'static (u32, u32), &'static (i64, i64, i64, i64))> {
     DESKTOP_SCREEN_SIZES
         .iter()
         .zip(DESKTOP_SCREEN_SIZES.iter().map(|_| {

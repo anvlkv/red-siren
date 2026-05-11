@@ -1,223 +1,549 @@
-use std::ops::Add;
-
-use mint::{Point2, Vector3};
+use mint::Point2;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 pub struct NodePhysics {
     /// Mass of the node in kg
     pub mass_kg: f64,
-    /// Size of the node in meters
-    ///
-    /// - `x` width of the node at base
-    /// - `z` depth of the node at base
-    /// - `y` height of the node
-    pub size_m: Vector3<f64>,
     /// Density of the material in kg/m^3
     pub material_density_kg_per_m3: f64,
     /// Thickness of the walls in meters
     pub wall_thickness_m: f64,
+    /// Rim breadth
+    pub rim_breadth: f64,
+    /// R0 radius of the node's base ie the base along X axis in meters
+    pub r0: f64,
     /// Base fillet radius of the node in meters
     pub r1: f64,
+    /// R1 sweep angle in degrees (0 = no arc, 90 = quarter circle, 180 = half circle)
+    pub r1_sweep: f64,
     /// Rim curve radius of the node in meters
     pub r2: f64,
+    /// R2 sweep angle in degrees (0 = no arc, 90 = quarter circle, 180 = half circle)
+    pub r2_sweep: f64,
     /// R1 Curves inward, _Like the inside of a bowl_?
     pub is_r1_concave: bool,
     /// R2 Curves inward, _Like the inside of a bowl_?
     pub is_r2_concave: bool,
+    /// Length of the node base material in meters
+    pub base_length_m: f64,
+}
+
+#[derive(Clone, Copy)]
+struct PenState {
+    point: Point2<f64>,
+    tangent_angle: f64,
+}
+
+#[derive(Clone, Copy)]
+enum PathSegment {
+    Line {
+        start: Point2<f64>,
+        length: f64,
+        tangent_angle: f64,
+    },
+    Arc {
+        center: Point2<f64>,
+        radial_start: Point2<f64>,
+        radius: f64,
+        sweep_cw: f64,
+        tangent_angle_start: f64,
+    },
+}
+
+impl PathSegment {
+    fn length(self) -> f64 {
+        match self {
+            Self::Line { length, .. } => length,
+            Self::Arc {
+                radius, sweep_cw, ..
+            } => radius * sweep_cw.abs(),
+        }
+    }
+
+    fn eval(self, u: f64) -> (Point2<f64>, Point2<f64>) {
+        let t = u.clamp(0.0, 1.0);
+        match self {
+            Self::Line {
+                start,
+                length,
+                tangent_angle,
+            } => {
+                let dir = Point2 {
+                    x: tangent_angle.cos(),
+                    y: tangent_angle.sin(),
+                };
+                (
+                    Point2 {
+                        x: start.x + dir.x * length * t,
+                        y: start.y + dir.y * length * t,
+                    },
+                    dir,
+                )
+            }
+            Self::Arc {
+                center,
+                radial_start,
+                sweep_cw,
+                tangent_angle_start,
+                ..
+            } => {
+                let rotated = NodePhysics::rotate_cw(radial_start, sweep_cw * t);
+                let tangent_angle = tangent_angle_start + sweep_cw * t;
+                (
+                    Point2 {
+                        x: center.x + rotated.x,
+                        y: center.y + rotated.y,
+                    },
+                    Point2 {
+                        x: tangent_angle.cos(),
+                        y: tangent_angle.sin(),
+                    },
+                )
+            }
+        }
+    }
 }
 
 impl NodePhysics {
-    /// Returns two half-profile outlines as `[outer, inner]`.
+    fn rim_segment_index(&self) -> Option<usize> {
+        let segments = self.build_outer_segments();
+        if segments.is_empty() {
+            None
+        } else {
+            Some(segments.len() - 1)
+        }
+    }
+
+    fn deg_to_rad(deg: f64) -> f64 {
+        deg * std::f64::consts::PI / 180.0
+    }
+
+    // Rotate a vector by a clockwise angle in screen coordinates (y grows downward).
+    fn rotate_cw(v: Point2<f64>, angle: f64) -> Point2<f64> {
+        Point2 {
+            x: v.x * angle.cos() - v.y * angle.sin(),
+            y: v.x * angle.sin() + v.y * angle.cos(),
+        }
+    }
+
+    fn arc_midpoint_x_for_turn(pen: PenState, radius: f64, sweep_rad: f64, turn_sign: f64) -> f64 {
+        let center = Point2 {
+            x: pen.point.x + turn_sign * radius * (-pen.tangent_angle.sin()),
+            y: pen.point.y + turn_sign * radius * pen.tangent_angle.cos(),
+        };
+        let radial_start = Point2 {
+            x: pen.point.x - center.x,
+            y: pen.point.y - center.y,
+        };
+        let mid = Self::rotate_cw(radial_start, turn_sign * sweep_rad * 0.5);
+        center.x + mid.x
+    }
+
+    // Choose the arc turn direction based on requested concavity relative to the axis (x=0).
+    // concave=true -> inward bend (smaller x); concave=false -> outward bend (larger x).
+    // When enforce_forward_end is true, prefer an end tangent with non-negative x component
+    // so the following rim line does not flip backward.
+    fn choose_turn_sign(
+        pen: PenState,
+        radius: f64,
+        sweep_rad: f64,
+        is_concave: bool,
+        enforce_forward_end: bool,
+    ) -> f64 {
+        let x_plus = Self::arc_midpoint_x_for_turn(pen, radius, sweep_rad, 1.0);
+        let x_minus = Self::arc_midpoint_x_for_turn(pen, radius, sweep_rad, -1.0);
+
+        let preferred = if is_concave {
+            if x_plus <= x_minus {
+                1.0
+            } else {
+                -1.0
+            }
+        } else if x_plus >= x_minus {
+            1.0
+        } else {
+            -1.0
+        };
+
+        if !enforce_forward_end {
+            return preferred;
+        }
+
+        let other = -preferred;
+        let preferred_end_x = (pen.tangent_angle + preferred * sweep_rad).cos();
+        let other_end_x = (pen.tangent_angle + other * sweep_rad).cos();
+
+        if preferred_end_x >= 0.0 {
+            preferred
+        } else if other_end_x >= 0.0 {
+            other
+        } else if other_end_x > preferred_end_x {
+            other
+        } else {
+            preferred
+        }
+    }
+
+    fn build_outer_segments(&self) -> Vec<PathSegment> {
+        let mut segments = Vec::new();
+        let mut pen = PenState {
+            point: Point2 { x: 0.0, y: 0.0 },
+            tangent_angle: 0.0,
+        };
+
+        // 1..2) Base line
+        if self.r0 > 0.0 {
+            segments.push(PathSegment::Line {
+                start: pen.point,
+                length: self.r0,
+                tangent_angle: pen.tangent_angle,
+            });
+            pen.point = Point2 {
+                x: pen.point.x + self.r0,
+                y: pen.point.y,
+            };
+        }
+
+        // 3) Arc r1
+        let sweep1 = Self::deg_to_rad(self.r1_sweep.abs());
+        if self.r1 > 0.0 && sweep1 > 0.0 && self.r1_sweep != 0.0 {
+            let turn_sign = Self::choose_turn_sign(pen, self.r1, sweep1, self.is_r1_concave, false);
+            // Negative r1_sweep flips the arc direction to point upward (toward -y)
+            let effective_turn_sign = if self.r1_sweep < 0.0 {
+                -turn_sign
+            } else {
+                turn_sign
+            };
+            let center = Point2 {
+                x: pen.point.x + effective_turn_sign * self.r1 * (-pen.tangent_angle.sin()),
+                y: pen.point.y + effective_turn_sign * self.r1 * pen.tangent_angle.cos(),
+            };
+            let radial_start = Point2 {
+                x: pen.point.x - center.x,
+                y: pen.point.y - center.y,
+            };
+            let sweep_cw = effective_turn_sign * sweep1;
+
+            segments.push(PathSegment::Arc {
+                center,
+                radial_start,
+                radius: self.r1,
+                sweep_cw,
+                tangent_angle_start: pen.tangent_angle,
+            });
+
+            let radial_end = Self::rotate_cw(radial_start, sweep_cw);
+            pen.point = Point2 {
+                x: center.x + radial_end.x,
+                y: center.y + radial_end.y,
+            };
+            pen.tangent_angle += sweep_cw;
+        }
+
+        // 4..6) Middle tangent line (material length accounting)
+        let sweep2 = Self::deg_to_rad(self.r2_sweep.abs());
+        let used = self.r0.max(0.0)
+            + self.r1.max(0.0) * sweep1.abs()
+            + self.r2.max(0.0) * sweep2.abs()
+            + self.rim_breadth.max(0.0);
+        let middle_len = (self.base_length_m - used).max(0.0);
+        if middle_len > 0.0 {
+            segments.push(PathSegment::Line {
+                start: pen.point,
+                length: middle_len,
+                tangent_angle: pen.tangent_angle,
+            });
+            pen.point = Point2 {
+                x: pen.point.x + middle_len * pen.tangent_angle.cos(),
+                y: pen.point.y + middle_len * pen.tangent_angle.sin(),
+            };
+        }
+
+        // 7) Arc r2
+        if self.r2 > 0.0 && sweep2 > 0.0 && self.r2_sweep != 0.0 {
+            // R2 direction is explicit: concave bends inward, convex bends outward.
+            // Keep deterministic sign here so shape presets can intentionally oppose.
+            let turn_sign = if self.is_r2_concave { 1.0 } else { -1.0 };
+            // Negative r2_sweep flips the arc direction to point upward (toward -y)
+            let effective_turn_sign = if self.r2_sweep < 0.0 {
+                -turn_sign
+            } else {
+                turn_sign
+            };
+            let center = Point2 {
+                x: pen.point.x + effective_turn_sign * self.r2 * (-pen.tangent_angle.sin()),
+                y: pen.point.y + effective_turn_sign * self.r2 * pen.tangent_angle.cos(),
+            };
+            let radial_start = Point2 {
+                x: pen.point.x - center.x,
+                y: pen.point.y - center.y,
+            };
+            let sweep_cw = effective_turn_sign * sweep2;
+
+            segments.push(PathSegment::Arc {
+                center,
+                radial_start,
+                radius: self.r2,
+                sweep_cw,
+                tangent_angle_start: pen.tangent_angle,
+            });
+
+            let radial_end = Self::rotate_cw(radial_start, sweep_cw);
+            pen.point = Point2 {
+                x: center.x + radial_end.x,
+                y: center.y + radial_end.y,
+            };
+            pen.tangent_angle += sweep_cw;
+        }
+
+        // 8..9) Rim line
+        let rim_len = self.rim_breadth.max(0.0);
+        if rim_len > 0.0 {
+            segments.push(PathSegment::Line {
+                start: pen.point,
+                length: rim_len,
+                tangent_angle: pen.tangent_angle,
+            });
+        }
+
+        segments
+    }
+
+    fn eval_outer_by_theta(&self, theta: f64) -> (Point2<f64>, Point2<f64>, usize, f64) {
+        let segments = self.build_outer_segments();
+        if segments.is_empty() {
+            return (Point2 { x: 0.0, y: 0.0 }, Point2 { x: 1.0, y: 0.0 }, 0, 0.0);
+        }
+
+        let total_len: f64 = segments.iter().map(|seg| seg.length()).sum();
+        if total_len <= 0.0 {
+            return (Point2 { x: 0.0, y: 0.0 }, Point2 { x: 1.0, y: 0.0 }, 0, 0.0);
+        }
+
+        let t = if theta.is_finite() {
+            theta.clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let mut s = t * total_len;
+
+        for (idx, segment) in segments.iter().enumerate() {
+            let len = segment.length();
+            if len <= 0.0 {
+                continue;
+            }
+            if s <= len {
+                let u = s / len;
+                let (point, tangent) = segment.eval(u);
+                return (point, tangent, idx, u);
+            }
+            s -= len;
+        }
+
+        let last_idx = segments.len() - 1;
+        let (point, tangent) = segments[last_idx].eval(1.0);
+        (point, tangent, last_idx, 1.0)
+    }
+
+    fn normalize_vector(v: Point2<f64>) -> Point2<f64> {
+        let len = (v.x * v.x + v.y * v.y).sqrt();
+        if len > 0.0 {
+            Point2 {
+                x: v.x / len,
+                y: v.y / len,
+            }
+        } else {
+            Point2 { x: 0.0, y: 0.0 }
+        }
+    }
+
+    fn normal_candidates(tangent: Point2<f64>) -> (Point2<f64>, Point2<f64>) {
+        let left = Self::normalize_vector(Point2 {
+            x: -tangent.y,
+            y: tangent.x,
+        });
+        let right = Self::normalize_vector(Point2 {
+            x: tangent.y,
+            y: -tangent.x,
+        });
+
+        (left, right)
+    }
+
+    fn inward_normal_for_tangent(
+        tangent: Point2<f64>,
+        previous_inner: Option<Point2<f64>>,
+        outer: Point2<f64>,
+    ) -> Point2<f64> {
+        let (left, right) = Self::normal_candidates(tangent);
+        let left_point = Point2 {
+            x: outer.x + left.x,
+            y: outer.y + left.y,
+        };
+        let right_point = Point2 {
+            x: outer.x + right.x,
+            y: outer.y + right.y,
+        };
+
+        if let Some(previous_inner) = previous_inner {
+            let left_dist = (left_point.x - previous_inner.x).powi(2)
+                + (left_point.y - previous_inner.y).powi(2);
+            let right_dist = (right_point.x - previous_inner.x).powi(2)
+                + (right_point.y - previous_inner.y).powi(2);
+            if left_dist <= right_dist {
+                left
+            } else {
+                right
+            }
+        } else if left.x <= right.x {
+            left
+        } else {
+            right
+        }
+    }
+
+    fn inner_from_outer(&self, outer: Point2<f64>, tangent: Point2<f64>) -> Point2<f64> {
+        let n = Self::inward_normal_for_tangent(tangent, None, outer);
+
+        let mut inner = Point2 {
+            x: outer.x + n.x * self.wall_thickness_m.max(0.0),
+            y: outer.y + n.y * self.wall_thickness_m.max(0.0),
+        };
+        if inner.x < 0.0 {
+            inner.x = 0.0;
+        }
+        inner
+    }
+
+    pub fn points_at(&self, theta: f64) -> (Point2<f64>, Point2<f64>) {
+        let (outer, tangent, seg_idx, seg_u) = self.eval_outer_by_theta(theta);
+        let rim_scale = match self.rim_segment_index() {
+            Some(rim_idx) if seg_idx == rim_idx => 1.0 - seg_u.clamp(0.0, 1.0),
+            _ => 1.0,
+        };
+        let mut inner = self.inner_from_outer(outer, tangent);
+
+        if rim_scale < 1.0 {
+            // Taper shell thickness to zero across the rim so the very last rim point is sharp.
+            inner = Point2 {
+                x: outer.x + (inner.x - outer.x) * rim_scale,
+                y: outer.y + (inner.y - outer.y) * rim_scale,
+            };
+        }
+
+        (outer, inner)
+    }
+
+    pub fn thickness_at(&self, theta: f64) -> f64 {
+        let (outer, inner) = self.points_at(theta);
+        let dx = outer.x - inner.x;
+        let dy = outer.y - inner.y;
+        (dx * dx + dy * dy).sqrt()
+    }
+
+    /// Returns half profile outline of a node.
     ///
     /// Coordinate system:
     /// - `x`: radius (positive away from center axis)
     /// - `y`: height (increasing downward)
-    pub fn outlines(&self, num_samples: usize) -> [Vec<Point2<f64>>; 2] {
-        let samples_per_zone = num_samples.max(2);
-        let h = self.size_m.y.max(0.0);
-        let split_y = h * 0.5;
-        let rm_outer = 0.5 * (self.r1 + self.r2);
+    pub fn outline(&self, num_samples_per_side: usize) -> Vec<Point2<f64>> {
+        let samples = num_samples_per_side.max(1);
+        let mut points = Vec::with_capacity((samples + 1) * 2 + 2);
 
-        let outer_a0 = point(self.r1, 0.0);
-        let outer_a1 = point(rm_outer, split_y);
-        let outer_b0 = outer_a1;
-        let outer_b1 = point(self.r2, h);
-
-        let mut outer = Vec::new();
-        append_circular_zone(
-            &mut outer,
-            outer_a0,
-            outer_a1,
-            self.is_r1_concave,
-            self.r1,
-            samples_per_zone,
-            false,
-        );
-        append_circular_zone(
-            &mut outer,
-            outer_b0,
-            outer_b1,
-            self.is_r2_concave,
-            self.r2,
-            samples_per_zone,
-            true,
-        );
-
-        let inner_r1 = (self.r1 - self.wall_thickness_m).max(0.0);
-        let inner_rm = (rm_outer - self.wall_thickness_m).max(0.0);
-        let inner_r2 = (self.r2 - self.wall_thickness_m).max(0.0);
-
-        let inner_a0 = point(inner_r1, 0.0);
-        let inner_a1 = point(inner_rm, split_y);
-        let inner_b0 = inner_a1;
-        let inner_b1 = point(inner_r2, h);
-
-        let mut inner = Vec::new();
-        append_circular_zone(
-            &mut inner,
-            inner_a0,
-            inner_a1,
-            self.is_r1_concave,
-            self.r1,
-            samples_per_zone,
-            false,
-        );
-        append_circular_zone(
-            &mut inner,
-            inner_b0,
-            inner_b1,
-            self.is_r2_concave,
-            self.r2,
-            samples_per_zone,
-            true,
-        );
-
-        [outer, inner]
-    }
-}
-
-fn append_circular_zone(
-    out: &mut Vec<Point2<f64>>,
-    a: Point2<f64>,
-    b: Point2<f64>,
-    is_concave: bool,
-    curve_radius: f64,
-    samples: usize,
-    skip_first: bool,
-) {
-    let points = sample_circular_zone(a, b, is_concave, curve_radius, samples);
-    for (i, p) in points.into_iter().enumerate() {
-        if skip_first && i == 0 {
-            continue;
+        // Outer profile sampled forward by normalized material-length theta.
+        for i in 0..=samples {
+            let theta = i as f64 / samples as f64;
+            let (outer, _) = self.points_at(theta);
+            points.push(outer);
         }
-        out.push(p);
-    }
-}
 
-fn sample_circular_zone(
-    a: Point2<f64>,
-    b: Point2<f64>,
-    is_concave: bool,
-    curve_radius: f64,
-    samples: usize,
-) -> Vec<Point2<f64>> {
-    let sample_count = samples.max(2);
-    let mut out = Vec::with_capacity(sample_count);
-    let chord = vector(b.x - a.x, b.y - a.y);
-    let chord_len = (chord.0 * chord.0 + chord.1 * chord.1).sqrt();
+        // Inner profile sampled backward to build a closed shell path.
+        let mut inner_rev = Vec::with_capacity(samples + 1);
+        let mut previous_inner = None;
+        for i in (0..=samples).rev() {
+            let theta = i as f64 / samples as f64;
+            let (outer, tangent, seg_idx, seg_u) = self.eval_outer_by_theta(theta);
+            let rim_scale = match self.rim_segment_index() {
+                Some(rim_idx) if seg_idx == rim_idx => 1.0 - seg_u.clamp(0.0, 1.0),
+                _ => 1.0,
+            };
 
-    if chord_len < 1e-9 {
-        out.resize(sample_count, a);
-        return out;
-    }
+            let chosen_normal = Self::inward_normal_for_tangent(tangent, previous_inner, outer);
+            let mut inner = Point2 {
+                x: outer.x + chosen_normal.x * self.wall_thickness_m.max(0.0),
+                y: outer.y + chosen_normal.y * self.wall_thickness_m.max(0.0),
+            };
 
-    // If radius is too small for this chord, clamp to the smallest valid circle.
-    let min_radius = chord_len * 0.5 + 1e-9;
-    let radius = curve_radius.abs().max(min_radius);
-    let half_chord = chord_len * 0.5;
-    let center_to_chord = (radius * radius - half_chord * half_chord).sqrt();
+            if rim_scale < 1.0 {
+                inner = Point2 {
+                    x: outer.x + (inner.x - outer.x) * rim_scale,
+                    y: outer.y + (inner.y - outer.y) * rim_scale,
+                };
+            }
 
-    let midpoint = point((a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
-    let mut normal = vector(chord.1 / chord_len, -chord.0 / chord_len);
-    // Keep the default arc orientation facing +x as outward.
-    if normal.0 < 0.0 {
-        normal = vector(-normal.0, -normal.1);
-    }
-
-    // Concave means arc bends inward toward the center axis (smaller x).
-    let center_sign = if is_concave { 1.0 } else { -1.0 };
-    let center = point(
-        midpoint.x + center_sign * center_to_chord * normal.0,
-        midpoint.y + center_sign * center_to_chord * normal.1,
-    );
-
-    let a0 = (a.y - center.y).atan2(a.x - center.x);
-    let a1 = (b.y - center.y).atan2(b.x - center.x);
-    let sweep = signed_shortest_angle(a1 - a0);
-
-    for i in 0..sample_count {
-        let t = i as f64 / (sample_count as f64 - 1.0);
-        let angle = a0 + sweep * t;
-        out.push(point(
-            center.x + radius * angle.cos(),
-            center.y + radius * angle.sin(),
-        ));
-    }
-
-    out
-}
-
-fn signed_shortest_angle(mut angle: f64) -> f64 {
-    let tau = std::f64::consts::TAU;
-    while angle > std::f64::consts::PI {
-        angle -= tau;
-    }
-    while angle < -std::f64::consts::PI {
-        angle += tau;
-    }
-    angle
-}
-
-fn point(x: f64, y: f64) -> Point2<f64> {
-    Point2 { x, y }
-}
-
-fn vector(x: f64, y: f64) -> (f64, f64) {
-    (x, y)
-}
-
-impl Add for NodePhysics {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        let is_r_concave = |a: bool, b: bool| {
-            let a = if a { 1 } else { -1 };
-            let b = if b { 1 } else { -1 };
-            a * b == 1
-        };
-
-        Self {
-            mass_kg: self.mass_kg + rhs.mass_kg,
-            size_m: Vector3 {
-                x: self.size_m.x + rhs.size_m.x,
-                y: self.size_m.y + rhs.size_m.y,
-                z: self.size_m.z + rhs.size_m.z,
-            },
-            material_density_kg_per_m3: self.material_density_kg_per_m3
-                + rhs.material_density_kg_per_m3,
-            wall_thickness_m: self.wall_thickness_m + rhs.wall_thickness_m,
-            r1: self.r1 + rhs.r1,
-            r2: self.r2 + rhs.r2,
-            is_r1_concave: is_r_concave(self.is_r1_concave, rhs.is_r1_concave),
-            is_r2_concave: is_r_concave(self.is_r2_concave, rhs.is_r2_concave),
+            previous_inner = Some(inner);
+            inner_rev.push(inner);
         }
+
+        if !points.is_empty() && !inner_rev.is_empty() {
+            let last = points[points.len() - 1];
+            let first_inner = inner_rev[0];
+            let dedup =
+                (last.x - first_inner.x).abs() < 1e-9 && (last.y - first_inner.y).abs() < 1e-9;
+            if dedup {
+                points.extend_from_slice(&inner_rev[1..]);
+            } else {
+                points.extend_from_slice(&inner_rev);
+            }
+        }
+
+        // Close from inner axis back to origin.
+        let last_is_inner_axis = points
+            .last()
+            .map(|p| p.x.abs() < 1e-9 && (p.y - self.wall_thickness_m).abs() < 1e-6)
+            .unwrap_or(false);
+        if !last_is_inner_axis {
+            points.push(Point2 {
+                x: 0.0,
+                y: self.wall_thickness_m,
+            });
+        }
+
+        let last_is_origin = points
+            .last()
+            .map(|p| p.x.abs() < 1e-9 && p.y.abs() < 1e-9)
+            .unwrap_or(false);
+        if !last_is_origin {
+            points.push(Point2 { x: 0.0, y: 0.0 });
+        }
+
+        points
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use mint::Point2;
+
     use super::*;
+
+    fn demo_node(is_r1_concave: bool, is_r2_concave: bool) -> NodePhysics {
+        NodePhysics {
+            mass_kg: 1.0,
+            material_density_kg_per_m3: 1_000.0,
+            wall_thickness_m: 0.05,
+            rim_breadth: 0.1,
+            r0: 0.25,
+            r1: 0.2,
+            r1_sweep: 35.0,
+            r2: 0.18,
+            r2_sweep: 35.0,
+            is_r1_concave,
+            is_r2_concave,
+            base_length_m: 1.0,
+        }
+    }
 
     fn translated(points: &[Point2<f64>], dx: f64, dy: f64) -> Vec<Point2<f64>> {
         points
@@ -229,127 +555,98 @@ mod tests {
             .collect()
     }
 
-    fn demo_node(is_r1_concave: bool, is_r2_concave: bool) -> NodePhysics {
-        NodePhysics {
-            mass_kg: 1.0,
-            size_m: Vector3 {
-                x: 0.4,
-                y: 1.2,
-                z: 0.4,
-            },
-            material_density_kg_per_m3: 1000.0,
-            wall_thickness_m: 0.05,
-            r1: 0.32,
-            r2: 0.58,
-            is_r1_concave,
-            is_r2_concave,
-        }
-    }
-
     #[test]
-    fn outlines_returns_outer_and_inner_with_expected_lengths() {
-        let node = demo_node(false, false);
-        let [outer, inner] = node.outlines(8);
-
-        assert_eq!(outer.len(), 15);
-        assert_eq!(inner.len(), 15);
-        assert_eq!(outer.first().unwrap().y, 0.0);
-        assert_eq!(outer.last().unwrap().y, node.size_m.y);
-        assert_eq!(inner.first().unwrap().y, 0.0);
-        assert_eq!(inner.last().unwrap().y, node.size_m.y);
-    }
-
-    #[test]
-    fn concave_lower_zone_bends_inward_relative_to_convex() {
-        let convex = demo_node(false, false);
-        let concave = demo_node(true, false);
-
-        let [outer_convex, _] = convex.outlines(9);
-        let [outer_concave, _] = concave.outlines(9);
-
-        // Index 4 is the midpoint sample of the first zone when samples_per_zone = 9.
-        let first_zone_mid = 4;
-        assert!(outer_concave[first_zone_mid].x < outer_convex[first_zone_mid].x);
-    }
-
-    #[test]
-    fn inner_outline_stays_at_or_inside_outer_outline() {
-        let node = demo_node(false, true);
-        let [outer, inner] = node.outlines(12);
-
-        assert_eq!(outer.len(), inner.len());
-        for (o, i) in outer.iter().zip(inner.iter()) {
-            assert!(i.x <= o.x + 1e-9);
-        }
-    }
-
-    #[test]
-    fn outlines_snapshot_shape_variations() {
+    fn outline_snapshot_shape_variations() {
         let variants = [
             (
-                "convex_bell",
+                "bowl_upwards",
                 NodePhysics {
-                    r1: 0.28,
-                    r2: 0.62,
-                    is_r1_concave: false,
+                    r0: 0.22,
+                    r1: 0.24,
+                    r2: 0.14,
+                    r1_sweep: -45.0,
+                    r2_sweep: -42.0,
+                    rim_breadth: 0.10,
+                    is_r1_concave: true,
                     is_r2_concave: false,
+                    base_length_m: 2.04,
                     ..demo_node(false, false)
                 },
             ),
             (
-                "concave_bowl",
+                "bell_downwards",
                 NodePhysics {
-                    r1: 0.52,
-                    r2: 0.44,
-                    is_r1_concave: true,
-                    is_r2_concave: true,
-                    ..demo_node(true, true)
-                },
-            ),
-            (
-                "mixed_lower_concave",
-                NodePhysics {
-                    r1: 0.46,
-                    r2: 0.58,
-                    is_r1_concave: true,
-                    is_r2_concave: false,
-                    ..demo_node(true, false)
-                },
-            ),
-            (
-                "mixed_upper_concave",
-                NodePhysics {
-                    r1: 0.26,
-                    r2: 0.54,
+                    r0: 0.24,
+                    r1: 0.16,
+                    r2: 0.20,
+                    r1_sweep: 58.0,
+                    r2_sweep: 52.0,
+                    rim_breadth: 0.10,
                     is_r1_concave: false,
                     is_r2_concave: true,
-                    ..demo_node(false, true)
-                },
-            ),
-            (
-                "thick_wall_gong",
-                NodePhysics {
-                    r1: 0.33,
-                    r2: 0.50,
-                    wall_thickness_m: 0.12,
-                    is_r1_concave: false,
-                    is_r2_concave: false,
+                    base_length_m: 1.10,
                     ..demo_node(false, false)
                 },
             ),
             (
-                "slender_node",
+                "bell_with_outward_rim",
                 NodePhysics {
+                    r0: 0.24,
+                    r1: 0.16,
+                    r2: 0.24,
+                    r1_sweep: 56.0,
+                    r2_sweep: 82.0,
+                    rim_breadth: 0.14,
+                    is_r1_concave: false,
+                    is_r2_concave: false,
+                    base_length_m: 1.16,
+                    ..demo_node(false, false)
+                },
+            ),
+            (
+                "bowl_with_inward_rim",
+                NodePhysics {
+                    r0: 0.22,
                     r1: 0.22,
-                    r2: 0.36,
-                    size_m: Vector3 {
-                        x: 0.4,
-                        y: 1.8,
-                        z: 0.4,
-                    },
+                    r2: 0.20,
+                    r1_sweep: -44.0,
+                    r2_sweep: -72.0,
+                    rim_breadth: 0.10,
+                    is_r1_concave: true,
+                    is_r2_concave: true,
+                    base_length_m: 1.06,
+                    ..demo_node(false, false)
+                },
+            ),
+            (
+                "gong",
+                NodePhysics {
                     wall_thickness_m: 0.04,
+                    rim_breadth: 0.07,
+                    r0: 0.28,
+                    r1: 0.36,
+                    r2: 0.34,
+                    r1_sweep: 12.0,
+                    r2_sweep: 14.0,
                     is_r1_concave: false,
                     is_r2_concave: false,
+                    base_length_m: 1.14,
+                    ..demo_node(false, false)
+                },
+            ),
+            (
+                "plate",
+                NodePhysics {
+                    wall_thickness_m: 0.025,
+                    rim_breadth: 0.05,
+                    r0: 0.32,
+                    r1: 0.44,
+                    r2: 0.42,
+                    r1_sweep: -6.0,
+                    r2_sweep: -8.0,
+                    is_r1_concave: true,
+                    is_r2_concave: false,
+                    base_length_m: 1.20,
                     ..demo_node(false, false)
                 },
             ),
@@ -360,9 +657,8 @@ mod tests {
         let spacing = 1.6;
 
         for (_, node) in variants {
-            let [outer, inner] = node.outlines(20);
-            all_paths.push(translated(&outer, cursor_x, 0.0));
-            all_paths.push(translated(&inner, cursor_x, 0.0));
+            let outline = node.outline(20);
+            all_paths.push(translated(&outline, cursor_x, 0.0));
             cursor_x += spacing;
         }
 

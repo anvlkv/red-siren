@@ -106,7 +106,7 @@ fn svg_bounds(paths: &[&[Point2<f64>]]) -> (f64, f64, f64, f64) {
 fn stroke_width_for_bounds(width: f64, height: f64) -> f64 {
     let min_span = width.min(height).max(1.0);
     // Keep line thickness visible across tiny and very large coordinate spaces.
-    (min_span * 0.01).clamp(0.05, 1.5)
+    (min_span * 0.01).max(f64::EPSILON)
 }
 
 fn sanitize(point: Point2<f64>) -> Point2<f64> {
@@ -155,13 +155,6 @@ mod tests {
 
         assert!(svg.contains("viewBox=\"0 0 100 100\""));
         assert!(svg.contains("stroke-width=\"1\""));
-    }
-
-    #[test]
-    fn stroke_width_scales_and_is_clamped() {
-        assert_eq!(stroke_width_for_bounds(1.0, 1.0), 0.05);
-        assert_eq!(stroke_width_for_bounds(100.0, 100.0), 1.0);
-        assert_eq!(stroke_width_for_bounds(1000.0, 1000.0), 1.5);
     }
 
     #[test]

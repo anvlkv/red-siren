@@ -1,6 +1,0 @@
----
-source: crates/common/src/config/node/tests.rs
-expression: "$crate :: test_util :: assert_paths_points_2d(&paths)"
-extension: svg
-snapshot_kind: binary
----

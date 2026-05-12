@@ -1,13 +1,6 @@
 use mint::Point2;
 use serde::{Deserialize, Serialize};
 
-mod geometry;
-mod sampling;
-mod volume;
-
-#[cfg(test)]
-mod tests;
-
 #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 pub struct NodePhysics {
     /// Density of the material in kg/m^3.
@@ -18,13 +11,6 @@ pub struct NodePhysics {
     pub wall_thickness_m: f64,
     /// Rim breadth
     pub rim_breadth: f64,
-    /// Radius-like control for curved rim lip closure.
-    ///
-    /// 0.0 keeps a sharp/straight lip transition.
-    pub rim_lip_offset_radius: f64,
-    /// When true, the curved lip bows on the inner side of the bowl/bell.
-    /// When false, the curved lip bows on the outer side.
-    pub rim_lip_on_inside: bool,
     /// Radius of the base segment in meters.
     pub base_radius_m: f64,
     /// Radius of the shoulder arc in meters.
@@ -43,74 +29,10 @@ pub struct NodePhysics {
     pub base_length_m: f64,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct NodeControls {
-    pub base: BaseControls,
-    pub shoulder: ShoulderControls,
-    pub fringe: FringeControls,
-    pub rim: RimControls,
-    pub bow: BowControls,
-    pub material: MaterialControls,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct BaseControls {
-    pub radius_m: f64,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct ShoulderControls {
-    pub radius_m: f64,
-    pub sweep_deg: f64,
-    pub curves_inward: bool,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct FringeControls {
-    pub length_m: f64,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct RimControls {
-    pub radius_m: f64,
-    pub sweep_deg: f64,
-    pub breadth_m: f64,
-    pub curves_inward: bool,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct BowControls {
-    pub thickness_m: f64,
-    pub on_inside: bool,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct MaterialControls {
-    pub density_kg_per_m3: f64,
-    pub wall_thickness_m: f64,
-}
-
 #[derive(Clone, Copy)]
 struct PenState {
     point: Point2<f64>,
     tangent_angle: f64,
-}
-
-#[derive(Clone, Copy)]
-struct RimLipArc {
-    start_s: f64,
-    curve_len: f64,
-    max_thickness: f64,
-    bow_on_inside: bool,
-}
-
-#[derive(Clone, Copy)]
-struct RimLipGeometry {
-    seg_idx: usize,
-    mid_start: Point2<f64>,
-    tangent: Point2<f64>,
-    rim_len: f64,
-    arc: Option<RimLipArc>,
 }
 
 #[derive(Clone, Copy)]
@@ -187,86 +109,45 @@ impl PathSegment {
 }
 
 impl NodePhysics {
-    pub fn controls(&self) -> NodeControls {
-        NodeControls {
-            base: BaseControls {
-                radius_m: self.base_radius_m,
-            },
-            shoulder: ShoulderControls {
-                radius_m: self.shoulder_radius_m,
-                sweep_deg: self.shoulder_sweep_deg,
-                curves_inward: self.shoulder_curves_inward,
-            },
-            fringe: FringeControls {
-                length_m: self.base_length_m,
-            },
-            rim: RimControls {
-                radius_m: self.rim_radius_m,
-                sweep_deg: self.rim_sweep_deg,
-                breadth_m: self.rim_breadth,
-                curves_inward: self.rim_curves_inward,
-            },
-            bow: BowControls {
-                thickness_m: self.rim_lip_offset_radius,
-                on_inside: self.rim_lip_on_inside,
-            },
-            material: MaterialControls {
-                density_kg_per_m3: self.material_density_kg_per_m3,
-                wall_thickness_m: self.wall_thickness_m,
-            },
+    fn u_at_index(index: usize, samples: usize) -> f64 {
+        index as f64 / samples as f64
+    }
+
+    fn revolved_solid_volume_m3<F>(&self, num_samples: usize, profile_point: F) -> f64
+    where
+        F: Fn(Point2<f64>, Point2<f64>) -> Point2<f64>,
+    {
+        let samples = num_samples.max(1);
+        let (prev_outer, prev_inner) = self.sample_outer_inner_at(0.0);
+        let mut prev_profile = profile_point(prev_outer, prev_inner);
+        let mut volume_m3 = 0.0;
+
+        for i in 1..=samples {
+            let u = Self::u_at_index(i, samples);
+            let (outer, inner) = self.sample_outer_inner_at(u);
+            let profile = profile_point(outer, inner);
+            let dy = profile.y - prev_profile.y;
+            let prev_area = std::f64::consts::PI * prev_profile.x.max(0.0).powi(2);
+            let area = std::f64::consts::PI * profile.x.max(0.0).powi(2);
+
+            volume_m3 += 0.5 * (prev_area + area) * dy;
+
+            prev_profile = profile;
         }
-    }
 
-    pub fn apply_controls(&mut self, controls: NodeControls) {
-        self.base_radius_m = controls.base.radius_m;
-        self.shoulder_radius_m = controls.shoulder.radius_m;
-        self.shoulder_sweep_deg = controls.shoulder.sweep_deg;
-        self.shoulder_curves_inward = controls.shoulder.curves_inward;
-        self.base_length_m = controls.fringe.length_m;
-        self.rim_radius_m = controls.rim.radius_m;
-        self.rim_sweep_deg = controls.rim.sweep_deg;
-        self.rim_breadth = controls.rim.breadth_m;
-        self.rim_curves_inward = controls.rim.curves_inward;
-        self.rim_lip_offset_radius = controls.bow.thickness_m;
-        self.rim_lip_on_inside = controls.bow.on_inside;
-        self.material_density_kg_per_m3 = controls.material.density_kg_per_m3;
-        self.wall_thickness_m = controls.material.wall_thickness_m;
-    }
-
-    pub fn from_controls(controls: NodeControls) -> Self {
-        let mut node = Self {
-            material_density_kg_per_m3: 0.0,
-            wall_thickness_m: 0.0,
-            rim_breadth: 0.0,
-            rim_lip_offset_radius: 0.0,
-            rim_lip_on_inside: true,
-            base_radius_m: 0.0,
-            shoulder_radius_m: 0.0,
-            shoulder_sweep_deg: 0.0,
-            rim_radius_m: 0.0,
-            rim_sweep_deg: 0.0,
-            shoulder_curves_inward: false,
-            rim_curves_inward: false,
-            base_length_m: 0.01,
-        };
-        node.apply_controls(controls);
-        node
+        volume_m3.abs()
     }
 
     fn sweep_abs_deg_to_rad(deg: f64) -> f64 {
         Self::deg_to_rad(deg.abs())
     }
 
-    fn rim_line_segment_index(&self) -> Option<usize> {
+    fn rim_segment_index(&self) -> Option<usize> {
         let segments = self.build_outer_segments();
-        let last = segments.last().copied()?;
-        match last {
-            PathSegment::Line { length, .. }
-                if length > 0.0 && self.rim_breadth.max(0.0) > EPS_COORD =>
-            {
-                Some(segments.len() - 1)
-            }
-            _ => None,
+        if segments.is_empty() {
+            None
+        } else {
+            Some(segments.len() - 1)
         }
     }
 
@@ -331,141 +212,44 @@ impl NodePhysics {
         center.x + mid.x
     }
 
-    fn add(a: Point2<f64>, b: Point2<f64>) -> Point2<f64> {
+    fn rim_scale_for_segment(rim_idx: Option<usize>, seg_idx: usize, seg_u: f64) -> f64 {
+        match rim_idx {
+            Some(idx) if seg_idx == idx => 1.0 - seg_u.clamp(0.0, 1.0),
+            _ => 1.0,
+        }
+    }
+
+    fn apply_rim_taper(outer: Point2<f64>, inner: Point2<f64>, rim_scale: f64) -> Point2<f64> {
+        if rim_scale >= 1.0 {
+            return inner;
+        }
+
         Point2 {
-            x: a.x + b.x,
-            y: a.y + b.y,
+            x: outer.x + (inner.x - outer.x) * rim_scale,
+            y: outer.y + (inner.y - outer.y) * rim_scale,
         }
     }
 
-    fn scale(v: Point2<f64>, k: f64) -> Point2<f64> {
-        Point2 {
-            x: v.x * k,
-            y: v.y * k,
-        }
-    }
-
-    fn build_lip_arc(rim_len: f64, bow_thickness: f64, bow_on_inside: bool) -> Option<RimLipArc> {
-        if rim_len <= EPS_COORD || bow_thickness <= EPS_COORD {
-            return None;
-        }
-
-        // Use the full rim segment as the bow span so the joins are explicit:
-        // t=0 joins opposite edge at rim tip, t=1 joins baseline edge at rim start.
-        let curve_len = rim_len.max(EPS_COORD);
-        if curve_len <= EPS_COORD {
-            return None;
-        }
-
-        let start_s = 0.0;
-
-        Some(RimLipArc {
-            start_s,
-            curve_len,
-            max_thickness: bow_thickness,
-            bow_on_inside,
-        })
-    }
-
-    fn rim_lip_geometry(&self) -> Option<RimLipGeometry> {
-        let seg_idx = self.rim_line_segment_index()?;
-        let segments = self.build_outer_segments();
-        let segment = segments.get(seg_idx).copied()?;
-        let (mid_start, rim_len, tangent) = match segment {
-            PathSegment::Line {
-                start,
-                length,
-                tangent_angle,
-            } => (
-                start,
-                length.max(0.0),
-                Point2 {
-                    x: tangent_angle.cos(),
-                    y: tangent_angle.sin(),
-                },
-            ),
-            _ => return None,
-        };
-
-        if rim_len <= EPS_COORD {
-            return None;
-        }
-
-        let bow_thickness = self.rim_lip_offset_radius.max(0.0);
-        let bow_on_inside = self.rim_lip_on_inside;
-        let arc = if bow_thickness > EPS_COORD {
-            Self::build_lip_arc(rim_len, bow_thickness, bow_on_inside)
-        } else {
-            None
-        };
-
-        Some(RimLipGeometry {
-            seg_idx,
-            mid_start,
-            tangent,
-            rim_len,
-            arc,
-        })
-    }
-
-    /// Sample the rim outer/inner pair at signed offset `s` from the rim-line start.
-    /// Negative `s` values address the preceding segment (when the arc overhangs into it).
-    fn sample_rim_outer_inner(
+    fn compute_inner_point(
         &self,
-        geom: RimLipGeometry,
-        s: f64,
-        theta: f64,
+        outer: Point2<f64>,
+        tangent: Point2<f64>,
+        previous_inner: Option<Point2<f64>>,
+        rim_scale: f64,
         clamp_x_to_axis: bool,
-    ) -> (Point2<f64>, Point2<f64>) {
-        let mid_line = Self::add(geom.mid_start, Self::scale(geom.tangent, s));
-        let inward = Self::inward_normal_for_theta(self, theta, geom.tangent, mid_line);
-        let half_thickness = 0.5 * self.wall_thickness_m.max(0.0);
-        let mut inner_line = Self::add(mid_line, Self::scale(inward, half_thickness));
-        let outer_line = Self::add(mid_line, Self::scale(inward, -half_thickness));
-
-        let Some(arc) = geom.arc else {
-            if clamp_x_to_axis && inner_line.x < 0.0 {
-                inner_line.x = 0.0;
-            }
-            return (outer_line, inner_line);
+    ) -> Point2<f64> {
+        let normal = Self::inward_normal_for_tangent(tangent, previous_inner, outer);
+        let thickness = self.wall_thickness_m.max(0.0);
+        let mut inner = Point2 {
+            x: outer.x + normal.x * thickness,
+            y: outer.y + normal.y * thickness,
         };
 
-        if s < arc.start_s || s > arc.start_s + arc.curve_len {
-            if clamp_x_to_axis && inner_line.x < 0.0 {
-                inner_line.x = 0.0;
-            }
-            return (outer_line, inner_line);
+        if clamp_x_to_axis && inner.x < 0.0 {
+            inner.x = 0.0;
         }
 
-        let p = ((s - arc.start_s) / arc.curve_len.max(EPS_COORD)).clamp(0.0, 1.0);
-        // t=0 at rim tip (outside-end), t=1 at rim root (inside-end).
-        let t = 1.0 - p;
-        let smooth_t = t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
-        let peak = (std::f64::consts::PI * t).sin();
-
-        if arc.bow_on_inside {
-            let join = Point2 {
-                x: outer_line.x + (inner_line.x - outer_line.x) * smooth_t,
-                y: outer_line.y + (inner_line.y - outer_line.y) * smooth_t,
-            };
-            let mut inner = Self::add(join, Self::scale(inward, arc.max_thickness * peak));
-            if clamp_x_to_axis && inner.x < 0.0 {
-                inner.x = 0.0;
-            }
-            (outer_line, inner)
-        } else {
-            let join = Point2 {
-                x: inner_line.x + (outer_line.x - inner_line.x) * smooth_t,
-                y: inner_line.y + (outer_line.y - inner_line.y) * smooth_t,
-            };
-            let outward = Self::scale(inward, -1.0);
-            let outer = Self::add(join, Self::scale(outward, arc.max_thickness * peak));
-            let mut inner = inner_line;
-            if clamp_x_to_axis && inner.x < 0.0 {
-                inner.x = 0.0;
-            }
-            (outer, inner)
-        }
+        Self::apply_rim_taper(outer, inner, rim_scale)
     }
 
     // Choose the arc turn direction based on requested concavity relative to the axis (x=0).
@@ -689,10 +473,9 @@ impl NodePhysics {
         (left, right)
     }
 
-    fn inward_normal_for_theta(
-        &self,
-        theta: f64,
+    fn inward_normal_for_tangent(
         tangent: Point2<f64>,
+        previous_inner: Option<Point2<f64>>,
         outer: Point2<f64>,
     ) -> Point2<f64> {
         let (left, right) = Self::normal_candidates(tangent);
@@ -705,26 +488,295 @@ impl NodePhysics {
             y: outer.y + right.y,
         };
 
-        let axis_side = if left_point.x.abs() <= right_point.x.abs() {
+        if let Some(previous_inner) = previous_inner {
+            let left_dist = (left_point.x - previous_inner.x).powi(2)
+                + (left_point.y - previous_inner.y).powi(2);
+            let right_dist = (right_point.x - previous_inner.x).powi(2)
+                + (right_point.y - previous_inner.y).powi(2);
+            if left_dist <= right_dist {
+                left
+            } else {
+                right
+            }
+        } else if left.x <= right.x {
             left
         } else {
             right
-        };
-        let away_from_axis = if axis_side.x == left.x && axis_side.y == left.y {
-            right
-        } else {
-            left
+        }
+    }
+
+    pub fn sample_outer_inner_at(&self, u: f64) -> (Point2<f64>, Point2<f64>) {
+        let rim_idx = self.rim_segment_index();
+        let (outer, tangent, seg_idx, seg_u) = self.eval_outer_by_theta(u);
+        let rim_scale = Self::rim_scale_for_segment(rim_idx, seg_idx, seg_u);
+        let inner = self.compute_inner_point(outer, tangent, None, rim_scale, true);
+
+        (outer, inner)
+    }
+
+    pub fn thickness_at(&self, u: f64) -> f64 {
+        let (outer, inner) = self.sample_outer_inner_at(u);
+        let dx = outer.x - inner.x;
+        let dy = outer.y - inner.y;
+        (dx * dx + dy * dy).sqrt()
+    }
+
+    /// Returns half profile outline of a node.
+    ///
+    /// Coordinate system:
+    /// - `x`: radius (positive away from center axis)
+    /// - `y`: height (increasing downward)
+    pub fn shell_outline(&self, num_samples_per_side: usize) -> Vec<Point2<f64>> {
+        let samples = num_samples_per_side.max(1);
+        let mut points = Vec::with_capacity((samples + 1) * 2 + 2);
+        let rim_idx = self.rim_segment_index();
+
+        // Outer profile sampled forward by normalized material-length theta.
+        for i in 0..=samples {
+            let u = Self::u_at_index(i, samples);
+            let (outer, _) = self.sample_outer_inner_at(u);
+            points.push(outer);
+        }
+
+        // Inner profile sampled backward to build a closed shell path.
+        let mut inner_rev = Vec::with_capacity(samples + 1);
+        let mut previous_inner = None;
+        for i in (0..=samples).rev() {
+            let u = Self::u_at_index(i, samples);
+            let (outer, tangent, seg_idx, seg_u) = self.eval_outer_by_theta(u);
+            let rim_scale = Self::rim_scale_for_segment(rim_idx, seg_idx, seg_u);
+            let inner = self.compute_inner_point(outer, tangent, previous_inner, rim_scale, false);
+
+            previous_inner = Some(inner);
+            inner_rev.push(inner);
+        }
+
+        if !points.is_empty() && !inner_rev.is_empty() {
+            let last = points[points.len() - 1];
+            let first_inner = inner_rev[0];
+            let dedup = (last.x - first_inner.x).abs() < EPS_COORD
+                && (last.y - first_inner.y).abs() < EPS_COORD;
+            if dedup {
+                points.extend_from_slice(&inner_rev[1..]);
+            } else {
+                points.extend_from_slice(&inner_rev);
+            }
+        }
+
+        // Project the final inner point to the axis at its current height,
+        // then close to origin. Using a fixed y here can create visible notches
+        // for steep presets where the inner path ends far from wall_thickness_m.
+        if let Some(last) = points.last().copied() {
+            if last.x.abs() >= EPS_COORD {
+                points.push(Point2 { x: 0.0, y: last.y });
+            }
+        }
+
+        let last_is_origin = points
+            .last()
+            .map(|p| p.x.abs() < EPS_COORD && p.y.abs() < EPS_COORD)
+            .unwrap_or(false);
+        if !last_is_origin {
+            points.push(Point2 { x: 0.0, y: 0.0 });
+        }
+
+        points
+    }
+
+    /// Computes the volume of the node's inner cavity in cubic meters, excluding material thickness.
+    ///
+    /// Takes into account the fact that inner profile is only 1/2 of the cross-section and the node is revolved around the y-axis.
+    pub fn inner_volume_m3(&self, num_samples: usize) -> f64 {
+        self.revolved_solid_volume_m3(num_samples, |_, inner| inner)
+    }
+
+    /// Computes the volume of the node's material in cubic meters.
+    ///
+    /// Takes into account the fact that inner profile is only 1/2 of the cross-section and the node is revolved around the y-axis.
+    ///
+    /// Only accounts for the actual material ie thickness.
+    pub fn material_volume_m3(&self, num_samples: usize) -> f64 {
+        let outer_volume_m3 = self.revolved_solid_volume_m3(num_samples, |outer, _| outer);
+        (outer_volume_m3 - self.inner_volume_m3(num_samples)).max(0.0)
+    }
+
+    pub fn mass_kg(&self) -> f64 {
+        self.material_density_kg_per_m3.max(0.0) * self.material_volume_m3(MASS_VOLUME_SAMPLES)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use mint::Point2;
+
+    use super::*;
+
+    fn demo_node(shoulder_curves_inward: bool, rim_curves_inward: bool) -> NodePhysics {
+        NodePhysics {
+            material_density_kg_per_m3: 1_000.0,
+            wall_thickness_m: 0.05,
+            rim_breadth: 0.1,
+            base_radius_m: 0.25,
+            shoulder_radius_m: 0.2,
+            shoulder_sweep_deg: 35.0,
+            rim_radius_m: 0.18,
+            rim_sweep_deg: 35.0,
+            shoulder_curves_inward,
+            rim_curves_inward,
+            base_length_m: 1.0,
+        }
+    }
+
+    fn translated(points: &[Point2<f64>], dx: f64, dy: f64) -> Vec<Point2<f64>> {
+        points
+            .iter()
+            .map(|p| Point2 {
+                x: p.x + dx,
+                y: p.y + dy,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn outline_snapshot_shape_variations() {
+        let variants = [
+            (
+                "bowl_upwards",
+                NodePhysics {
+                    base_radius_m: 0.22,
+                    shoulder_radius_m: 0.24,
+                    rim_radius_m: 0.14,
+                    shoulder_sweep_deg: -45.0,
+                    rim_sweep_deg: -42.0,
+                    rim_breadth: 0.10,
+                    shoulder_curves_inward: true,
+                    rim_curves_inward: false,
+                    base_length_m: 2.04,
+                    ..demo_node(false, false)
+                },
+            ),
+            (
+                "bell_downwards",
+                NodePhysics {
+                    base_radius_m: 0.24,
+                    shoulder_radius_m: 0.16,
+                    rim_radius_m: 0.20,
+                    shoulder_sweep_deg: 58.0,
+                    rim_sweep_deg: 52.0,
+                    rim_breadth: 0.10,
+                    shoulder_curves_inward: false,
+                    rim_curves_inward: true,
+                    base_length_m: 1.10,
+                    ..demo_node(false, false)
+                },
+            ),
+            (
+                "bell_with_outward_rim",
+                NodePhysics {
+                    base_radius_m: 0.24,
+                    shoulder_radius_m: 0.16,
+                    rim_radius_m: 0.24,
+                    shoulder_sweep_deg: 56.0,
+                    rim_sweep_deg: 82.0,
+                    rim_breadth: 0.14,
+                    shoulder_curves_inward: false,
+                    rim_curves_inward: false,
+                    base_length_m: 1.16,
+                    ..demo_node(false, false)
+                },
+            ),
+            (
+                "bowl_with_inward_rim",
+                NodePhysics {
+                    base_radius_m: 0.22,
+                    shoulder_radius_m: 0.22,
+                    rim_radius_m: 0.20,
+                    shoulder_sweep_deg: -44.0,
+                    rim_sweep_deg: -72.0,
+                    rim_breadth: 0.10,
+                    shoulder_curves_inward: true,
+                    rim_curves_inward: true,
+                    base_length_m: 1.06,
+                    ..demo_node(false, false)
+                },
+            ),
+            (
+                "gong",
+                NodePhysics {
+                    wall_thickness_m: 0.04,
+                    rim_breadth: 0.07,
+                    base_radius_m: 0.28,
+                    shoulder_radius_m: 0.36,
+                    rim_radius_m: 0.34,
+                    shoulder_sweep_deg: 12.0,
+                    rim_sweep_deg: 14.0,
+                    shoulder_curves_inward: false,
+                    rim_curves_inward: false,
+                    base_length_m: 1.14,
+                    ..demo_node(false, false)
+                },
+            ),
+            (
+                "plate",
+                NodePhysics {
+                    wall_thickness_m: 0.025,
+                    rim_breadth: 0.05,
+                    base_radius_m: 0.32,
+                    shoulder_radius_m: 0.44,
+                    rim_radius_m: 0.42,
+                    shoulder_sweep_deg: -6.0,
+                    rim_sweep_deg: -8.0,
+                    shoulder_curves_inward: true,
+                    rim_curves_inward: false,
+                    base_length_m: 1.20,
+                    ..demo_node(false, false)
+                },
+            ),
+        ];
+
+        let mut all_paths: Vec<Vec<Point2<f64>>> = Vec::new();
+        let mut cursor_x = 0.0;
+        let spacing = 1.6;
+
+        for (_, node) in variants {
+            let outline = node.shell_outline(20);
+            all_paths.push(translated(&outline, cursor_x, 0.0));
+            cursor_x += spacing;
+        }
+
+        let paths: Vec<&[Point2<f64>]> = all_paths.iter().map(Vec::as_slice).collect();
+        crate::assert_paths_points_2d_snapshot!("node_outlines_shape_variations", &paths);
+    }
+
+    #[test]
+    fn volume_methods_return_finite_positive_values() {
+        let node = demo_node(false, false);
+
+        let inner_volume = node.inner_volume_m3(128);
+        let material_volume = node.material_volume_m3(128);
+
+        assert!(inner_volume.is_finite());
+        assert!(material_volume.is_finite());
+        assert!(inner_volume > 0.0);
+        assert!(material_volume > 0.0);
+    }
+
+    #[test]
+    fn zero_wall_thickness_has_no_material_volume() {
+        let node = NodePhysics {
+            wall_thickness_m: 0.0,
+            ..demo_node(false, false)
         };
 
-        match self.midpoint_sample_at(theta).convexity {
-            geometry::LocalConvexity::Convex => {
-                if away_from_axis.x < 0.0 {
-                    away_from_axis
-                } else {
-                    axis_side
-                }
-            }
-            geometry::LocalConvexity::Concave | geometry::LocalConvexity::Flat => axis_side,
-        }
+        assert!(node.material_volume_m3(128) <= EPS_COORD);
+    }
+
+    #[test]
+    fn derived_mass_matches_density_times_material_volume() {
+        let node = demo_node(true, false);
+        let expected_mass =
+            node.material_density_kg_per_m3 * node.material_volume_m3(MASS_VOLUME_SAMPLES);
+
+        assert!((node.mass_kg() - expected_mass).abs() <= EPS_COORD);
     }
 }

@@ -15,4 +15,5 @@ pub struct Context {
     // Audio
     pub sample_rate_hz: u32,
     pub num_channels: u16,
+    pub buffer_size_samples: u32,
 }

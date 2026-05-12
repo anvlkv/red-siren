@@ -27,17 +27,29 @@ pub fn assert_paths_points_2d(paths: &[&[Point2<f64>]]) -> Vec<u8> {
         svg.push_str("  <path d=\"");
 
         let first = sanitize(path[0]);
+        let closed = if path.len() > 1 {
+            let last = sanitize(path[path.len() - 1]);
+            (last.x - first.x).abs() <= f64::EPSILON && (last.y - first.y).abs() <= f64::EPSILON
+        } else {
+            false
+        };
+        let draw_len = if closed { path.len() - 1 } else { path.len() };
+
         svg.push_str("M ");
         svg.push_str(&fmt_f64(first.x));
         svg.push(' ');
         svg.push_str(&fmt_f64(first.y));
 
-        for point in &path[1..] {
+        for point in &path[1..draw_len] {
             let point = sanitize(*point);
             svg.push_str(" L ");
             svg.push_str(&fmt_f64(point.x));
             svg.push(' ');
             svg.push_str(&fmt_f64(point.y));
+        }
+
+        if closed {
+            svg.push_str(" Z");
         }
 
         svg.push_str("\" />\n");
@@ -145,6 +157,22 @@ mod tests {
 
         assert!(svg.contains("<path d=\"M 0 0 L 1 1\" />"));
         assert!(svg.contains("<path d=\"M 2 3 L 4 5\" />"));
+    }
+
+    #[test]
+    fn svg_output_closes_path_when_start_matches_end() {
+        let closed = [
+            Point2 { x: 0.0, y: 0.0 },
+            Point2 { x: 1.0, y: 0.0 },
+            Point2 { x: 1.0, y: 1.0 },
+            Point2 { x: 0.0, y: 0.0 },
+        ];
+        let paths: &[&[Point2<f64>]] = &[&closed];
+
+        let bytes = assert_paths_points_2d(paths);
+        let svg = String::from_utf8(bytes).expect("valid utf8");
+
+        assert!(svg.contains("<path d=\"M 0 0 L 1 0 L 1 1 Z\" />"));
     }
 
     #[test]

@@ -7,6 +7,7 @@ edition = "2024"
 const-primes = "0.10.5"
 log.workspace = true
 mint = { workspace = true }
+nalgebra = { workspace = true }
 num-complex = "0.4.6"
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -17,6 +18,14 @@ thiserror = { workspace = true }
 [dev-dependencies]
 eframe = "0.33"
 insta = { workspace = true, features = ["json", "redactions"] }
+
+[[example]]
+name = "node_egui"
+path = "examples/node_egui.rs"
+
+[[example]]
+name = "segment_egui"
+path = "examples/segment_egui.rs"
 
 [features]
 test-util = []

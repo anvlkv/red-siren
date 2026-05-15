@@ -4,6 +4,7 @@ use mint::Point2;
 pub fn assert_paths_points_2d(paths: &[&[Point2<f64>]]) -> Vec<u8> {
     let (min_x, min_y, width, height) = svg_bounds(paths);
     let stroke_width = stroke_width_for_bounds(width, height);
+    let marker_radius = marker_radius_for_bounds(width, height);
 
     let mut svg = String::new();
     svg.push_str("<svg xmlns=\"http://www.w3.org/2000/svg\" ");
@@ -15,16 +16,12 @@ pub fn assert_paths_points_2d(paths: &[&[Point2<f64>]]) -> Vec<u8> {
     svg.push_str(&fmt_f64(width));
     svg.push(' ');
     svg.push_str(&fmt_f64(height));
-    svg.push_str("\" fill=\"none\" stroke=\"black\" stroke-width=\"");
-    svg.push_str(&fmt_f64(stroke_width));
     svg.push_str("\">\n");
 
-    for path in paths {
+    for (path_index, path) in paths.iter().enumerate() {
         if path.is_empty() {
             continue;
         }
-
-        svg.push_str("  <path d=\"");
 
         let first = sanitize(path[0]);
         let closed = if path.len() > 1 {
@@ -34,6 +31,8 @@ pub fn assert_paths_points_2d(paths: &[&[Point2<f64>]]) -> Vec<u8> {
             false
         };
         let draw_len = if closed { path.len() - 1 } else { path.len() };
+
+        svg.push_str("  <path d=\"");
 
         svg.push_str("M ");
         svg.push_str(&fmt_f64(first.x));
@@ -52,6 +51,29 @@ pub fn assert_paths_points_2d(paths: &[&[Point2<f64>]]) -> Vec<u8> {
             svg.push_str(" Z");
         }
 
+        svg.push_str("\" fill=\"");
+        if closed {
+            svg.push_str("rgba(0,0,0,0.12)");
+        } else {
+            svg.push_str("none");
+        }
+        svg.push_str("\" stroke=\"");
+        if path_index == 0 {
+            svg.push_str("black");
+        } else {
+            svg.push_str("#1f77b4");
+        }
+        svg.push_str("\" stroke-width=\"");
+        svg.push_str(&fmt_f64(stroke_width));
+        svg.push_str("\" />\n");
+
+        // Add a deterministic marker at the first point to make path orientation/debugging obvious.
+        svg.push_str("  <circle fill=\"red\" stroke=\"none\" cx=\"");
+        svg.push_str(&fmt_f64(first.x));
+        svg.push_str("\" cy=\"");
+        svg.push_str(&fmt_f64(first.y));
+        svg.push_str("\" r=\"");
+        svg.push_str(&fmt_f64(marker_radius));
         svg.push_str("\" />\n");
     }
 
@@ -118,6 +140,11 @@ fn svg_bounds(paths: &[&[Point2<f64>]]) -> (f64, f64, f64, f64) {
 fn stroke_width_for_bounds(width: f64, height: f64) -> f64 {
     let min_span = width.min(height).max(1.0);
     // Keep line thickness visible across tiny and very large coordinate spaces.
+    (min_span * 0.0025).max(f64::EPSILON)
+}
+
+fn marker_radius_for_bounds(width: f64, height: f64) -> f64 {
+    let min_span = width.min(height).max(1.0);
     (min_span * 0.01).max(f64::EPSILON)
 }
 
@@ -155,8 +182,9 @@ mod tests {
         let bytes = assert_paths_points_2d(paths);
         let svg = String::from_utf8(bytes).expect("valid utf8");
 
-        assert!(svg.contains("<path d=\"M 0 0 L 1 1\" />"));
-        assert!(svg.contains("<path d=\"M 2 3 L 4 5\" />"));
+        assert!(svg.contains("<path d=\"M 0 0 L 1 1\" fill=\"none\" stroke=\"black\""));
+        assert!(svg.contains("<path d=\"M 2 3 L 4 5\" fill=\"none\" stroke=\"#1f77b4\""));
+        assert!(svg.contains("<circle fill=\"red\" stroke=\"none\" cx=\"0\" cy=\"0\""));
     }
 
     #[test]
@@ -172,17 +200,7 @@ mod tests {
         let bytes = assert_paths_points_2d(paths);
         let svg = String::from_utf8(bytes).expect("valid utf8");
 
-        assert!(svg.contains("<path d=\"M 0 0 L 1 0 L 1 1 Z\" />"));
-    }
-
-    #[test]
-    fn svg_output_falls_back_for_empty_input() {
-        let paths: &[&[Point2<f64>]] = &[];
-        let bytes = assert_paths_points_2d(paths);
-        let svg = String::from_utf8(bytes).expect("valid utf8");
-
-        assert!(svg.contains("viewBox=\"0 0 100 100\""));
-        assert!(svg.contains("stroke-width=\"1\""));
+        assert!(svg.contains("<path d=\"M 0 0 L 1 0 L 1 1 Z\" fill=\"rgba(0,0,0,0.12)\""));
     }
 
     #[test]

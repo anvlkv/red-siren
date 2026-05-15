@@ -3,8 +3,7 @@ mod channel;
 mod context;
 mod grid_limits;
 mod layout;
-mod materials;
-mod node;
+pub mod materials;
 mod orientation;
 mod scale;
 
@@ -13,7 +12,6 @@ pub use channel::*;
 pub use context::*;
 pub use grid_limits::*;
 pub use layout::*;
-pub use node::*;
 pub use orientation::*;
 pub use scale::*;
 
@@ -25,7 +23,6 @@ pub struct Config {
     pub ctx: Context,
     pub layout: Layout,
     pub scale: Scale,
-    pub base_physics: Node,
     pub base_band: Band,
     pub grid_limits: GridLimits,
 }

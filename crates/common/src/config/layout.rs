@@ -1,6 +1,6 @@
 use std::num::NonZero;
 
-use mint::Point2;
+use nalgebra::geometry::Point2;
 use serde::{Deserialize, Serialize};
 
 use crate::{safe_area::SafeArea, Line, Rect};
@@ -42,8 +42,8 @@ impl Default for Layout {
             num_bands: NonZero::new(2).unwrap(),
             first_band_channel: super::BandChannel::Left,
             orientation: super::LayoutOrientation::Horizontal,
-            left_string_position: (Point2 { x: 0, y: 0 }, Point2 { x: 1, y: 0 }),
-            right_string_position: (Point2 { x: 0, y: 1 }, Point2 { x: 1, y: 1 }),
+            left_string_position: (Point2::new(0, 0), Point2::new(1, 0)),
+            right_string_position: (Point2::new(0, 1), Point2::new(1, 1)),
             instrument_breadth: 0.5,
             key_radius: 0.05,
             key_band_length: 0.4,

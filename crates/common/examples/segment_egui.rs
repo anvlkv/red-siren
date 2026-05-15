@@ -1,4 +1,4 @@
-use common::config::Segment;
+use common::geometry::Segment;
 use eframe::egui::{self, Color32, Pos2, Sense, Shape, Stroke};
 use mint::Point2;
 
@@ -93,7 +93,7 @@ impl Default for DirectSegmentConfig {
             line_b: 0.0,
             const_value: 1.5,
             para_a: 0.25,
-            para_b: -1.0,
+            para_b: 0.0,
             para_c: 0.5,
             hyp_a: 1.0,
             hyp_b: -1.0,
@@ -109,32 +109,19 @@ impl Default for DirectSegmentConfig {
 impl DirectSegmentConfig {
     fn build_segment(&self) -> Result<Segment, String> {
         match self.kind {
-            CurveKind::Line => {
-                Segment::from_line(self.start, self.end, self.density, self.line_m, self.line_b)
-            }
-            CurveKind::Constant => {
-                Segment::from_constant(self.start, self.end, self.density, self.const_value)
-            }
-            CurveKind::Parabolic => Segment::from_parabolic(
-                self.start,
-                self.end,
-                self.density,
+            CurveKind::Line => Segment::start_line(self.end - self.start, self.line_m, self.line_b),
+            CurveKind::Constant => Segment::start_constant(self.end - self.start, self.const_value),
+            CurveKind::Parabolic => Segment::start_parabolic(
+                self.end - self.start,
                 self.para_a,
                 self.para_b,
                 self.para_c,
             ),
-            CurveKind::Hyperbolic => Segment::from_hyperbolic(
-                self.start,
-                self.end,
-                self.density,
-                self.hyp_a,
-                self.hyp_b,
-                self.hyp_c,
-            ),
-            CurveKind::ArcSweep => Segment::from_arc_sweep(
-                self.start,
-                self.end,
-                self.density,
+            CurveKind::Hyperbolic => {
+                Segment::start_hyperbolic(self.end - self.start, self.hyp_a, self.hyp_b, self.hyp_c)
+            }
+            CurveKind::ArcSweep => Segment::start_arc_sweep(
+                self.end - self.start,
                 self.arc_center_y,
                 self.arc_radius,
                 self.arc_start_angle,
@@ -248,16 +235,16 @@ impl Default for ContinuationConfig {
 impl ContinuationConfig {
     fn build_segment(&self, prev: &Segment) -> Result<Segment, String> {
         match self.kind {
-            CurveKind::Line => Segment::new_line(Some(prev), self.to_t, self.density),
-            CurveKind::Constant => Segment::new_constant(Some(prev), self.to_t, self.density),
+            CurveKind::Line => Segment::continue_line(prev, self.to_t, self.density),
+            CurveKind::Constant => Segment::continue_constant(prev, self.to_t, self.density),
             CurveKind::Parabolic => {
-                Segment::new_parabolic(Some(prev), self.to_t, self.to_value, self.density)
+                Segment::continue_parabolic(prev, self.to_t, self.to_value, self.density)
             }
             CurveKind::Hyperbolic => {
-                Segment::new_hyperbolic(Some(prev), self.to_t, self.pole_t, self.density)
+                Segment::continue_hyperbolic(prev, self.to_t, self.pole_t, self.density)
             }
-            CurveKind::ArcSweep => Segment::new_arc_sweep(
-                Some(prev),
+            CurveKind::ArcSweep => Segment::continue_arc_sweep(
+                prev,
                 self.to_t,
                 self.arc_radius,
                 self.arc_sweep_angle,
@@ -339,14 +326,9 @@ impl Default for SegmentApp {
             first: DirectSegmentConfig::default(),
             second: ContinuationConfig::default(),
             third: ContinuationConfig {
-                kind: CurveKind::ArcSweep,
+                kind: CurveKind::Line,
                 to_t: 10.0,
-                density: 16.0,
-                to_value: 1.0,
-                pole_t: 12.0,
-                arc_radius: 2.5,
-                arc_sweep_angle: -std::f64::consts::FRAC_PI_2,
-                arc_concave_up: true,
+                ..ContinuationConfig::default()
             },
         }
     }
@@ -654,11 +636,21 @@ fn draw_chart(ui: &mut egui::Ui, segments: Option<&[Segment]>, error: Option<&st
 }
 
 fn sample_segment_points(segment: &Segment) -> Vec<Point2<f64>> {
-    segment
-        .sampled_points()
-        .into_iter()
-        .filter(|point| point.x.is_finite() && point.y.is_finite())
-        .collect()
+    let samples = ((segment.end - segment.start) * segment.sampling_density)
+        .ceil()
+        .max(1.0) as usize;
+
+    let mut points = Vec::with_capacity(samples + 1);
+    for index in 0..=samples {
+        let u = index as f64 / samples as f64;
+        let t = segment.start + (segment.end - segment.start) * u;
+        let y = segment.evaluate(t);
+        if t.is_finite() && y.is_finite() {
+            points.push(Point2 { x: t, y });
+        }
+    }
+
+    points
 }
 
 fn show_segment_metrics(ui: &mut egui::Ui, segment: &Segment, heading: &str) {

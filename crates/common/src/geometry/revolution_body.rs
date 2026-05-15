@@ -1,5 +1,5 @@
-use crate::geometry::Segment;
 use crate::geometry::embodied::{Embodied, EmbodiedBounds, EmbodiedPoint3, EmbodiedTriangle};
+use crate::geometry::Segment;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
@@ -108,8 +108,7 @@ impl<'de, const N: usize> Deserialize<'de> for RevolutionBody<N> {
                     }
                 }
 
-                let profile_vec =
-                    profile.ok_or_else(|| de::Error::missing_field("profile"))?;
+                let profile_vec = profile.ok_or_else(|| de::Error::missing_field("profile"))?;
                 let axis = axis.ok_or_else(|| de::Error::missing_field("axis"))?;
 
                 if profile_vec.len() != N {
@@ -254,6 +253,31 @@ impl<const N: usize> RevolutionBody<N> {
             .collect()
     }
 
+    /// Return axial belts of vertex indices for `sample_points(resolution)`.
+    ///
+    /// The outer vector is indexed by axial belt (`i`), and each inner vector contains
+    /// vertex indices for all theta samples (`j`) on that ring.
+    pub fn axial_indices(&self, resolution: usize) -> Vec<Vec<usize>> {
+        if resolution == 0 {
+            return vec![];
+        }
+
+        let axial_len = self.profile_sample_positions(resolution).len();
+        if axial_len == 0 {
+            return vec![];
+        }
+
+        let theta_samples = resolution;
+
+        (0..axial_len)
+            .map(|i| {
+                (0..theta_samples)
+                    .map(|j| j * axial_len + i)
+                    .collect::<Vec<usize>>()
+            })
+            .collect()
+    }
+
     /// Maximum radius across the profile at `axial_budget` sampled positions.
     pub fn max_radius(&self, axial_budget: usize) -> f64 {
         self.sampled_profile_points(axial_budget)
@@ -373,6 +397,16 @@ impl<const N: usize> Embodied for RevolutionBody<N> {
 
         (min, max)
     }
+
+    fn opt_resolution(&self) -> usize {
+        (self
+            .profile
+            .iter()
+            .map(|s| s.sampling_density)
+            .sum::<f64>()
+            .ceil() as usize)
+            .max(8)
+    }
 }
 
 #[cfg(test)]
@@ -409,7 +443,10 @@ mod tests {
         let mut seg2 = Segment::start_line(2.0, 1.0, 0.0).expect("segment");
         seg2.start = 1.5; // intentional gap
         let result = RevolutionBody::new([seg1, seg2], RevolutionAxis::Y);
-        assert!(matches!(result, Err(RevolutionBodyError::NonMonotonicSegments)));
+        assert!(matches!(
+            result,
+            Err(RevolutionBodyError::NonMonotonicSegments)
+        ));
     }
 
     #[test]
@@ -438,8 +475,14 @@ mod tests {
         let body = make_body_linear(1.0, 1.0, 0.0, RevolutionAxis::Y);
         let json = serde_json::to_string(&body).expect("serialize");
         assert!(json.contains("\"profile\""), "must contain 'profile' key");
-        assert!(!json.contains("outer_profile"), "must not contain legacy outer_profile");
-        assert!(!json.contains("inner_profile"), "must not contain legacy inner_profile");
+        assert!(
+            !json.contains("outer_profile"),
+            "must not contain legacy outer_profile"
+        );
+        assert!(
+            !json.contains("inner_profile"),
+            "must not contain legacy inner_profile"
+        );
     }
 
     #[test]
@@ -511,6 +554,35 @@ mod tests {
         let resolution = 8;
         let radial = body.profile_sample_positions(resolution).len();
         assert_eq!(body.sample_points(resolution).len(), resolution * radial);
+    }
+
+    #[test]
+    fn test_axial_indices_match_sample_points_layout() {
+        let body = make_body_linear(1.0, 1.0, 0.0, RevolutionAxis::Y);
+        let resolution = 6;
+        let axial_len = body.profile_sample_positions(resolution).len();
+        let belts = body.axial_indices(resolution);
+
+        assert_eq!(belts.len(), axial_len);
+        for (i, belt) in belts.iter().enumerate() {
+            assert_eq!(belt.len(), resolution);
+            for (j, &vertex_index) in belt.iter().enumerate() {
+                assert_eq!(vertex_index, j * axial_len + i);
+            }
+        }
+    }
+
+    #[test]
+    fn test_axial_indices_cover_all_vertices_once() {
+        let body = make_body_linear(1.0, 1.0, 0.0, RevolutionAxis::Y);
+        let resolution = 5;
+        let points = body.sample_points(resolution);
+        let belts = body.axial_indices(resolution);
+        let mut flattened: Vec<usize> = belts.into_iter().flatten().collect();
+
+        flattened.sort_unstable();
+        assert_eq!(flattened.len(), points.len());
+        assert_eq!(flattened, (0..points.len()).collect::<Vec<usize>>());
     }
 
     #[test]

@@ -14,6 +14,9 @@ pub trait Embodied {
 
     /// Compute the axis-aligned bounding box of the surface.
     fn bounding_box(&self, resolution: usize) -> Self::Bounds;
+
+    /// Optimal resolution hint for sampling this geometry, if any. This can be used by downstream code to avoid unnecessary sampling at very high resolutions.
+    fn opt_resolution(&self) -> usize;
 }
 
 /// Default mesh output aliases used by RevolutionBody.

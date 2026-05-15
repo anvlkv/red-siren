@@ -32,5 +32,9 @@ path = "examples/segment_egui.rs"
 name = "revolution_body_egui"
 path = "examples/revolution_body_egui.rs"
 
+[[example]]
+name = "thick_revolution_body_egui"
+path = "examples/thick_revolution_body_egui.rs"
+
 [features]
 test-util = []

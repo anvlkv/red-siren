@@ -6,7 +6,9 @@ mod thick_body;
 pub use embodied::{Embodied, EmbodiedBounds, EmbodiedPoint3, EmbodiedTriangle};
 pub use revolution_body::{RevolutionAxis, RevolutionBody, RevolutionBodyError};
 pub use segment::*;
-pub use thick_body::{ThickBody, ThicknessMap, ThicknessMapPoint};
+pub use thick_body::{
+    thickness_map_from_axial_samples, ThickBody, ThicknessMap, ThicknessMapPoint,
+};
 
 /// Line between two points
 pub type Line = (

@@ -1131,6 +1131,7 @@ version = "0.1.0"
 dependencies = [
  "const-primes",
  "eframe",
+ "egui",
  "insta",
  "log",
  "mint",

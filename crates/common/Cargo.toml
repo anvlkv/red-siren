@@ -17,6 +17,7 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 eframe = "0.33"
+egui = "0.33"
 insta = { workspace = true, features = ["json", "redactions"] }
 
 [[example]]
@@ -26,6 +27,10 @@ path = "examples/node_egui.rs"
 [[example]]
 name = "segment_egui"
 path = "examples/segment_egui.rs"
+
+[[example]]
+name = "revolution_body_egui"
+path = "examples/revolution_body_egui.rs"
 
 [features]
 test-util = []

@@ -1,5 +1,9 @@
+mod embodied;
+mod revolution_body;
 mod segment;
 
+pub use embodied::{Embodied, EmbodiedBounds, EmbodiedPoint3, EmbodiedTriangle};
+pub use revolution_body::{RevolutionAxis, RevolutionBody, RevolutionBodyError};
 pub use segment::*;
 
 /// Line between two points

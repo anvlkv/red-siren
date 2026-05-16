@@ -1,6 +1,56 @@
 use nalgebra::{Point3, Vector3};
 use std::collections::HashMap;
 
+#[derive(Clone, Debug)]
+pub struct SurfaceMesh<V, I> {
+    pub vertices: Vec<V>,
+    pub indices: Vec<I>,
+}
+
+impl<V, I> SurfaceMesh<V, I> {
+    pub fn new(vertices: Vec<V>, indices: Vec<I>) -> Self {
+        Self { vertices, indices }
+    }
+
+    pub fn vertex_count(&self) -> usize {
+        self.vertices.len()
+    }
+
+    pub fn index_count(&self) -> usize {
+        self.indices.len()
+    }
+
+    pub fn vertices_iter(&self) -> std::slice::Iter<'_, V> {
+        self.vertices.iter()
+    }
+
+    pub fn indices_iter(&self) -> std::slice::Iter<'_, I> {
+        self.indices.iter()
+    }
+
+    pub fn into_parts(self) -> (Vec<V>, Vec<I>) {
+        (self.vertices, self.indices)
+    }
+}
+
+impl<V, I> IntoIterator for SurfaceMesh<V, I> {
+    type Item = V;
+    type IntoIter = std::vec::IntoIter<V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.vertices.into_iter()
+    }
+}
+
+impl<'a, V, I> IntoIterator for &'a SurfaceMesh<V, I> {
+    type Item = &'a V;
+    type IntoIter = std::slice::Iter<'a, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.vertices.iter()
+    }
+}
+
 /// A generic surface meshing interface for any meshable geometry.
 pub trait Meshable {
     type Vertex;
@@ -11,8 +61,28 @@ pub trait Meshable {
     /// Sample surface vertices given a resolution hint.
     fn sample_points(&self, resolution: usize) -> Vec<Self::Vertex>;
 
+    /// Iterate sampled vertices without requiring downstream call sites to spell out
+    /// temporary vector ownership. Default implementation is allocation-backed.
+    fn sample_points_iter(&self, resolution: usize) -> std::vec::IntoIter<Self::Vertex> {
+        self.sample_points(resolution).into_iter()
+    }
+
     /// Generate triangle index topology consistent with the vertices from `sample_points`.
     fn mesh_indices(&self, resolution: usize) -> Vec<Self::Index>;
+
+    /// Iterate sampled triangle indices. Default implementation is allocation-backed.
+    fn mesh_indices_iter(&self, resolution: usize) -> std::vec::IntoIter<Self::Index> {
+        self.mesh_indices(resolution).into_iter()
+    }
+
+    /// Retrieve vertices and triangle topology together. This allows consumers to sample once
+    /// and iterate over both collections repeatedly without re-querying the mesh provider.
+    fn surface_mesh_data(&self, resolution: usize) -> SurfaceMesh<Self::Vertex, Self::Index> {
+        SurfaceMesh::new(
+            self.sample_points(resolution),
+            self.mesh_indices(resolution),
+        )
+    }
 
     /// Compute the axis-aligned bounding box of the surface.
     fn bounding_box(&self, resolution: usize) -> Self::Bounds;
@@ -47,6 +117,79 @@ pub type EmbodiedPoint3 = Point3<f64>;
 pub type EmbodiedTriangle = [u32; 3];
 pub type EmbodiedBounds = (Point3<f64>, Point3<f64>);
 pub type EmbodiedVector3 = Vector3<f64>;
+
+/// Compute mesh surface area by summing triangle areas.
+pub fn mesh_surface_area_m2(points: &[EmbodiedPoint3], indices: &[EmbodiedTriangle]) -> f64 {
+    indices
+        .iter()
+        .filter_map(|[a, b, c]| {
+            let (a, b, c) = (*a as usize, *b as usize, *c as usize);
+            if a >= points.len() || b >= points.len() || c >= points.len() {
+                return None;
+            }
+
+            let pa = points[a];
+            let pb = points[b];
+            let pc = points[c];
+            let area = 0.5 * (pb - pa).cross(&(pc - pa)).norm();
+            if area.is_finite() {
+                Some(area)
+            } else {
+                None
+            }
+        })
+        .sum()
+}
+
+/// Find the closest mesh vertex to the provided point.
+pub fn nearest_vertex_index(points: &[EmbodiedPoint3], point: EmbodiedPoint3) -> usize {
+    points
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| {
+            let da = (*a - point).norm_squared();
+            let db = (*b - point).norm_squared();
+            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(idx, _)| idx)
+        .unwrap_or(0)
+}
+
+/// Area-weighted per-vertex normals from triangle topology.
+pub fn mesh_vertex_normals(
+    points: &[EmbodiedPoint3],
+    indices: &[EmbodiedTriangle],
+    epsilon: f64,
+) -> Vec<EmbodiedVector3> {
+    let mut normals = vec![EmbodiedVector3::zeros(); points.len()];
+
+    for [a, b, c] in indices {
+        let (a, b, c) = (*a as usize, *b as usize, *c as usize);
+        if a >= points.len() || b >= points.len() || c >= points.len() {
+            continue;
+        }
+
+        let pa = points[a];
+        let pb = points[b];
+        let pc = points[c];
+        let tri_normal = (pb - pa).cross(&(pc - pa));
+        if !tri_normal.iter().all(|v| v.is_finite()) {
+            continue;
+        }
+
+        normals[a] += tri_normal;
+        normals[b] += tri_normal;
+        normals[c] += tri_normal;
+    }
+
+    for normal in &mut normals {
+        *normal = normal
+            .try_normalize(epsilon)
+            .unwrap_or_else(EmbodiedVector3::zeros);
+    }
+
+    normals
+}
 
 pub(crate) fn mesh_signed_volume(points: &[EmbodiedPoint3], indices: &[EmbodiedTriangle]) -> f64 {
     indices
@@ -239,5 +382,54 @@ pub(crate) fn cavity_volume_from_shell(
         Some(volume)
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mesh_surface_area_unit_square_two_triangles() {
+        let points = vec![
+            EmbodiedPoint3::new(0.0, 0.0, 0.0),
+            EmbodiedPoint3::new(1.0, 0.0, 0.0),
+            EmbodiedPoint3::new(1.0, 1.0, 0.0),
+            EmbodiedPoint3::new(0.0, 1.0, 0.0),
+        ];
+        let indices = vec![[0, 1, 2], [0, 2, 3]];
+
+        let area = mesh_surface_area_m2(&points, &indices);
+        assert!((area - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn nearest_vertex_index_picks_closest_point() {
+        let points = vec![
+            EmbodiedPoint3::new(0.0, 0.0, 0.0),
+            EmbodiedPoint3::new(2.0, 0.0, 0.0),
+            EmbodiedPoint3::new(0.0, 2.0, 0.0),
+        ];
+
+        let idx = nearest_vertex_index(&points, EmbodiedPoint3::new(1.8, 0.1, 0.0));
+        assert_eq!(idx, 1);
+    }
+
+    #[test]
+    fn mesh_vertex_normals_are_normalized_on_plane() {
+        let points = vec![
+            EmbodiedPoint3::new(0.0, 0.0, 0.0),
+            EmbodiedPoint3::new(1.0, 0.0, 0.0),
+            EmbodiedPoint3::new(1.0, 1.0, 0.0),
+            EmbodiedPoint3::new(0.0, 1.0, 0.0),
+        ];
+        let indices = vec![[0, 1, 2], [0, 2, 3]];
+
+        let normals = mesh_vertex_normals(&points, &indices, 1e-12);
+        assert_eq!(normals.len(), points.len());
+        for normal in normals {
+            assert!((normal.norm() - 1.0).abs() < 1e-12);
+            assert!(normal.z.abs() > 0.999999999);
+        }
     }
 }

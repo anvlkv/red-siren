@@ -1,7 +1,124 @@
-use crate::geometry::embodied::{Embodied, EmbodiedBounds, EmbodiedPoint3, EmbodiedTriangle};
+use crate::geometry::embodied::{
+    cavity_volume_from_shell, Embodied, EmbodiedBounds, EmbodiedPoint3, EmbodiedTriangle,
+    EmbodiedVector3,
+};
 use crate::geometry::Segment;
+use nalgebra::Vector3;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
+
+const RAY_EPSILON: f64 = 1e-9;
+
+fn incident_triangles(
+    indices: &[EmbodiedTriangle],
+    vertex_index: usize,
+) -> Vec<(usize, [usize; 3])> {
+    indices
+        .iter()
+        .enumerate()
+        .filter_map(|(tri_idx, [a, b, c])| {
+            let tri = [*a as usize, *b as usize, *c as usize];
+            if tri.contains(&vertex_index) {
+                Some((tri_idx, tri))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn area_weighted_vertex_normal(
+    points: &[EmbodiedPoint3],
+    indices: &[EmbodiedTriangle],
+    vertex_index: usize,
+) -> Option<Vector3<f64>> {
+    if vertex_index >= points.len() {
+        return None;
+    }
+
+    let mut normal = Vector3::zeros();
+    for (_tri_idx, [a, b, c]) in incident_triangles(indices, vertex_index) {
+        if a >= points.len() || b >= points.len() || c >= points.len() {
+            continue;
+        }
+        let pa = points[a];
+        let pb = points[b];
+        let pc = points[c];
+        let tri_normal = (pb - pa).cross(&(pc - pa));
+        if tri_normal.norm_squared().is_finite() {
+            normal += tri_normal;
+        }
+    }
+
+    normal.try_normalize(RAY_EPSILON)
+}
+
+fn ray_triangle_hit_distance(
+    origin: EmbodiedPoint3,
+    direction: Vector3<f64>,
+    p0: EmbodiedPoint3,
+    p1: EmbodiedPoint3,
+    p2: EmbodiedPoint3,
+) -> Option<f64> {
+    let e1 = p1 - p0;
+    let e2 = p2 - p0;
+    let h = direction.cross(&e2);
+    let a = e1.dot(&h);
+    if a.abs() < RAY_EPSILON {
+        return None;
+    }
+
+    let f = 1.0 / a;
+    let s = origin - p0;
+    let u = f * s.dot(&h);
+    if !(0.0..=1.0).contains(&u) {
+        return None;
+    }
+
+    let q = s.cross(&e1);
+    let v = f * direction.dot(&q);
+    if v < 0.0 || u + v > 1.0 {
+        return None;
+    }
+
+    let t = f * e2.dot(&q);
+    if t > RAY_EPSILON {
+        Some(t)
+    } else {
+        None
+    }
+}
+
+fn directional_thickness_from_mesh(
+    points: &[EmbodiedPoint3],
+    indices: &[EmbodiedTriangle],
+    vertex_index: usize,
+    direction: Vector3<f64>,
+) -> Option<f64> {
+    if vertex_index >= points.len() {
+        return None;
+    }
+    let dir = direction.try_normalize(RAY_EPSILON)?;
+    let origin = points[vertex_index];
+
+    let incident: std::collections::HashSet<usize> = incident_triangles(indices, vertex_index)
+        .into_iter()
+        .map(|(idx, _)| idx)
+        .collect();
+
+    indices
+        .iter()
+        .enumerate()
+        .filter(|(tri_idx, _)| !incident.contains(tri_idx))
+        .filter_map(|(_tri_idx, [a, b, c])| {
+            let (a, b, c) = (*a as usize, *b as usize, *c as usize);
+            if a >= points.len() || b >= points.len() || c >= points.len() {
+                return None;
+            }
+            ray_triangle_hit_distance(origin, dir, points[a], points[b], points[c])
+        })
+        .min_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal))
+}
 
 /// Error type for RevolutionBody construction and operations.
 #[derive(Debug, Clone, Error)]
@@ -291,6 +408,7 @@ impl<const N: usize> Embodied for RevolutionBody<N> {
     type Vertex = EmbodiedPoint3;
     type Index = EmbodiedTriangle;
     type Bounds = EmbodiedBounds;
+    type Vector = EmbodiedVector3;
 
     /// Generate surface vertices by revolving the profile.
     ///
@@ -396,6 +514,63 @@ impl<const N: usize> Embodied for RevolutionBody<N> {
         }
 
         (min, max)
+    }
+
+    fn material_volume_m3(&self, resolution: usize) -> f64 {
+        let sampled = self.sampled_profile_points(resolution.max(2));
+        if sampled.len() < 2 {
+            return 0.0;
+        }
+
+        let mut integral = 0.0;
+        for window in sampled.windows(2) {
+            let (h0, r0) = window[0];
+            let (h1, r1) = window[1];
+            if !(h0.is_finite() && h1.is_finite() && r0.is_finite() && r1.is_finite()) {
+                continue;
+            }
+
+            let dh = (h1 - h0).abs();
+            let r0_sq = r0 * r0;
+            let r1_sq = r1 * r1;
+            integral += 0.5 * (r0_sq + r1_sq) * dh;
+        }
+
+        std::f64::consts::PI * integral
+    }
+
+    fn cavity_volume_m3(&self, resolution: usize) -> Option<f64> {
+        let resolution = resolution.max(3);
+        let points = self.sample_points(resolution);
+        let indices = self.mesh_indices(resolution);
+        cavity_volume_from_shell(&points, &indices)
+    }
+
+    fn surface_normal_at_vertex(
+        &self,
+        resolution: usize,
+        vertex_index: usize,
+    ) -> Option<Self::Vector> {
+        let points = self.sample_points(resolution.max(3));
+        if points.is_empty() {
+            return None;
+        }
+        let indices = self.mesh_indices(resolution.max(3));
+        area_weighted_vertex_normal(&points, &indices, vertex_index)
+    }
+
+    fn material_thickness_at_vertex(
+        &self,
+        resolution: usize,
+        vertex_index: usize,
+        direction: Self::Vector,
+    ) -> Option<f64> {
+        let points = self.sample_points(resolution.max(3));
+        if points.is_empty() {
+            return None;
+        }
+        let indices = self.mesh_indices(resolution.max(3));
+        directional_thickness_from_mesh(&points, &indices, vertex_index, direction)
     }
 
     fn opt_resolution(&self) -> usize {
@@ -694,5 +869,65 @@ mod tests {
         let body = RevolutionBody::new([seg], RevolutionAxis::Z).expect("body");
         let (min, max) = body.bounding_box(8);
         assert!(min.z <= 0.0 && max.z >= 1.0);
+    }
+
+    #[test]
+    fn test_material_volume_cylinder() {
+        let body = make_body_constant(1.0, 1.0);
+        let volume = body.material_volume_m3(64);
+        assert!((volume - std::f64::consts::PI).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_material_volume_linear_profile_approx() {
+        let body = make_body_linear(1.0, 1.0, 0.0, RevolutionAxis::Y);
+        let volume = body.material_volume_m3(256);
+        let expected = std::f64::consts::PI / 3.0;
+        assert!((volume - expected).abs() < 3e-5);
+    }
+
+    #[test]
+    fn test_cavity_volume_matches_open_pipe_shell() {
+        let resolution = 128;
+        let body = make_body_constant(1.0, 1.0);
+        let cavity = body.cavity_volume_m3(resolution).expect("cavity");
+        let expected =
+            0.5 * resolution as f64 * (2.0 * std::f64::consts::PI / resolution as f64).sin();
+        assert!((cavity - expected).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_surface_normal_invalid_vertex_is_none() {
+        let body = make_body_constant(1.0, 1.0);
+        assert_eq!(body.surface_normal_at_vertex(16, usize::MAX), None);
+    }
+
+    #[test]
+    fn test_surface_normal_is_finite() {
+        let body = make_body_constant(1.0, 1.0);
+        let normal = body.surface_normal_at_vertex(16, 0).expect("normal");
+        assert!(normal.x.is_finite() && normal.y.is_finite() && normal.z.is_finite());
+        assert!((normal.norm() - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_material_thickness_rejects_zero_direction() {
+        let body = make_body_constant(1.0, 1.0);
+        assert_eq!(
+            body.material_thickness_at_vertex(16, 0, Vector3::zeros()),
+            None
+        );
+    }
+
+    #[test]
+    fn test_material_thickness_positive_for_inward_probe() {
+        let body = make_body_constant(1.0, 1.0);
+        let points = body.sample_points(16);
+        let p0 = points[0];
+        let inward = Vector3::new(-p0.x, -p0.y, -p0.z);
+        let t = body
+            .material_thickness_at_vertex(16, 0, inward)
+            .expect("thickness");
+        assert!(t > 0.0);
     }
 }

@@ -1,9 +1,14 @@
-use crate::geometry::embodied::{Embodied, EmbodiedBounds, EmbodiedPoint3, EmbodiedTriangle};
+use crate::geometry::embodied::{
+    boundary_edges, cavity_volume_from_shell, mesh_signed_volume, Embodied, EmbodiedBounds,
+    EmbodiedPoint3, EmbodiedTriangle, EmbodiedVector3,
+};
+use nalgebra::Vector3;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 
 const DIRECTION_EPSILON: f64 = 1e-9;
 const EDGE_TAPER_RINGS: usize = 2;
+const RAY_EPSILON: f64 = 1e-9;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ThicknessMapPoint {
@@ -127,29 +132,6 @@ fn normalize_points(mut points: Vec<ThicknessMapPoint>) -> Vec<ThicknessMapPoint
     normalized
 }
 
-fn mesh_edges(indices: &[EmbodiedTriangle]) -> Vec<(usize, usize)> {
-    let mut edges = Vec::with_capacity(indices.len() * 3);
-    for [a, b, c] in indices {
-        edges.push((*a as usize, *b as usize));
-        edges.push((*b as usize, *c as usize));
-        edges.push((*c as usize, *a as usize));
-    }
-    edges
-}
-
-fn boundary_edges(indices: &[EmbodiedTriangle]) -> Vec<(usize, usize)> {
-    let mut edge_counts: HashMap<(usize, usize), usize> = HashMap::new();
-    for (a, b) in mesh_edges(indices) {
-        let key = if a <= b { (a, b) } else { (b, a) };
-        *edge_counts.entry(key).or_insert(0) += 1;
-    }
-
-    edge_counts
-        .into_iter()
-        .filter_map(|(edge, count)| if count == 1 { Some(edge) } else { None })
-        .collect()
-}
-
 fn boundary_taper_factors(
     indices: &[EmbodiedTriangle],
     vertex_count: usize,
@@ -169,10 +151,17 @@ fn boundary_taper_factors(
     }
 
     let mut adjacency = vec![Vec::<usize>::new(); vertex_count];
-    for (a, b) in mesh_edges(indices) {
-        if a < vertex_count && b < vertex_count {
-            adjacency[a].push(b);
-            adjacency[b].push(a);
+    for [a, b, c] in indices {
+        let tri_edges = [
+            (*a as usize, *b as usize),
+            (*b as usize, *c as usize),
+            (*c as usize, *a as usize),
+        ];
+        for (start, end) in tri_edges {
+            if start < vertex_count && end < vertex_count {
+                adjacency[start].push(end);
+                adjacency[end].push(start);
+            }
         }
     }
 
@@ -215,6 +204,117 @@ fn boundary_taper_factors(
         .collect()
 }
 
+fn incident_triangles(
+    indices: &[EmbodiedTriangle],
+    vertex_index: usize,
+) -> Vec<(usize, [usize; 3])> {
+    indices
+        .iter()
+        .enumerate()
+        .filter_map(|(tri_idx, [a, b, c])| {
+            let tri = [*a as usize, *b as usize, *c as usize];
+            if tri.contains(&vertex_index) {
+                Some((tri_idx, tri))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn area_weighted_vertex_normal(
+    points: &[EmbodiedPoint3],
+    indices: &[EmbodiedTriangle],
+    vertex_index: usize,
+) -> Option<Vector3<f64>> {
+    if vertex_index >= points.len() {
+        return None;
+    }
+
+    let mut normal = Vector3::zeros();
+    for (_tri_idx, [a, b, c]) in incident_triangles(indices, vertex_index) {
+        if a >= points.len() || b >= points.len() || c >= points.len() {
+            continue;
+        }
+        let pa = points[a];
+        let pb = points[b];
+        let pc = points[c];
+        let tri_normal = (pb - pa).cross(&(pc - pa));
+        if tri_normal.norm_squared().is_finite() {
+            normal += tri_normal;
+        }
+    }
+
+    normal.try_normalize(RAY_EPSILON)
+}
+
+fn ray_triangle_hit_distance(
+    origin: EmbodiedPoint3,
+    direction: Vector3<f64>,
+    p0: EmbodiedPoint3,
+    p1: EmbodiedPoint3,
+    p2: EmbodiedPoint3,
+) -> Option<f64> {
+    let e1 = p1 - p0;
+    let e2 = p2 - p0;
+    let h = direction.cross(&e2);
+    let a = e1.dot(&h);
+    if a.abs() < RAY_EPSILON {
+        return None;
+    }
+
+    let f = 1.0 / a;
+    let s = origin - p0;
+    let u = f * s.dot(&h);
+    if !(0.0..=1.0).contains(&u) {
+        return None;
+    }
+
+    let q = s.cross(&e1);
+    let v = f * direction.dot(&q);
+    if v < 0.0 || u + v > 1.0 {
+        return None;
+    }
+
+    let t = f * e2.dot(&q);
+    if t > RAY_EPSILON {
+        Some(t)
+    } else {
+        None
+    }
+}
+
+fn directional_thickness_from_mesh(
+    points: &[EmbodiedPoint3],
+    indices: &[EmbodiedTriangle],
+    vertex_index: usize,
+    direction: Vector3<f64>,
+) -> Option<f64> {
+    if vertex_index >= points.len() {
+        return None;
+    }
+    let dir = direction.try_normalize(RAY_EPSILON)?;
+    let origin = points[vertex_index];
+
+    let incident: std::collections::HashSet<usize> = incident_triangles(indices, vertex_index)
+        .into_iter()
+        .map(|(idx, _)| idx)
+        .collect();
+
+    indices
+        .iter()
+        .enumerate()
+        .filter(|(tri_idx, _)| !incident.contains(tri_idx))
+        .filter_map(|(_tri_idx, [a, b, c])| {
+            let (a, b, c) = (*a as usize, *b as usize, *c as usize);
+            if a >= points.len() || b >= points.len() || c >= points.len() {
+                return None;
+            }
+            ray_triangle_hit_distance(origin, dir, points[a], points[b], points[c])
+        })
+        .min_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThickBody<B> {
     pub base: B,
@@ -232,11 +332,17 @@ impl<B> ThickBody<B> {
 
 impl<B> Embodied for ThickBody<B>
 where
-    B: Embodied<Vertex = EmbodiedPoint3, Index = EmbodiedTriangle, Bounds = EmbodiedBounds>,
+    B: Embodied<
+        Vertex = EmbodiedPoint3,
+        Index = EmbodiedTriangle,
+        Bounds = EmbodiedBounds,
+        Vector = EmbodiedVector3,
+    >,
 {
     type Vertex = EmbodiedPoint3;
     type Index = EmbodiedTriangle;
     type Bounds = EmbodiedBounds;
+    type Vector = EmbodiedVector3;
 
     fn sample_points(&self, resolution: usize) -> Vec<Self::Vertex> {
         let base_points = self.base.sample_points(resolution);
@@ -319,6 +425,69 @@ where
         (min, max)
     }
 
+    fn material_volume_m3(&self, resolution: usize) -> f64 {
+        let points = self.sample_points(resolution.max(2));
+        if points.is_empty() {
+            return 0.0;
+        }
+
+        let indices = self.mesh_indices(resolution.max(2));
+        if indices.is_empty() {
+            return 0.0;
+        }
+
+        mesh_signed_volume(&points, &indices).abs()
+    }
+
+    fn cavity_volume_m3(&self, resolution: usize) -> Option<f64> {
+        let resolution = resolution.max(2);
+        let base_indices = self.base.mesh_indices(resolution);
+        if base_indices.is_empty() {
+            return None;
+        }
+
+        let points = self.sample_points(resolution);
+        if points.is_empty() {
+            return None;
+        }
+
+        let thick_indices = self.mesh_indices(resolution);
+        let inner_start = base_indices.len();
+        let inner_end = inner_start + base_indices.len();
+        if thick_indices.len() < inner_end {
+            return None;
+        }
+
+        cavity_volume_from_shell(&points, &thick_indices[inner_start..inner_end])
+    }
+
+    fn surface_normal_at_vertex(
+        &self,
+        resolution: usize,
+        vertex_index: usize,
+    ) -> Option<Vector3<f64>> {
+        let points = self.sample_points(resolution.max(3));
+        if points.is_empty() {
+            return None;
+        }
+        let indices = self.mesh_indices(resolution.max(3));
+        area_weighted_vertex_normal(&points, &indices, vertex_index)
+    }
+
+    fn material_thickness_at_vertex(
+        &self,
+        resolution: usize,
+        vertex_index: usize,
+        direction: Vector3<f64>,
+    ) -> Option<f64> {
+        let points = self.sample_points(resolution.max(3));
+        if points.is_empty() {
+            return None;
+        }
+        let indices = self.mesh_indices(resolution.max(3));
+        directional_thickness_from_mesh(&points, &indices, vertex_index, direction)
+    }
+
     fn opt_resolution(&self) -> usize {
         self.base.opt_resolution()
     }
@@ -328,6 +497,67 @@ where
 mod tests {
     use super::*;
     use crate::geometry::{RevolutionAxis, RevolutionBody, Segment};
+
+    #[derive(Clone, Debug)]
+    struct ClosedTetra;
+
+    impl Embodied for ClosedTetra {
+        type Vertex = EmbodiedPoint3;
+        type Index = EmbodiedTriangle;
+        type Bounds = EmbodiedBounds;
+        type Vector = EmbodiedVector3;
+
+        fn sample_points(&self, _resolution: usize) -> Vec<Self::Vertex> {
+            vec![
+                EmbodiedPoint3::new(0.0, 0.0, 0.0),
+                EmbodiedPoint3::new(1.0, 0.0, 0.0),
+                EmbodiedPoint3::new(0.0, 1.0, 0.0),
+                EmbodiedPoint3::new(0.0, 0.0, 1.0),
+            ]
+        }
+
+        fn mesh_indices(&self, _resolution: usize) -> Vec<Self::Index> {
+            vec![[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]]
+        }
+
+        fn bounding_box(&self, _resolution: usize) -> Self::Bounds {
+            (
+                EmbodiedPoint3::new(0.0, 0.0, 0.0),
+                EmbodiedPoint3::new(1.0, 1.0, 1.0),
+            )
+        }
+
+        fn material_volume_m3(&self, _resolution: usize) -> f64 {
+            1.0 / 6.0
+        }
+
+        fn cavity_volume_m3(&self, _resolution: usize) -> Option<f64> {
+            None
+        }
+
+        fn surface_normal_at_vertex(
+            &self,
+            _resolution: usize,
+            vertex_index: usize,
+        ) -> Option<Self::Vector> {
+            let points = self.sample_points(4);
+            let indices = self.mesh_indices(4);
+            area_weighted_vertex_normal(&points, &indices, vertex_index)
+        }
+
+        fn material_thickness_at_vertex(
+            &self,
+            _resolution: usize,
+            _vertex_index: usize,
+            _direction: Self::Vector,
+        ) -> Option<f64> {
+            None
+        }
+
+        fn opt_resolution(&self) -> usize {
+            4
+        }
+    }
 
     fn make_body() -> RevolutionBody<1> {
         let segment = Segment::start_constant(1.0, 1.0).expect("segment");
@@ -481,5 +711,118 @@ mod tests {
             assert!((face - *base_point).norm() < 1e-10);
             assert!((back - *base_point).norm() < 1e-10);
         }
+    }
+
+    #[test]
+    fn thick_body_material_volume_is_positive() {
+        let base = make_body();
+        let map = ThicknessMap::new(vec![ThicknessMapPoint {
+            body_vertex_index: 0,
+            face_thickness: 0.08,
+            backface_thickness: 0.04,
+        }])
+        .expect("map");
+        let thick = ThickBody::new(base, map);
+
+        assert!(thick.material_volume_m3(16) > 0.0);
+    }
+
+    #[test]
+    fn thick_body_cavity_is_positive_for_open_base() {
+        let base = make_body();
+        let map = ThicknessMap::new(vec![ThicknessMapPoint {
+            body_vertex_index: 0,
+            face_thickness: 0.08,
+            backface_thickness: 0.04,
+        }])
+        .expect("map");
+        let thick = ThickBody::new(base, map);
+
+        let cavity = thick.cavity_volume_m3(64).expect("cavity");
+        assert!(cavity.is_finite());
+        assert!(cavity > 0.0);
+        assert!(cavity < std::f64::consts::PI);
+    }
+
+    #[test]
+    fn thick_body_cavity_is_positive_for_bowl_profile() {
+        let segment = Segment::start_parabolic(1.0, 0.35, 0.0, 0.55).expect("segment");
+        let base = RevolutionBody::new([segment], RevolutionAxis::Y).expect("body");
+        let map = ThicknessMap::new(vec![ThicknessMapPoint {
+            body_vertex_index: 0,
+            face_thickness: 0.06,
+            backface_thickness: 0.05,
+        }])
+        .expect("map");
+        let thick = ThickBody::new(base, map);
+
+        let cavity = thick.cavity_volume_m3(96).expect("cavity");
+        assert!(cavity.is_finite());
+        assert!(cavity > 0.0);
+    }
+
+    #[test]
+    fn thick_body_cavity_is_some_for_closed_base() {
+        let map = ThicknessMap::new(vec![ThicknessMapPoint {
+            body_vertex_index: 0,
+            face_thickness: 0.05,
+            backface_thickness: 0.03,
+        }])
+        .expect("map");
+        let thick = ThickBody::new(ClosedTetra, map);
+
+        let cavity = thick.cavity_volume_m3(8).expect("cavity");
+        assert!(cavity > 0.0);
+    }
+
+    #[test]
+    fn thick_body_surface_normal_invalid_vertex_is_none() {
+        let base = make_body();
+        let map = ThicknessMap::new(vec![ThicknessMapPoint {
+            body_vertex_index: 0,
+            face_thickness: 0.05,
+            backface_thickness: 0.05,
+        }])
+        .expect("map");
+        let thick = ThickBody::new(base, map);
+
+        assert_eq!(thick.surface_normal_at_vertex(16, usize::MAX), None);
+    }
+
+    #[test]
+    fn thick_body_thickness_rejects_zero_direction() {
+        let base = make_body();
+        let map = ThicknessMap::new(vec![ThicknessMapPoint {
+            body_vertex_index: 0,
+            face_thickness: 0.08,
+            backface_thickness: 0.04,
+        }])
+        .expect("map");
+        let thick = ThickBody::new(base, map);
+
+        assert_eq!(
+            thick.material_thickness_at_vertex(16, 0, Vector3::zeros()),
+            None
+        );
+    }
+
+    #[test]
+    fn thick_body_thickness_positive_for_inward_probe() {
+        let base = make_body();
+        let map = ThicknessMap::new(vec![ThicknessMapPoint {
+            body_vertex_index: 0,
+            face_thickness: 0.08,
+            backface_thickness: 0.04,
+        }])
+        .expect("map");
+        let thick = ThickBody::new(base, map);
+
+        let points = thick.sample_points(16);
+        let p0 = points[0];
+        let inward = Vector3::new(-p0.x, -p0.y, -p0.z);
+        let t = thick
+            .material_thickness_at_vertex(16, 0, inward)
+            .expect("thickness");
+        assert!(t > 0.0);
     }
 }

@@ -3,6 +3,13 @@ use common::geometry::{
     RevolutionBody, Segment, ThickBody,
 };
 use eframe::egui::{self, Color32, Shape, Stroke};
+use nalgebra::Vector3;
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum ProbeMode {
+    Normal,
+    Manual,
+}
 
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
@@ -194,6 +201,9 @@ struct ThickRevolutionBodyApp {
     validation_error: Option<String>,
     camera_pitch: f64,
     camera_yaw: f64,
+    selected_vertex_index: usize,
+    probe_mode: ProbeMode,
+    manual_direction: [f64; 3],
 }
 
 impl Default for ThickRevolutionBodyApp {
@@ -232,6 +242,9 @@ impl Default for ThickRevolutionBodyApp {
             validation_error: None,
             camera_pitch: 0.5,
             camera_yaw: 0.7,
+            selected_vertex_index: 0,
+            probe_mode: ProbeMode::Normal,
+            manual_direction: [0.0, -1.0, 0.0],
         }
     }
 }
@@ -284,16 +297,6 @@ impl ThickRevolutionBodyApp {
         Ok((body.clone(), ThickBody::new(body, thickness_map)))
     }
 
-    fn get_mesh_stats(&self) -> Option<(usize, usize)> {
-        match self.try_build_scene() {
-            Ok((_body, thick)) => Some((
-                thick.sample_points(self.resolution).len(),
-                thick.mesh_indices(self.resolution).len(),
-            )),
-            Err(_) => None,
-        }
-    }
-
     fn sample_thickness_curves(
         &self,
         body: &RevolutionBody<2>,
@@ -335,65 +338,138 @@ impl ThickRevolutionBodyApp {
         Ok(out)
     }
 
+    fn requested_probe_direction(
+        &self,
+        surface_normal: Option<Vector3<f64>>,
+    ) -> Option<Vector3<f64>> {
+        match self.probe_mode {
+            ProbeMode::Normal => surface_normal,
+            ProbeMode::Manual => Vector3::new(
+                self.manual_direction[0],
+                self.manual_direction[1],
+                self.manual_direction[2],
+            )
+            .try_normalize(1e-9),
+        }
+    }
+
     fn show_controls(&mut self, ui: &mut egui::Ui) {
-        self.profile_config_1.show_controls(ui, "Profile Segment 1");
+        let scene = self.try_build_scene();
+        let vertex_count = scene
+            .as_ref()
+            .ok()
+            .map(|(_, thick_body)| thick_body.sample_points(self.resolution).len())
+            .unwrap_or(0);
+        let max_vertex_index = vertex_count.saturating_sub(1);
 
-        ui.separator();
-        self.profile_config_2.show_controls(ui, "Profile Segment 2");
-
-        ui.separator();
-        self.face_thickness_config
-            .show_controls(ui, "Face Thickness Segment");
-
-        ui.separator();
-        self.backface_thickness_config
-            .show_controls(ui, "Backface Thickness Segment");
-
-        ui.separator();
-        ui.heading("Revolution Axis");
-        for axis in [RevolutionAxis::X, RevolutionAxis::Y, RevolutionAxis::Z] {
-            let label = match axis {
-                RevolutionAxis::X => "X",
-                RevolutionAxis::Y => "Y",
-                RevolutionAxis::Z => "Z",
-            };
-            ui.selectable_value(&mut self.axis, axis, label);
+        if vertex_count > 0 {
+            self.selected_vertex_index = self.selected_vertex_index.min(max_vertex_index);
+        } else {
+            self.selected_vertex_index = 0;
         }
 
-        ui.separator();
-        ui.heading("Mesh Configuration");
-        ui.add(egui::Slider::new(&mut self.resolution, 4..=48).text("Resolution"));
+        egui::CollapsingHeader::new("Profile Segment 1")
+            .id_salt("profile_1")
+            .default_open(true)
+            .show(ui, |ui| {
+                self.profile_config_1.show_controls(ui, "Profile Segment 1");
+            });
 
-        ui.separator();
-        ui.heading("Camera Control");
-        ui.add(
-            egui::Slider::new(
-                &mut self.camera_pitch,
-                -std::f64::consts::PI..=std::f64::consts::PI,
-            )
-            .text("Pitch"),
-        );
-        ui.add(
-            egui::Slider::new(
-                &mut self.camera_yaw,
-                -std::f64::consts::PI..=std::f64::consts::PI,
-            )
-            .text("Yaw"),
-        );
+        egui::CollapsingHeader::new("Profile Segment 2")
+            .id_salt("profile_2")
+            .default_open(true)
+            .show(ui, |ui| {
+                self.profile_config_2.show_controls(ui, "Profile Segment 2");
+            });
 
-        ui.separator();
+        egui::CollapsingHeader::new("Face Thickness Segment")
+            .id_salt("face_thickness")
+            .default_open(false)
+            .show(ui, |ui| {
+                self.face_thickness_config
+                    .show_controls(ui, "Face Thickness Segment");
+            });
 
-        match self.try_build_scene() {
-            Ok(_) => {
-                ui.colored_label(Color32::GREEN, "✓ Valid configuration");
-                self.validation_error = None;
+        egui::CollapsingHeader::new("Backface Thickness Segment")
+            .id_salt("backface_thickness")
+            .default_open(false)
+            .show(ui, |ui| {
+                self.backface_thickness_config
+                    .show_controls(ui, "Backface Thickness Segment");
+            });
+
+        egui::CollapsingHeader::new("Revolution Axis")
+            .id_salt("axis")
+            .default_open(false)
+            .show(ui, |ui| {
+                for axis in [RevolutionAxis::X, RevolutionAxis::Y, RevolutionAxis::Z] {
+                    let label = match axis {
+                        RevolutionAxis::X => "X",
+                        RevolutionAxis::Y => "Y",
+                        RevolutionAxis::Z => "Z",
+                    };
+                    ui.selectable_value(&mut self.axis, axis, label);
+                }
+            });
+
+        egui::CollapsingHeader::new("Mesh Configuration")
+            .id_salt("mesh_config")
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.add(egui::Slider::new(&mut self.resolution, 4..=48).text("Resolution"));
+            });
+
+        egui::CollapsingHeader::new("Camera Control")
+            .id_salt("camera")
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.add(
+                    egui::Slider::new(
+                        &mut self.camera_pitch,
+                        -std::f64::consts::PI..=std::f64::consts::PI,
+                    )
+                    .text("Pitch"),
+                );
+                ui.add(
+                    egui::Slider::new(
+                        &mut self.camera_yaw,
+                        -std::f64::consts::PI..=std::f64::consts::PI,
+                    )
+                    .text("Yaw"),
+                );
+            });
+
+        egui::CollapsingHeader::new("Vertex Analysis")
+            .id_salt("vertex_analysis")
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.label(format!("Available Vertices: {}", vertex_count));
+                ui.add_enabled(
+                    vertex_count > 0,
+                    egui::Slider::new(&mut self.selected_vertex_index, 0..=max_vertex_index)
+                        .step_by(1.0)
+                        .text("Vertex Index"),
+                );
 
                 ui.separator();
-                ui.heading("Mesh Statistics");
-                if let Some((vertex_count, triangle_count)) = self.get_mesh_stats() {
-                    ui.label(format!("Vertices: {}", vertex_count));
-                    ui.label(format!("Triangles: {}", triangle_count));
+                ui.label("Probe Direction:");
+
+                ui.selectable_value(&mut self.probe_mode, ProbeMode::Normal, "Use Surface Normal");
+                ui.selectable_value(&mut self.probe_mode, ProbeMode::Manual, "Manual Direction");
+
+                if self.probe_mode == ProbeMode::Manual {
+                    ui.add(egui::Slider::new(&mut self.manual_direction[0], -1.0..=1.0).text("Dir X"));
+                    ui.add(egui::Slider::new(&mut self.manual_direction[1], -1.0..=1.0).text("Dir Y"));
+                    ui.add(egui::Slider::new(&mut self.manual_direction[2], -1.0..=1.0).text("Dir Z"));
                 }
+            });
+
+        ui.separator();
+
+        match scene {
+            Ok((_, _thick_body)) => {
+                ui.colored_label(Color32::GREEN, "✓ Valid configuration");
+                self.validation_error = None;
             }
             Err(err) => {
                 ui.colored_label(Color32::LIGHT_RED, format!("✗ {}", err));
@@ -534,7 +610,15 @@ fn draw_2d_thickness_preview(ui: &mut egui::Ui, samples: &[(f64, f64, f64)]) {
     );
 }
 
-fn draw_3d_mesh<M>(ui: &mut egui::Ui, mesh: &M, pitch: f64, yaw: f64, resolution: usize)
+fn draw_3d_mesh<M>(
+    ui: &mut egui::Ui,
+    mesh: &M,
+    pitch: f64,
+    yaw: f64,
+    resolution: usize,
+    selected_vertex: Option<usize>,
+    selected_probe_direction: Option<Vector3<f64>>,
+)
 where
     M: Embodied<Vertex = EmbodiedPoint3, Index = EmbodiedTriangle>,
 {
@@ -586,6 +670,21 @@ where
     }
 
     let scale = 0.42_f32 * plot_rect.width().min(plot_rect.height()) / max_extent as f32;
+    let project_point = |point: EmbodiedPoint3| {
+        let x1 = point.x * cos_yaw + point.z * sin_yaw;
+        let z1 = -point.x * sin_yaw + point.z * cos_yaw;
+        let y1 = point.y * cos_pitch - z1 * sin_pitch;
+        let z2 = point.y * sin_pitch + z1 * cos_pitch;
+
+        (
+            egui::pos2(
+                plot_rect.center().x + x1 as f32 * scale,
+                plot_rect.center().y - y1 as f32 * scale,
+            ),
+            z2,
+        )
+    };
+
     for (screen_pt, _) in &mut projected {
         screen_pt.x = plot_rect.center().x + screen_pt.x * scale;
         screen_pt.y = plot_rect.center().y - screen_pt.y * scale;
@@ -669,6 +768,30 @@ where
             egui::Stroke::new(width, line_color),
         );
     }
+
+    // Draw selected vertex highlight
+    if let Some(selected_idx) = selected_vertex {
+        if selected_idx < projected.len() {
+            if let Some(probe_direction) = selected_probe_direction {
+                let start_world = points[selected_idx];
+                let normal_length = 0.18 * max_extent.max(1.0);
+                let end_world = start_world + probe_direction * normal_length;
+                let start_screen = projected[selected_idx].0;
+                let end_screen = project_point(end_world).0;
+
+                painter.line_segment(
+                    [start_screen, end_screen],
+                    Stroke::new(1.5_f32, Color32::from_rgb(255, 196, 64)),
+                );
+                painter.circle_filled(end_screen, 2.0_f32, Color32::from_rgb(255, 196, 64));
+            }
+
+            let vertex_pos = projected[selected_idx].0;
+            let radius = 3.5_f32;
+            painter.circle_filled(vertex_pos, radius, Color32::YELLOW);
+            painter.circle_stroke(vertex_pos, radius, Stroke::new(1.25_f32, Color32::GOLD));
+        }
+    }
 }
 
 impl eframe::App for ThickRevolutionBodyApp {
@@ -684,6 +807,40 @@ impl eframe::App for ThickRevolutionBodyApp {
 
         egui::CentralPanel::default().show(ctx, |ui| match self.try_build_scene() {
             Ok((body, thick_body)) => {
+                let selected_normal = thick_body
+                    .surface_normal_at_vertex(self.resolution, self.selected_vertex_index);
+                let requested_probe_direction = self.requested_probe_direction(selected_normal);
+                let (display_probe_direction, thickness_result) = match requested_probe_direction {
+                    Some(direction) => {
+                        let forward = thick_body.material_thickness_at_vertex(
+                            self.resolution,
+                            self.selected_vertex_index,
+                            direction,
+                        );
+                        if self.probe_mode == ProbeMode::Normal {
+                            match forward {
+                                Some(thickness) => (Some(direction), Some(thickness)),
+                                None => {
+                                    let reverse_direction = -direction;
+                                    match thick_body.material_thickness_at_vertex(
+                                        self.resolution,
+                                        self.selected_vertex_index,
+                                        reverse_direction,
+                                    ) {
+                                        Some(thickness) => {
+                                            (Some(reverse_direction), Some(thickness))
+                                        }
+                                        None => (Some(direction), None),
+                                    }
+                                }
+                            }
+                        } else {
+                            (Some(direction), forward)
+                        }
+                    }
+                    None => (None, None),
+                };
+
                 ui.columns(2, |cols| {
                     cols[0].heading("2D Profile Preview (2 profile segments)");
                     cols[0].group(|ui| {
@@ -709,22 +866,90 @@ impl eframe::App for ThickRevolutionBodyApp {
                 ui.separator();
                 ui.heading("3D Thick Mesh Preview");
                 ui.label(
-                    "Filled render: outside (warm), inside (cool), rim (green) + wireframe overlay",
+                    "Filled render: outside (warm), inside (cool), rim (green) + wireframe overlay; selected vertex in yellow",
                 );
-                draw_3d_mesh(
-                    ui,
-                    &thick_body,
-                    self.camera_pitch,
-                    self.camera_yaw,
-                    self.resolution,
-                );
+                
+                ui.columns(2, |cols| {
+                    // 3D Mesh on left
+                    cols[0].group(|ui| {
+                        draw_3d_mesh(
+                            ui,
+                            &thick_body,
+                            self.camera_pitch,
+                            self.camera_yaw,
+                            self.resolution,
+                            Some(self.selected_vertex_index),
+                            display_probe_direction,
+                        );
+                    });
 
-                if let Some((stats_vertices, stats_triangles)) = self.get_mesh_stats() {
-                    ui.label(format!(
-                        "Mesh: {} vertices, {} triangles",
-                        stats_vertices, stats_triangles
-                    ));
-                }
+                    // Stats panel on right
+                    cols[1].group(|ui| {
+                        ui.heading("Embodied Stats");
+                        
+                        // Material volume
+                        let mat_vol = thick_body.material_volume_m3(self.resolution);
+                        ui.label(format!("Material Volume: {:.6} m³", mat_vol));
+
+                        // Cavity volume
+                        match thick_body.cavity_volume_m3(self.resolution) {
+                            Some(cav_vol) => {
+                                ui.label(format!("Cavity Volume: {:.6} m³", cav_vol));
+                            }
+                            None => {
+                                ui.label("Cavity Volume: (unavailable)");
+                            }
+                        }
+
+                        ui.separator();
+                        ui.heading("Vertex Probes");
+                        ui.label(format!("Selected Index: {}", self.selected_vertex_index));
+
+                        // Vertex position
+                        let points = thick_body.sample_points(self.resolution);
+                        if self.selected_vertex_index < points.len() {
+                            let pos = points[self.selected_vertex_index];
+                            ui.label(format!("Pos X: {:.6}", pos.x));
+                            ui.label(format!("Pos Y: {:.6}", pos.y));
+                            ui.label(format!("Pos Z: {:.6}", pos.z));
+
+                            ui.separator();
+
+                            // Surface normal
+                            match selected_normal {
+                                Some(normal) => {
+                                    ui.label(format!("Normal X: {:.6}", normal.x));
+                                    ui.label(format!("Normal Y: {:.6}", normal.y));
+                                    ui.label(format!("Normal Z: {:.6}", normal.z));
+                                }
+                                None => {
+                                    ui.colored_label(Color32::LIGHT_RED, "Normal: (invalid vertex)");
+                                }
+                            }
+
+                            ui.separator();
+
+                            if let Some(dir) = display_probe_direction {
+                                ui.label(format!("Probe Dir X: {:.6}", dir.x));
+                                ui.label(format!("Probe Dir Y: {:.6}", dir.y));
+                                ui.label(format!("Probe Dir Z: {:.6}", dir.z));
+
+                                match thickness_result {
+                                    Some(thickness) => {
+                                        ui.label(format!("Thickness: {:.6} m", thickness));
+                                    }
+                                    None => {
+                                        ui.colored_label(Color32::LIGHT_RED, "Thickness: (no hit)");
+                                    }
+                                }
+                            } else {
+                                ui.colored_label(Color32::LIGHT_RED, "Thickness: (invalid direction)");
+                            }
+                        } else {
+                            ui.colored_label(Color32::LIGHT_RED, "Vertex index out of bounds");
+                        }
+                    });
+                });
             }
             Err(_) => {
                 ui.vertical(|ui| {

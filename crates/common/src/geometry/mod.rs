@@ -1,9 +1,11 @@
 mod embodied;
+mod memo_body;
 mod revolution_body;
 mod segment;
 mod thick_body;
 
 pub use embodied::{Embodied, EmbodiedBounds, EmbodiedPoint3, EmbodiedTriangle};
+pub use memo_body::MemoBody;
 pub use revolution_body::{RevolutionAxis, RevolutionBody, RevolutionBodyError};
 pub use segment::*;
 pub use thick_body::{

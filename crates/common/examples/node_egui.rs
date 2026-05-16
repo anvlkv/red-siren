@@ -1,786 +1,710 @@
-// #![allow(clippy::cast_lossless)]
-// use common::config::materials::Material;
-// use common::config::{Node, Segment};
-// use eframe::egui::{self, Color32, Pos2, Sense, Shape, Stroke};
-// use mint::Point2;
+use common::body::materials::{Material, Medium};
+use common::config::{Node, NodeComputedDebug, NodeModelBuilders};
+use common::egui_helpers::{draw_xy_line_chart, run_native_app};
+use eframe::egui::{self, Color32, Pos2, Rect, Sense, Shape, Stroke};
+use nalgebra::{Point3, Vector3};
 
-// // ─── constants ───────────────────────────────────────────────────────────────
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ExampleShapePreset {
+    Bell,
+    Bowl,
+    Bottle,
+}
 
-// const SEGMENT_NAMES: [&str; 5] = ["Crown", "Upper body", "Mid-body", "Shoulder", "Rim"];
-// const INNER_COLOR: Color32 = Color32::from_rgb(102, 178, 255);
-// const OUTER_COLOR: Color32 = Color32::from_rgb(80, 200, 130);
-// const BASELINE_COLOR: Color32 = Color32::from_rgb(245, 203, 92);
-// const BG_COLOR: Color32 = Color32::from_rgb(18, 20, 26);
-// const AXIS_COLOR: Color32 = Color32::from_rgba_premultiplied(100, 100, 120, 60);
-// const MIRROR_INNER_COLOR: Color32 = Color32::from_rgba_premultiplied(60, 70, 80, 10);
-// const MIRROR_OUTER_COLOR: Color32 = Color32::from_rgba_premultiplied(60, 70, 80, 10);
-// const MIRROR_WALL_COLOR: Color32 = Color32::from_rgba_premultiplied(60, 70, 80, 10);
+fn main() -> eframe::Result<()> {
+    run_native_app("Node inspector", [1480.0, 980.0], |_cc| {
+        NodeInspectorApp::default()
+    })
+}
 
-// // ─── segment config widget ────────────────────────────────────────────────────
+struct NodeInspectorApp {
+    builders: NodeModelBuilders,
+    active_preset: ExampleShapePreset,
+    bowl_material: Material,
+    clapper_material: Material,
+    medium: Medium,
+    resolution: usize,
+    camera_yaw: f64,
+    camera_pitch: f64,
+    zoom: f64,
+    pan_x: f32,
+    pan_y: f32,
+    wireframe: bool,
+    last_error: Option<String>,
+}
 
-// #[derive(Clone, Copy, PartialEq, Debug)]
-// enum CurveKind {
-//     Line,
-//     Constant,
-//     Parabolic,
-//     Hyperbolic,
-//     ArcSweep,
-// }
+#[derive(Clone, Copy)]
+struct ShapeControlValues {
+    height: f64,
+    radius_0: f64,
+    radius_1: f64,
+    radius_2: f64,
+    radius_3: f64,
+    radius_4: f64,
+    radius_5: f64,
+    profile_bias: f64,
+    segment_bias_0: f64,
+    segment_bias_1: f64,
+    segment_bias_2: f64,
+    segment_bias_3: f64,
+    segment_bias_4: f64,
+    sampling_density: f64,
+}
 
-// impl CurveKind {
-//     fn label(self) -> &'static str {
-//         match self {
-//             Self::Line => "Line",
-//             Self::Constant => "Constant",
-//             Self::Parabolic => "Parabolic",
-//             Self::Hyperbolic => "Hyperbolic",
-//             Self::ArcSweep => "ArcSweep",
-//         }
-//     }
-// }
+impl Default for NodeInspectorApp {
+    fn default() -> Self {
+        Self {
+            builders: NodeModelBuilders::default(),
+            active_preset: ExampleShapePreset::Bowl,
+            bowl_material: Material {
+                density_kg_per_m3: 8800.0,
+                poisson_ratio: 0.34,
+                youngs_modulus_pa: 1.1e11,
+            },
+            clapper_material: Material {
+                density_kg_per_m3: 7850.0,
+                poisson_ratio: 0.29,
+                youngs_modulus_pa: 2.0e11,
+            },
+            medium: Medium {
+                density_kg_per_m3: 1.225,
+                speed_of_sound_m_per_s: 343.0,
+                viscosity_pa_s: 1.8e-5,
+                impedance_m_rayl: 420.0,
+            },
+            resolution: 40,
+            camera_yaw: 0.65,
+            camera_pitch: 0.45,
+            zoom: 1.45,
+            pan_x: 0.0,
+            pan_y: 0.0,
+            wireframe: true,
+            last_error: None,
+        }
+    }
+}
 
-// #[derive(Clone, Debug)]
-// struct SegmentConfig {
-//     /// Axial start parameter (fixed from previous segment end, except for first segment).
-//     start: f64,
-//     /// Axial end parameter (editable).
-//     end: f64,
-//     density: f64,
-//     kind: CurveKind,
-//     // Line
-//     line_m: f64,
-//     line_b: f64,
-//     // Constant
-//     const_value: f64,
-//     // Parabolic
-//     para_a: f64,
-//     para_b: f64,
-//     para_c: f64,
-//     // Hyperbolic
-//     hyp_a: f64,
-//     hyp_b: f64,
-//     hyp_c: f64,
-//     // ArcSweep
-//     arc_center_y: f64,
-//     arc_radius: f64,
-//     arc_start_angle: f64,
-//     arc_sweep_angle: f64,
-//     arc_concave_up: bool,
-// }
+impl NodeInspectorApp {
+    fn propose_shape_values(&mut self, kind: ExampleShapePreset) {
+        self.active_preset = kind;
+        let shape = &mut self.builders.shape;
+        match kind {
+            ExampleShapePreset::Bell => {
+                shape.height_m = 0.9;
+                shape.radius_0_m = 0.07;
+                shape.radius_1_m = 0.10;
+                shape.radius_2_m = 0.18;
+                shape.radius_3_m = 0.22;
+                shape.radius_4_m = 0.24;
+                shape.radius_5_m = 0.27;
+                shape.profile_bias = 0.28;
+            }
+            ExampleShapePreset::Bowl => {
+                shape.height_m = 0.75;
+                shape.radius_0_m = 0.06;
+                shape.radius_1_m = 0.08;
+                shape.radius_2_m = 0.16;
+                shape.radius_3_m = 0.18;
+                shape.radius_4_m = 0.21;
+                shape.radius_5_m = 0.22;
+                shape.profile_bias = 0.0;
+            }
+            ExampleShapePreset::Bottle => {
+                shape.height_m = 0.95;
+                shape.radius_0_m = 0.09;
+                shape.radius_1_m = 0.16;
+                shape.radius_2_m = 0.17;
+                shape.radius_3_m = 0.13;
+                shape.radius_4_m = 0.06;
+                shape.radius_5_m = 0.05;
+                shape.profile_bias = -0.2;
+            }
+        }
+        shape.segment_bias_0 = 0.0;
+        shape.segment_bias_1 = 0.0;
+        shape.segment_bias_2 = 0.0;
+        shape.segment_bias_3 = 0.0;
+        shape.segment_bias_4 = 0.0;
+        shape.sampling_density = 24.0;
+    }
 
-// impl SegmentConfig {
-//     fn line_slope_dr_dy(&self) -> f64 {
-//         // UI exposes dy/dr for intuitive "outwardness" control.
-//         // Internal Segment::Line expects dr/dy.
-//         let dy_dr = self.line_m;
-//         if dy_dr.abs() < 1e-3 {
-//             if dy_dr.is_sign_negative() {
-//                 -1_000.0
-//             } else {
-//                 1_000.0
-//             }
-//         } else {
-//             1.0 / dy_dr
-//         }
-//     }
+    fn shape_control_values(&self) -> ShapeControlValues {
+        ShapeControlValues {
+            height: self.builders.shape.height_m,
+            radius_0: self.builders.shape.radius_0_m,
+            radius_1: self.builders.shape.radius_1_m,
+            radius_2: self.builders.shape.radius_2_m,
+            radius_3: self.builders.shape.radius_3_m,
+            radius_4: self.builders.shape.radius_4_m,
+            radius_5: self.builders.shape.radius_5_m,
+            profile_bias: self.builders.shape.profile_bias,
+            segment_bias_0: self.builders.shape.segment_bias_0,
+            segment_bias_1: self.builders.shape.segment_bias_1,
+            segment_bias_2: self.builders.shape.segment_bias_2,
+            segment_bias_3: self.builders.shape.segment_bias_3,
+            segment_bias_4: self.builders.shape.segment_bias_4,
+            sampling_density: self.builders.shape.sampling_density,
+        }
+    }
 
-//     fn with_start(start: f64, end: f64) -> Self {
-//         // Default: a gentle parabolic dome outward (r increases then levels off).
-//         let span = (end - start).max(0.01);
-//         Self {
-//             start,
-//             end,
-//             density: 12.0,
-//             kind: CurveKind::Parabolic,
-//             line_m: 0.1,
-//             line_b: 0.1,
-//             const_value: 0.2,
-//             para_a: 0.02 / span,
-//             para_b: 0.0,
-//             para_c: 0.1,
-//             hyp_a: 0.1,
-//             hyp_b: start - 0.5,
-//             hyp_c: 0.1,
-//             arc_center_y: 0.0,
-//             arc_radius: span,
-//             arc_start_angle: 0.0,
-//             arc_sweep_angle: std::f64::consts::FRAC_PI_4,
-//             arc_concave_up: false,
-//         }
-//     }
+    fn apply_shape_control_values(&mut self, controls: ShapeControlValues) {
+        self.builders.shape.height_m = controls.height;
+        self.builders.shape.radius_0_m = controls.radius_0;
+        self.builders.shape.radius_1_m = controls.radius_1;
+        self.builders.shape.radius_2_m = controls.radius_2;
+        self.builders.shape.radius_3_m = controls.radius_3;
+        self.builders.shape.radius_4_m = controls.radius_4;
+        self.builders.shape.radius_5_m = controls.radius_5;
+        self.builders.shape.profile_bias = controls.profile_bias;
+        self.builders.shape.segment_bias_0 = controls.segment_bias_0;
+        self.builders.shape.segment_bias_1 = controls.segment_bias_1;
+        self.builders.shape.segment_bias_2 = controls.segment_bias_2;
+        self.builders.shape.segment_bias_3 = controls.segment_bias_3;
+        self.builders.shape.segment_bias_4 = controls.segment_bias_4;
+        self.builders.shape.sampling_density = controls.sampling_density;
+    }
 
-//     /// Build the first segment using the start constructor family.
-//     fn build_start(&self) -> Result<Segment, String> {
-//         if self.end <= self.start {
-//             return Err(format!(
-//                 "end ({:.3}) must be > start ({:.3})",
-//                 self.end, self.start
-//             ));
-//         }
-//         match self.kind {
-//             CurveKind::Line => {
-//                 Segment::start_line(self.end - self.start, self.line_slope_dr_dy(), self.line_b)
-//             }
-//             CurveKind::Constant => Segment::start_constant(self.end - self.start, self.const_value),
-//             CurveKind::Parabolic => Segment::start_parabolic(
-//                 self.end - self.start,
-//                 self.para_a,
-//                 self.para_b,
-//                 self.para_c,
-//             ),
-//             CurveKind::Hyperbolic => {
-//                 Segment::start_hyperbolic(self.end - self.start, self.hyp_a, self.hyp_b, self.hyp_c)
-//             }
-//             CurveKind::ArcSweep => Segment::start_arc_sweep(
-//                 self.end - self.start,
-//                 self.arc_center_y,
-//                 self.arc_radius,
-//                 self.arc_start_angle,
-//                 self.arc_sweep_angle,
-//             ),
-//         }
-//         .map_err(|e| e.to_string())
-//     }
+    fn build_node_and_debug(&mut self) -> Option<(Node, NodeComputedDebug)> {
+        match self
+            .builders
+            .build_node(self.bowl_material, self.clapper_material)
+        {
+            Ok(node) => match node.computed_debug(self.resolution, &self.medium) {
+                Some(debug) => {
+                    self.last_error = None;
+                    Some((node, debug))
+                }
+                None => {
+                    self.last_error = Some("computed debug snapshot unavailable".to_string());
+                    None
+                }
+            },
+            Err(err) => {
+                self.last_error = Some(err);
+                None
+            }
+        }
+    }
 
-//     /// Build a continuation segment preserving continuity from previous segment.
-//     fn build_continuation(&self, prev: &Segment) -> Result<Segment, String> {
-//         if self.end <= prev.end {
-//             return Err(format!(
-//                 "end ({:.3}) must be > previous end ({:.3})",
-//                 self.end, prev.end
-//             ));
-//         }
-//         match self.kind {
-//             CurveKind::Line => Segment::continue_line(prev, self.end, self.density),
-//             CurveKind::Constant => Segment::continue_constant(prev, self.end, self.density),
-//             CurveKind::Parabolic => {
-//                 Segment::continue_parabolic(prev, self.end, self.const_value, self.density)
-//             }
-//             CurveKind::Hyperbolic => {
-//                 Segment::continue_hyperbolic(prev, self.end, self.hyp_b, self.density)
-//             }
-//             CurveKind::ArcSweep => Segment::continue_arc_sweep(
-//                 prev,
-//                 self.end,
-//                 self.arc_radius,
-//                 self.arc_sweep_angle,
-//                 self.arc_concave_up,
-//                 self.density,
-//             ),
-//         }
-//         .map_err(|e| e.to_string())
-//     }
+    fn left_controls(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Node Helpers");
+        ui.label("Generic profile builder with example presets");
 
-//     fn show(&mut self, ui: &mut egui::Ui, start_fixed: bool, continuation_mode: bool) {
-//         egui::Grid::new(ui.id().with("seg_grid"))
-//             .num_columns(2)
-//             .show(ui, |ui| {
-//                 if start_fixed {
-//                     ui.label("start");
-//                     ui.monospace(format!("{:.4}", self.start));
-//                     ui.end_row();
-//                 } else {
-//                     ui.label("start");
-//                     ui.add(egui::DragValue::new(&mut self.start).speed(0.01));
-//                     ui.end_row();
-//                 }
-//                 ui.label("end");
-//                 ui.add(egui::DragValue::new(&mut self.end).speed(0.01));
-//                 ui.end_row();
-//                 ui.label("density");
-//                 ui.add(egui::Slider::new(&mut self.density, 1.0..=64.0));
-//                 ui.end_row();
-//             });
+        ui.add(egui::Slider::new(&mut self.resolution, 12..=96).text("analysis resolution"));
 
-//         ui.separator();
-//         egui::ComboBox::from_id_salt(ui.id().with("kind"))
-//             .selected_text(self.kind.label())
-//             .show_ui(ui, |ui| {
-//                 for k in [
-//                     CurveKind::Line,
-//                     CurveKind::Constant,
-//                     CurveKind::Parabolic,
-//                     CurveKind::Hyperbolic,
-//                     CurveKind::ArcSweep,
-//                 ] {
-//                     ui.selectable_value(&mut self.kind, k, k.label());
-//                 }
-//             });
+        egui::CollapsingHeader::new("Shape Profile")
+            .id_salt("node_shape_profile")
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button("Propose Bell").clicked() {
+                        self.propose_shape_values(ExampleShapePreset::Bell);
+                    }
+                    if ui.button("Propose Bowl").clicked() {
+                        self.propose_shape_values(ExampleShapePreset::Bowl);
+                    }
+                    if ui.button("Propose Bottle").clicked() {
+                        self.propose_shape_values(ExampleShapePreset::Bottle);
+                    }
+                });
 
-//         ui.separator();
-//         match self.kind {
-//             CurveKind::Line => {
-//                 if continuation_mode {
-//                     ui.small("line continuation keeps C1 continuity from previous segment");
-//                 } else {
-//                     ui.add(egui::Slider::new(&mut self.line_m, -5.0..=5.0).text("dy/dr (slope)"));
-//                     ui.add(egui::Slider::new(&mut self.line_b, -2.0..=2.0).text("r(y=0)"));
-//                     ui.small(format!("internal dr/dy = {:.3}", self.line_slope_dr_dy()));
-//                 }
-//             }
-//             CurveKind::Constant => {
-//                 if continuation_mode {
-//                     ui.small("constant continuation requires near-zero previous slope");
-//                 } else {
-//                     ui.add(
-//                         egui::Slider::new(&mut self.const_value, -2.0..=2.0).text("value (radius)"),
-//                     );
-//                 }
-//             }
-//             CurveKind::Parabolic => {
-//                 if continuation_mode {
-//                     ui.add(
-//                         egui::Slider::new(&mut self.const_value, -2.0..=2.0)
-//                             .text("to_value (end radius)"),
-//                     );
-//                 } else {
-//                     ui.add(egui::Slider::new(&mut self.para_a, -2.0..=2.0).text("a"));
-//                     ui.add(egui::Slider::new(&mut self.para_b, -5.0..=5.0).text("b"));
-//                     ui.add(egui::Slider::new(&mut self.para_c, -2.0..=2.0).text("c"));
-//                 }
-//             }
-//             CurveKind::Hyperbolic => {
-//                 if continuation_mode {
-//                     ui.add(
-//                         egui::DragValue::new(&mut self.hyp_b)
-//                             .speed(0.05)
-//                             .prefix("pole_t "),
-//                     );
-//                 } else {
-//                     ui.add(egui::Slider::new(&mut self.hyp_a, -2.0..=2.0).text("a"));
-//                     ui.add(
-//                         egui::DragValue::new(&mut self.hyp_b)
-//                             .speed(0.05)
-//                             .prefix("b (pole) "),
-//                     );
-//                     ui.add(egui::Slider::new(&mut self.hyp_c, -2.0..=2.0).text("c"));
-//                 }
-//                 if self.hyp_b > self.start && self.hyp_b < self.end {
-//                     ui.colored_label(
-//                         Color32::from_rgb(220, 180, 60),
-//                         "pole must be outside [start, end]",
-//                     );
-//                 }
-//             }
-//             CurveKind::ArcSweep => {
-//                 ui.add(egui::Slider::new(&mut self.arc_center_y, -5.0..=5.0).text("center_y"));
-//                 ui.add(egui::Slider::new(&mut self.arc_radius, 0.05..=5.0).text("radius"));
-//                 ui.add(
-//                     egui::Slider::new(
-//                         &mut self.arc_sweep_angle,
-//                         -std::f64::consts::TAU..=std::f64::consts::TAU,
-//                     )
-//                     .text("sweep_angle (rad)"),
-//                 );
-//                 if continuation_mode {
-//                     ui.checkbox(&mut self.arc_concave_up, "concave_up");
-//                 } else {
-//                     ui.add(
-//                         egui::Slider::new(
-//                             &mut self.arc_start_angle,
-//                             -std::f64::consts::PI..=std::f64::consts::PI,
-//                         )
-//                         .text("start_angle (rad)"),
-//                     );
-//                 }
-//             }
-//         }
-//     }
-// }
+                let mut controls = self.shape_control_values();
+                ui.add(egui::Slider::new(&mut controls.height, 0.3..=1.8).text("height"));
+                ui.add(egui::Slider::new(&mut controls.radius_0, 0.005..=0.45).text("radius 0"));
+                ui.add(egui::Slider::new(&mut controls.radius_1, 0.005..=0.55).text("radius 1"));
+                ui.add(egui::Slider::new(&mut controls.radius_2, 0.005..=0.65).text("radius 2"));
+                ui.add(egui::Slider::new(&mut controls.radius_3, 0.005..=0.65).text("radius 3"));
+                ui.add(egui::Slider::new(&mut controls.radius_4, 0.005..=0.65).text("radius 4"));
+                ui.add(egui::Slider::new(&mut controls.radius_5, 0.005..=0.65).text("radius 5"));
+                ui.add(
+                    egui::Slider::new(&mut controls.profile_bias, -1.0..=1.0).text("profile bias"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut controls.segment_bias_0, -1.0..=1.0)
+                        .text("segment bias 0"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut controls.segment_bias_1, -1.0..=1.0)
+                        .text("segment bias 1"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut controls.segment_bias_2, -1.0..=1.0)
+                        .text("segment bias 2"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut controls.segment_bias_3, -1.0..=1.0)
+                        .text("segment bias 3"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut controls.segment_bias_4, -1.0..=1.0)
+                        .text("segment bias 4"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut controls.sampling_density, 2.0..=64.0)
+                        .text("profile density"),
+                );
+                self.apply_shape_control_values(controls);
+            });
 
-// // ─── presets ─────────────────────────────────────────────────────────────────
+        egui::CollapsingHeader::new("Clapper")
+            .id_salt("node_clapper")
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.add(
+                    egui::Slider::new(&mut self.builders.clapper.length_m, 0.15..=0.7)
+                        .text("length"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut self.builders.clapper.head_radius_m, 0.01..=0.08)
+                        .text("head r"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut self.builders.clapper.neck_radius_m, 0.005..=0.06)
+                        .text("neck r"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut self.builders.clapper.tip_radius_m, 0.003..=0.04)
+                        .text("tip r"),
+                );
+            });
 
-// struct Preset {
-//     #[allow(dead_code)]
-//     name: &'static str,
-//     segments: [SegmentConfig; 5],
-//     wall_thickness_m: [f64; 5],
-//     material_density_kg_per_m3: f64,
-// }
+        egui::CollapsingHeader::new("Thickness")
+            .id_salt("node_thickness")
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.add(
+                    egui::Slider::new(
+                        &mut self.builders.thickness.inner_base_thickness_m,
+                        0.001..=0.02,
+                    )
+                    .text("inner base"),
+                );
+                ui.add(
+                    egui::Slider::new(
+                        &mut self.builders.thickness.inner_lip_thickness_m,
+                        0.001..=0.02,
+                    )
+                    .text("inner lip"),
+                );
+                ui.add(
+                    egui::Slider::new(
+                        &mut self.builders.thickness.outer_base_thickness_m,
+                        0.001..=0.02,
+                    )
+                    .text("outer base"),
+                );
+                ui.add(
+                    egui::Slider::new(
+                        &mut self.builders.thickness.outer_lip_thickness_m,
+                        0.001..=0.02,
+                    )
+                    .text("outer lip"),
+                );
+            });
 
-// fn bell_preset() -> Preset {
-//     // A simple bell profile: crown dome, widening body, shoulder flare, rim.
-//     let seg = |start: f64, end: f64, a: f64, b: f64, c: f64| -> SegmentConfig {
-//         SegmentConfig {
-//             start,
-//             end,
-//             kind: CurveKind::Parabolic,
-//             para_a: a,
-//             para_b: b,
-//             para_c: c,
-//             ..SegmentConfig::with_start(start, end)
-//         }
-//     };
-//     Preset {
-//         name: "bell",
-//         material_density_kg_per_m3: 8_500.0, // bronze
-//         wall_thickness_m: [0.006, 0.007, 0.008, 0.010, 0.015],
-//         segments: [
-//             seg(0.0, 0.10, 0.0, 0.5, 0.05),   // crown: spreads outward
-//             seg(0.10, 0.35, 0.5, 0.0, 0.05),  // upper body: widens
-//             seg(0.35, 0.65, 0.0, 0.45, 0.0),  // mid-body: broad
-//             seg(0.65, 0.85, 0.8, -0.8, 0.35), // shoulder: flares out
-//             seg(0.85, 1.00, 0.0, 0.1, 0.45),  // rim: vertical edge
-//         ],
-//     }
-// }
+        egui::CollapsingHeader::new("Medium")
+            .id_salt("node_medium")
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.add(
+                    egui::Slider::new(&mut self.medium.density_kg_per_m3, 0.2..=5.0)
+                        .text("density"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut self.medium.speed_of_sound_m_per_s, 120.0..=900.0)
+                        .text("c (m/s)"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut self.medium.viscosity_pa_s, 1.0e-6..=5.0e-3)
+                        .logarithmic(true)
+                        .text("viscosity"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut self.medium.impedance_m_rayl, 10.0..=5000.0)
+                        .logarithmic(true)
+                        .text("impedance"),
+                );
+            });
 
-// fn gong_preset() -> Preset {
-//     let seg = |start: f64, end: f64, a: f64, b: f64, c: f64| -> SegmentConfig {
-//         SegmentConfig {
-//             start,
-//             end,
-//             kind: CurveKind::Parabolic,
-//             para_a: a,
-//             para_b: b,
-//             para_c: c,
-//             ..SegmentConfig::with_start(start, end)
-//         }
-//     };
-//     Preset {
-//         name: "gong",
-//         material_density_kg_per_m3: 8_000.0,
-//         wall_thickness_m: [0.003, 0.003, 0.004, 0.005, 0.012],
-//         segments: [
-//             seg(0.0, 0.05, 0.0, 0.4, 0.02),  // crown: spreads outward gently
-//             seg(0.05, 0.20, 0.2, 0.0, 0.02), // gentle rise
-//             seg(0.20, 0.50, 0.0, 0.4, 0.0),  // broad flat middle
-//             seg(0.50, 0.80, 0.5, -0.5, 0.3), // shoulder
-//             seg(0.80, 1.00, 0.0, 0.05, 0.4), // rim
-//         ],
-//     }
-// }
+        egui::CollapsingHeader::new("Materials")
+            .id_salt("node_materials")
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.label("Bowl material");
+                ui.add(
+                    egui::Slider::new(&mut self.bowl_material.density_kg_per_m3, 500.0..=20000.0)
+                        .text("bowl density"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut self.bowl_material.poisson_ratio, -0.49..=0.49)
+                        .text("bowl poisson"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut self.bowl_material.youngs_modulus_pa, 1.0e9..=5.0e11)
+                        .logarithmic(true)
+                        .text("bowl E"),
+                );
+                ui.label("Clapper material");
+                ui.add(
+                    egui::Slider::new(
+                        &mut self.clapper_material.density_kg_per_m3,
+                        500.0..=20000.0,
+                    )
+                    .text("clapper density"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut self.clapper_material.poisson_ratio, -0.49..=0.49)
+                        .text("clapper poisson"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut self.clapper_material.youngs_modulus_pa, 1.0e9..=5.0e11)
+                        .logarithmic(true)
+                        .text("clapper E"),
+                );
+            });
 
-// // ─── app state ────────────────────────────────────────────────────────────────
+        egui::CollapsingHeader::new("Preview")
+            .id_salt("node_preview")
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.add(egui::Slider::new(&mut self.camera_yaw, -3.14..=3.14).text("yaw"));
+                ui.add(egui::Slider::new(&mut self.camera_pitch, -1.35..=1.35).text("pitch"));
+                ui.add(egui::Slider::new(&mut self.zoom, 0.35..=3.5).text("zoom"));
+                ui.add(egui::Slider::new(&mut self.pan_x, -480.0..=480.0).text("pan x"));
+                ui.add(egui::Slider::new(&mut self.pan_y, -360.0..=360.0).text("pan y"));
+                ui.checkbox(&mut self.wireframe, "wireframe overlay");
+                ui.small("Drag in preview to pan");
+            });
 
-// struct NodeApp {
-//     segments: [SegmentConfig; 5],
-//     wall_thickness_m: [f64; 5],
-//     material_density_kg_per_m3: f64,
-//     poisson_ratio: f64,
-//     youngs_modulus_pa: f64,
-//     inner_soundbow_enabled: bool,
-//     outer_soundbow_enabled: bool,
-//     inner_soundbow: SegmentConfig,
-//     outer_soundbow: SegmentConfig,
-//     samples: usize,
-//     expanded_section: Option<usize>,
-// }
+        if let Some(err) = &self.last_error {
+            ui.separator();
+            ui.colored_label(Color32::from_rgb(255, 120, 120), format!("Error: {err}"));
+        }
+    }
 
-// impl Default for NodeApp {
-//     fn default() -> Self {
-//         let preset = bell_preset();
-//         Self {
-//             wall_thickness_m: preset.wall_thickness_m,
-//             material_density_kg_per_m3: preset.material_density_kg_per_m3,
-//             poisson_ratio: 0.34,
-//             youngs_modulus_pa: 110e9,
-//             inner_soundbow_enabled: false,
-//             outer_soundbow_enabled: false,
-//             inner_soundbow: SegmentConfig::with_start(0.80, 1.00),
-//             outer_soundbow: SegmentConfig::with_start(0.80, 1.00),
-//             samples: 80,
-//             expanded_section: None,
-//             segments: preset.segments,
-//         }
-//     }
-// }
+    fn top_charts(&self, ui: &mut egui::Ui, node: &Node) {
+        ui.columns(3, |cols| {
+            let bowl_pts = node.bowl.meshable.base.sampled_profile_points(80);
+            draw_xy_line_chart(&mut cols[0], "Bowl profile", &bowl_pts, "y", "r");
 
-// impl NodeApp {
-//     fn apply_preset(&mut self, preset: Preset) {
-//         self.segments = preset.segments;
-//         self.wall_thickness_m = preset.wall_thickness_m;
-//         self.material_density_kg_per_m3 = preset.material_density_kg_per_m3;
-//     }
+            let clapper_pts = node.clapper.meshable.sampled_profile_points(80);
+            draw_xy_line_chart(&mut cols[1], "Clapper profile", &clapper_pts, "y", "r");
 
-//     fn chain_starts(&mut self) {
-//         self.segments[0].start = 0.0;
-//         for i in 1..5 {
-//             let prev_end = self.segments[i - 1].end;
-//             self.segments[i].start = prev_end;
-//         }
-//     }
+            let radial = node.bowl.meshable.base.profile_sample_positions(40);
+            let thickness_pts = radial
+                .iter()
+                .enumerate()
+                .map(|(i, u)| {
+                    let (face, back) = node.bowl.meshable.thickness_map.sample(i);
+                    (*u, face + back)
+                })
+                .collect::<Vec<_>>();
+            draw_xy_line_chart(&mut cols[2], "Thickness profile", &thickness_pts, "u", "m");
+        });
+    }
 
-//     fn build_node(&mut self) -> Result<Node, String> {
-//         self.chain_starts();
-//         let mut segs_built = [None; 5];
-//         segs_built[0] = Some(
-//             self.segments[0]
-//                 .build_start()
-//                 .map_err(|e| format!("{}: {e}", SEGMENT_NAMES[0]))?,
-//         );
+    fn draw_3d_preview(&mut self, ui: &mut egui::Ui, node: &Node) {
+        let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::drag());
+        let rect = response.rect;
+        if response.dragged() {
+            let delta = ui.ctx().input(|input| input.pointer.delta());
+            self.pan_x += delta.x;
+            self.pan_y += delta.y;
+        }
+        painter.rect_filled(rect, 6.0, Color32::from_rgb(17, 22, 28));
 
-//         for i in 1..5 {
-//             let prev = segs_built[i - 1].unwrap();
-//             segs_built[i] = Some(
-//                 self.segments[i]
-//                     .build_continuation(&prev)
-//                     .map_err(|e| format!("{}: {e}", SEGMENT_NAMES[i]))?,
-//             );
-//             self.segments[i].start = prev.end;
-//             self.segments[i].end = segs_built[i].unwrap().end;
-//         }
-//         let profile_segments = [
-//             segs_built[0].unwrap(),
-//             segs_built[1].unwrap(),
-//             segs_built[2].unwrap(),
-//             segs_built[3].unwrap(),
-//             segs_built[4].unwrap(),
-//         ];
-//         let wall_thickness_m = self.wall_thickness_m;
+        let bowl_mesh = node.bowl.surface_mesh(28);
+        let clapper_mesh = node.clapper.surface_mesh(24);
 
-//         let inner_bow = if self.inner_soundbow_enabled {
-//             Some(
-//                 self.inner_soundbow
-//                     .build_start()
-//                     .map_err(|e| format!("inner soundbow: {e}"))?,
-//             )
-//         } else {
-//             None
-//         };
-//         let outer_bow = if self.outer_soundbow_enabled {
-//             Some(
-//                 self.outer_soundbow
-//                     .build_start()
-//                     .map_err(|e| format!("outer soundbow: {e}"))?,
-//             )
-//         } else {
-//             None
-//         };
+        let mut tris = Vec::new();
+        tris.extend(collect_projected_tris(
+            &bowl_mesh.0,
+            &bowl_mesh.1,
+            self.camera_yaw,
+            self.camera_pitch,
+            self.zoom,
+            self.pan_x,
+            self.pan_y,
+            rect,
+            Color32::from_rgb(91, 151, 219),
+        ));
+        tris.extend(collect_projected_tris(
+            &clapper_mesh.0,
+            &clapper_mesh.1,
+            self.camera_yaw,
+            self.camera_pitch,
+            self.zoom,
+            self.pan_x,
+            self.pan_y,
+            rect,
+            Color32::from_rgb(220, 179, 105),
+        ));
 
-//         Ok(Node {
-//             material: Material {
-//                 material_density_kg_per_m3: self.material_density_kg_per_m3,
-//                 poisson_ratio: self.poisson_ratio,
-//                 youngs_modulus_pa: self.youngs_modulus_pa,
-//             },
-//             profile_segments,
-//             wall_thickness_m,
-//             soundbow_segments: [inner_bow, outer_bow],
-//         })
-//     }
-// }
+        tris.sort_by(|a, b| {
+            a.depth
+                .partial_cmp(&b.depth)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
-// // ─── side panel ──────────────────────────────────────────────────────────────
+        for tri in tris {
+            painter.add(Shape::convex_polygon(
+                vec![tri.p0, tri.p1, tri.p2],
+                tri.fill,
+                if self.wireframe {
+                    Stroke::new(0.6_f32, Color32::from_rgba_premultiplied(20, 20, 20, 150))
+                } else {
+                    Stroke::NONE
+                },
+            ));
+        }
+    }
 
-// fn show_controls(app: &mut NodeApp, ui: &mut egui::Ui, node_result: &Result<Node, String>) {
-//     // Presets
-//     ui.heading("Presets");
-//     ui.horizontal_wrapped(|ui| {
-//         if ui.button("bell").clicked() {
-//             app.apply_preset(bell_preset());
-//         }
-//         if ui.button("gong").clicked() {
-//             app.apply_preset(gong_preset());
-//         }
-//     });
-//     ui.separator();
+    fn bottom_debug(&self, ui: &mut egui::Ui, debug: &NodeComputedDebug) {
+        egui::ScrollArea::vertical()
+            .id_salt("node_inspector_scroll")
+            .max_height(220.0)
+            .show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(format!(
+                        "resolution: req {} / analysis {} / modes {}",
+                        debug.requested_resolution,
+                        debug.analysis_resolution,
+                        debug.frequencies_hz.len()
+                    ));
+                    ui.separator();
+                    ui.label(format!(
+                        "mesh: {} vertices, {} triangles",
+                        debug.mesh_vertex_count, debug.mesh_triangle_count
+                    ));
+                    ui.separator();
+                    ui.label(format!(
+                        "active/constrained: {}/{}",
+                        debug.active_vertex_count, debug.constrained_vertex_count
+                    ));
+                });
 
-//     // Material
-//     ui.heading("Material");
-//     egui::Grid::new("material_grid")
-//         .num_columns(2)
-//         .striped(true)
-//         .show(ui, |ui| {
-//             ui.label("density (kg/m³)");
-//             ui.add(
-//                 egui::DragValue::new(&mut app.material_density_kg_per_m3)
-//                     .speed(10.0)
-//                     .range(100.0..=20_000.0),
-//             );
-//             ui.end_row();
-//             ui.label("Poisson ratio");
-//             ui.add(egui::Slider::new(&mut app.poisson_ratio, 0.0..=0.5));
-//             ui.end_row();
-//             ui.label("Young's modulus (Pa)");
-//             ui.add(
-//                 egui::DragValue::new(&mut app.youngs_modulus_pa)
-//                     .speed(1e9)
-//                     .range(1e9..=500e9),
-//             );
-//             ui.end_row();
-//         });
-//     ui.separator();
+                egui::Grid::new("node_debug_grid")
+                    .num_columns(2)
+                    .striped(true)
+                    .show(ui, |ui| {
+                        ui.label("Bowl mass (kg)");
+                        ui.monospace(format!("{:.5}", debug.bowl_mass_kg));
+                        ui.end_row();
+                        ui.label("Clapper mass (kg)");
+                        ui.monospace(format!("{:.5}", debug.clapper_mass_kg));
+                        ui.end_row();
+                        ui.label("Clapper ratio");
+                        ui.monospace(format!("{:.5}", debug.clapper_mass_ratio));
+                        ui.end_row();
+                        ui.label("Bowl radius (m)");
+                        ui.monospace(format!("{:.5}", debug.bowl_radius_m));
+                        ui.end_row();
+                        ui.label("Bowl thickness (m)");
+                        ui.monospace(format!("{:.6}", debug.bowl_thickness_m));
+                        ui.end_row();
+                        ui.label("Surface area (m^2)");
+                        ui.monospace(format!("{:.5}", debug.bowl_surface_area_m2));
+                        ui.end_row();
+                        ui.label("Volume (m^3)");
+                        ui.monospace(format!("{:.6}", debug.bowl_volume_m3));
+                        ui.end_row();
+                        ui.label("Flexural rigidity");
+                        ui.monospace(format!("{:.3e}", debug.bowl_flexural_rigidity));
+                        ui.end_row();
+                        ui.label("Medium viscosity");
+                        ui.monospace(format!("{:.3e}", debug.medium.viscosity_pa_s));
+                        ui.end_row();
+                    });
 
-//     // Profile segments
-//     ui.heading("Profile segments");
-//     ui.small("Segment 1 uses start_*; segments 2-5 use continue_* from the previous segment.");
-//     for i in 0..5 {
-//         let is_open = app.expanded_section == Some(i);
-//         let header = format!(
-//             "{}  [t {:.3}–{:.3}]  wall {:.4} m",
-//             SEGMENT_NAMES[i], app.segments[i].start, app.segments[i].end, app.wall_thickness_m[i]
-//         );
-//         let resp = egui::CollapsingHeader::new(header)
-//             .id_salt(format!("seg_{i}"))
-//             .open(if is_open { Some(true) } else { None })
-//             .show(ui, |ui| {
-//                 app.segments[i].show(ui, true, i != 0);
-//                 ui.separator();
-//                 ui.add(
-//                     egui::Slider::new(&mut app.wall_thickness_m[i], 0.001..=0.1)
-//                         .text("wall thickness (m)"),
-//                 );
-//             });
-//         if resp.header_response.clicked() {
-//             app.expanded_section = if is_open { None } else { Some(i) };
-//         }
-//     }
-//     ui.separator();
+                ui.separator();
+                ui.label("Modes");
+                for i in 0..debug.frequencies_hz.len() {
+                    let freq = debug.frequencies_hz[i];
+                    let strike_damp_air = debug.strike_damping_in_air.get(i).copied().unwrap_or(0.0);
+                    let strike_damp_medium = debug
+                        .strike_damping_in_medium
+                        .get(i)
+                        .copied()
+                        .unwrap_or(0.0);
+                    let jet_damp_air = debug.jet_damping_in_air.get(i).copied().unwrap_or(0.0);
+                    let jet_damp_medium = debug.jet_damping_in_medium.get(i).copied().unwrap_or(0.0);
+                    let shape = &debug.mode_shapes[i];
+                    ui.monospace(format!(r#"#{:02}  {:8.2} Hz  
+strike[c={:.3}, damp(a/m)={:.5}/{:.5}, angle={:.3}, bw={:.2}]  
+jet[c={:.3}, damp(a/m)={:.5}/{:.5}, lock={:.2}+/-{:.2}, thr={:.3}, gain={:.3}, tau={:.4}s, St={:.3}, phase={:.3}, rad={:.3e}]"#,
+                        i + 1,
+                        freq,
+                        shape.paths.strike.coupling,
+                        strike_damp_air,
+                        strike_damp_medium,
+                        shape.paths.strike.angle_sensitivity,
+                        shape.paths.strike.impact_bandwidth_hz,
+                        shape.paths.jet.coupling,
+                        jet_damp_air,
+                        jet_damp_medium,
+                        shape.paths.jet.lock_center_hz,
+                        shape.paths.jet.lock_bandwidth_hz,
+                        shape.paths.jet.threshold_drive,
+                        shape.paths.jet.small_signal_gain,
+                        shape.paths.jet.convective_delay_s,
+                        shape.paths.jet.strouhal_target,
+                        shape.paths.jet.phase_sensitivity,
+                        shape.paths.jet.radiation_efficiency,
+                    ));
+                }
+            });
+    }
+}
 
-//     // Soundbow
-//     ui.heading("Soundbow");
-//     ui.checkbox(&mut app.inner_soundbow_enabled, "Inner soundbow (concave)");
-//     if app.inner_soundbow_enabled {
-//         egui::CollapsingHeader::new("Inner soundbow segment")
-//             .id_salt("inner_bow")
-//             .show(ui, |ui| {
-//                 app.inner_soundbow.show(ui, false, false);
-//             });
-//     }
-//     ui.checkbox(&mut app.outer_soundbow_enabled, "Outer soundbow (convex)");
-//     if app.outer_soundbow_enabled {
-//         egui::CollapsingHeader::new("Outer soundbow segment")
-//             .id_salt("outer_bow")
-//             .show(ui, |ui| {
-//                 app.outer_soundbow.show(ui, false, false);
-//             });
-//     }
-//     ui.separator();
+impl eframe::App for NodeInspectorApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let state = self.build_node_and_debug();
 
-//     // Samples
-//     ui.add(egui::Slider::new(&mut app.samples, 16..=400).text("sampling budget"));
-//     ui.separator();
+        egui::SidePanel::left("node_controls")
+            .min_width(300.0)
+            .max_width(420.0)
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    self.left_controls(ui);
+                });
+            });
 
-//     // Computed stats
-//     ui.heading("Computed");
-//     match node_result {
-//         Err(e) => {
-//             ui.colored_label(Color32::LIGHT_RED, format!("Error: {e}"));
-//         }
-//         Ok(node) => {
-//             let n = app.samples.max(2);
-//             let sz = node.size(n);
-//             let mass = node.mass_kg(n);
-//             let mat_vol = node.material_volume_m3(n);
-//             let inn_vol = node.inner_volume_m3(n);
-//             let t0 = node.thickness_at(0.0);
-//             let t50 = node.thickness_at(0.5);
-//             let t100 = node.thickness_at(1.0);
-//             egui::Grid::new("stats_grid")
-//                 .num_columns(2)
-//                 .striped(true)
-//                 .show(ui, |ui| {
-//                     ui.label("size (m)");
-//                     ui.monospace(format!("{:.4} × {:.4} × {:.4}", sz.x, sz.y, sz.z));
-//                     ui.end_row();
-//                     ui.label("mass (kg)");
-//                     ui.monospace(format!("{:.4}", mass));
-//                     ui.end_row();
-//                     ui.label("material vol (m³)");
-//                     ui.monospace(format!("{:.6}", mat_vol));
-//                     ui.end_row();
-//                     ui.label("inner vol (m³)");
-//                     ui.monospace(format!("{:.6}", inn_vol));
-//                     ui.end_row();
-//                     ui.label("thickness u=0");
-//                     ui.monospace(format!("{:.5} m", t0));
-//                     ui.end_row();
-//                     ui.label("thickness u=0.5");
-//                     ui.monospace(format!("{:.5} m", t50));
-//                     ui.end_row();
-//                     ui.label("thickness u=1");
-//                     ui.monospace(format!("{:.5} m", t100));
-//                     ui.end_row();
-//                 });
-//         }
-//     }
-// }
+        egui::CentralPanel::default().show(ctx, |ui| {
+            if let Some((node, debug)) = state {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.group(|ui| {
+                        self.top_charts(ui, &node);
+                    });
 
-// // ─── central panel ───────────────────────────────────────────────────────────
+                    ui.add_space(6.0);
+                    ui.group(|ui| {
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(ui.available_width(), 520.0),
+                            egui::Layout::top_down(egui::Align::LEFT),
+                            |ui| {
+                                self.draw_3d_preview(ui, &node);
+                            },
+                        );
+                    });
 
-// fn draw_node(ui: &mut egui::Ui, node_result: &Result<Node, String>, samples: usize) {
-//     let desired = ui.available_size();
-//     let (response, painter) = ui.allocate_painter(desired, Sense::hover());
-//     let rect = response.rect;
+                    ui.add_space(6.0);
+                    ui.group(|ui| {
+                        self.bottom_debug(ui, &debug);
+                    });
+                });
+            } else {
+                ui.centered_and_justified(|ui| {
+                    ui.colored_label(
+                        Color32::from_rgb(255, 120, 120),
+                        self.last_error
+                            .clone()
+                            .unwrap_or_else(|| "unable to build node".to_string()),
+                    );
+                });
+            }
+        });
 
-//     painter.rect_filled(rect, 4.0, BG_COLOR);
+        ctx.request_repaint();
+    }
+}
 
-//     let node = match node_result {
-//         Err(e) => {
-//             painter.text(
-//                 rect.center(),
-//                 egui::Align2::CENTER_CENTER,
-//                 format!("Error: {e}"),
-//                 egui::TextStyle::Body.resolve(ui.style()),
-//                 Color32::LIGHT_RED,
-//             );
-//             return;
-//         }
-//         Ok(n) => n,
-//     };
+#[derive(Clone)]
+struct DrawTri {
+    p0: Pos2,
+    p1: Pos2,
+    p2: Pos2,
+    depth: f64,
+    fill: Color32,
+}
 
-//     let n_profile = (samples * 2).max(40);
+fn collect_projected_tris(
+    points: &[Point3<f64>],
+    indices: &[[u32; 3]],
+    yaw: f64,
+    pitch: f64,
+    zoom: f64,
+    pan_x: f32,
+    pan_y: f32,
+    rect: Rect,
+    base_color: Color32,
+) -> Vec<DrawTri> {
+    if points.is_empty() || indices.is_empty() {
+        return vec![];
+    }
 
-//     // Collect contour points with explicit ordering:
-//     // inner (l:-1..0) and outer (l:0..1), then mirror both.
-//     let mut inner_profile: Vec<Point2<f64>> = Vec::with_capacity(n_profile / 2 + 2);
-//     let mut outer_profile: Vec<Point2<f64>> = Vec::with_capacity(n_profile / 2 + 2);
-//     let half = n_profile / 2;
-//     for i in 0..=half {
-//         let t = i as f64 / half as f64;
-//         // Inner contour runs crown(-1) -> rim(0); bias samples toward crown.
-//         let l = -1.0 + t.powi(3);
-//         inner_profile.push(node.profile_at(l));
-//     }
-//     for i in 0..=half {
-//         let t = i as f64 / half as f64;
-//         // Outer contour runs rim(0) -> crown(1); bias samples toward crown.
-//         let l = 1.0 - (1.0 - t).powi(3);
-//         outer_profile.push(node.profile_at(l));
-//     }
+    let mut transformed = Vec::with_capacity(points.len());
+    for p in points {
+        transformed.push(rotate_point(*p, yaw, pitch));
+    }
 
-//     // Collect sample_at_u points for thickness markers.
-//     let n_samp = samples.max(10);
+    let mut max_abs = 0.0f64;
+    for p in &transformed {
+        max_abs = max_abs.max(p.x.abs()).max(p.y.abs()).max(p.z.abs());
+    }
+    let scale = (rect.width().min(rect.height()) as f64) * 0.42 * zoom / max_abs.max(1e-6);
 
-//     // Compute bounding box over all profile points (x = radius, y = axial depth).
-//     // For display: x-axis is horizontal (mirrored: -r .. 0 .. +r), y-axis is vertical (0 at top).
-//     let mut max_r = 0.0_f64;
-//     let mut max_y = 0.0_f64;
-//     for p in inner_profile.iter().chain(outer_profile.iter()) {
-//         max_r = max_r.max(p.x.abs());
-//         max_y = max_y.max(p.y.abs());
-//     }
-//     max_r = max_r.max(1e-6);
-//     max_y = max_y.max(1e-6);
+    let mut tris = Vec::with_capacity(indices.len());
+    for [ia, ib, ic] in indices {
+        let (ia, ib, ic) = (*ia as usize, *ib as usize, *ic as usize);
+        if ia >= transformed.len() || ib >= transformed.len() || ic >= transformed.len() {
+            continue;
+        }
 
-//     let draw_rect = rect.shrink(24.0);
-//     let scale_r = draw_rect.width() as f64 / (2.0 * max_r * 1.1);
-//     let scale_y = draw_rect.height() as f64 / (max_y * 1.1);
-//     let scale = scale_r.min(scale_y);
+        let a = transformed[ia];
+        let b = transformed[ib];
+        let c = transformed[ic];
+        let normal = (b - a).cross(&(c - a));
+        if normal.z >= 0.0 {
+            continue;
+        }
 
-//     let cx = draw_rect.center().x as f64;
-//     let top = draw_rect.top() as f64 + (draw_rect.height() as f64 - max_y * 1.05 * scale) / 2.0;
+        let light_dir = Vector3::new(0.35, -0.4, -1.0).normalize();
+        let lambert = normal.normalize().dot(&light_dir).abs().clamp(0.1, 1.0);
+        let shade = 0.25 + lambert * 0.75;
+        let fill = scale_color(base_color, shade as f32);
 
-//     let map_pt =
-//         |r: f64, y: f64| -> Pos2 { Pos2::new((cx + r * scale) as f32, (top + y * scale) as f32) };
+        let p0 = project_to_screen(a, rect, scale, pan_x, pan_y);
+        let p1 = project_to_screen(b, rect, scale, pan_x, pan_y);
+        let p2 = project_to_screen(c, rect, scale, pan_x, pan_y);
+        let depth = (a.z + b.z + c.z) / 3.0;
 
-//     // Symmetry axis.
-//     painter.line_segment(
-//         [map_pt(0.0, -max_y * 0.05), map_pt(0.0, max_y * 1.1)],
-//         Stroke::new(1.0_f32, AXIS_COLOR),
-//     );
+        tris.push(DrawTri {
+            p0,
+            p1,
+            p2,
+            depth,
+            fill,
+        });
+    }
 
-//     // Build explicit contour loops to avoid accidental long chords.
-//     let inner_right: Vec<Pos2> = inner_profile.iter().map(|p| map_pt(p.x, p.y)).collect();
-//     let outer_right: Vec<Pos2> = outer_profile.iter().map(|p| map_pt(p.x, p.y)).collect();
-//     let inner_left: Vec<Pos2> = inner_profile.iter().map(|p| map_pt(-p.x, p.y)).collect();
-//     let outer_left: Vec<Pos2> = outer_profile.iter().map(|p| map_pt(-p.x, p.y)).collect();
+    tris
+}
 
-//     if inner_right.len() >= 2 {
-//         painter.add(Shape::line(inner_right, Stroke::new(2.0_f32, INNER_COLOR)));
-//     }
-//     if outer_right.len() >= 2 {
-//         painter.add(Shape::line(outer_right, Stroke::new(2.0_f32, OUTER_COLOR)));
-//     }
-//     if inner_left.len() >= 2 {
-//         painter.add(Shape::line(
-//             inner_left,
-//             Stroke::new(1.0_f32, MIRROR_INNER_COLOR),
-//         ));
-//     }
-//     if outer_left.len() >= 2 {
-//         painter.add(Shape::line(
-//             outer_left,
-//             Stroke::new(1.0_f32, MIRROR_OUTER_COLOR),
-//         ));
-//     }
+fn rotate_point(p: Point3<f64>, yaw: f64, pitch: f64) -> Point3<f64> {
+    let cy = yaw.cos();
+    let sy = yaw.sin();
+    let cp = pitch.cos();
+    let sp = pitch.sin();
 
-//     // sample_at_u markers: outer (green), inner (blue), connected by thin lines.
-//     let marker_every = (n_samp / 20).max(1);
-//     for i in 0..=n_samp {
-//         let u = i as f64 / n_samp as f64;
-//         let (outer, inner) = node.sample_at_u(u);
-//         if i % marker_every == 0 {
-//             let op_r = map_pt(outer.x, outer.y);
-//             let op_l = map_pt(-outer.x, outer.y);
-//             let ip_r = map_pt(inner.x, inner.y);
-//             let ip_l = map_pt(-inner.x, inner.y);
-//             // Wall thickness lines.
-//             painter.line_segment(
-//                 [op_r, ip_r],
-//                 Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(200, 200, 200, 40)),
-//             );
-//             painter.line_segment([op_l, ip_l], Stroke::new(1.0_f32, MIRROR_WALL_COLOR));
-//             painter.circle_filled(op_r, 2.5_f32, OUTER_COLOR);
-//             painter.circle_filled(op_l, 2.0_f32, MIRROR_OUTER_COLOR);
-//             painter.circle_filled(ip_r, 2.5_f32, INNER_COLOR);
-//             painter.circle_filled(ip_l, 2.0_f32, MIRROR_INNER_COLOR);
-//         }
-//     }
+    let x = p.x * cy + p.z * sy;
+    let z0 = -p.x * sy + p.z * cy;
+    let y = p.y * cp - z0 * sp;
+    let z = p.y * sp + z0 * cp;
 
-//     // Rim tip marker.
-//     let rim = node.profile_at(0.0);
-//     let rim_r = map_pt(rim.x, rim.y);
-//     let rim_l = map_pt(-rim.x, rim.y);
-//     painter.circle_filled(rim_r, 4.0_f32, BASELINE_COLOR);
-//     painter.circle_filled(
-//         rim_l,
-//         3.0_f32,
-//         Color32::from_rgba_premultiplied(245, 203, 92, 90),
-//     );
+    Point3::new(x, y, z)
+}
 
-//     // Crown origin marker.
-//     let crown = map_pt(0.0, 0.0);
-//     painter.circle_filled(crown, 4.0_f32, Color32::WHITE);
+fn project_to_screen(p: Point3<f64>, rect: Rect, scale: f64, pan_x: f32, pan_y: f32) -> Pos2 {
+    let perspective = 1.0 / (1.0 + (p.z + 1.8).max(0.05) * 0.25);
+    Pos2::new(
+        rect.center().x + pan_x + (p.x * scale * perspective) as f32,
+        rect.center().y + pan_y - (p.y * scale * perspective) as f32,
+    )
+}
 
-//     // Legend.
-//     let font = egui::TextStyle::Small.resolve(ui.style());
-//     painter.text(
-//         Pos2::new(draw_rect.left() + 4.0, draw_rect.top() + 4.0),
-//         egui::Align2::LEFT_TOP,
-//         "● inner   ● outer   ● rim   ○ crown",
-//         font.clone(),
-//         Color32::from_gray(160),
-//     );
-// }
-
-// // ─── eframe App ──────────────────────────────────────────────────────────────
-
-// impl eframe::App for NodeApp {
-//     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-//         let node_result = self.build_node();
-//         let samples = self.samples;
-
-//         egui::SidePanel::left("node_controls")
-//             .min_width(300.0)
-//             .max_width(420.0)
-//             .show(ctx, |ui| {
-//                 egui::ScrollArea::vertical().show(ui, |ui| {
-//                     show_controls(self, ui, &node_result);
-//                 });
-//             });
-
-//         egui::CentralPanel::default().show(ctx, |ui| {
-//             draw_node(ui, &node_result, samples);
-//         });
-
-//         ctx.request_repaint();
-//     }
-// }
-
-// // ─── main ─────────────────────────────────────────────────────────────────────
-fn main() {
-
-    //     let options = eframe::NativeOptions {
-    //         viewport: egui::ViewportBuilder::default()
-    //             .with_title("Node preview")
-    //             .with_inner_size([1200.0, 800.0]),
-    //         ..Default::default()
-    //     };
-    //     eframe::run_native(
-    //         "Node preview",
-    //         options,
-    //         Box::new(|_cc| Ok(Box::new(NodeApp::default()))),
-    //     )
+fn scale_color(c: Color32, factor: f32) -> Color32 {
+    let r = (c.r() as f32 * factor).clamp(0.0, 255.0) as u8;
+    let g = (c.g() as f32 * factor).clamp(0.0, 255.0) as u8;
+    let b = (c.b() as f32 * factor).clamp(0.0, 255.0) as u8;
+    Color32::from_rgb(r, g, b)
 }

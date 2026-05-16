@@ -1,6 +1,10 @@
 use common::body::{
-    thickness_map_from_axial_samples, Meshable, EmbodiedPoint3, EmbodiedTriangle, RevolutionAxis,
-    RevolutionMesh, Segment, ThickMesh,
+    thickness_map_from_axial_samples, EmbodiedPoint3, EmbodiedTriangle, Meshable, RevolutionAxis,
+    RevolutionMesh, ThickMesh,
+};
+use common::egui_helpers::{
+    draw_depth_wireframe, draw_segment_chart_sized, draw_xy_multi_line_chart_sized, run_native_app,
+    CurveKind, DirectSegmentConfig, MeshProjector,
 };
 use eframe::egui::{self, Color32, Shape, Stroke};
 use nalgebra::Vector3;
@@ -12,183 +16,11 @@ enum ProbeMode {
 }
 
 fn main() -> eframe::Result<()> {
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_title("Thick RevolutionBody - Surface Mesh Viewer")
-            .with_inner_size([1450.0, 920.0]),
-        ..Default::default()
-    };
-    eframe::run_native(
+    run_native_app(
         "Thick RevolutionBody - Surface Mesh Viewer",
-        options,
-        Box::new(|_cc| Ok(Box::new(ThickRevolutionBodyApp::default()))),
+        [1450.0, 920.0],
+        |_cc| ThickRevolutionBodyApp::default(),
     )
-}
-
-#[derive(Clone, Copy, PartialEq, Debug)]
-enum CurveKind {
-    Line,
-    Constant,
-    Parabolic,
-    Hyperbolic,
-    ArcSweep,
-}
-
-impl CurveKind {
-    fn label(self) -> &'static str {
-        match self {
-            Self::Line => "Line",
-            Self::Constant => "Constant",
-            Self::Parabolic => "Parabolic",
-            Self::Hyperbolic => "Hyperbolic",
-            Self::ArcSweep => "ArcSweep",
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Debug)]
-struct DirectSegmentConfig {
-    start: f64,
-    end: f64,
-    density: f64,
-    kind: CurveKind,
-    line_m: f64,
-    line_b: f64,
-    const_value: f64,
-    para_a: f64,
-    para_b: f64,
-    para_c: f64,
-    hyp_a: f64,
-    hyp_b: f64,
-    hyp_c: f64,
-    arc_center_y: f64,
-    arc_radius: f64,
-    arc_start_angle: f64,
-    arc_sweep_angle: f64,
-}
-
-impl Default for DirectSegmentConfig {
-    fn default() -> Self {
-        Self {
-            start: 0.0,
-            end: 4.0,
-            density: 16.0,
-            kind: CurveKind::Parabolic,
-            line_m: 1.0,
-            line_b: 0.0,
-            const_value: 1.5,
-            para_a: 0.25,
-            para_b: 0.0,
-            para_c: 0.5,
-            hyp_a: 1.0,
-            hyp_b: -1.0,
-            hyp_c: 0.0,
-            arc_center_y: 0.0,
-            arc_radius: 2.0,
-            arc_start_angle: 0.0,
-            arc_sweep_angle: std::f64::consts::FRAC_PI_2,
-        }
-    }
-}
-
-impl DirectSegmentConfig {
-    fn build_segment(&self) -> Result<Segment, String> {
-        match self.kind {
-            CurveKind::Line => Segment::start_line(self.end - self.start, self.line_m, self.line_b),
-            CurveKind::Constant => Segment::start_constant(self.end - self.start, self.const_value),
-            CurveKind::Parabolic => Segment::start_parabolic(
-                self.end - self.start,
-                self.para_a,
-                self.para_b,
-                self.para_c,
-            ),
-            CurveKind::Hyperbolic => {
-                Segment::start_hyperbolic(self.end - self.start, self.hyp_a, self.hyp_b, self.hyp_c)
-            }
-            CurveKind::ArcSweep => Segment::start_arc_sweep(
-                self.end - self.start,
-                self.arc_center_y,
-                self.arc_radius,
-                self.arc_start_angle,
-                self.arc_sweep_angle,
-            ),
-        }
-        .map_err(|err| err.to_string())
-    }
-
-    fn show_controls(&mut self, ui: &mut egui::Ui, heading: &str) {
-        ui.heading(heading);
-        ui.label("Domain");
-        ui.add(egui::Slider::new(&mut self.start, -10.0..=10.0).text("start"));
-        ui.add(egui::Slider::new(&mut self.end, -10.0..=10.0).text("end"));
-        ui.add(egui::Slider::new(&mut self.density, 1.0..=64.0).text("sampling density"));
-
-        ui.separator();
-        ui.label("Curve type");
-        egui::ComboBox::from_id_salt(format!("{}_kind", heading))
-            .selected_text(self.kind.label())
-            .show_ui(ui, |ui| {
-                for k in [
-                    CurveKind::Line,
-                    CurveKind::Constant,
-                    CurveKind::Parabolic,
-                    CurveKind::Hyperbolic,
-                    CurveKind::ArcSweep,
-                ] {
-                    ui.selectable_value(&mut self.kind, k, k.label());
-                }
-            });
-
-        ui.separator();
-        ui.label("Parameters");
-        match self.kind {
-            CurveKind::Line => {
-                ui.add(egui::Slider::new(&mut self.line_m, -10.0..=10.0).text("m (slope)"));
-                ui.add(egui::Slider::new(&mut self.line_b, -10.0..=10.0).text("b (intercept)"));
-            }
-            CurveKind::Constant => {
-                ui.add(egui::Slider::new(&mut self.const_value, -10.0..=10.0).text("value"));
-            }
-            CurveKind::Parabolic => {
-                ui.add(egui::Slider::new(&mut self.para_a, -5.0..=5.0).text("a"));
-                ui.add(egui::Slider::new(&mut self.para_b, -10.0..=10.0).text("b"));
-                ui.add(egui::Slider::new(&mut self.para_c, -10.0..=10.0).text("c"));
-            }
-            CurveKind::Hyperbolic => {
-                ui.add(egui::Slider::new(&mut self.hyp_a, -5.0..=5.0).text("a"));
-                ui.add(
-                    egui::DragValue::new(&mut self.hyp_b)
-                        .speed(0.05)
-                        .prefix("b (pole) "),
-                );
-                ui.add(egui::Slider::new(&mut self.hyp_c, -10.0..=10.0).text("c"));
-                if self.hyp_b > self.start && self.hyp_b < self.end {
-                    ui.colored_label(
-                        Color32::from_rgb(220, 180, 60),
-                        "b (pole) must be outside [start, end]",
-                    );
-                }
-            }
-            CurveKind::ArcSweep => {
-                ui.add(egui::Slider::new(&mut self.arc_center_y, -10.0..=10.0).text("center_y"));
-                ui.add(egui::Slider::new(&mut self.arc_radius, 0.05..=10.0).text("radius"));
-                ui.add(
-                    egui::Slider::new(
-                        &mut self.arc_start_angle,
-                        -std::f64::consts::PI..=std::f64::consts::PI,
-                    )
-                    .text("start_angle (rad)"),
-                );
-                ui.add(
-                    egui::Slider::new(
-                        &mut self.arc_sweep_angle,
-                        -std::f64::consts::TAU..=std::f64::consts::TAU,
-                    )
-                    .text("sweep_angle (rad)"),
-                );
-            }
-        }
-    }
 }
 
 struct ThickRevolutionBodyApp {
@@ -370,32 +202,46 @@ impl ThickRevolutionBodyApp {
 
         egui::CollapsingHeader::new("Profile Segment 1")
             .id_salt("profile_1")
-            .default_open(true)
+            .default_open(false)
             .show(ui, |ui| {
-                self.profile_config_1.show_controls(ui, "Profile Segment 1");
+                self.profile_config_1.show_controls(
+                    ui,
+                    "Profile Segment 1",
+                    "thick_profile_segment_1_kind",
+                );
             });
 
         egui::CollapsingHeader::new("Profile Segment 2")
             .id_salt("profile_2")
-            .default_open(true)
+            .default_open(false)
             .show(ui, |ui| {
-                self.profile_config_2.show_controls(ui, "Profile Segment 2");
+                self.profile_config_2.show_controls(
+                    ui,
+                    "Profile Segment 2",
+                    "thick_profile_segment_2_kind",
+                );
             });
 
         egui::CollapsingHeader::new("Face Thickness Segment")
             .id_salt("face_thickness")
             .default_open(false)
             .show(ui, |ui| {
-                self.face_thickness_config
-                    .show_controls(ui, "Face Thickness Segment");
+                self.face_thickness_config.show_controls(
+                    ui,
+                    "Face Thickness Segment",
+                    "thick_face_thickness_kind",
+                );
             });
 
         egui::CollapsingHeader::new("Backface Thickness Segment")
             .id_salt("backface_thickness")
             .default_open(false)
             .show(ui, |ui| {
-                self.backface_thickness_config
-                    .show_controls(ui, "Backface Thickness Segment");
+                self.backface_thickness_config.show_controls(
+                    ui,
+                    "Backface Thickness Segment",
+                    "thick_backface_thickness_kind",
+                );
             });
 
         egui::CollapsingHeader::new("Revolution Axis")
@@ -454,13 +300,23 @@ impl ThickRevolutionBodyApp {
                 ui.separator();
                 ui.label("Probe Direction:");
 
-                ui.selectable_value(&mut self.probe_mode, ProbeMode::Normal, "Use Surface Normal");
+                ui.selectable_value(
+                    &mut self.probe_mode,
+                    ProbeMode::Normal,
+                    "Use Surface Normal",
+                );
                 ui.selectable_value(&mut self.probe_mode, ProbeMode::Manual, "Manual Direction");
 
                 if self.probe_mode == ProbeMode::Manual {
-                    ui.add(egui::Slider::new(&mut self.manual_direction[0], -1.0..=1.0).text("Dir X"));
-                    ui.add(egui::Slider::new(&mut self.manual_direction[1], -1.0..=1.0).text("Dir Y"));
-                    ui.add(egui::Slider::new(&mut self.manual_direction[2], -1.0..=1.0).text("Dir Z"));
+                    ui.add(
+                        egui::Slider::new(&mut self.manual_direction[0], -1.0..=1.0).text("Dir X"),
+                    );
+                    ui.add(
+                        egui::Slider::new(&mut self.manual_direction[1], -1.0..=1.0).text("Dir Y"),
+                    );
+                    ui.add(
+                        egui::Slider::new(&mut self.manual_direction[2], -1.0..=1.0).text("Dir Z"),
+                    );
                 }
             });
 
@@ -480,134 +336,17 @@ impl ThickRevolutionBodyApp {
 }
 
 fn draw_2d_profile<const N: usize>(ui: &mut egui::Ui, body: &RevolutionMesh<N>) {
-    let profile_samples = body.sampled_profile_points(64);
-    if profile_samples.len() < 2 {
-        return;
-    }
-
-    let (min_t, max_t) = body.height_range();
-    let max_r = profile_samples
-        .iter()
-        .map(|(_, r)| *r)
-        .fold(0.0f64, f64::max)
-        .max(0.5);
-
-    let desired_size = egui::Vec2::new(420.0, 300.0);
-    let (response, painter) = ui.allocate_painter(desired_size, egui::Sense::hover());
-
-    let rect = response.rect;
-    let plot_rect = rect.shrink(10.0);
-
-    painter.rect_filled(rect, 0.0, egui::Color32::WHITE);
-    painter.rect_stroke(
-        plot_rect,
-        0.0,
-        egui::Stroke::new(1.0_f32, egui::Color32::BLACK),
-        egui::StrokeKind::Middle,
-    );
-
-    let margin_r = (max_r * 0.15).max(0.2);
-    let margin_t = ((max_t - min_t) * 0.1).max(0.4);
-    let min_t_scaled = min_t - margin_t;
-    let max_t_scaled = max_t + margin_t;
-    let min_r_scaled = 0.0;
-    let max_r_scaled = max_r + margin_r;
-
-    let width = plot_rect.width() as f64;
-    let height = plot_rect.height() as f64;
-
-    let data_to_screen = |t: f64, r: f64| -> egui::Pos2 {
-        let x =
-            plot_rect.left() as f64 + width * (t - min_t_scaled) / (max_t_scaled - min_t_scaled);
-        let y =
-            plot_rect.bottom() as f64 - height * (r - min_r_scaled) / (max_r_scaled - min_r_scaled);
-        egui::Pos2::new(x as f32, y as f32)
-    };
-
-    for i in 0..profile_samples.len() - 1 {
-        let (t1, r1) = profile_samples[i];
-        let (t2, r2) = profile_samples[i + 1];
-        painter.line_segment(
-            [data_to_screen(t1, r1), data_to_screen(t2, r2)],
-            egui::Stroke::new(2.0_f32, Color32::RED),
-        );
-    }
+    draw_segment_chart_sized(ui, 280.0, Some(body.profile.as_slice()), None);
 }
 
 fn draw_2d_thickness_preview(ui: &mut egui::Ui, samples: &[(f64, f64, f64)]) {
-    if samples.len() < 2 {
-        return;
-    }
-
-    let min_t = samples.first().map(|s| s.0).unwrap_or(0.0);
-    let max_t = samples.last().map(|s| s.0).unwrap_or(1.0);
-    let max_thickness = samples
-        .iter()
-        .map(|(_, face, back)| face.max(*back))
-        .fold(0.0_f64, f64::max)
-        .max(0.02);
-
-    let desired_size = egui::Vec2::new(420.0, 220.0);
-    let (response, painter) = ui.allocate_painter(desired_size, egui::Sense::hover());
-
-    let rect = response.rect;
-    let plot_rect = rect.shrink(10.0);
-
-    painter.rect_filled(rect, 0.0, Color32::WHITE);
-    painter.rect_stroke(
-        plot_rect,
-        0.0,
-        egui::Stroke::new(1.0_f32, Color32::BLACK),
-        egui::StrokeKind::Middle,
-    );
-
-    let margin_t = ((max_t - min_t) * 0.08).max(0.1);
-    let min_t_scaled = min_t - margin_t;
-    let max_t_scaled = max_t + margin_t;
-    let max_thickness_scaled = (max_thickness * 1.2).max(0.05);
-
-    let width = plot_rect.width() as f64;
-    let height = plot_rect.height() as f64;
-
-    let data_to_screen = |t: f64, y: f64| -> egui::Pos2 {
-        let x =
-            plot_rect.left() as f64 + width * (t - min_t_scaled) / (max_t_scaled - min_t_scaled);
-        let sy = plot_rect.bottom() as f64 - height * y / max_thickness_scaled;
-        egui::Pos2::new(x as f32, sy as f32)
-    };
-
-    let face_color = Color32::from_rgb(216, 69, 69);
-    let back_color = Color32::from_rgb(55, 121, 214);
-
-    for i in 0..samples.len() - 1 {
-        let (t1, f1, b1) = samples[i];
-        let (t2, f2, b2) = samples[i + 1];
-
-        painter.line_segment(
-            [data_to_screen(t1, f1), data_to_screen(t2, f2)],
-            egui::Stroke::new(2.0_f32, face_color),
-        );
-        painter.line_segment(
-            [data_to_screen(t1, b1), data_to_screen(t2, b2)],
-            egui::Stroke::new(2.0_f32, back_color),
-        );
-    }
-
-    let font_id = egui::FontId::proportional(11.0);
-    painter.text(
-        plot_rect.left_top() + egui::vec2(8.0, 6.0),
-        egui::Align2::LEFT_TOP,
-        "Face",
-        font_id.clone(),
-        face_color,
-    );
-    painter.text(
-        plot_rect.left_top() + egui::vec2(52.0, 6.0),
-        egui::Align2::LEFT_TOP,
-        "Backface",
-        font_id,
-        back_color,
-    );
+    let face = samples.iter().map(|(t, f, _)| (*t, *f)).collect::<Vec<_>>();
+    let back = samples.iter().map(|(t, _, b)| (*t, *b)).collect::<Vec<_>>();
+    let series: [(&str, &[(f64, f64)], Color32); 2] = [
+        ("face", face.as_slice(), Color32::from_rgb(216, 69, 69)),
+        ("backface", back.as_slice(), Color32::from_rgb(55, 121, 214)),
+    ];
+    draw_xy_multi_line_chart_sized(ui, "Thickness", 220.0, &series, "h", "m");
 }
 
 fn draw_3d_mesh<M>(
@@ -618,8 +357,7 @@ fn draw_3d_mesh<M>(
     resolution: usize,
     selected_vertex: Option<usize>,
     selected_probe_direction: Option<Vector3<f64>>,
-)
-where
+) where
     M: Meshable<Vertex = EmbodiedPoint3, Index = EmbodiedTriangle>,
 {
     let desired_size = egui::Vec2::new(760.0, 460.0);
@@ -649,50 +387,11 @@ where
         return;
     }
 
-    let (sin_pitch, cos_pitch) = pitch.sin_cos();
-    let (sin_yaw, cos_yaw) = yaw.sin_cos();
-
-    let mut projected: Vec<(egui::Pos2, f64)> = Vec::with_capacity(points.len());
-    let mut max_extent: f64 = 0.0;
-
-    for p in &points {
-        let x1 = p.x * cos_yaw + p.z * sin_yaw;
-        let z1 = -p.x * sin_yaw + p.z * cos_yaw;
-        let y1 = p.y * cos_pitch - z1 * sin_pitch;
-        let z2 = p.y * sin_pitch + z1 * cos_pitch;
-
-        max_extent = max_extent.max(x1.abs()).max(y1.abs()).max(z2.abs());
-        projected.push((egui::pos2(x1 as f32, y1 as f32), z2));
-    }
-
-    if max_extent <= f64::EPSILON {
-        max_extent = 1.0;
-    }
-
-    let scale = 0.42_f32 * plot_rect.width().min(plot_rect.height()) / max_extent as f32;
-    let project_point = |point: EmbodiedPoint3| {
-        let x1 = point.x * cos_yaw + point.z * sin_yaw;
-        let z1 = -point.x * sin_yaw + point.z * cos_yaw;
-        let y1 = point.y * cos_pitch - z1 * sin_pitch;
-        let z2 = point.y * sin_pitch + z1 * cos_pitch;
-
-        (
-            egui::pos2(
-                plot_rect.center().x + x1 as f32 * scale,
-                plot_rect.center().y - y1 as f32 * scale,
-            ),
-            z2,
-        )
-    };
-
-    for (screen_pt, _) in &mut projected {
-        screen_pt.x = plot_rect.center().x + screen_pt.x * scale;
-        screen_pt.y = plot_rect.center().y - screen_pt.y * scale;
-    }
+    let xyz_points = points.iter().map(|p| (p.x, p.y, p.z)).collect::<Vec<_>>();
+    let (projector, projected) =
+        MeshProjector::from_xyz_points(&xyz_points, plot_rect, pitch, yaw, 0.42);
 
     let mut face_data: Vec<([usize; 3], f64, Color32)> = Vec::with_capacity(indices.len());
-    let mut edge_data: Vec<((usize, usize), f64)> = Vec::new();
-    edge_data.reserve(indices.len() * 3);
 
     let outer_fill = Color32::from_rgba_unmultiplied(226, 121, 97, 130);
     let inner_fill = Color32::from_rgba_unmultiplied(84, 154, 236, 130);
@@ -716,23 +415,6 @@ where
             rim_fill
         };
         face_data.push(([ai, bi, ci], depth, color));
-
-        let mut ab = (ai, bi);
-        if ab.0 > ab.1 {
-            ab = (ab.1, ab.0);
-        }
-        let mut bc = (bi, ci);
-        if bc.0 > bc.1 {
-            bc = (bc.1, bc.0);
-        }
-        let mut ca = (ci, ai);
-        if ca.0 > ca.1 {
-            ca = (ca.1, ca.0);
-        }
-
-        edge_data.push((ab, depth));
-        edge_data.push((bc, depth));
-        edge_data.push((ca, depth));
     }
 
     face_data.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
@@ -747,37 +429,19 @@ where
             Stroke::NONE,
         ));
     }
-
-    edge_data.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-    edge_data.dedup_by_key(|entry| entry.0);
-
-    let min_depth = edge_data.first().map(|(_, d)| *d).unwrap_or(0.0);
-    let max_depth = edge_data.last().map(|(_, d)| *d).unwrap_or(1.0);
-    let depth_span = (max_depth - min_depth).max(1e-9);
-
-    for ((a, b), depth) in edge_data {
-        let near = ((depth - min_depth) / depth_span) as f32;
-        let line_color = egui::Color32::from_rgb(
-            (60.0 + 120.0 * near) as u8,
-            (90.0 + 110.0 * near) as u8,
-            (130.0 + 90.0 * near) as u8,
-        );
-        let width = 0.6_f32 + 1.1_f32 * near;
-        painter.line_segment(
-            [projected[a].0, projected[b].0],
-            egui::Stroke::new(width, line_color),
-        );
-    }
+    draw_depth_wireframe(&painter, &projected, &indices);
 
     // Draw selected vertex highlight
     if let Some(selected_idx) = selected_vertex {
         if selected_idx < projected.len() {
             if let Some(probe_direction) = selected_probe_direction {
                 let start_world = points[selected_idx];
-                let normal_length = 0.18 * max_extent.max(1.0);
+                let normal_length = 0.18 * projector.max_extent().max(1.0);
                 let end_world = start_world + probe_direction * normal_length;
                 let start_screen = projected[selected_idx].0;
-                let end_screen = project_point(end_world).0;
+                let end_screen = projector
+                    .project_xyz(end_world.x, end_world.y, end_world.z)
+                    .0;
 
                 painter.line_segment(
                     [start_screen, end_screen],
@@ -841,19 +505,18 @@ impl eframe::App for ThickRevolutionBodyApp {
                     None => (None, None),
                 };
 
+                let points = thick_body.sample_points(self.resolution);
+                let stats_vertices = points.len();
+                let stats_triangles = thick_body.mesh_indices(self.resolution).len();
                 ui.columns(2, |cols| {
-                    cols[0].heading("2D Profile Preview (2 profile segments)");
+                    cols[0].heading("2D Profile Preview");
                     cols[0].group(|ui| {
-                        ui.set_min_size(egui::Vec2::new(420.0, 300.0));
                         draw_2d_profile(ui, &body);
                     });
 
                     cols[1].heading("2D Thickness Preview");
                     cols[1].group(|ui| match self.sample_thickness_curves(&body, 96) {
-                        Ok(samples) => {
-                            ui.set_min_size(egui::Vec2::new(420.0, 300.0));
-                            draw_2d_thickness_preview(ui, &samples);
-                        }
+                        Ok(samples) => draw_2d_thickness_preview(ui, &samples),
                         Err(err) => {
                             ui.colored_label(
                                 Color32::LIGHT_RED,
@@ -864,13 +527,15 @@ impl eframe::App for ThickRevolutionBodyApp {
                 });
 
                 ui.separator();
-                ui.heading("3D Thick Mesh Preview");
+                ui.heading(format!(
+                    "3D Thick Mesh Preview | {} vertices, {} triangles",
+                    stats_vertices, stats_triangles
+                ));
                 ui.label(
                     "Filled render: outside (warm), inside (cool), rim (green) + wireframe overlay; selected vertex in yellow",
                 );
-                
+
                 ui.columns(2, |cols| {
-                    // 3D Mesh on left
                     cols[0].group(|ui| {
                         draw_3d_mesh(
                             ui,
@@ -883,15 +548,12 @@ impl eframe::App for ThickRevolutionBodyApp {
                         );
                     });
 
-                    // Stats panel on right
                     cols[1].group(|ui| {
                         ui.heading("Embodied Stats");
-                        
-                        // Material volume
+
                         let mat_vol = thick_body.material_volume_m3(self.resolution);
                         ui.label(format!("Material Volume: {:.6} m³", mat_vol));
 
-                        // Cavity volume
                         match thick_body.cavity_volume_m3(self.resolution) {
                             Some(cav_vol) => {
                                 ui.label(format!("Cavity Volume: {:.6} m³", cav_vol));
@@ -905,8 +567,6 @@ impl eframe::App for ThickRevolutionBodyApp {
                         ui.heading("Vertex Probes");
                         ui.label(format!("Selected Index: {}", self.selected_vertex_index));
 
-                        // Vertex position
-                        let points = thick_body.sample_points(self.resolution);
                         if self.selected_vertex_index < points.len() {
                             let pos = points[self.selected_vertex_index];
                             ui.label(format!("Pos X: {:.6}", pos.x));
@@ -915,7 +575,6 @@ impl eframe::App for ThickRevolutionBodyApp {
 
                             ui.separator();
 
-                            // Surface normal
                             match selected_normal {
                                 Some(normal) => {
                                     ui.label(format!("Normal X: {:.6}", normal.x));

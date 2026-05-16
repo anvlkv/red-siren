@@ -1,4 +1,4 @@
-use common::geometry::{Embodied, RevolutionAxis, RevolutionBody, Segment};
+use common::body::{Meshable, RevolutionAxis, RevolutionMesh, Segment};
 use eframe::egui::{self, Color32};
 
 #[allow(dead_code)]
@@ -223,7 +223,7 @@ impl Default for RevolutionBodyApp {
 }
 
 impl RevolutionBodyApp {
-    fn try_build_body(&self) -> Result<RevolutionBody<2>, String> {
+    fn try_build_body(&self) -> Result<RevolutionMesh<2>, String> {
         let seg1 = self
             .profile_config_1
             .build_segment()
@@ -238,7 +238,7 @@ impl RevolutionBodyApp {
         seg2.start += seg1.end;
         seg2.end += seg1.end;
 
-        RevolutionBody::new([seg1, seg2], self.axis)
+        RevolutionMesh::new([seg1, seg2], self.axis)
             .map_err(|err| format!("body construction: {err}"))
     }
 
@@ -318,7 +318,7 @@ impl RevolutionBodyApp {
 
 fn draw_2d_profile<const N: usize>(
     ui: &mut egui::Ui,
-    body: &RevolutionBody<N>,
+    body: &RevolutionMesh<N>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (min_t, max_t) = body.height_range();
 
@@ -448,7 +448,7 @@ fn draw_2d_profile<const N: usize>(
 
 fn draw_3d_mesh<const N: usize>(
     ui: &mut egui::Ui,
-    body: &RevolutionBody<N>,
+    body: &RevolutionMesh<N>,
     pitch: f64,
     yaw: f64,
     resolution: usize,

@@ -1,6 +1,6 @@
-use common::geometry::{
-    thickness_map_from_axial_samples, Embodied, EmbodiedPoint3, EmbodiedTriangle, RevolutionAxis,
-    RevolutionBody, Segment, ThickBody,
+use common::body::{
+    thickness_map_from_axial_samples, Meshable, EmbodiedPoint3, EmbodiedTriangle, RevolutionAxis,
+    RevolutionMesh, Segment, ThickMesh,
 };
 use eframe::egui::{self, Color32, Shape, Stroke};
 use nalgebra::Vector3;
@@ -250,7 +250,7 @@ impl Default for ThickRevolutionBodyApp {
 }
 
 impl ThickRevolutionBodyApp {
-    fn try_build_scene(&self) -> Result<(RevolutionBody<2>, ThickBody<RevolutionBody<2>>), String> {
+    fn try_build_scene(&self) -> Result<(RevolutionMesh<2>, ThickMesh<RevolutionMesh<2>>), String> {
         let seg1 = self
             .profile_config_1
             .build_segment()
@@ -264,7 +264,7 @@ impl ThickRevolutionBodyApp {
         seg2.start += seg1.end;
         seg2.end += seg1.end;
 
-        let body = RevolutionBody::new([seg1, seg2], self.axis)
+        let body = RevolutionMesh::new([seg1, seg2], self.axis)
             .map_err(|err| format!("body construction: {err}"))?;
 
         let face_segment = self
@@ -294,12 +294,12 @@ impl ThickRevolutionBodyApp {
             })
             .ok_or_else(|| "thickness map construction failed (invalid values)".to_string())?;
 
-        Ok((body.clone(), ThickBody::new(body, thickness_map)))
+        Ok((body.clone(), ThickMesh::new(body, thickness_map)))
     }
 
     fn sample_thickness_curves(
         &self,
-        body: &RevolutionBody<2>,
+        body: &RevolutionMesh<2>,
         samples: usize,
     ) -> Result<Vec<(f64, f64, f64)>, String> {
         if samples < 2 {
@@ -479,7 +479,7 @@ impl ThickRevolutionBodyApp {
     }
 }
 
-fn draw_2d_profile<const N: usize>(ui: &mut egui::Ui, body: &RevolutionBody<N>) {
+fn draw_2d_profile<const N: usize>(ui: &mut egui::Ui, body: &RevolutionMesh<N>) {
     let profile_samples = body.sampled_profile_points(64);
     if profile_samples.len() < 2 {
         return;
@@ -620,7 +620,7 @@ fn draw_3d_mesh<M>(
     selected_probe_direction: Option<Vector3<f64>>,
 )
 where
-    M: Embodied<Vertex = EmbodiedPoint3, Index = EmbodiedTriangle>,
+    M: Meshable<Vertex = EmbodiedPoint3, Index = EmbodiedTriangle>,
 {
     let desired_size = egui::Vec2::new(760.0, 460.0);
     let (response, painter) = ui.allocate_painter(desired_size, egui::Sense::hover());

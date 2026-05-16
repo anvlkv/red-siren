@@ -1,8 +1,8 @@
-use crate::geometry::embodied::{
-    cavity_volume_from_shell, Embodied, EmbodiedBounds, EmbodiedPoint3, EmbodiedTriangle,
-    EmbodiedVector3,
+use crate::body::meshable::{
+    cavity_volume_from_shell, EmbodiedBounds, EmbodiedPoint3, EmbodiedTriangle, EmbodiedVector3,
+    Meshable,
 };
-use crate::geometry::Segment;
+use crate::body::Segment;
 use nalgebra::Vector3;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
@@ -154,7 +154,7 @@ pub enum RevolutionAxis {
 /// - `profile`: array of N segments defining the radius r(h).
 /// - `axis`: the revolution axis (X, Y, or Z).
 #[derive(Debug, Clone)]
-pub struct RevolutionBody<const N: usize> {
+pub struct RevolutionMesh<const N: usize> {
     /// N segments defining the radius r(h) as a function of axial position h.
     pub profile: [Segment; N],
     /// The axis around which the profile is revolved.
@@ -162,7 +162,7 @@ pub struct RevolutionBody<const N: usize> {
 }
 
 // Manual Serialize implementation for RevolutionBody<N>
-impl<const N: usize> Serialize for RevolutionBody<N> {
+impl<const N: usize> Serialize for RevolutionMesh<N> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -177,7 +177,7 @@ impl<const N: usize> Serialize for RevolutionBody<N> {
 }
 
 // Manual Deserialize implementation for RevolutionBody<N>
-impl<'de, const N: usize> Deserialize<'de> for RevolutionBody<N> {
+impl<'de, const N: usize> Deserialize<'de> for RevolutionMesh<N> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -188,7 +188,7 @@ impl<'de, const N: usize> Deserialize<'de> for RevolutionBody<N> {
         struct RevolutionBodyVisitor<const N: usize>;
 
         impl<'de, const N: usize> Visitor<'de> for RevolutionBodyVisitor<N> {
-            type Value = RevolutionBody<N>;
+            type Value = RevolutionMesh<N>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 write!(
@@ -198,7 +198,7 @@ impl<'de, const N: usize> Deserialize<'de> for RevolutionBody<N> {
                 )
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<RevolutionBody<N>, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<RevolutionMesh<N>, V::Error>
             where
                 V: MapAccess<'de>,
             {
@@ -240,7 +240,7 @@ impl<'de, const N: usize> Deserialize<'de> for RevolutionBody<N> {
                     .try_into()
                     .map_err(|_| de::Error::custom("failed to convert profile to array"))?;
 
-                Ok(RevolutionBody {
+                Ok(RevolutionMesh {
                     profile: profile_array,
                     axis,
                 })
@@ -255,7 +255,7 @@ impl<'de, const N: usize> Deserialize<'de> for RevolutionBody<N> {
     }
 }
 
-impl<const N: usize> RevolutionBody<N> {
+impl<const N: usize> RevolutionMesh<N> {
     /// Construct a new RevolutionBody from a profile and a revolution axis.
     ///
     /// # Errors
@@ -272,7 +272,7 @@ impl<const N: usize> RevolutionBody<N> {
                 return Err(RevolutionBodyError::NonMonotonicSegments);
             }
         }
-        Ok(RevolutionBody { profile, axis })
+        Ok(RevolutionMesh { profile, axis })
     }
 
     /// Get the axial range [min, max] of the profile.
@@ -404,7 +404,7 @@ impl<const N: usize> RevolutionBody<N> {
     }
 }
 
-impl<const N: usize> Embodied for RevolutionBody<N> {
+impl<const N: usize> Meshable for RevolutionMesh<N> {
     type Vertex = EmbodiedPoint3;
     type Index = EmbodiedTriangle;
     type Bounds = EmbodiedBounds;
@@ -588,14 +588,14 @@ impl<const N: usize> Embodied for RevolutionBody<N> {
 mod tests {
     use super::*;
 
-    fn make_body_linear(end: f64, m: f64, b: f64, axis: RevolutionAxis) -> RevolutionBody<1> {
+    fn make_body_linear(end: f64, m: f64, b: f64, axis: RevolutionAxis) -> RevolutionMesh<1> {
         let seg = Segment::start_line(end, m, b).expect("segment");
-        RevolutionBody::new([seg], axis).expect("body")
+        RevolutionMesh::new([seg], axis).expect("body")
     }
 
-    fn make_body_constant(end: f64, value: f64) -> RevolutionBody<1> {
+    fn make_body_constant(end: f64, value: f64) -> RevolutionMesh<1> {
         let seg = Segment::start_constant(end, value).expect("segment");
-        RevolutionBody::new([seg], RevolutionAxis::Y).expect("body")
+        RevolutionMesh::new([seg], RevolutionAxis::Y).expect("body")
     }
 
     // ── Construction ───────────────────────────────────────────────────────────
@@ -617,7 +617,7 @@ mod tests {
         let seg1 = Segment::start_line(1.0, 1.0, 0.0).expect("segment");
         let mut seg2 = Segment::start_line(2.0, 1.0, 0.0).expect("segment");
         seg2.start = 1.5; // intentional gap
-        let result = RevolutionBody::new([seg1, seg2], RevolutionAxis::Y);
+        let result = RevolutionMesh::new([seg1, seg2], RevolutionAxis::Y);
         assert!(matches!(
             result,
             Err(RevolutionBodyError::NonMonotonicSegments)
@@ -629,7 +629,7 @@ mod tests {
         let seg1 = Segment::start_line(1.0, 1.0, 0.0).expect("segment");
         let mut seg2 = Segment::start_line(2.0, 1.0, 0.0).expect("segment");
         seg2.start = 1.0;
-        let body = RevolutionBody::new([seg1, seg2], RevolutionAxis::Y).expect("body");
+        let body = RevolutionMesh::new([seg1, seg2], RevolutionAxis::Y).expect("body");
         assert_eq!(body.segment_count(), 2);
         assert_eq!(body.height_range(), (0.0, 2.0));
     }
@@ -640,7 +640,7 @@ mod tests {
     fn test_serialization_roundtrip() {
         let body = make_body_linear(1.0, 1.0, 0.0, RevolutionAxis::Z);
         let json = serde_json::to_string(&body).expect("serialize");
-        let restored: RevolutionBody<1> = serde_json::from_str(&json).expect("deserialize");
+        let restored: RevolutionMesh<1> = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(restored.axis, RevolutionAxis::Z);
         assert_eq!(restored.segment_count(), 1);
     }
@@ -665,9 +665,9 @@ mod tests {
         let seg1 = Segment::start_line(1.0, 1.0, 0.0).expect("segment");
         let mut seg2 = Segment::start_line(2.0, 1.0, 0.0).expect("segment");
         seg2.start = 1.0;
-        let body = RevolutionBody::new([seg1, seg2], RevolutionAxis::X).expect("body");
+        let body = RevolutionMesh::new([seg1, seg2], RevolutionAxis::X).expect("body");
         let json = serde_json::to_string(&body).expect("serialize");
-        let restored: RevolutionBody<2> = serde_json::from_str(&json).expect("deserialize");
+        let restored: RevolutionMesh<2> = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(restored.axis, RevolutionAxis::X);
         assert_eq!(restored.height_range(), (0.0, 2.0));
     }
@@ -787,7 +787,7 @@ mod tests {
     #[test]
     fn test_sample_points_x_axis_cylinder() {
         let seg = Segment::start_constant(1.0, 1.0).expect("segment");
-        let body = RevolutionBody::new([seg], RevolutionAxis::X).expect("body");
+        let body = RevolutionMesh::new([seg], RevolutionAxis::X).expect("body");
         for p in body.sample_points(8) {
             let d = (p.y * p.y + p.z * p.z).sqrt();
             assert!((d - 1.0).abs() < 1e-10);
@@ -797,7 +797,7 @@ mod tests {
     #[test]
     fn test_sample_points_z_axis_cylinder() {
         let seg = Segment::start_constant(1.0, 1.0).expect("segment");
-        let body = RevolutionBody::new([seg], RevolutionAxis::Z).expect("body");
+        let body = RevolutionMesh::new([seg], RevolutionAxis::Z).expect("body");
         for p in body.sample_points(8) {
             let d = (p.x * p.x + p.y * p.y).sqrt();
             assert!((d - 1.0).abs() < 1e-10);
@@ -858,7 +858,7 @@ mod tests {
     #[test]
     fn test_bounding_box_x_axis_height_along_x() {
         let seg = Segment::start_constant(1.0, 1.0).expect("segment");
-        let body = RevolutionBody::new([seg], RevolutionAxis::X).expect("body");
+        let body = RevolutionMesh::new([seg], RevolutionAxis::X).expect("body");
         let (min, max) = body.bounding_box(8);
         assert!(min.x <= 0.0 && max.x >= 1.0);
     }
@@ -866,7 +866,7 @@ mod tests {
     #[test]
     fn test_bounding_box_z_axis_height_along_z() {
         let seg = Segment::start_constant(1.0, 1.0).expect("segment");
-        let body = RevolutionBody::new([seg], RevolutionAxis::Z).expect("body");
+        let body = RevolutionMesh::new([seg], RevolutionAxis::Z).expect("body");
         let (min, max) = body.bounding_box(8);
         assert!(min.z <= 0.0 && max.z >= 1.0);
     }

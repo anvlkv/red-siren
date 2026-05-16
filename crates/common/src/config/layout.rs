@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::{safe_area::SafeArea, Line, Rect};
 
 pub const LAYOUT_PRIMES: const_primes::Primes<20> = const_primes::Primes::new();
+pub const MAX_LP: usize = LAYOUT_PRIMES.as_array()[19] as usize; // 71
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 pub struct Layout {
@@ -57,18 +58,19 @@ impl Default for Layout {
 #[derive(Clone, Copy, Debug)]
 struct LayoutCandidate {
     layout: Layout,
+    #[allow(dead_code)]
     score: f64,
 }
 
 impl LayoutCandidate {
-    fn generate_candidates(screen_estate: &Rect, safe_area: &SafeArea) -> Vec<Self> {
+    fn generate_candidates(_screen_estate: &Rect, _safe_area: &SafeArea) -> Vec<Self> {
         todo!()
     }
 
     fn evaluate(
-        candidates: &mut [Self],
-        screen_estate: &Rect,
-        safe_area: &SafeArea,
+        _candidates: &mut [Self],
+        _screen_estate: &Rect,
+        _safe_area: &SafeArea,
     ) -> Option<Self> {
         todo!()
     }

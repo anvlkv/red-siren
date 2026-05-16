@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 pub struct Material {
     /// Density of the material in kg/m^3.
-    pub material_density_kg_per_m3: f64,
+    pub density_kg_per_m3: f64,
     /// Poison's ratio of the material, describes how much a material narrows sideways when stretched.
     pub poisson_ratio: f64,
     /// Young's modulus of the material in Pascals, describes the stiffness of the material.

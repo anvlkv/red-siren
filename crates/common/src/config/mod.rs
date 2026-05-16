@@ -3,7 +3,7 @@ mod channel;
 mod context;
 mod grid_limits;
 mod layout;
-pub mod materials;
+mod node;
 mod orientation;
 mod scale;
 
@@ -12,18 +12,20 @@ pub use channel::*;
 pub use context::*;
 pub use grid_limits::*;
 pub use layout::*;
+pub use node::*;
 pub use orientation::*;
 pub use scale::*;
 
 use serde::{Deserialize, Serialize};
+use std::hash::{Hash, Hasher};
 
-#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Config {
     pub ctx_hash: u64,
     pub ctx: Context,
     pub layout: Layout,
     pub scale: Scale,
-    pub base_band: Band,
+    pub bands: Vec<(Band, Vec<Node>)>,
     pub grid_limits: GridLimits,
 }
 
@@ -56,10 +58,9 @@ impl Config {
     //     }
     // }
 
-    // fn hash_context(ctx: &Context) -> u64 {
-    //     use std::hash::{Hash, Hasher};
-    //     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    //     ctx.hash(&mut hasher);
-    //     hasher.finish()
-    // }
+    fn hash_context(ctx: &Context) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        ctx.hash(&mut hasher);
+        hasher.finish()
+    }
 }

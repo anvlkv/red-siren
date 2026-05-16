@@ -1,4 +1,4 @@
-use common::geometry::Segment;
+use common::body::Segment;
 use eframe::egui::{self, Color32, Pos2, Sense, Shape, Stroke};
 use mint::Point2;
 

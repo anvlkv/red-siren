@@ -1,6 +1,6 @@
-use crate::geometry::embodied::{
-    boundary_edges, cavity_volume_from_shell, mesh_signed_volume, Embodied, EmbodiedBounds,
-    EmbodiedPoint3, EmbodiedTriangle, EmbodiedVector3,
+use crate::body::meshable::{
+    boundary_edges, cavity_volume_from_shell, mesh_signed_volume, EmbodiedBounds, EmbodiedPoint3,
+    EmbodiedTriangle, EmbodiedVector3, Meshable,
 };
 use nalgebra::Vector3;
 use serde::{Deserialize, Serialize};
@@ -316,12 +316,12 @@ fn directional_thickness_from_mesh(
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ThickBody<B> {
+pub struct ThickMesh<B> {
     pub base: B,
     pub thickness_map: ThicknessMap,
 }
 
-impl<B> ThickBody<B> {
+impl<B> ThickMesh<B> {
     pub fn new(base: B, thickness_map: ThicknessMap) -> Self {
         Self {
             base,
@@ -330,9 +330,9 @@ impl<B> ThickBody<B> {
     }
 }
 
-impl<B> Embodied for ThickBody<B>
+impl<B> Meshable for ThickMesh<B>
 where
-    B: Embodied<
+    B: Meshable<
         Vertex = EmbodiedPoint3,
         Index = EmbodiedTriangle,
         Bounds = EmbodiedBounds,
@@ -496,12 +496,12 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geometry::{RevolutionAxis, RevolutionBody, Segment};
+    use crate::body::{RevolutionAxis, RevolutionMesh, Segment};
 
     #[derive(Clone, Debug)]
     struct ClosedTetra;
 
-    impl Embodied for ClosedTetra {
+    impl Meshable for ClosedTetra {
         type Vertex = EmbodiedPoint3;
         type Index = EmbodiedTriangle;
         type Bounds = EmbodiedBounds;
@@ -559,9 +559,9 @@ mod tests {
         }
     }
 
-    fn make_body() -> RevolutionBody<1> {
+    fn make_body() -> RevolutionMesh<1> {
         let segment = Segment::start_constant(1.0, 1.0).expect("segment");
-        RevolutionBody::new([segment], RevolutionAxis::Y).expect("body")
+        RevolutionMesh::new([segment], RevolutionAxis::Y).expect("body")
     }
 
     #[test]
@@ -659,7 +659,7 @@ mod tests {
             backface_thickness: 0.03,
         }])
         .expect("map");
-        let thick = ThickBody::new(base, map);
+        let thick = ThickMesh::new(base, map);
 
         let points = thick.sample_points(resolution);
         let indices = thick.mesh_indices(resolution);
@@ -692,7 +692,7 @@ mod tests {
             backface_thickness: 0.2,
         }])
         .expect("map");
-        let thick = ThickBody::new(base, map);
+        let thick = ThickMesh::new(base, map);
         let thick_points = thick.sample_points(resolution);
 
         let mut boundary_vertex_seen = vec![false; base_points.len()];
@@ -722,7 +722,7 @@ mod tests {
             backface_thickness: 0.04,
         }])
         .expect("map");
-        let thick = ThickBody::new(base, map);
+        let thick = ThickMesh::new(base, map);
 
         assert!(thick.material_volume_m3(16) > 0.0);
     }
@@ -736,7 +736,7 @@ mod tests {
             backface_thickness: 0.04,
         }])
         .expect("map");
-        let thick = ThickBody::new(base, map);
+        let thick = ThickMesh::new(base, map);
 
         let cavity = thick.cavity_volume_m3(64).expect("cavity");
         assert!(cavity.is_finite());
@@ -747,14 +747,14 @@ mod tests {
     #[test]
     fn thick_body_cavity_is_positive_for_bowl_profile() {
         let segment = Segment::start_parabolic(1.0, 0.35, 0.0, 0.55).expect("segment");
-        let base = RevolutionBody::new([segment], RevolutionAxis::Y).expect("body");
+        let base = RevolutionMesh::new([segment], RevolutionAxis::Y).expect("body");
         let map = ThicknessMap::new(vec![ThicknessMapPoint {
             body_vertex_index: 0,
             face_thickness: 0.06,
             backface_thickness: 0.05,
         }])
         .expect("map");
-        let thick = ThickBody::new(base, map);
+        let thick = ThickMesh::new(base, map);
 
         let cavity = thick.cavity_volume_m3(96).expect("cavity");
         assert!(cavity.is_finite());
@@ -769,7 +769,7 @@ mod tests {
             backface_thickness: 0.03,
         }])
         .expect("map");
-        let thick = ThickBody::new(ClosedTetra, map);
+        let thick = ThickMesh::new(ClosedTetra, map);
 
         let cavity = thick.cavity_volume_m3(8).expect("cavity");
         assert!(cavity > 0.0);
@@ -784,7 +784,7 @@ mod tests {
             backface_thickness: 0.05,
         }])
         .expect("map");
-        let thick = ThickBody::new(base, map);
+        let thick = ThickMesh::new(base, map);
 
         assert_eq!(thick.surface_normal_at_vertex(16, usize::MAX), None);
     }
@@ -798,7 +798,7 @@ mod tests {
             backface_thickness: 0.04,
         }])
         .expect("map");
-        let thick = ThickBody::new(base, map);
+        let thick = ThickMesh::new(base, map);
 
         assert_eq!(
             thick.material_thickness_at_vertex(16, 0, Vector3::zeros()),
@@ -815,7 +815,7 @@ mod tests {
             backface_thickness: 0.04,
         }])
         .expect("map");
-        let thick = ThickBody::new(base, map);
+        let thick = ThickMesh::new(base, map);
 
         let points = thick.sample_points(16);
         let p0 = points[0];

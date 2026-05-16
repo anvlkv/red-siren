@@ -1,5 +1,5 @@
-use crate::geometry::embodied::{
-    Embodied, EmbodiedBounds, EmbodiedPoint3, EmbodiedTriangle, EmbodiedVector3,
+use crate::body::meshable::{
+    EmbodiedBounds, EmbodiedPoint3, EmbodiedTriangle, EmbodiedVector3, Meshable,
 };
 use std::collections::HashMap;
 use std::sync::{OnceLock, RwLock};
@@ -21,9 +21,9 @@ use std::sync::{OnceLock, RwLock};
 /// // Different resolution creates new cache entry
 /// let points3 = memo.sample_points(512);
 /// ```
-pub struct MemoBody {
+pub struct MemoMesh {
     inner: Box<
-        dyn Embodied<
+        dyn Meshable<
             Vertex = EmbodiedPoint3,
             Index = EmbodiedTriangle,
             Bounds = EmbodiedBounds,
@@ -53,11 +53,11 @@ fn direction_key(direction: EmbodiedVector3) -> [u64; 3] {
     ]
 }
 
-impl MemoBody {
+impl MemoMesh {
     /// Wrap a boxed `Embodied` implementation with memoization.
     pub fn new(
         inner: Box<
-            dyn Embodied<
+            dyn Meshable<
                 Vertex = EmbodiedPoint3,
                 Index = EmbodiedTriangle,
                 Bounds = EmbodiedBounds,
@@ -65,7 +65,7 @@ impl MemoBody {
             >,
         >,
     ) -> Self {
-        MemoBody {
+        MemoMesh {
             inner,
             cache: RwLock::new(HashMap::new()),
             opt_resolution_cache: OnceLock::new(),
@@ -93,7 +93,7 @@ impl MemoBody {
     }
 }
 
-impl Embodied for MemoBody {
+impl Meshable for MemoMesh {
     type Vertex = EmbodiedPoint3;
     type Index = EmbodiedTriangle;
     type Bounds = EmbodiedBounds;
@@ -276,7 +276,7 @@ mod tests {
         }
     }
 
-    impl Embodied for CountingEmbodied {
+    impl Meshable for CountingEmbodied {
         type Vertex = EmbodiedPoint3;
         type Index = EmbodiedTriangle;
         type Bounds = EmbodiedBounds;
@@ -347,10 +347,10 @@ mod tests {
         }
     }
 
-    fn make_memo_body() -> (MemoBody, Arc<Counters>) {
+    fn make_memo_body() -> (MemoMesh, Arc<Counters>) {
         let counters = Arc::new(Counters::default());
         let body = CountingEmbodied::new(Arc::clone(&counters));
-        (MemoBody::new(Box::new(body)), counters)
+        (MemoMesh::new(Box::new(body)), counters)
     }
 
     #[test]

@@ -2,7 +2,7 @@ use nalgebra::{Point3, Vector3};
 use std::collections::HashMap;
 
 /// A generic surface meshing interface for any meshable geometry.
-pub trait Embodied {
+pub trait Meshable {
     type Vertex;
     type Index;
     type Bounds;

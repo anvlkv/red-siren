@@ -2,7 +2,10 @@ use nalgebra::{DMatrix, Point3};
 
 use crate::{mesh_surface_area_m2, nearest_vertex_index, Meshable, SurfaceMesh};
 
-use super::{Node, MODAL_EIGEN_MAX_RESOLUTION, MODAL_EPSILON, MOUNT_PROFILE_R_M, MOUNT_PROFILE_Y_M, MIN_MODE_COUNT};
+use super::{
+    Node, MIN_MODE_COUNT, MODAL_EIGEN_MAX_RESOLUTION, MODAL_EPSILON, MOUNT_PROFILE_R_M,
+    MOUNT_PROFILE_Y_M,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct BowlDescriptor {
@@ -24,6 +27,36 @@ pub(super) struct ScalarSolve {
     pub modes: Vec<ScalarMode>,
     pub constrained_count: usize,
     pub active_count: usize,
+    pub diagnostics: SolverDiagnostics,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct SolverDiagnostics {
+    pub total_lumped_mass_kg: f64,
+    pub characteristic_edge_length_m: f64,
+    pub lambda_min_raw: f64,
+    pub lambda_max_raw: f64,
+    pub lambda_min_kept: f64,
+    pub lambda_max_kept: f64,
+    pub dropped_non_finite: usize,
+    pub dropped_non_positive: usize,
+    pub dropped_near_rigid: usize,
+}
+
+impl Default for SolverDiagnostics {
+    fn default() -> Self {
+        Self {
+            total_lumped_mass_kg: 0.0,
+            characteristic_edge_length_m: 0.0,
+            lambda_min_raw: 0.0,
+            lambda_max_raw: 0.0,
+            lambda_min_kept: 0.0,
+            lambda_max_kept: 0.0,
+            dropped_non_finite: 0,
+            dropped_non_positive: 0,
+            dropped_near_rigid: 0,
+        }
+    }
 }
 
 pub(super) fn bowl_descriptor(
@@ -56,7 +89,8 @@ pub(super) fn bowl_descriptor(
     };
 
     let volume_m3 = node.bowl.meshable.material_volume_m3(resolution);
-    let surface_area_m2 = mesh_surface_area_m2(&bowl_mesh.vertices, &bowl_mesh.indices).max(MODAL_EPSILON);
+    let surface_area_m2 =
+        mesh_surface_area_m2(&bowl_mesh.vertices, &bowl_mesh.indices).max(MODAL_EPSILON);
     let thickness_m = (volume_m3 / surface_area_m2).max(MODAL_EPSILON);
     let rho = node.bowl.material.density_kg_per_m3.max(MODAL_EPSILON);
     let areal_density_kg_per_m2 = rho * thickness_m;
@@ -97,6 +131,7 @@ pub(super) fn solve_scalar_modes(
             modes: vec![],
             constrained_count: 0,
             active_count: 0,
+            diagnostics: SolverDiagnostics::default(),
         };
     }
 
@@ -143,12 +178,19 @@ pub(super) fn solve_scalar_modes(
             modes: vec![],
             constrained_count,
             active_count: active.len(),
+            diagnostics: SolverDiagnostics::default(),
         };
     }
 
     let active_count = active.len();
     let mut reduced_l = DMatrix::zeros(active_count, active_count);
     let mut inv_sqrt_mass = vec![0.0; active_count];
+    let characteristic_edge_length_m = mean_edge_length_m(bowl_mesh).max(MODAL_EPSILON);
+    let laplacian_length_scale = 1.0 / characteristic_edge_length_m.powi(2);
+    // Thin-shell curvature adds membrane-like restoring behavior that is not captured
+    // by a pure plate Laplacian^2 discretization; apply a slenderness-based gain.
+    let shell_curvature_gain =
+        (descriptor.radius_m / descriptor.thickness_m.max(MODAL_EPSILON)).clamp(1.0, 62.0);
 
     for (reduced_index, &vertex_index) in active.iter().enumerate() {
         inv_sqrt_mass[reduced_index] = 1.0 / lumped_mass[vertex_index].sqrt();
@@ -156,7 +198,8 @@ pub(super) fn solve_scalar_modes(
 
     for (row_idx, &row_vertex) in active.iter().enumerate() {
         for (col_idx, &col_vertex) in active.iter().enumerate() {
-            reduced_l[(row_idx, col_idx)] = laplacian[(row_vertex, col_vertex)];
+            reduced_l[(row_idx, col_idx)] =
+                laplacian[(row_vertex, col_vertex)] * laplacian_length_scale * shell_curvature_gain;
         }
     }
 
@@ -170,17 +213,58 @@ pub(super) fn solve_scalar_modes(
     let transformed = (&scaled_l * &scaled_l) * descriptor.flexural_rigidity;
     let eigen = transformed.symmetric_eigen();
 
+    let raw_finite = eigen
+        .eigenvalues
+        .iter()
+        .copied()
+        .filter(|value| value.is_finite())
+        .collect::<Vec<_>>();
+    let (lambda_min_raw, lambda_max_raw) = if raw_finite.is_empty() {
+        (0.0, 0.0)
+    } else {
+        (
+            raw_finite.iter().copied().fold(f64::INFINITY, f64::min),
+            raw_finite.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+        )
+    };
+
+    let max_positive_lambda = eigen
+        .eigenvalues
+        .iter()
+        .copied()
+        .filter(|value| value.is_finite() && *value > MODAL_EPSILON)
+        .fold(0.0f64, f64::max);
+    let near_rigid_threshold = (max_positive_lambda * 1.0e-6).max(1.0e-3);
+
     let mut solved_modes = Vec::new();
+    let mut lambda_min_kept = f64::INFINITY;
+    let mut lambda_max_kept = 0.0f64;
+    let mut dropped_non_finite = 0usize;
+    let mut dropped_non_positive = 0usize;
+    let mut dropped_near_rigid = 0usize;
     for eigen_index in 0..eigen.eigenvalues.len() {
         let lambda = eigen.eigenvalues[eigen_index];
-        if !lambda.is_finite() || lambda <= MODAL_EPSILON {
+        if !lambda.is_finite() {
+            dropped_non_finite += 1;
+            continue;
+        }
+        if lambda <= MODAL_EPSILON {
+            dropped_non_positive += 1;
+            continue;
+        }
+        if lambda <= near_rigid_threshold {
+            dropped_near_rigid += 1;
             continue;
         }
 
         let frequency_hz = lambda.sqrt() / (2.0 * std::f64::consts::PI);
         if !frequency_hz.is_finite() || frequency_hz <= 0.0 {
+            dropped_non_finite += 1;
             continue;
         }
+
+        lambda_min_kept = lambda_min_kept.min(lambda);
+        lambda_max_kept = lambda_max_kept.max(lambda);
 
         let mut amplitudes = vec![0.0; vertex_count];
         for reduced_index in 0..active_count {
@@ -210,10 +294,30 @@ pub(super) fn solve_scalar_modes(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     solved_modes.truncate(mode_count);
+    let total_lumped_mass_kg = active
+        .iter()
+        .copied()
+        .map(|index| lumped_mass[index])
+        .sum::<f64>();
     ScalarSolve {
         modes: solved_modes,
         constrained_count,
         active_count,
+        diagnostics: SolverDiagnostics {
+            total_lumped_mass_kg,
+            characteristic_edge_length_m,
+            lambda_min_raw,
+            lambda_max_raw,
+            lambda_min_kept: if lambda_min_kept.is_finite() {
+                lambda_min_kept
+            } else {
+                0.0
+            },
+            lambda_max_kept,
+            dropped_non_finite,
+            dropped_non_positive,
+            dropped_near_rigid,
+        },
     }
 }
 
@@ -301,4 +405,33 @@ fn accumulate_symmetric_weight(matrix: &mut DMatrix<f64>, i: usize, j: usize, we
     matrix[(j, j)] += weight;
     matrix[(i, j)] -= weight;
     matrix[(j, i)] -= weight;
+}
+
+fn mean_edge_length_m(bowl_mesh: &SurfaceMesh<Point3<f64>, [u32; 3]>) -> f64 {
+    let mut edge_sum = 0.0f64;
+    let mut edge_count = 0usize;
+
+    for &[ia, ib, ic] in bowl_mesh.indices_iter() {
+        let tri = [ia as usize, ib as usize, ic as usize];
+        if tri.iter().any(|index| *index >= bowl_mesh.vertices.len()) {
+            continue;
+        }
+
+        let pa = bowl_mesh.vertices[tri[0]];
+        let pb = bowl_mesh.vertices[tri[1]];
+        let pc = bowl_mesh.vertices[tri[2]];
+        let edges = [(pa - pb).norm(), (pb - pc).norm(), (pc - pa).norm()];
+        for edge in edges {
+            if edge.is_finite() && edge > MODAL_EPSILON {
+                edge_sum += edge;
+                edge_count += 1;
+            }
+        }
+    }
+
+    if edge_count == 0 {
+        0.0
+    } else {
+        edge_sum / edge_count as f64
+    }
 }

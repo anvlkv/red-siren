@@ -1,4 +1,3 @@
-
 use super::*;
 use crate::body::materials::Material;
 use crate::body::{
@@ -73,31 +72,57 @@ fn band(viscosity_pa_s: f64) -> Band {
 fn modal_pipeline_is_deterministic_and_sorted() {
     let node = make_node();
     let resolution = 32;
+    let mode_count = 8;
 
-    let freqs = node.modal_frequencies_hz(resolution);
+    let freqs = node.modal_frequencies_hz(resolution, mode_count);
     assert_eq!(freqs.len(), 8);
     assert!(freqs.iter().all(|f| f.is_finite() && *f > 0.0));
     for pair in freqs.windows(2) {
         assert!(pair[0] <= pair[1]);
     }
 
-    let shapes = node.mode_shapes(resolution);
+    let shapes = node.mode_shapes(resolution, mode_count);
     assert_eq!(shapes.len(), freqs.len());
-    assert!(shapes.iter().all(|m| m.paths.strike.damping_in_air >= 0.0));
-    assert!(shapes.iter().all(|m| m.paths.jet.damping_in_air >= 0.0));
+    assert!(shapes.iter().all(|m| {
+        m.strike_base.coupling.is_finite()
+            && m.strike_base.coupling >= 0.0
+            && m.jet_base.coupling.is_finite()
+            && m.jet_base.coupling >= 0.0
+    }));
+}
+
+#[test]
+fn default_builder_first_mode_stays_in_audible_bell_range() {
+    let builders = NodeModelBuilders::default();
+    let node = builders
+        .build_node(bowl_material(), clapper_material())
+        .expect("node");
+
+    let freqs = node.modal_frequencies_hz(32, 8);
+    assert!(!freqs.is_empty());
+    let first = freqs[0];
+    assert!(
+        first.is_finite() && (150.0..=600.0).contains(&first),
+        "unexpected first mode frequency: {first} Hz"
+    );
 }
 
 #[test]
 fn participation_factors_are_bounded() {
     let node = make_node();
     let resolution = 32;
+    let mode_count = 8;
     let factors = node.modal_participation_factor(
         Point3::new(0.0, 0.6, 0.0),
         Vector3::new(0.0, 1.0, 0.0),
         resolution,
+        mode_count,
     );
 
-    assert_eq!(factors.len(), node.modal_frequencies_hz(resolution).len());
+    assert_eq!(
+        factors.len(),
+        node.modal_frequencies_hz(resolution, mode_count).len()
+    );
     assert!(factors.iter().all(|f| (0.0..=1.0).contains(f)));
 }
 
@@ -105,9 +130,10 @@ fn participation_factors_are_bounded() {
 fn damping_increases_with_viscosity() {
     let node = make_node();
     let resolution = 32;
+    let mode_count = 8;
 
-    let low = node.modal_damping(&band(1.8e-5), resolution);
-    let high = node.modal_damping(&band(8.0e-4), resolution);
+    let low = node.modal_damping(&band(1.8e-5), resolution, mode_count);
+    let high = node.modal_damping(&band(8.0e-4), resolution, mode_count);
     assert_eq!(low.len(), high.len());
 
     let low_sum: f64 = low.iter().sum();
@@ -119,7 +145,8 @@ fn damping_increases_with_viscosity() {
 fn mounting_constraint_reduces_anchor_displacement() {
     let node = make_node();
     let resolution = 32;
-    let modes = node.mode_shapes(resolution);
+    let mode_count = 8;
+    let modes = node.mode_shapes(resolution, mode_count);
     assert!(!modes.is_empty());
 
     // Use the same capped resolution that mode_shapes() uses internally, so
@@ -172,7 +199,7 @@ fn model_builders_construct_all_shape_families() {
         let node = builders
             .build_node(bowl_material(), clapper_material())
             .expect("build node from helpers");
-        let freqs = node.modal_frequencies_hz(24);
+        let freqs = node.modal_frequencies_hz(32, 8);
         assert!(!freqs.is_empty());
         assert!(freqs.iter().all(|f| f.is_finite() && *f > 0.0));
     }
@@ -192,35 +219,48 @@ fn computed_debug_snapshot_contains_full_metrics() {
         impedance_m_rayl: 500.0,
     };
 
-    let debug = node.computed_debug(24, &medium).expect("debug snapshot");
-    assert!(debug.mesh_vertex_count > 0);
-    assert!(debug.mesh_triangle_count > 0);
-    assert!(debug.active_vertex_count > 0);
-    assert!(!debug.frequencies_hz.is_empty());
-    assert_eq!(debug.mode_shapes.len(), debug.frequencies_hz.len());
+    let debug = node.computed_debug(32, 8, &medium).expect("debug snapshot");
+    let (structure, acoustics) = debug;
+    assert!(structure.mesh_vertex_count > 0);
+    assert!(structure.mesh_triangle_count > 0);
+    assert!(structure.active_vertex_count > 0);
+    assert!(!structure.frequencies_hz.is_empty());
     assert_eq!(
-        debug.strike_damping_in_air.len(),
-        debug.frequencies_hz.len()
+        structure.mode_structures.len(),
+        structure.frequencies_hz.len()
     );
     assert_eq!(
-        debug.strike_damping_in_medium.len(),
-        debug.frequencies_hz.len()
+        acoustics.strike_damping_in_air.len(),
+        acoustics.frequencies_hz.len()
     );
-    assert_eq!(debug.jet_damping_in_air.len(), debug.frequencies_hz.len());
     assert_eq!(
-        debug.jet_damping_in_medium.len(),
-        debug.frequencies_hz.len()
+        acoustics.strike_damping_in_medium.len(),
+        acoustics.frequencies_hz.len()
     );
-    assert!(debug
-        .mode_shapes
-        .iter()
-        .all(|mode| mode.paths.jet.lock_bandwidth_hz.is_finite()
-            && mode.paths.jet.lock_bandwidth_hz >= 0.0));
-    assert!(debug
-        .mode_shapes
-        .iter()
-        .all(|mode| mode.paths.jet.strouhal_target.is_finite()
-            && mode.paths.jet.strouhal_target > 0.0));
-    assert!(debug.bowl_mass_kg > 0.0);
-    assert!(debug.clapper_mass_kg > 0.0);
+    assert_eq!(
+        acoustics.jet_damping_in_air.len(),
+        acoustics.frequencies_hz.len()
+    );
+    assert_eq!(
+        acoustics.jet_damping_in_medium.len(),
+        acoustics.frequencies_hz.len()
+    );
+    assert!(acoustics.mode_acoustics.iter().all(|mode| mode
+        .jet
+        .acoustic_lock_in
+        .lock_bandwidth_hz
+        .is_finite()
+        && mode.jet.acoustic_lock_in.lock_bandwidth_hz >= 0.0));
+    assert!(structure.mode_structures.iter().all(|mode| mode
+        .jet_base
+        .vortex_dynamics
+        .strouhal_target
+        .is_finite()
+        && mode.jet_base.vortex_dynamics.strouhal_target > 0.0));
+    assert!(structure.bowl_mass_kg > 0.0);
+    assert!(structure.clapper_mass_kg > 0.0);
+    assert!(structure.solver_total_lumped_mass_kg > 0.0);
+    assert!(structure.solver_characteristic_edge_length_m > 0.0);
+    assert!(structure.solver_lambda_max_raw >= structure.solver_lambda_min_raw);
+    assert!(structure.solver_lambda_max_kept >= structure.solver_lambda_min_kept);
 }

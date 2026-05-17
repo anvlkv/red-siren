@@ -8,7 +8,6 @@ use crate::{
 
 const MODAL_EPSILON: f64 = 1e-12;
 const MIN_MODE_COUNT: usize = 1;
-const MAX_MODE_COUNT: usize = 24;
 const MOUNT_PROFILE_R_M: f64 = 0.0;
 const MOUNT_PROFILE_Y_M: f64 = 0.0;
 /// Hard cap on the mesh resolution used for the FEM eigen solve.
@@ -33,8 +32,7 @@ impl Node {
         Self { bowl, clapper }
     }
 
-    pub fn modal_frequencies_hz(&self, resolution: usize) -> Vec<f64> {
-        let mode_count = self.mode_budget(resolution);
+    pub fn modal_frequencies_hz(&self, resolution: usize, mode_count: usize) -> Vec<f64> {
         let resolution = solver::analysis_resolution(self, resolution);
         let bowl_mesh = match self.bowl_surface_mesh(resolution) {
             Some(mesh) => mesh,
@@ -56,8 +54,7 @@ impl Node {
             .collect()
     }
 
-    pub fn mode_shapes(&self, resolution: usize) -> Vec<ModeShape> {
-        let mode_count = self.mode_budget(resolution);
+    pub fn mode_shapes(&self, resolution: usize, mode_count: usize) -> Vec<ModeStructure> {
         let resolution = solver::analysis_resolution(self, resolution);
         let bowl_mesh = match self.bowl_surface_mesh(resolution) {
             Some(mesh) => mesh,
@@ -71,8 +68,8 @@ impl Node {
         point: Point3<f64>,
         direction: Vector3<f64>,
         resolution: usize,
+        mode_count: usize,
     ) -> Vec<f64> {
-        let mode_count = self.mode_budget(resolution);
         let resolution = solver::analysis_resolution(self, resolution);
         let bowl_mesh = match self.bowl_surface_mesh(resolution) {
             Some(mesh) => mesh,
@@ -116,8 +113,7 @@ impl Node {
             .collect()
     }
 
-    pub fn modal_damping(&self, band: &Band, resolution: usize) -> Vec<f64> {
-        let mode_count = self.mode_budget(resolution);
+    pub fn modal_damping(&self, band: &Band, resolution: usize, mode_count: usize) -> Vec<f64> {
         let resolution = solver::analysis_resolution(self, resolution);
         let bowl_mesh = match self.bowl_surface_mesh(resolution) {
             Some(mesh) => mesh,
@@ -163,7 +159,7 @@ impl Node {
         mode_count: usize,
         resolution: usize,
         bowl_mesh: &SurfaceMesh<Point3<f64>, [u32; 3]>,
-    ) -> Vec<ModeShape> {
+    ) -> Vec<ModeStructure> {
         if bowl_mesh.vertex_count() < 3 {
             return vec![];
         }
@@ -187,7 +183,7 @@ impl Node {
         bowl_mesh: &SurfaceMesh<Point3<f64>, [u32; 3]>,
         descriptor: BowlDescriptor,
         solved_modes: &[ScalarMode],
-    ) -> Vec<ModeShape> {
+    ) -> Vec<ModeStructure> {
         if solved_modes.is_empty() {
             return vec![];
         }
@@ -195,7 +191,6 @@ impl Node {
         let normals = mesh_vertex_normals(&bowl_mesh.vertices, &bowl_mesh.indices, MODAL_EPSILON);
         let (bounds_min, bounds_max) = self.bowl.meshable.bounding_box(resolution);
         let y_span = (bounds_max.y - bounds_min.y).abs().max(MODAL_EPSILON);
-        let air = acoustics::standard_air_medium();
 
         let mut modes = Vec::with_capacity(solved_modes.len());
         for (i, solved_mode) in solved_modes.iter().enumerate() {
@@ -222,18 +217,8 @@ impl Node {
                 y_span,
                 0.9,
             );
-            let ka = 2.0 * std::f64::consts::PI * frequency_hz * descriptor.radius_m
-                / air.speed_of_sound_m_per_s.max(MODAL_EPSILON);
-            let radiation_efficiency = acoustics::radiation_efficiency_from_ka(ka, m);
-
-            let strike_damping_in_air =
-                acoustics::strike_path_damping_for_medium(self, i, frequency_hz, &air, descriptor);
-            let jet_damping_in_air =
-                acoustics::jet_path_damping_for_medium(self, i, frequency_hz, &air, descriptor);
 
             let angle_sensitivity = ((m as f64) / ((m + 2) as f64)).clamp(0.0, 1.0);
-            let strike_impact_bandwidth_hz =
-                ((0.01 + strike_damping_in_air * 0.8) * frequency_hz).max(0.0);
 
             let strouhal_target = (0.17 + 0.015 * (m as f64)).clamp(0.12, 0.42);
             let effective_aperture_m = (descriptor.thickness_m * 2.2)
@@ -244,41 +229,23 @@ impl Node {
             .max(MODAL_EPSILON);
             let convective_delay_s =
                 (effective_aperture_m / convective_speed_m_per_s).clamp(1e-6, 0.25);
-            let acoustic_center_hz = (air.speed_of_sound_m_per_s
-                / (4.0 * descriptor.radius_m.max(MODAL_EPSILON)))
-            .max(1.0);
-            let lock_center_hz = (0.65 * frequency_hz + 0.35 * acoustic_center_hz).max(1.0);
-            let lock_bandwidth_hz = ((0.02 + 0.07 * jet_coupling + 0.15 * jet_damping_in_air)
-                * lock_center_hz)
-                .max(0.5);
-            let threshold_drive =
-                (((1.0 - jet_coupling) * (0.45 + 0.8 * jet_damping_in_air)) + 0.05).clamp(0.0, 2.0);
-            let small_signal_gain = (jet_coupling * (1.2 - radiation_efficiency).max(0.2)
-                / (jet_damping_in_air + 0.04))
-                .clamp(0.0, 40.0);
-            let phase_sensitivity = (1.0 / ((m + 1) as f64).sqrt()).clamp(0.2, 1.0);
+            let threshold_drive = (((1.0 - jet_coupling) * 0.45) + 0.05).clamp(0.0, 2.0);
+            let small_signal_gain = (jet_coupling * 1.2 / 0.04).clamp(0.0, 40.0);
 
-            modes.push(ModeShape {
-                vertex_displacement: displacement,
+            modes.push(ModeStructure {
                 frequency_hz,
-                paths: ModeInteractionPaths {
-                    strike: ModeStrikeAcoustics {
-                        coupling: strike_coupling,
-                        angle_sensitivity,
-                        damping_in_air: strike_damping_in_air,
-                        impact_bandwidth_hz: strike_impact_bandwidth_hz,
-                    },
-                    jet: ModeJetAcoustics {
-                        coupling: jet_coupling,
-                        damping_in_air: jet_damping_in_air,
-                        lock_center_hz,
-                        lock_bandwidth_hz,
+                vertex_displacement: displacement,
+                strike_base: StrikeStructuralBase {
+                    coupling: strike_coupling,
+                    angle_sensitivity,
+                },
+                jet_base: JetStructuralBase {
+                    coupling: jet_coupling,
+                    vortex_dynamics: JetVortexDynamics {
+                        strouhal_target,
+                        convective_delay_s,
                         threshold_drive,
                         small_signal_gain,
-                        convective_delay_s,
-                        strouhal_target,
-                        phase_sensitivity,
-                        radiation_efficiency,
                     },
                 },
             });
@@ -287,8 +254,76 @@ impl Node {
         modes
     }
 
-    pub fn computed_debug(&self, resolution: usize, medium: &Medium) -> Option<NodeComputedDebug> {
-        let mode_budget = self.mode_budget(resolution);
+    fn compute_strike_acoustics_for_mode(
+        &self,
+        mode_index: usize,
+        frequency_hz: f64,
+        medium: &Medium,
+        descriptor: BowlDescriptor,
+    ) -> StrikeAcousticsInMedium {
+        let damping_in_air = acoustics::strike_path_damping_for_medium(
+            self,
+            mode_index,
+            frequency_hz,
+            medium,
+            descriptor,
+        );
+        let impact_bandwidth_hz = ((0.01 + damping_in_air * 0.8) * frequency_hz).max(0.0);
+
+        StrikeAcousticsInMedium {
+            damping_in_air,
+            impact_bandwidth_hz,
+        }
+    }
+
+    fn compute_jet_acoustics_for_mode(
+        &self,
+        mode_index: usize,
+        frequency_hz: f64,
+        medium: &Medium,
+        descriptor: BowlDescriptor,
+        _strike_base: &StrikeStructuralBase,
+        jet_base: &JetStructuralBase,
+    ) -> JetAcousticsInMedium {
+        let (m, _n) = acoustics::mode_index_pair(mode_index);
+
+        let damping_in_air = acoustics::jet_path_damping_for_medium(
+            self,
+            mode_index,
+            frequency_hz,
+            medium,
+            descriptor,
+        );
+
+        let ka = 2.0 * std::f64::consts::PI * frequency_hz * descriptor.radius_m
+            / medium.speed_of_sound_m_per_s.max(MODAL_EPSILON);
+        let radiation_efficiency = acoustics::radiation_efficiency_from_ka(ka, m);
+
+        let acoustic_center_hz = (medium.speed_of_sound_m_per_s
+            / (4.0 * descriptor.radius_m.max(MODAL_EPSILON)))
+        .max(1.0);
+        let lock_center_hz = (0.65 * frequency_hz + 0.35 * acoustic_center_hz).max(1.0);
+        let lock_bandwidth_hz =
+            ((0.02 + 0.07 * jet_base.coupling + 0.15 * damping_in_air) * lock_center_hz).max(0.5);
+        let phase_sensitivity = (1.0 / ((m + 1) as f64).sqrt()).clamp(0.2, 1.0);
+
+        JetAcousticsInMedium {
+            damping_in_air,
+            acoustic_lock_in: AcousticLockIn {
+                lock_center_hz,
+                lock_bandwidth_hz,
+                phase_sensitivity,
+            },
+            radiation_efficiency,
+        }
+    }
+
+    pub fn computed_debug(
+        &self,
+        resolution: usize,
+        mode_count: usize,
+        medium: &Medium,
+    ) -> Option<NodeComputedDebug> {
         let analysis_resolution = solver::analysis_resolution(self, resolution);
         let bowl_mesh = self.bowl_surface_mesh(analysis_resolution)?;
         if bowl_mesh.vertex_count() < 3 {
@@ -296,7 +331,7 @@ impl Node {
         }
 
         let descriptor = solver::bowl_descriptor(self, analysis_resolution, &bowl_mesh)?;
-        let solved = solver::solve_scalar_modes(mode_budget, &bowl_mesh, descriptor);
+        let solved = solver::solve_scalar_modes(mode_count, &bowl_mesh, descriptor);
         if solved.modes.is_empty() {
             return None;
         }
@@ -306,7 +341,8 @@ impl Node {
             .iter()
             .map(|mode| mode.frequency_hz)
             .collect::<Vec<_>>();
-        let mode_shapes = self.mode_shapes_from_solved_modes(
+
+        let mode_structures = self.mode_shapes_from_solved_modes(
             analysis_resolution,
             &bowl_mesh,
             descriptor,
@@ -373,16 +409,39 @@ impl Node {
             })
             .collect::<Vec<_>>();
 
+        let mode_acoustics: Vec<ModeInteractionAcoustics> = solved
+            .modes
+            .iter()
+            .enumerate()
+            .map(|(i, mode)| {
+                let strike = self.compute_strike_acoustics_for_mode(
+                    i,
+                    mode.frequency_hz,
+                    medium,
+                    descriptor,
+                );
+                let jet = self.compute_jet_acoustics_for_mode(
+                    i,
+                    mode.frequency_hz,
+                    medium,
+                    descriptor,
+                    &mode_structures[i].strike_base,
+                    &mode_structures[i].jet_base,
+                );
+                ModeInteractionAcoustics { strike, jet }
+            })
+            .collect();
+
         let bowl_surface_area_m2 =
             mesh_surface_area_m2(&bowl_mesh.vertices, &bowl_mesh.indices).max(MODAL_EPSILON);
         let bowl_volume_m3 = self.bowl.meshable.material_volume_m3(analysis_resolution);
         let bowl_mass_kg = self.bowl.mass_kg(analysis_resolution);
         let clapper_mass_kg = self.clapper.mass_kg(analysis_resolution);
 
-        Some(NodeComputedDebug {
+        let structure = NodeComputedStructure {
             requested_resolution: resolution,
             analysis_resolution,
-            mode_budget,
+            mode_budget: mode_count,
             mesh_vertex_count: bowl_mesh.vertex_count(),
             mesh_triangle_count: bowl_mesh.indices.len(),
             constrained_vertex_count: solved.constrained_count,
@@ -396,18 +455,30 @@ impl Node {
             bowl_mass_kg,
             clapper_mass_kg,
             clapper_mass_ratio: descriptor.clapper_mass_ratio,
+            solver_total_lumped_mass_kg: solved.diagnostics.total_lumped_mass_kg,
+            solver_characteristic_edge_length_m: solved.diagnostics.characteristic_edge_length_m,
+            solver_lambda_min_raw: solved.diagnostics.lambda_min_raw,
+            solver_lambda_max_raw: solved.diagnostics.lambda_max_raw,
+            solver_lambda_min_kept: solved.diagnostics.lambda_min_kept,
+            solver_lambda_max_kept: solved.diagnostics.lambda_max_kept,
+            solver_dropped_non_finite: solved.diagnostics.dropped_non_finite,
+            solver_dropped_non_positive: solved.diagnostics.dropped_non_positive,
+            solver_dropped_near_rigid: solved.diagnostics.dropped_near_rigid,
+            frequencies_hz: frequencies_hz.clone(),
+            mode_structures,
+        };
+
+        let acoustics = NodeComputedAcoustics {
             frequencies_hz,
-            mode_shapes,
+            mode_acoustics,
             strike_damping_in_air,
             strike_damping_in_medium,
             jet_damping_in_air,
             jet_damping_in_medium,
             medium: *medium,
-        })
-    }
+        };
 
-    fn mode_budget(&self, resolution: usize) -> usize {
-        (resolution.max(8) / 4).clamp(MIN_MODE_COUNT, MAX_MODE_COUNT)
+        Some((structure, acoustics))
     }
 }
 

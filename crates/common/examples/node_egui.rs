@@ -24,6 +24,7 @@ struct NodeInspectorApp {
     clapper_material: Material,
     medium: Medium,
     resolution: usize,
+    mode_count: usize,
     camera_yaw: f64,
     camera_pitch: f64,
     zoom: f64,
@@ -31,6 +32,7 @@ struct NodeInspectorApp {
     pan_y: f32,
     wireframe: bool,
     last_error: Option<String>,
+    last_debug_snapshot: Option<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -73,6 +75,7 @@ impl Default for NodeInspectorApp {
                 impedance_m_rayl: 420.0,
             },
             resolution: 40,
+            mode_count: 8,
             camera_yaw: 0.65,
             camera_pitch: 0.45,
             zoom: 1.45,
@@ -80,6 +83,7 @@ impl Default for NodeInspectorApp {
             pan_y: 0.0,
             wireframe: true,
             last_error: None,
+            last_debug_snapshot: None,
         }
     }
 }
@@ -169,7 +173,7 @@ impl NodeInspectorApp {
             .builders
             .build_node(self.bowl_material, self.clapper_material)
         {
-            Ok(node) => match node.computed_debug(self.resolution, &self.medium) {
+            Ok(node) => match node.computed_debug(self.resolution, self.mode_count, &self.medium) {
                 Some(debug) => {
                     self.last_error = None;
                     Some((node, debug))
@@ -186,11 +190,57 @@ impl NodeInspectorApp {
         }
     }
 
+    fn print_debug_snapshot_once_for_change(&mut self, debug: &NodeComputedDebug) {
+        let (structure, acoustics) = debug;
+        let acoustic_preview = debug
+            .1
+            .frequencies_hz
+            .iter()
+            .enumerate()
+            .take(4)
+            .map(|(i, freq)| {
+                let mode_structure = &structure.mode_structures[i];
+                let mode_acoustics = &acoustics.mode_acoustics[i];
+                format!(
+                    "#{:02} {:.1}Hz strike[c={:.3},air={:.4},bw={:.1}] jet[c={:.3},air={:.4},lock={:.1}±{:.1},thr={:.3},gain={:.3},tau={:.4},St={:.3}]",
+                    i + 1,
+                    freq,
+                    mode_structure.strike_base.coupling,
+                    mode_acoustics.strike.damping_in_air,
+                    mode_acoustics.strike.impact_bandwidth_hz,
+                    mode_structure.jet_base.coupling,
+                    mode_acoustics.jet.damping_in_air,
+                    mode_acoustics.jet.acoustic_lock_in.lock_center_hz,
+                    mode_acoustics.jet.acoustic_lock_in.lock_bandwidth_hz,
+                    mode_structure.jet_base.vortex_dynamics.threshold_drive,
+                    mode_structure.jet_base.vortex_dynamics.small_signal_gain,
+                    mode_structure.jet_base.vortex_dynamics.convective_delay_s,
+                    mode_structure.jet_base.vortex_dynamics.strouhal_target,
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" | ");
+
+        let snapshot = format!(
+            "modes={} budget={} acoustic=[{}]",
+            structure.frequencies_hz.len(),
+            structure.mode_budget,
+            acoustic_preview,
+        );
+        if self.last_debug_snapshot.as_deref() == Some(snapshot.as_str()) {
+            return;
+        }
+
+        self.last_debug_snapshot = Some(snapshot.clone());
+        println!("[node_egui] {snapshot}");
+    }
+
     fn left_controls(&mut self, ui: &mut egui::Ui) {
         ui.heading("Node Helpers");
         ui.label("Generic profile builder with example presets");
 
         ui.add(egui::Slider::new(&mut self.resolution, 12..=96).text("analysis resolution"));
+        ui.add(egui::Slider::new(&mut self.mode_count, 1..=24).text("mode count"));
 
         egui::CollapsingHeader::new("Shape Profile")
             .id_salt("node_shape_profile")
@@ -460,6 +510,7 @@ impl NodeInspectorApp {
     }
 
     fn bottom_debug(&self, ui: &mut egui::Ui, debug: &NodeComputedDebug) {
+        let (structure, acoustics) = debug;
         egui::ScrollArea::vertical()
             .id_salt("node_inspector_scroll")
             .max_height(220.0)
@@ -467,19 +518,19 @@ impl NodeInspectorApp {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(format!(
                         "resolution: req {} / analysis {} / modes {}",
-                        debug.requested_resolution,
-                        debug.analysis_resolution,
-                        debug.frequencies_hz.len()
+                        structure.requested_resolution,
+                        structure.analysis_resolution,
+                        structure.frequencies_hz.len()
                     ));
                     ui.separator();
                     ui.label(format!(
                         "mesh: {} vertices, {} triangles",
-                        debug.mesh_vertex_count, debug.mesh_triangle_count
+                        structure.mesh_vertex_count, structure.mesh_triangle_count
                     ));
                     ui.separator();
                     ui.label(format!(
                         "active/constrained: {}/{}",
-                        debug.active_vertex_count, debug.constrained_vertex_count
+                        structure.active_vertex_count, structure.constrained_vertex_count
                     ));
                 });
 
@@ -488,68 +539,103 @@ impl NodeInspectorApp {
                     .striped(true)
                     .show(ui, |ui| {
                         ui.label("Bowl mass (kg)");
-                        ui.monospace(format!("{:.5}", debug.bowl_mass_kg));
+                        ui.monospace(format!("{:.5}", structure.bowl_mass_kg));
                         ui.end_row();
                         ui.label("Clapper mass (kg)");
-                        ui.monospace(format!("{:.5}", debug.clapper_mass_kg));
+                        ui.monospace(format!("{:.5}", structure.clapper_mass_kg));
                         ui.end_row();
                         ui.label("Clapper ratio");
-                        ui.monospace(format!("{:.5}", debug.clapper_mass_ratio));
+                        ui.monospace(format!("{:.5}", structure.clapper_mass_ratio));
                         ui.end_row();
                         ui.label("Bowl radius (m)");
-                        ui.monospace(format!("{:.5}", debug.bowl_radius_m));
+                        ui.monospace(format!("{:.5}", structure.bowl_radius_m));
                         ui.end_row();
                         ui.label("Bowl thickness (m)");
-                        ui.monospace(format!("{:.6}", debug.bowl_thickness_m));
+                        ui.monospace(format!("{:.6}", structure.bowl_thickness_m));
                         ui.end_row();
                         ui.label("Surface area (m^2)");
-                        ui.monospace(format!("{:.5}", debug.bowl_surface_area_m2));
+                        ui.monospace(format!("{:.5}", structure.bowl_surface_area_m2));
                         ui.end_row();
                         ui.label("Volume (m^3)");
-                        ui.monospace(format!("{:.6}", debug.bowl_volume_m3));
+                        ui.monospace(format!("{:.6}", structure.bowl_volume_m3));
+                        ui.end_row();
+                        ui.label("Solver lumped mass (kg)");
+                        ui.monospace(format!("{:.5}", structure.solver_total_lumped_mass_kg));
+                        ui.end_row();
+                        ui.label("Solver edge length (m)");
+                        ui.monospace(format!(
+                            "{:.6}",
+                            structure.solver_characteristic_edge_length_m
+                        ));
                         ui.end_row();
                         ui.label("Flexural rigidity");
-                        ui.monospace(format!("{:.3e}", debug.bowl_flexural_rigidity));
+                        ui.monospace(format!("{:.3e}", structure.bowl_flexural_rigidity));
+                        ui.end_row();
+                        ui.label("Lambda raw min/max");
+                        ui.monospace(format!(
+                            "{:.3e} / {:.3e}",
+                            structure.solver_lambda_min_raw, structure.solver_lambda_max_raw
+                        ));
+                        ui.end_row();
+                        ui.label("Lambda kept min/max");
+                        ui.monospace(format!(
+                            "{:.3e} / {:.3e}",
+                            structure.solver_lambda_min_kept, structure.solver_lambda_max_kept
+                        ));
+                        ui.end_row();
+                        ui.label("Dropped eigvals");
+                        ui.monospace(format!(
+                            "nf={} np={} rigid={}",
+                            structure.solver_dropped_non_finite,
+                            structure.solver_dropped_non_positive,
+                            structure.solver_dropped_near_rigid,
+                        ));
                         ui.end_row();
                         ui.label("Medium viscosity");
-                        ui.monospace(format!("{:.3e}", debug.medium.viscosity_pa_s));
+                        ui.monospace(format!("{:.3e}", acoustics.medium.viscosity_pa_s));
                         ui.end_row();
                     });
 
                 ui.separator();
                 ui.label("Modes");
-                for i in 0..debug.frequencies_hz.len() {
-                    let freq = debug.frequencies_hz[i];
-                    let strike_damp_air = debug.strike_damping_in_air.get(i).copied().unwrap_or(0.0);
-                    let strike_damp_medium = debug
+                for i in 0..structure.mode_structures.len() {
+                    let mode_structure = &structure.mode_structures[i];
+                    let mode_acoustics = &acoustics.mode_acoustics[i];
+                    let freq = mode_structure.frequency_hz;
+                    let strike_damp_air = acoustics
+                        .strike_damping_in_air
+                        .get(i)
+                        .copied()
+                        .unwrap_or(0.0);
+                    let strike_damp_medium = acoustics
                         .strike_damping_in_medium
                         .get(i)
                         .copied()
                         .unwrap_or(0.0);
-                    let jet_damp_air = debug.jet_damping_in_air.get(i).copied().unwrap_or(0.0);
-                    let jet_damp_medium = debug.jet_damping_in_medium.get(i).copied().unwrap_or(0.0);
-                    let shape = &debug.mode_shapes[i];
+                    let jet_damp_air = acoustics.jet_damping_in_air.get(i).copied().unwrap_or(0.0);
+                    let jet_damp_medium =
+                        acoustics.jet_damping_in_medium.get(i).copied().unwrap_or(0.0);
                     ui.monospace(format!(r#"#{:02}  {:8.2} Hz  
 strike[c={:.3}, damp(a/m)={:.5}/{:.5}, angle={:.3}, bw={:.2}]  
 jet[c={:.3}, damp(a/m)={:.5}/{:.5}, lock={:.2}+/-{:.2}, thr={:.3}, gain={:.3}, tau={:.4}s, St={:.3}, phase={:.3}, rad={:.3e}]"#,
                         i + 1,
                         freq,
-                        shape.paths.strike.coupling,
+                        mode_structure.strike_base.coupling,
                         strike_damp_air,
                         strike_damp_medium,
-                        shape.paths.strike.angle_sensitivity,
-                        shape.paths.strike.impact_bandwidth_hz,
-                        shape.paths.jet.coupling,
+                        mode_structure.strike_base.angle_sensitivity,
+                        mode_acoustics.strike.impact_bandwidth_hz,
+                        mode_structure.jet_base.coupling,
                         jet_damp_air,
                         jet_damp_medium,
-                        shape.paths.jet.lock_center_hz,
-                        shape.paths.jet.lock_bandwidth_hz,
-                        shape.paths.jet.threshold_drive,
-                        shape.paths.jet.small_signal_gain,
-                        shape.paths.jet.convective_delay_s,
-                        shape.paths.jet.strouhal_target,
-                        shape.paths.jet.phase_sensitivity,
-                        shape.paths.jet.radiation_efficiency,
+                        mode_acoustics.jet.acoustic_lock_in.lock_center_hz,
+                        mode_acoustics.jet.acoustic_lock_in.lock_bandwidth_hz,
+                        mode_structure.jet_base.vortex_dynamics.threshold_drive,
+                        mode_structure.jet_base.vortex_dynamics.small_signal_gain,
+                        mode_structure.jet_base.vortex_dynamics.convective_delay_s,
+                        mode_structure.jet_base.vortex_dynamics.strouhal_target,
+                        mode_acoustics.jet.acoustic_lock_in.phase_sensitivity,
+                        mode_acoustics.jet.radiation_efficiency,
                     ));
                 }
             });
@@ -571,6 +657,7 @@ impl eframe::App for NodeInspectorApp {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             if let Some((node, debug)) = state {
+                self.print_debug_snapshot_once_for_change(&debug);
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     ui.group(|ui| {
                         self.top_charts(ui, &node);

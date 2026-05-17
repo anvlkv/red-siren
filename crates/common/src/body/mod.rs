@@ -69,7 +69,7 @@ impl<
 
     pub fn mass_kg(&self, resolution: usize) -> f64 {
         let volume_m3 = self.meshable.material_volume_m3(resolution);
-        volume_m3 * self.material.density_kg_per_m3
+        volume_m3 * self.material.reference_density_kg_per_m3
     }
 
     pub fn center_of_mass(&self, resolution: usize) -> Option<EmbodiedPoint3> {
@@ -129,7 +129,7 @@ impl<
     }
 
     pub fn inertia_tensor(&self, resolution: usize) -> Option<nalgebra::Matrix3<f64>> {
-        let density = self.material.density_kg_per_m3;
+        let density = self.material.reference_density_kg_per_m3;
         if !density.is_finite() || density <= 0.0 {
             return None;
         }
@@ -284,9 +284,12 @@ mod tests {
 
     fn steel() -> Material {
         Material {
-            density_kg_per_m3: 7800.0,
+            reference_density_kg_per_m3: 7800.0,
             poisson_ratio: 0.29,
-            youngs_modulus_pa: 2.0e11,
+            reference_youngs_modulus_mpa: 200_000.0,
+            reference_temperature_c: 20.0,
+            linear_thermal_expansion_per_c: 12.0e-6,
+            dln_e_dtemp_per_c: -4.0e-4,
         }
     }
 

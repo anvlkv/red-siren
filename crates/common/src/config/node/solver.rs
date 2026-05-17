@@ -63,6 +63,7 @@ pub(super) fn bowl_descriptor(
     node: &Node,
     resolution: usize,
     bowl_mesh: &SurfaceMesh<Point3<f64>, [u32; 3]>,
+    ambient_temperature_c: Option<f64>,
 ) -> Option<BowlDescriptor> {
     if bowl_mesh.indices.is_empty() {
         return None;
@@ -92,10 +93,20 @@ pub(super) fn bowl_descriptor(
     let surface_area_m2 =
         mesh_surface_area_m2(&bowl_mesh.vertices, &bowl_mesh.indices).max(MODAL_EPSILON);
     let thickness_m = (volume_m3 / surface_area_m2).max(MODAL_EPSILON);
-    let rho = node.bowl.material.density_kg_per_m3.max(MODAL_EPSILON);
+    let material_temperature_c =
+        ambient_temperature_c.unwrap_or(node.bowl.material.reference_temperature_c);
+    let rho = node
+        .bowl
+        .material
+        .density_kg_per_m3_at_temperature_c(material_temperature_c)
+        .max(MODAL_EPSILON);
     let areal_density_kg_per_m2 = rho * thickness_m;
 
-    let e = node.bowl.material.youngs_modulus_pa.max(1.0e6);
+    let e = node
+        .bowl
+        .material
+        .youngs_modulus_pa_at_temperature_c(material_temperature_c)
+        .max(1.0e6);
     let nu = node.bowl.material.poisson_ratio.clamp(-0.49, 0.49);
     let flexural_rigidity = e * thickness_m.powi(3) / (12.0 * (1.0 - nu * nu).max(0.05));
 

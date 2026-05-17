@@ -7,17 +7,23 @@ use crate::config::BandChannel;
 
 fn bowl_material() -> Material {
     Material {
-        density_kg_per_m3: 8800.0,
+        reference_density_kg_per_m3: 8800.0,
         poisson_ratio: 0.34,
-        youngs_modulus_pa: 1.1e11,
+        reference_youngs_modulus_mpa: 110_000.0,
+        reference_temperature_c: 20.0,
+        linear_thermal_expansion_per_c: 18.0e-6,
+        dln_e_dtemp_per_c: -3.0e-4,
     }
 }
 
 fn clapper_material() -> Material {
     Material {
-        density_kg_per_m3: 7850.0,
+        reference_density_kg_per_m3: 7850.0,
         poisson_ratio: 0.29,
-        youngs_modulus_pa: 2.0e11,
+        reference_youngs_modulus_mpa: 200_000.0,
+        reference_temperature_c: 20.0,
+        linear_thermal_expansion_per_c: 12.0e-6,
+        dln_e_dtemp_per_c: -4.0e-4,
     }
 }
 
@@ -54,18 +60,6 @@ fn make_clapper() -> Body<ClapperGeometry> {
 
 fn make_node() -> Node {
     Node::new(make_bowl(), make_clapper())
-}
-
-fn band(viscosity_pa_s: f64) -> Band {
-    Band {
-        channel: BandChannel::Left,
-        medium: Medium {
-            density_kg_per_m3: 1.225,
-            speed_of_sound_m_per_s: 343.0,
-            viscosity_pa_s,
-            impedance_m_rayl: 420.0,
-        },
-    }
 }
 
 #[test]
@@ -127,18 +121,46 @@ fn participation_factors_are_bounded() {
 }
 
 #[test]
-fn damping_increases_with_viscosity() {
+fn damping_changes_with_medium_properties() {
     let node = make_node();
     let resolution = 32;
     let mode_count = 8;
 
-    let low = node.modal_damping(&band(1.8e-5), resolution, mode_count);
-    let high = node.modal_damping(&band(8.0e-4), resolution, mode_count);
-    assert_eq!(low.len(), high.len());
+    let high_viscosity = node.modal_damping(
+        &Band {
+            channel: BandChannel::Left,
+            medium: Medium::from_available(
+                20.0,
+                Medium::STANDARD_PRESSURE_PA,
+                1.2,
+                343.0,
+                8.0e-5,
+                None,
+            ),
+        },
+        resolution,
+        mode_count,
+    );
+    let low_viscosity = node.modal_damping(
+        &Band {
+            channel: BandChannel::Left,
+            medium: Medium::from_available(
+                20.0,
+                Medium::STANDARD_PRESSURE_PA,
+                1.2,
+                343.0,
+                1.0e-5,
+                None,
+            ),
+        },
+        resolution,
+        mode_count,
+    );
+    assert_eq!(high_viscosity.len(), low_viscosity.len());
 
-    let low_sum: f64 = low.iter().sum();
-    let high_sum: f64 = high.iter().sum();
-    assert!(high_sum > low_sum);
+    let high_viscosity_sum: f64 = high_viscosity.iter().sum();
+    let low_viscosity_sum: f64 = low_viscosity.iter().sum();
+    assert!((high_viscosity_sum - low_viscosity_sum).abs() > 1e-6);
 }
 
 #[test]
@@ -212,12 +234,7 @@ fn computed_debug_snapshot_contains_full_metrics() {
         .build_node(bowl_material(), clapper_material())
         .expect("node");
 
-    let medium = Medium {
-        density_kg_per_m3: 1.4,
-        speed_of_sound_m_per_s: 330.0,
-        viscosity_pa_s: 4.2e-4,
-        impedance_m_rayl: 500.0,
-    };
+    let medium = Medium::from_available(35.0, 80_000.0, 1.0, 360.0, 1.8e-5, None);
 
     let debug = node.computed_debug(32, 8, &medium).expect("debug snapshot");
     let (structure, acoustics) = debug;

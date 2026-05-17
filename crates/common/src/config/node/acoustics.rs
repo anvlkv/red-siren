@@ -6,12 +6,7 @@ use super::solver::BowlDescriptor;
 use super::{Node, MODAL_EPSILON};
 
 pub(super) fn standard_air_medium() -> Medium {
-    Medium {
-        density_kg_per_m3: 1.225,
-        speed_of_sound_m_per_s: 343.0,
-        viscosity_pa_s: 1.8e-5,
-        impedance_m_rayl: 420.0,
-    }
+    Medium::standard_air()
 }
 
 pub(super) fn mode_index_pair(index: usize) -> (usize, usize) {
@@ -95,23 +90,31 @@ fn damping_components_for_medium(
     medium: &Medium,
     descriptor: BowlDescriptor,
 ) -> (f64, f64, f64, f64) {
+    let medium_viscosity = medium.viscosity_pa_s;
+    let medium_density = medium.density_kg_per_m3;
+    let medium_speed_of_sound = medium.speed_of_sound_m_per_s;
+    let medium_impedance = medium.impedance_m_rayl;
     let structural = {
-        let stiffness_factor = (1.0e9 / node.bowl.material.youngs_modulus_pa.max(1.0e6)).sqrt();
+        let youngs_modulus_pa = node
+            .bowl
+            .material
+            .youngs_modulus_pa_at_temperature_c(medium.temperature_c);
+        let stiffness_factor = (1.0e9 / youngs_modulus_pa.max(1.0e6)).sqrt();
         let poisson_factor = 1.0 + node.bowl.material.poisson_ratio.clamp(-0.49, 0.49).abs() * 0.3;
         let mode_factor = 1.0 + mode_index as f64 * 0.05;
         (0.0012 * stiffness_factor * poisson_factor * mode_factor).max(0.0)
     };
 
-    let medium_viscous = medium.viscosity_pa_s.max(0.0)
-        / (medium.density_kg_per_m3.max(MODAL_EPSILON)
-            * medium.speed_of_sound_m_per_s.max(MODAL_EPSILON)
+    let medium_viscous = medium_viscosity.max(0.0)
+        / (medium_density.max(MODAL_EPSILON)
+            * medium_speed_of_sound.max(MODAL_EPSILON)
             * descriptor.thickness_m.max(MODAL_EPSILON));
     let ka = 2.0 * std::f64::consts::PI * frequency_hz * descriptor.radius_m
-        / medium.speed_of_sound_m_per_s.max(MODAL_EPSILON);
+        / medium_speed_of_sound.max(MODAL_EPSILON);
     let (m, _n) = mode_index_pair(mode_index);
     let radiation = radiation_efficiency_from_ka(ka, m)
-        * (medium.impedance_m_rayl.max(0.0)
-            / (medium.impedance_m_rayl.max(0.0) + descriptor.areal_density_kg_per_m2.max(1.0)));
+        * (medium_impedance.max(0.0)
+            / (medium_impedance.max(0.0) + descriptor.areal_density_kg_per_m2.max(1.0)));
 
     let clapper_coupling = descriptor.clapper_mass_ratio * 0.0025 / ((mode_index + 1) as f64);
     (structural, medium_viscous, radiation, clapper_coupling)

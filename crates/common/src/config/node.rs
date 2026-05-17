@@ -42,7 +42,7 @@ impl Node {
             return vec![];
         }
 
-        let descriptor = match solver::bowl_descriptor(self, resolution, &bowl_mesh) {
+        let descriptor = match solver::bowl_descriptor(self, resolution, &bowl_mesh, None) {
             Some(desc) => desc,
             None => return vec![],
         };
@@ -124,7 +124,12 @@ impl Node {
             return vec![];
         }
 
-        let descriptor = match solver::bowl_descriptor(self, resolution, &bowl_mesh) {
+        let descriptor = match solver::bowl_descriptor(
+            self,
+            resolution,
+            &bowl_mesh,
+            Some(band.medium.temperature_c),
+        ) {
             Some(desc) => desc,
             None => return vec![],
         };
@@ -164,7 +169,7 @@ impl Node {
             return vec![];
         }
 
-        let descriptor = match solver::bowl_descriptor(self, resolution, bowl_mesh) {
+        let descriptor = match solver::bowl_descriptor(self, resolution, bowl_mesh, None) {
             Some(desc) => desc,
             None => return vec![],
         };
@@ -295,12 +300,14 @@ impl Node {
             descriptor,
         );
 
+        let speed_of_sound_m_per_s = medium.speed_of_sound_m_per_s;
+
         let ka = 2.0 * std::f64::consts::PI * frequency_hz * descriptor.radius_m
-            / medium.speed_of_sound_m_per_s.max(MODAL_EPSILON);
+            / speed_of_sound_m_per_s.max(MODAL_EPSILON);
         let radiation_efficiency = acoustics::radiation_efficiency_from_ka(ka, m);
 
-        let acoustic_center_hz = (medium.speed_of_sound_m_per_s
-            / (4.0 * descriptor.radius_m.max(MODAL_EPSILON)))
+        let acoustic_center_hz =
+            (speed_of_sound_m_per_s / (4.0 * descriptor.radius_m.max(MODAL_EPSILON)))
         .max(1.0);
         let lock_center_hz = (0.65 * frequency_hz + 0.35 * acoustic_center_hz).max(1.0);
         let lock_bandwidth_hz =
@@ -330,7 +337,12 @@ impl Node {
             return None;
         }
 
-        let descriptor = solver::bowl_descriptor(self, analysis_resolution, &bowl_mesh)?;
+        let descriptor = solver::bowl_descriptor(
+            self,
+            analysis_resolution,
+            &bowl_mesh,
+            Some(medium.temperature_c),
+        )?;
         let solved = solver::solve_scalar_modes(mode_count, &bowl_mesh, descriptor);
         if solved.modes.is_empty() {
             return None;

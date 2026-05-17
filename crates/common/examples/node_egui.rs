@@ -59,21 +59,22 @@ impl Default for NodeInspectorApp {
             builders: NodeModelBuilders::default(),
             active_preset: ExampleShapePreset::Bowl,
             bowl_material: Material {
-                density_kg_per_m3: 8800.0,
+                reference_density_kg_per_m3: 8800.0,
                 poisson_ratio: 0.34,
-                youngs_modulus_pa: 1.1e11,
+                reference_youngs_modulus_mpa: 110_000.0,
+                reference_temperature_c: 20.0,
+                linear_thermal_expansion_per_c: 18.0e-6,
+                dln_e_dtemp_per_c: -3.0e-4,
             },
             clapper_material: Material {
-                density_kg_per_m3: 7850.0,
+                reference_density_kg_per_m3: 7850.0,
                 poisson_ratio: 0.29,
-                youngs_modulus_pa: 2.0e11,
+                reference_youngs_modulus_mpa: 200_000.0,
+                reference_temperature_c: 20.0,
+                linear_thermal_expansion_per_c: 12.0e-6,
+                dln_e_dtemp_per_c: -4.0e-4,
             },
-            medium: Medium {
-                density_kg_per_m3: 1.225,
-                speed_of_sound_m_per_s: 343.0,
-                viscosity_pa_s: 1.8e-5,
-                impedance_m_rayl: 420.0,
-            },
+            medium: Medium::standard_air(),
             resolution: 40,
             mode_count: 8,
             camera_yaw: 0.65,
@@ -356,23 +357,46 @@ impl NodeInspectorApp {
             .id_salt("node_medium")
             .default_open(false)
             .show(ui, |ui| {
+                if ui
+                    .button("Compute Impedance From Density x c")
+                    .clicked()
+                {
+                    self.medium.impedance_m_rayl = Medium::impedance_from_density_and_speed(
+                        self.medium.density_kg_per_m3,
+                        self.medium.speed_of_sound_m_per_s,
+                    );
+                }
+                ui.separator();
                 ui.add(
-                    egui::Slider::new(&mut self.medium.density_kg_per_m3, 0.2..=5.0)
-                        .text("density"),
+                    egui::Slider::new(&mut self.medium.temperature_c, -40.0..=120.0)
+                        .text("temperature (C)"),
                 );
                 ui.add(
-                    egui::Slider::new(&mut self.medium.speed_of_sound_m_per_s, 120.0..=900.0)
+                    egui::Slider::new(&mut self.medium.pressure_pa, 20_000.0..=250_000.0)
+                        .logarithmic(true)
+                        .text("pressure (Pa)"),
+                );
+
+                ui.separator();
+                ui.add(
+                    egui::Slider::new(&mut self.medium.density_kg_per_m3, 0.02..=50.0)
+                        .logarithmic(true)
+                        .text("density (kg/m^3)"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut self.medium.speed_of_sound_m_per_s, 10.0..=2000.0)
+                        .logarithmic(true)
                         .text("c (m/s)"),
                 );
                 ui.add(
-                    egui::Slider::new(&mut self.medium.viscosity_pa_s, 1.0e-6..=5.0e-3)
+                    egui::Slider::new(&mut self.medium.viscosity_pa_s, 1.0e-7..=1.0e-2)
                         .logarithmic(true)
-                        .text("viscosity"),
+                        .text("viscosity (Pa*s)"),
                 );
                 ui.add(
-                    egui::Slider::new(&mut self.medium.impedance_m_rayl, 10.0..=5000.0)
+                    egui::Slider::new(&mut self.medium.impedance_m_rayl, 1.0..=20_000.0)
                         .logarithmic(true)
-                        .text("impedance"),
+                        .text("impedance (Rayl)"),
                 );
             });
 
@@ -382,7 +406,10 @@ impl NodeInspectorApp {
             .show(ui, |ui| {
                 ui.label("Bowl material");
                 ui.add(
-                    egui::Slider::new(&mut self.bowl_material.density_kg_per_m3, 500.0..=20000.0)
+                    egui::Slider::new(
+                        &mut self.bowl_material.reference_density_kg_per_m3,
+                        500.0..=20000.0,
+                    )
                         .text("bowl density"),
                 );
                 ui.add(
@@ -390,14 +417,24 @@ impl NodeInspectorApp {
                         .text("bowl poisson"),
                 );
                 ui.add(
-                    egui::Slider::new(&mut self.bowl_material.youngs_modulus_pa, 1.0e9..=5.0e11)
+                    egui::Slider::new(
+                        &mut self.bowl_material.reference_youngs_modulus_mpa,
+                        1.0e3..=5.0e5,
+                    )
                         .logarithmic(true)
-                        .text("bowl E"),
+                        .text("bowl E (MPa)"),
+                );
+                ui.add(
+                    egui::Slider::new(
+                        &mut self.bowl_material.dln_e_dtemp_per_c,
+                        -2.0e-3..=2.0e-3,
+                    )
+                    .text("bowl d(ln E)/dT"),
                 );
                 ui.label("Clapper material");
                 ui.add(
                     egui::Slider::new(
-                        &mut self.clapper_material.density_kg_per_m3,
+                        &mut self.clapper_material.reference_density_kg_per_m3,
                         500.0..=20000.0,
                     )
                     .text("clapper density"),
@@ -407,9 +444,19 @@ impl NodeInspectorApp {
                         .text("clapper poisson"),
                 );
                 ui.add(
-                    egui::Slider::new(&mut self.clapper_material.youngs_modulus_pa, 1.0e9..=5.0e11)
+                    egui::Slider::new(
+                        &mut self.clapper_material.reference_youngs_modulus_mpa,
+                        1.0e3..=5.0e5,
+                    )
                         .logarithmic(true)
-                        .text("clapper E"),
+                        .text("clapper E (MPa)"),
+                );
+                ui.add(
+                    egui::Slider::new(
+                        &mut self.clapper_material.dln_e_dtemp_per_c,
+                        -2.0e-3..=2.0e-3,
+                    )
+                    .text("clapper d(ln E)/dT"),
                 );
             });
 
@@ -590,6 +637,12 @@ impl NodeInspectorApp {
                             structure.solver_dropped_non_positive,
                             structure.solver_dropped_near_rigid,
                         ));
+                        ui.end_row();
+                        ui.label("Medium temperature (C)");
+                        ui.monospace(format!("{:.2}", acoustics.medium.temperature_c));
+                        ui.end_row();
+                        ui.label("Medium pressure (Pa)");
+                        ui.monospace(format!("{:.1}", acoustics.medium.pressure_pa));
                         ui.end_row();
                         ui.label("Medium viscosity");
                         ui.monospace(format!("{:.3e}", acoustics.medium.viscosity_pa_s));

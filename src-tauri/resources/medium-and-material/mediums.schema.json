@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "items": {
+    "additionalProperties": false,
+    "properties": {
+      "phase": {
+        "type": "string"
+      },
+      "properties": {
+        "additionalProperties": false,
+        "properties": {
+          "density_kg_per_m3": {
+            "type": "number"
+          },
+          "impedance_m_rayl": {
+            "type": "number"
+          },
+          "pressure_pa": {
+            "type": "number"
+          },
+          "speed_of_sound_m_per_s": {
+            "type": "number"
+          },
+          "temperature_c": {
+            "type": "number"
+          },
+          "viscosity_pa_s": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "density_kg_per_m3",
+          "impedance_m_rayl",
+          "pressure_pa",
+          "speed_of_sound_m_per_s",
+          "temperature_c",
+          "viscosity_pa_s"
+        ],
+        "type": "object"
+      },
+      "source_id": {
+        "type": "string"
+      },
+      "substance": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "phase",
+      "properties",
+      "source_id",
+      "substance"
+    ],
+    "type": "object"
+  },
+  "title": "mediums.json",
+  "type": "array"
+}

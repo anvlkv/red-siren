@@ -28,16 +28,20 @@ Usage:
 
 import argparse
 import csv
+import sys
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-LANDING_URL = "https://webbook.nist.gov/chemistry/fluid/"
-
-P_MPA   = "0.101325"   # 1 atm
-T_LOW   = "0"
-T_HIGH  = "100"
-T_INC   = "5"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from config import (
+    DEFAULT_P_MPA,
+    DEFAULT_T_HIGH_C,
+    DEFAULT_T_INC_C,
+    DEFAULT_T_LOW_C,
+    LANDING_URL,
+    NIST_CSV
+)
 
 
 def harvest_substances(page):
@@ -63,10 +67,10 @@ def fetch_one(page, species_id, species_name):
     with page.expect_navigation(wait_until="domcontentloaded"):
         page.click('input[type="submit"][value="Press to Continue"]')
 
-    page.fill('input[name="P"]',     P_MPA)
-    page.fill('input[name="TLow"]',  T_LOW)
-    page.fill('input[name="THigh"]', T_HIGH)
-    page.fill('input[name="TInc"]',  T_INC)
+    page.fill('input[name="P"]', DEFAULT_P_MPA)
+    page.fill('input[name="TLow"]', DEFAULT_T_LOW_C)
+    page.fill('input[name="THigh"]', DEFAULT_T_HIGH_C)
+    page.fill('input[name="TInc"]', DEFAULT_T_INC_C)
 
     with page.expect_navigation(wait_until="domcontentloaded"):
         page.click('input[type="submit"][value="Press for Data"]')
@@ -91,7 +95,7 @@ def fetch_one(page, species_id, species_name):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default="nist_fluid_data.csv")
+    ap.add_argument("--out", default=NIST_CSV)
     ap.add_argument("--headless", default="1")
     ap.add_argument("--limit", type=int, default=0)
     args = ap.parse_args()

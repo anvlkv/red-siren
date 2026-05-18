@@ -1,0 +1,452 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "items": {
+    "additionalProperties": false,
+    "properties": {
+      "materials_a": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "interface_metrics": {
+              "additionalProperties": false,
+              "properties": {
+                "impedance_ratio": {
+                  "type": "number"
+                },
+                "material_impedance_m_rayl": {
+                  "type": "number"
+                },
+                "medium_impedance_m_rayl": {
+                  "type": "number"
+                },
+                "reflection_coefficient": {
+                  "type": "number"
+                },
+                "transmission_coefficient": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "impedance_ratio",
+                "material_impedance_m_rayl",
+                "medium_impedance_m_rayl",
+                "reflection_coefficient",
+                "transmission_coefficient"
+              ],
+              "type": "object"
+            },
+            "material": {
+              "additionalProperties": false,
+              "properties": {
+                "family": {
+                  "type": "string"
+                },
+                "heat_treatment": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "material": {
+                  "type": "string"
+                },
+                "properties": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "dln_e_dtemp_per_c": {
+                      "type": "number"
+                    },
+                    "linear_thermal_expansion_per_c": {
+                      "type": "number"
+                    },
+                    "poisson_ratio": {
+                      "type": "number"
+                    },
+                    "reference_density_kg_per_m3": {
+                      "type": "number"
+                    },
+                    "reference_temperature_c": {
+                      "type": "number"
+                    },
+                    "reference_youngs_modulus_mpa": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "dln_e_dtemp_per_c",
+                    "linear_thermal_expansion_per_c",
+                    "poisson_ratio",
+                    "reference_density_kg_per_m3",
+                    "reference_temperature_c",
+                    "reference_youngs_modulus_mpa"
+                  ],
+                  "type": "object"
+                },
+                "source_id": {
+                  "type": "string"
+                },
+                "standard": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "family",
+                "heat_treatment",
+                "material",
+                "properties",
+                "source_id",
+                "standard"
+              ],
+              "type": "object"
+            },
+            "materials_b": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "interface_metrics": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "counterpart_impedance_m_rayl": {
+                        "type": "number"
+                      },
+                      "impedance_ratio": {
+                        "type": "number"
+                      },
+                      "reflection_coefficient": {
+                        "type": "number"
+                      },
+                      "seed_impedance_m_rayl": {
+                        "type": "number"
+                      },
+                      "transmission_coefficient": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "counterpart_impedance_m_rayl",
+                      "impedance_ratio",
+                      "reflection_coefficient",
+                      "seed_impedance_m_rayl",
+                      "transmission_coefficient"
+                    ],
+                    "type": "object"
+                  },
+                  "material": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "family": {
+                        "type": "string"
+                      },
+                      "heat_treatment": {
+                        "anyOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      "material": {
+                        "type": "string"
+                      },
+                      "properties": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "dln_e_dtemp_per_c": {
+                            "type": "number"
+                          },
+                          "linear_thermal_expansion_per_c": {
+                            "type": "number"
+                          },
+                          "poisson_ratio": {
+                            "type": "number"
+                          },
+                          "reference_density_kg_per_m3": {
+                            "type": "number"
+                          },
+                          "reference_temperature_c": {
+                            "type": "number"
+                          },
+                          "reference_youngs_modulus_mpa": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "dln_e_dtemp_per_c",
+                          "linear_thermal_expansion_per_c",
+                          "poisson_ratio",
+                          "reference_density_kg_per_m3",
+                          "reference_temperature_c",
+                          "reference_youngs_modulus_mpa"
+                        ],
+                        "type": "object"
+                      },
+                      "source_id": {
+                        "type": "string"
+                      },
+                      "standard": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "family",
+                      "heat_treatment",
+                      "material",
+                      "properties",
+                      "source_id",
+                      "standard"
+                    ],
+                    "type": "object"
+                  },
+                  "rank_in_seed": {
+                    "type": "integer"
+                  },
+                  "score": {
+                    "type": "number"
+                  },
+                  "score_components": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "base_transmission_score": {
+                        "type": "number"
+                      },
+                      "cross_family_bonus": {
+                        "type": "number"
+                      },
+                      "family_novelty": {
+                        "type": "number"
+                      },
+                      "medium_support_score": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "base_transmission_score",
+                      "cross_family_bonus",
+                      "family_novelty",
+                      "medium_support_score"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "interface_metrics",
+                  "material",
+                  "rank_in_seed",
+                  "score",
+                  "score_components"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "rank": {
+              "type": "integer"
+            },
+            "score": {
+              "type": "number"
+            },
+            "score_components": {
+              "additionalProperties": false,
+              "properties": {
+                "loudness_component": {
+                  "type": "number"
+                },
+                "transfer_component": {
+                  "type": "number"
+                },
+                "weights": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "loudness": {
+                      "type": "number"
+                    },
+                    "transfer": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "loudness",
+                    "transfer"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "loudness_component",
+                "transfer_component",
+                "weights"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "interface_metrics",
+            "material",
+            "materials_b",
+            "rank",
+            "score",
+            "score_components"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "medium": {
+        "additionalProperties": false,
+        "properties": {
+          "phase": {
+            "type": "string"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "properties": {
+              "density_kg_per_m3": {
+                "type": "number"
+              },
+              "impedance_m_rayl": {
+                "type": "number"
+              },
+              "pressure_pa": {
+                "type": "number"
+              },
+              "speed_of_sound_m_per_s": {
+                "type": "number"
+              },
+              "temperature_c": {
+                "type": "number"
+              },
+              "viscosity_pa_s": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "density_kg_per_m3",
+              "impedance_m_rayl",
+              "pressure_pa",
+              "speed_of_sound_m_per_s",
+              "temperature_c",
+              "viscosity_pa_s"
+            ],
+            "type": "object"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "substance": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "phase",
+          "properties",
+          "source_id",
+          "substance"
+        ],
+        "type": "object"
+      },
+      "pipeline": {
+        "additionalProperties": false,
+        "properties": {
+          "material_material_top_n": {
+            "type": "integer"
+          },
+          "n": {
+            "type": "integer"
+          },
+          "seed_material_medium_top_n": {
+            "type": "integer"
+          },
+          "variant_expansion_top_n": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "material_material_top_n",
+          "n",
+          "seed_material_medium_top_n",
+          "variant_expansion_top_n"
+        ],
+        "type": "object"
+      },
+      "variant_materials": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "family": {
+              "type": "string"
+            },
+            "heat_treatment": {
+              "type": "string"
+            },
+            "material": {
+              "type": "string"
+            },
+            "properties": {
+              "additionalProperties": false,
+              "properties": {
+                "dln_e_dtemp_per_c": {
+                  "type": "number"
+                },
+                "linear_thermal_expansion_per_c": {
+                  "type": "number"
+                },
+                "poisson_ratio": {
+                  "type": "number"
+                },
+                "reference_density_kg_per_m3": {
+                  "type": "number"
+                },
+                "reference_temperature_c": {
+                  "type": "number"
+                },
+                "reference_youngs_modulus_mpa": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "dln_e_dtemp_per_c",
+                "linear_thermal_expansion_per_c",
+                "poisson_ratio",
+                "reference_density_kg_per_m3",
+                "reference_temperature_c",
+                "reference_youngs_modulus_mpa"
+              ],
+              "type": "object"
+            },
+            "source_id": {
+              "type": "string"
+            },
+            "standard": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "family",
+            "heat_treatment",
+            "material",
+            "properties",
+            "source_id",
+            "standard"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "required": [
+      "materials_a",
+      "medium",
+      "pipeline",
+      "variant_materials"
+    ],
+    "type": "object"
+  },
+  "title": "material-material-by-medium.json",
+  "type": "array"
+}

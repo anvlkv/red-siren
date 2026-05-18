@@ -25,6 +25,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "category": "Music"
+    "category": "Music",
+    "resources": [
+      "resources/**/*.*"
+    ]
   }
 }

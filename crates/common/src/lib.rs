@@ -3,6 +3,7 @@ pub mod config;
 pub mod data;
 pub mod device;
 pub mod error;
+pub mod playback_quality;
 pub mod safe_area;
 
 #[cfg(feature = "egui")]

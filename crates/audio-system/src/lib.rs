@@ -1,5 +1,8 @@
+#[cfg(feature = "egui")]
+pub mod egui_testbed;
 pub mod quality;
 pub mod rt;
+
 pub mod system;
 
 pub use quality::{PlaybackQualityGate, SampleType};

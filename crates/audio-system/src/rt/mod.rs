@@ -1,5 +1,6 @@
 pub mod gate_manager;
 pub mod telemetry;
+pub mod stream;
 
 use crate::quality::{PlaybackQualityGate, SampleType};
 

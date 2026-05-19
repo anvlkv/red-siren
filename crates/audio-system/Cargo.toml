@@ -5,7 +5,10 @@ edition = "2024"
 
 [dependencies]
 common = { workspace = true }
+cpal = { version = "0.17.3" }
 dyn-clone = "1.0.20"
+eframe = { workspace = true, optional = true }
+egui = { workspace = true, optional = true }
 fastrand = { workspace = true }
 fundsp = { workspace = true, default-features = false, features = ["std"] }
 log = { workspace = true }
@@ -15,6 +18,7 @@ num-rational = "0.4.2"
 ordered-float = "5.3.0"
 parking_lot = "0.12"
 spectrum-analyzer = "1.7.0"
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 u-num-it = "0.3.4"
 
@@ -24,5 +28,15 @@ insta = { workspace = true }
 insta-fun = "^2.4"
 test-log = "0.2"
 
+[[example]]
+name = "cpal_runtime_egui"
+path = "examples/cpal_runtime_egui.rs"
+required-features = ["egui_testbed"]
+
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2"
+
+[features]
+default = []
+egui = ["dep:eframe", "dep:egui"]
+egui_testbed = ["egui"]

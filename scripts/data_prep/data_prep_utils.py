@@ -47,6 +47,52 @@ def parse_float(value: object) -> float | None:
     return f
 
 
+def parse_friction_range(value: object) -> float | None:
+    """Parse a friction coefficient value that may be a range or a single number.
+
+    Examples::
+
+        parse_friction_range("0.5 - 0.8")  # → 0.65  (midpoint)
+        parse_friction_range("0.4")         # → 0.4
+        parse_friction_range("")            # → None
+        parse_friction_range("0.3 - ")      # → 0.3   (partial range, use available end)
+
+    Returns the midpoint for a ``"lo - hi"`` range, or the single value
+    otherwise.  Returns ``None`` when the value is blank or unparseable.
+    """
+    import re
+    import math
+
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s or s.lower() in {"n/a", "na", "-", "—", "null", "none"}:
+        return None
+
+    # Match a range like "0.5 - 0.8" or "0.5-0.8"
+    range_match = re.match(
+        r"^\s*([0-9]*\.?[0-9]+)\s*[-–]\s*([0-9]*\.?[0-9]+)\s*$", s
+    )
+    if range_match:
+        lo = parse_float(range_match.group(1))
+        hi = parse_float(range_match.group(2))
+        if lo is not None and hi is not None:
+            mid = (lo + hi) / 2.0
+            return mid if math.isfinite(mid) else None
+        if lo is not None:
+            return lo
+        if hi is not None:
+            return hi
+        return None
+
+    # Match a trailing-dash partial range like "0.3 - "
+    partial_match = re.match(r"^\s*([0-9]*\.?[0-9]+)\s*[-–]\s*$", s)
+    if partial_match:
+        return parse_float(partial_match.group(1))
+
+    return parse_float(s)
+
+
 def write_json(path: Path, data: object) -> None:
     """Write *data* as indented JSON to *path*, creating parent directories as
     needed.  Overwrites any existing file so repeated runs are deterministic.

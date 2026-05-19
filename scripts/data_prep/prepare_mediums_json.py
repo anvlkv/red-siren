@@ -60,7 +60,7 @@ from pathlib import Path
 # Allow running from any working directory.
 # ---------------------------------------------------------------------------
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import MPA_TO_PA, MEDIUMS_JSON, NIST_CSV
+from config import MPA_TO_PA, MEDIUMS_JSON, MEDIUM_TOP_N, NIST_CSV
 from data_prep_utils import parse_float, write_json
 
 
@@ -111,11 +111,17 @@ def main() -> None:
                     },
                 }
 
-    # Build output list sorted by substance name for determinism.
-    records = [v["record"] for v in sorted(best_by_substance.values(), key=lambda x: x["record"]["substance"])]
+    # Select top-N substances by acoustic impedance (best acoustic properties).
+    top_entries = sorted(best_by_substance.values(), key=lambda x: x["impedance"], reverse=True)[:MEDIUM_TOP_N]
+
+    # Output sorted by density ascending (lightest first).
+    records = sorted(
+        [entry["record"] for entry in top_entries],
+        key=lambda r: r["properties"]["density_kg_per_m3"],
+    )
 
     write_json(MEDIUMS_JSON, records)
-    print(f"Wrote {len(records)} medium records → {MEDIUMS_JSON}")
+    print(f"Wrote {len(records)} medium records (top {MEDIUM_TOP_N} by impedance, sorted by density) → {MEDIUMS_JSON}")
 
 
 if __name__ == "__main__":

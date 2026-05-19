@@ -29,6 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from coupling_metrics import (
+    FrictionTable,
     acoustic_impedance_rayl,
     impedance_ratio,
     longitudinal_wave_speed_m_per_s,
@@ -37,14 +38,12 @@ from coupling_metrics import (
 )
 from config import (
     COUPLING_TOP_N,
+    FRICTION_CSV,
+    FRICTION_RANKING_WEIGHT,
     MATERIAL_MATERIAL_BY_MEDIUM_JSON,
     MATERIAL_MATERIAL_GREEDY_BASE_WEIGHT,
     MATERIAL_MATERIAL_GREEDY_CROSS_FAMILY_BONUS,
     MATERIAL_MATERIAL_GREEDY_FAMILY_NOVELTY_WEIGHT,
-    MATERIAL_MATERIAL_GREEDY_MATERIAL_NOVELTY_WEIGHT,
-    MATERIAL_MATERIAL_GREEDY_MAX_FAMILY_EXPOSURE,
-    MATERIAL_MATERIAL_GREEDY_MAX_MATERIAL_APPEARANCES,
-    MATERIAL_MATERIAL_GREEDY_MAX_PAIR_FAMILY_COMBINATION,
     MATERIALS_A_GREEDY_FAMILY_NOVELTY_WEIGHT,
     MATERIALS_A_GREEDY_MAX_PER_FAMILY,
     MATERIALS_B_GREEDY_MAX_PER_FAMILY,
@@ -291,10 +290,6 @@ def _build_material_payload(material_entry: dict) -> dict:
     }
 
 
-def _pair_family_key(family_a: str, family_b: str) -> tuple[str, str]:
-    return tuple(sorted((family_a, family_b)))
-
-
 def _material_medium_score(material_entry: dict, medium_entry: dict) -> dict | None:
     z_material = float(material_entry["impedance"])
     z_medium = _medium_impedance(medium_entry)
@@ -378,236 +373,26 @@ def _expand_materials_for_medium(all_materials: list[dict], seed_materials: list
     )
 
 
-def _pair_adjusted_score(
-    candidate: dict,
-    family_usage: Counter[str],
-    material_usage: Counter[str],
-) -> tuple[float, dict]:
-    base_score = float(candidate["base_score"])
-    material_a_id = str(candidate["material_a"]["source_id"])
-    material_b_id = str(candidate["material_b"]["source_id"])
-    family_a = str(candidate["material_a"]["family"])
-    family_b = str(candidate["material_b"]["family"])
-
-    family_novelty = 0.5 * (
-        1.0 / (1.0 + family_usage[family_a]) + 1.0 / (1.0 + family_usage[family_b])
-    )
-    material_novelty = 0.5 * (
-        1.0 / (1.0 + material_usage[material_a_id])
-        + 1.0 / (1.0 + material_usage[material_b_id])
-    )
-    cross_family_bonus = 1.0 if family_a != family_b else 0.0
-
-    adjusted_score = (
-        MATERIAL_MATERIAL_GREEDY_BASE_WEIGHT * base_score
-        + MATERIAL_MATERIAL_GREEDY_FAMILY_NOVELTY_WEIGHT * family_novelty
-        + MATERIAL_MATERIAL_GREEDY_MATERIAL_NOVELTY_WEIGHT * material_novelty
-        + MATERIAL_MATERIAL_GREEDY_CROSS_FAMILY_BONUS * cross_family_bonus
-    )
-    return adjusted_score, {
-        "base_transmission_score": base_score,
-        "family_novelty": family_novelty,
-        "material_novelty": material_novelty,
-        "cross_family_bonus": cross_family_bonus,
-        "weights": {
-            "base": MATERIAL_MATERIAL_GREEDY_BASE_WEIGHT,
-            "family_novelty": MATERIAL_MATERIAL_GREEDY_FAMILY_NOVELTY_WEIGHT,
-            "material_novelty": MATERIAL_MATERIAL_GREEDY_MATERIAL_NOVELTY_WEIGHT,
-            "cross_family_bonus": MATERIAL_MATERIAL_GREEDY_CROSS_FAMILY_BONUS,
-        },
-    }
-
-
-def _select_pairs_greedily(candidates: list[dict]) -> list[dict]:
-    selected: list[dict] = []
-    family_usage: Counter[str] = Counter()
-    material_usage: Counter[str] = Counter()
-    family_pair_usage: Counter[tuple[str, str]] = Counter()
-    remaining = list(candidates)
-
-    while remaining and len(selected) < COUPLING_TOP_N:
-        best_index = None
-        best_score = None
-        best_components = None
-        best_tiebreak = None
-
-        for family_overflow_allowance in range(COUPLING_TOP_N + 1):
-            for enforce_family_pair_cap in (True, False):
-                best_index = None
-                best_score = None
-                best_components = None
-                best_tiebreak = None
-
-                for index, candidate in enumerate(remaining):
-                    material_a_id = str(candidate["material_a"]["source_id"])
-                    material_b_id = str(candidate["material_b"]["source_id"])
-                    family_a = str(candidate["material_a"]["family"])
-                    family_b = str(candidate["material_b"]["family"])
-                    family_pair = _pair_family_key(family_a, family_b)
-
-                    if material_usage[material_a_id] >= MATERIAL_MATERIAL_GREEDY_MAX_MATERIAL_APPEARANCES:
-                        continue
-                    if material_usage[material_b_id] >= MATERIAL_MATERIAL_GREEDY_MAX_MATERIAL_APPEARANCES:
-                        continue
-                    if (
-                        family_usage[family_a]
-                        >= MATERIAL_MATERIAL_GREEDY_MAX_FAMILY_EXPOSURE + family_overflow_allowance
-                    ):
-                        continue
-                    if (
-                        family_usage[family_b]
-                        >= MATERIAL_MATERIAL_GREEDY_MAX_FAMILY_EXPOSURE + family_overflow_allowance
-                    ):
-                        continue
-                    if (
-                        enforce_family_pair_cap
-                        and family_pair_usage[family_pair] >= MATERIAL_MATERIAL_GREEDY_MAX_PAIR_FAMILY_COMBINATION
-                    ):
-                        continue
-
-                    adjusted_score, score_components = _pair_adjusted_score(
-                        candidate, family_usage, material_usage
-                    )
-                    tiebreak = (
-                        str(candidate["material_a"]["material"]),
-                        str(candidate["material_a"]["source_id"]),
-                        str(candidate["material_b"]["material"]),
-                        str(candidate["material_b"]["source_id"]),
-                    )
-                    if best_score is None or adjusted_score > best_score or (
-                        adjusted_score == best_score and tiebreak < best_tiebreak
-                    ):
-                        best_index = index
-                        best_score = adjusted_score
-                        best_components = score_components
-                        best_tiebreak = tiebreak
-
-                if best_index is not None:
-                    break
-
-            if best_index is not None:
-                break
-
-        if best_index is None or best_score is None or best_components is None:
-            break
-
-        chosen = remaining.pop(best_index)
-        chosen["score"] = best_score
-        chosen["score_components"] = best_components
-        selected.append(chosen)
-
-        family_a = str(chosen["material_a"]["family"])
-        family_b = str(chosen["material_b"]["family"])
-        family_usage[family_a] += 1
-        family_usage[family_b] += 1
-        material_usage[str(chosen["material_a"]["source_id"])] += 1
-        material_usage[str(chosen["material_b"]["source_id"])] += 1
-        family_pair_usage[_pair_family_key(family_a, family_b)] += 1
-
-    return selected
-
-
-def _rank_pairs_for_medium(expanded_materials: list[dict]) -> list[dict]:
-    candidates: list[dict] = []
-    for i in range(len(expanded_materials)):
-        a = expanded_materials[i]
-        for j in range(i + 1, len(expanded_materials)):
-            b = expanded_materials[j]
-
-            z_a = a["impedance"]
-            z_b = b["impedance"]
-            transfer = transmission_coefficient(z_a, z_b)
-            reflect = reflection_coefficient(z_a, z_b)
-            ratio = impedance_ratio(z_a, z_b)
-            if transfer is None or reflect is None or ratio is None:
-                continue
-
-            a_family = _material_family(a["row"])
-            b_family = _material_family(b["row"])
-            a_entry = dict(a)
-            b_entry = dict(b)
-            a_entry["family"] = a_family
-            b_entry["family"] = b_family
-
-            candidates.append(
-                {
-                    "base_score": transfer,
-                    "interface_metrics": {
-                        "material_a_impedance_m_rayl": z_a,
-                        "material_b_impedance_m_rayl": z_b,
-                        "impedance_ratio": ratio,
-                        "transmission_coefficient": transfer,
-                        "reflection_coefficient": reflect,
-                    },
-                    "material_a": _build_material_payload(a_entry),
-                    "material_b": _build_material_payload(b_entry),
-                }
-            )
-
-    top = _select_pairs_greedily(candidates)
-    top.sort(
-        key=lambda r: (
-            -r["score"],
-            str(r["material_a"]["material"]),
-            str(r["material_a"]["source_id"]),
-            str(r["material_b"]["material"]),
-            str(r["material_b"]["source_id"]),
-        )
-    )
-    for i, row in enumerate(top, start=1):
-        row["rank"] = i
-    return top
-
-
 def _build_seed_records(seed_materials: list[dict], medium_entry: dict) -> list[dict]:
-    records: list[dict] = []
+    scored: list[tuple[float, dict]] = []
     for material in seed_materials:
-        scored = _material_medium_score(material, medium_entry)
-        if scored is None:
+        result = _material_medium_score(material, medium_entry)
+        if result is None:
             continue
-        records.append(
-            {
-                "score": scored["score"],
-                "score_components": scored["score_components"],
-                "interface_metrics": scored["interface_metrics"],
-                "material": _build_material_payload({
-                    "row": material["row"],
-                    "family": _material_family(material["row"]),
-                }),
-            }
-        )
+        payload = _build_material_payload({
+            "row": material["row"],
+            "family": _material_family(material["row"]),
+        })
+        scored.append((result["score"], {**payload, "radiation": result["interface_metrics"]}))
 
-    records.sort(
-        key=lambda r: (
-            -r["score"],
-            str(r["material"]["material"]),
-            str(r["material"]["source_id"]),
+    scored.sort(
+        key=lambda t: (
+            -t[0],
+            str(t[1]["material"]),
+            str(t[1]["source_id"]),
         )
     )
-    for i, row in enumerate(records, start=1):
-        row["rank"] = i
-    return records
-
-
-def _build_variant_records(expanded_materials: list[dict], seed_material_ids: set[str]) -> list[dict]:
-    variants = [m for m in expanded_materials if str(m["row"].get("source_id")) not in seed_material_ids]
-    variant_records: list[dict] = []
-    for material in variants:
-        variant_records.append(
-            _build_material_payload(
-                {
-                    "row": material["row"],
-                    "family": _material_family(material["row"]),
-                }
-            )
-        )
-    variant_records.sort(
-        key=lambda m: (
-            str(m["material"]),
-            str(m["source_id"]),
-        )
-    )
-    return variant_records
+    return [r for _, r in scored]
 
 
 def _select_seed_materials_diverse(scored_materials: list[dict]) -> list[dict]:
@@ -660,7 +445,13 @@ def _select_seed_materials_diverse(scored_materials: list[dict]) -> list[dict]:
     return selected
 
 
-def _build_materials_b_for_seed(seed_material: dict, expanded_materials: list[dict], medium_entry: dict) -> list[dict]:
+def _build_materials_b_for_seed(
+    seed_material: dict,
+    expanded_materials: list[dict],
+    medium_entry: dict,
+    friction_table: "FrictionTable",
+    prefer_lubricated: bool,
+) -> list[dict]:
     seed_id = str((seed_material.get("row") or {}).get("source_id"))
     seed_family = _material_family(seed_material.get("row") or {})
     seed_impedance = float(seed_material.get("impedance") or 0.0)
@@ -678,12 +469,17 @@ def _build_materials_b_for_seed(seed_material: dict, expanded_materials: list[di
         if transfer is None or reflect is None or ratio is None:
             continue
 
+        counterpart_family = _material_family(counterpart.get("row") or {})
+        friction_coeff, friction_source = friction_table.lookup(
+            seed_family, counterpart_family, prefer_lubricated
+        )
         medium_score = _material_medium_score(counterpart, medium_entry)
         candidates.append(
             {
                 "base_score": transfer,
+                "friction_coefficient": friction_coeff,
                 "medium_support_score": (medium_score or {}).get("score", 0.0),
-                "interface_metrics": {
+                    "conduction": {
                     "seed_impedance_m_rayl": seed_impedance,
                     "counterpart_impedance_m_rayl": counterpart_impedance,
                     "impedance_ratio": ratio,
@@ -693,7 +489,7 @@ def _build_materials_b_for_seed(seed_material: dict, expanded_materials: list[di
                 "material": _build_material_payload(
                     {
                         "row": counterpart.get("row"),
-                        "family": _material_family(counterpart.get("row") or {}),
+                        "family": counterpart_family,
                     }
                 ),
             }
@@ -729,11 +525,16 @@ def _build_materials_b_for_seed(seed_material: dict, expanded_materials: list[di
                 medium_support = float(row.get("medium_support_score") or 0.0)
                 family_novelty = 1.0 / (1.0 + family_usage[family])
                 cross_family_bonus = 1.0 if family != seed_family else 0.0
+                friction_coeff: float | None = row.get("friction_coefficient")
+                # Normalise friction to (0, 1) — coefficients range ~0.02–1.6;
+                # cap at 1.5 so the weight is always the true max contribution.
+                friction_norm = min(friction_coeff / 1.5, 1.0) if friction_coeff is not None else 0.0
                 adjusted = (
                     MATERIAL_MATERIAL_GREEDY_BASE_WEIGHT * base_score
                     + 0.15 * medium_support
                     + MATERIAL_MATERIAL_GREEDY_FAMILY_NOVELTY_WEIGHT * family_novelty
                     + MATERIAL_MATERIAL_GREEDY_CROSS_FAMILY_BONUS * cross_family_bonus
+                    + FRICTION_RANKING_WEIGHT * friction_norm
                 )
 
                 tiebreak = (
@@ -746,15 +547,10 @@ def _build_materials_b_for_seed(seed_material: dict, expanded_materials: list[di
                     best_index = index
                     best_score = adjusted
                     best_row = {
-                        "score": adjusted,
-                        "score_components": {
-                            "base_transmission_score": base_score,
-                            "medium_support_score": medium_support,
-                            "family_novelty": family_novelty,
-                            "cross_family_bonus": cross_family_bonus,
-                        },
-                        "interface_metrics": row.get("interface_metrics"),
-                        "material": material,
+                            "_score": adjusted,
+                            **material,
+                            "conduction": row.get("conduction"),
+                            "friction_coefficient": row.get("friction_coefficient"),
                     }
                     best_tiebreak = tiebreak
 
@@ -774,42 +570,35 @@ def _build_materials_b_for_seed(seed_material: dict, expanded_materials: list[di
 
     selected.sort(
         key=lambda row: (
-            -(row.get("score") or 0.0),
-            str((row.get("material") or {}).get("material")),
-            str((row.get("material") or {}).get("source_id")),
+            -row["_score"],
+            str(row.get("material")),
+            str(row.get("source_id")),
         )
     )
-    for i, row in enumerate(selected, start=1):
-        row["rank_in_seed"] = i
-    return selected
+    return [{k: v for k, v in row.items() if k != "_score"} for row in selected]
 
 
-def _nested_materials_a(seed_records: list[dict], seed_materials: list[dict], expanded_materials: list[dict], medium_entry: dict) -> list[dict]:
+def _nested_materials_a(
+    seed_records: list[dict],
+    seed_materials: list[dict],
+    expanded_materials: list[dict],
+    medium_entry: dict,
+    friction_table: "FrictionTable",
+    prefer_lubricated: bool,
+) -> list[dict]:
     by_seed_id = {str((m.get("row") or {}).get("source_id")): m for m in seed_materials}
     nested: list[dict] = []
     for seed_record in seed_records:
-        seed_payload = seed_record.get("material") or {}
-        seed_id = str(seed_payload.get("source_id"))
+        seed_id = str(seed_record.get("source_id"))
         seed_material = by_seed_id.get(seed_id)
         if seed_material is None:
             continue
-        seed_node = dict(seed_record)
-        seed_node["materials_b"] = _build_materials_b_for_seed(seed_material, expanded_materials, medium_entry)
-        nested.append(seed_node)
-
-    for seed in nested:
-        candidates = list(seed.get("materials_b") or [])
-        selected: list[dict] = []
-        selected.extend(candidates)
-        seed["materials_b"] = selected
-
-    nested.sort(
-        key=lambda seed: (
-            -(seed.get("score") or 0.0),
-            str((seed.get("material") or {}).get("material")),
-            str((seed.get("material") or {}).get("source_id")),
-        )
-    )
+        nested.append({
+            **seed_record,
+            "couplings": _build_materials_b_for_seed(
+                seed_material, expanded_materials, medium_entry, friction_table, prefer_lubricated
+            ),
+        })
     return nested
 
 
@@ -817,9 +606,12 @@ def main() -> None:
     materials = _load_json(MATERIALS_JSON)
     mediums = _load_json(MEDIUMS_JSON)
     deduped_materials = _dedupe_materials_by_signature(materials)
+    friction_table = FrictionTable(FRICTION_CSV)
 
     medium_sections: list[dict] = []
     for medium in mediums:
+        prefer_lubricated = (str(medium.get("phase") or "").lower() == "liquid")
+
         scored_materials: list[dict] = []
         for material in deduped_materials:
             scored = _material_medium_score(material, medium)
@@ -843,9 +635,10 @@ def main() -> None:
         seed_materials = [r["material"] for r in selected_seed_entries]
         expanded_materials = _expand_materials_for_medium(deduped_materials, seed_materials)
         seed_records = _build_seed_records(seed_materials, medium)
-        seed_material_ids = {str(m["row"].get("source_id")) for m in seed_materials}
-        variant_records = _build_variant_records(expanded_materials, seed_material_ids)
-        materials_a = _nested_materials_a(seed_records, seed_materials, expanded_materials, medium)
+        materials = _nested_materials_a(
+            seed_records, seed_materials, expanded_materials, medium,
+            friction_table, prefer_lubricated
+        )
 
         medium_sections.append(
             {
@@ -855,23 +648,9 @@ def main() -> None:
                     "phase": medium.get("phase"),
                     "properties": medium.get("properties"),
                 },
-                "pipeline": {
-                    "n": COUPLING_TOP_N,
-                    "seed_material_medium_top_n": COUPLING_TOP_N,
-                    "variant_expansion_top_n": COUPLING_TOP_N,
-                    "material_material_top_n": COUPLING_TOP_N,
-                },
-                "materials_a": materials_a,
-                "variant_materials": variant_records,
+                "materials": materials,
             }
         )
-
-    medium_sections.sort(
-        key=lambda s: (
-            str(s["medium"].get("substance")),
-            str(s["medium"].get("source_id")),
-        )
-    )
 
     write_json(MATERIAL_MATERIAL_BY_MEDIUM_JSON, medium_sections)
     print(

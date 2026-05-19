@@ -17,18 +17,15 @@ MPA_TO_PA = 1.0e6
 
 # Coupling-ranking configuration
 COUPLING_TOP_N = 25
+MEDIUM_TOP_N = 25
 MATERIAL_MEDIUM_LOUDNESS_WEIGHT = 0.70
 MATERIAL_MEDIUM_TRANSFER_WEIGHT = 0.30
 MATERIAL_SIGNATURE_IMPEDANCE_DECIMALS = 3
 MATERIAL_SIGNATURE_DENSITY_DECIMALS = 3
 MATERIAL_SIGNATURE_POISSON_DECIMALS = 6
 MATERIAL_SIGNATURE_YOUNGS_MPA_DECIMALS = 3
-MATERIAL_MATERIAL_GREEDY_MAX_MATERIAL_APPEARANCES = 1
-MATERIAL_MATERIAL_GREEDY_MAX_FAMILY_EXPOSURE = 10
-MATERIAL_MATERIAL_GREEDY_MAX_PAIR_FAMILY_COMBINATION = 3
 MATERIAL_MATERIAL_GREEDY_BASE_WEIGHT = 0.75
 MATERIAL_MATERIAL_GREEDY_FAMILY_NOVELTY_WEIGHT = 0.20
-MATERIAL_MATERIAL_GREEDY_MATERIAL_NOVELTY_WEIGHT = 0.10
 MATERIAL_MATERIAL_GREEDY_CROSS_FAMILY_BONUS = 0.15
 MATERIALS_A_GREEDY_MAX_PER_FAMILY = 2
 MATERIALS_A_GREEDY_FAMILY_NOVELTY_WEIGHT = 0.25
@@ -59,3 +56,13 @@ MEDIUMS_JSON = repo_path(
 MATERIAL_MATERIAL_BY_MEDIUM_JSON = repo_path(
     "src-tauri", "resources", "medium-and-material", "material-material-by-medium.json"
 )
+FRICTION_CSV = repo_path(
+    "scripts", "data_prep", "raw_data", "friction pairs.csv"
+)
+
+# ---------------------------------------------------------------------------
+# Friction-ranking configuration
+# ---------------------------------------------------------------------------
+# Weight of the friction coefficient term added to the greedy pair score.
+# Acoustic coupling dominates; friction provides a tiebreaking signal.
+FRICTION_RANKING_WEIGHT = 0.10

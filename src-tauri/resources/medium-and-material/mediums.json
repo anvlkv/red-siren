@@ -2,149 +2,6 @@
   {
     "phase": "liquid",
     "properties": {
-      "density_kg_per_m3": 1878.4,
-      "impedance_m_rayl": 1983966.08,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1056.2,
-      "temperature_c": -126.8,
-      "viscosity_pa_s": 0.0038228
-    },
-    "source_id": "C431890",
-    "substance": "1,1,1,2,3,3,3-Heptafluoropropane (R227ea)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1596.7,
-      "impedance_m_rayl": 1322339.0389999999,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 828.17,
-      "temperature_c": -33.15,
-      "viscosity_pa_s": 0.0010555
-    },
-    "source_id": "C431630",
-    "substance": "1,1,1,2,3,3-Hexafluoropropane (R236ea)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1667.8,
-      "impedance_m_rayl": 1624620.658,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 974.11,
-      "temperature_c": -78.55,
-      "viscosity_pa_s": 0.0015964
-    },
-    "source_id": "C690391",
-    "substance": "1,1,1,3,3,3-Hexafluoropropane (R236fa)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1645.9,
-      "impedance_m_rayl": 2049310.0899999999,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1245.1,
-      "temperature_c": -103.15,
-      "viscosity_pa_s": 0.0058133
-    },
-    "source_id": "C460731",
-    "substance": "1,1,1,3,3-Pentafluoropropane (R245fa)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1591.9,
-      "impedance_m_rayl": 1773694.9800000002,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1114.2,
-      "temperature_c": -62.15,
-      "viscosity_pa_s": 0.0058498
-    },
-    "source_id": "C679867",
-    "substance": "1,1,2,2,3-Pentafluoropropane (R245ca)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1705.0,
-      "impedance_m_rayl": 1548481.0,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 908.2,
-      "temperature_c": -36.22,
-      "viscosity_pa_s": 0.0018188
-    },
-    "source_id": "C76131",
-    "substance": "1,1,2-Trichloro-1,2,2-trifluoroethane (R113)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1441.3,
-      "impedance_m_rayl": 1859421.13,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1290.1,
-      "temperature_c": -88.47,
-      "viscosity_pa_s": 0.0031346
-    },
-    "source_id": "C1717006",
-    "substance": "1,1-Dichloro-1-fluoroethane (R141b)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1518.1,
-      "impedance_m_rayl": 956069.0179999999,
-      "pressure_pa": 101330.0,
-      "speed_of_sound_m_per_s": 629.78,
-      "temperature_c": 3.5916,
-      "viscosity_pa_s": 0.00043999
-    },
-    "source_id": "C76142",
-    "substance": "1,2-Dichloro-1,1,2,2-tetrafluoroethane (R114)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1451.1,
-      "impedance_m_rayl": 2115994.02,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1458.2,
-      "temperature_c": -130.43,
-      "viscosity_pa_s": 0.004087
-    },
-    "source_id": "C75683",
-    "substance": "1-Chloro-1,1-difluoroethane (R142b)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 627.9,
-      "impedance_m_rayl": 666578.6399999999,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1061.6,
-      "temperature_c": -16.55,
-      "viscosity_pa_s": 0.00043892
-    },
-    "source_id": "C463821",
-    "substance": "2,2-Dimethylpropane"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 789.05,
-      "impedance_m_rayl": 1597826.25,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 2025.0,
-      "temperature_c": -160.5,
-      "viscosity_pa_s": 0.032819
-    },
-    "source_id": "C78784",
-    "substance": "2-Methylbutane"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
       "density_kg_per_m3": 807.57,
       "impedance_m_rayl": 1631452.914,
       "pressure_pa": 101320.0,
@@ -154,747 +11,6 @@
     },
     "source_id": "C107835",
     "substance": "2-Methylpentane"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 733.89,
-      "impedance_m_rayl": 1476293.1239999998,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 2011.6,
-      "temperature_c": -77.66,
-      "viscosity_pa_s": 0.00057082
-    },
-    "source_id": "C7664417",
-    "substance": "Ammonia"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1416.9,
-      "impedance_m_rayl": 1222189.6020000002,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 862.58,
-      "temperature_c": -189.34,
-      "viscosity_pa_s": 0.00029028
-    },
-    "source_id": "C7440371",
-    "substance": "Argon"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 894.05,
-      "impedance_m_rayl": 1246573.9149999998,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1394.3,
-      "temperature_c": 5.524,
-      "viscosity_pa_s": 0.00081304
-    },
-    "source_id": "C71432",
-    "substance": "Benzene"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 735.0,
-      "impedance_m_rayl": 1342992.0,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1827.2,
-      "temperature_c": -138.25,
-      "viscosity_pa_s": 0.0023625
-    },
-    "source_id": "C106978",
-    "substance": "Butane"
-  },
-  {
-    "phase": "vapor",
-    "properties": {
-      "density_kg_per_m3": 2.513,
-      "impedance_m_rayl": 582.2620999999999,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 231.7,
-      "temperature_c": -56.558,
-      "viscosity_pa_s": 1.0938e-05
-    },
-    "source_id": "C124389",
-    "substance": "Carbon dioxide"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 849.69,
-      "impedance_m_rayl": 848653.3782,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 998.78,
-      "temperature_c": -204.99,
-      "viscosity_pa_s": 0.00029183
-    },
-    "source_id": "C630080",
-    "substance": "Carbon monoxide"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1352.8,
-      "impedance_m_rayl": 1961560.0,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1450.0,
-      "temperature_c": -138.85,
-      "viscosity_pa_s": 0.0013583
-    },
-    "source_id": "C463581",
-    "substance": "Carbonyl sulfide"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1745.0,
-      "impedance_m_rayl": 1561478.35,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 894.83,
-      "temperature_c": -99.4,
-      "viscosity_pa_s": 0.0012646
-    },
-    "source_id": "C76153",
-    "substance": "Chloropentafluoroethane (R115)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1815.7,
-      "impedance_m_rayl": 1947338.25,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1072.5,
-      "temperature_c": -166.15,
-      "viscosity_pa_s": 0.0023866
-    },
-    "source_id": "C75729",
-    "substance": "Chlorotrifluoromethane (R13)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 791.1,
-      "impedance_m_rayl": 1065611.7,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1347.0,
-      "temperature_c": 6.71,
-      "viscosity_pa_s": 0.0012522
-    },
-    "source_id": "C110827",
-    "substance": "Cyclohexane"
-  },
-  {
-    "phase": "vapor",
-    "properties": {
-      "density_kg_per_m3": 1.921,
-      "impedance_m_rayl": 480.74946,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 250.26,
-      "temperature_c": -0.15,
-      "viscosity_pa_s": 8.0574e-06
-    },
-    "source_id": "C75194",
-    "substance": "Cyclopropane"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1775.9,
-      "impedance_m_rayl": 1134924.4130000002,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 639.07,
-      "temperature_c": -54.15,
-      "viscosity_pa_s": 0.0011811
-    },
-    "source_id": "C355259",
-    "substance": "Decafluorobutane"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 769.29,
-      "impedance_m_rayl": 1130163.9389999998,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1469.1,
-      "temperature_c": -29.65,
-      "viscosity_pa_s": 0.0024369
-    },
-    "source_id": "C124185",
-    "substance": "Decane"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 162.51,
-      "impedance_m_rayl": 158096.2284,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 972.84,
-      "temperature_c": -249.49,
-      "viscosity_pa_s": 2.7014e-05
-    },
-    "source_id": "C7782390",
-    "substance": "Deuterium"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1088.5,
-      "impedance_m_rayl": 1587141.8499999999,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1458.1,
-      "temperature_c": 63.819,
-      "viscosity_pa_s": 0.00052052
-    },
-    "source_id": "C7789200",
-    "substance": "Deuterium oxide"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1789.2,
-      "impedance_m_rayl": 2209840.92,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1235.1,
-      "temperature_c": -142.05,
-      "viscosity_pa_s": 0.0049273
-    },
-    "source_id": "C75718",
-    "substance": "Dichlorodifluoromethane (R12)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1550.2,
-      "impedance_m_rayl": 1557795.98,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1004.9,
-      "temperature_c": -58.15,
-      "viscosity_pa_s": 0.0008118
-    },
-    "source_id": "C75434",
-    "substance": "Dichlorofluoromethane (R21)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1237.4,
-      "impedance_m_rayl": 1422638.7800000003,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1149.7,
-      "temperature_c": -90.82,
-      "viscosity_pa_s": 0.00032085
-    },
-    "source_id": "C10024972",
-    "substance": "Dinitrogen monoxide"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 2004.5,
-      "impedance_m_rayl": 1644471.755,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 820.39,
-      "temperature_c": -109.94,
-      "viscosity_pa_s": 0.022504
-    },
-    "source_id": "C678262",
-    "substance": "Dodecafluoropentane"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 771.53,
-      "impedance_m_rayl": 1101590.534,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1427.8,
-      "temperature_c": -9.55,
-      "viscosity_pa_s": 0.0028966
-    },
-    "source_id": "C112403",
-    "substance": "Dodecane"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 651.57,
-      "impedance_m_rayl": 1309069.287,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 2009.1,
-      "temperature_c": -182.78,
-      "viscosity_pa_s": 0.0012927
-    },
-    "source_id": "C74840",
-    "substance": "Ethane"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1591.2,
-      "impedance_m_rayl": 1782621.3599999999,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1120.3,
-      "temperature_c": -103.3,
-      "viscosity_pa_s": 0.0021572
-    },
-    "source_id": "C811972",
-    "substance": "Ethane, 1,1,1,2-tetrafluoro- (R134a)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1330.7,
-      "impedance_m_rayl": 1408412.8800000001,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1058.4,
-      "temperature_c": -111.81,
-      "viscosity_pa_s": 0.0010727
-    },
-    "source_id": "C420462",
-    "substance": "Ethane, 1,1,1-trifluoro- (R143a)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1193.0,
-      "impedance_m_rayl": 1671631.6,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1401.2,
-      "temperature_c": -118.59,
-      "viscosity_pa_s": 0.0020181
-    },
-    "source_id": "C75376",
-    "substance": "Ethane, 1,1-difluoro- (R152a)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1852.9,
-      "impedance_m_rayl": 2397467.31,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1293.9,
-      "temperature_c": -153.15,
-      "viscosity_pa_s": 0.021029
-    },
-    "source_id": "C2837890",
-    "substance": "Ethane, 1-chloro-1,2,2,2-tetrafluoro- (R124)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1771.1,
-      "impedance_m_rayl": 2202717.07,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1243.7,
-      "temperature_c": -107.15,
-      "viscosity_pa_s": 0.0049632
-    },
-    "source_id": "C306832",
-    "substance": "Ethane, 2,2-dichloro-1,1,1-trifluoro- (R123)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1690.9,
-      "impedance_m_rayl": 1577643.5180000002,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 933.02,
-      "temperature_c": -100.63,
-      "viscosity_pa_s": 0.0011539
-    },
-    "source_id": "C354336",
-    "substance": "Ethane, pentafluoro- (R125)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 654.65,
-      "impedance_m_rayl": 1156832.015,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1767.1,
-      "temperature_c": -169.16,
-      "viscosity_pa_s": 0.00068527
-    },
-    "source_id": "C74851",
-    "substance": "Ethene"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1706.9,
-      "impedance_m_rayl": 1782686.3600000003,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1044.4,
-      "temperature_c": -219.67,
-      "viscosity_pa_s": 0.001273
-    },
-    "source_id": "C7782414",
-    "substance": "Fluorine"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1009.2,
-      "impedance_m_rayl": 1427311.56,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1414.3,
-      "temperature_c": -143.33,
-      "viscosity_pa_s": 0.0020767
-    },
-    "source_id": "C593533",
-    "substance": "Fluoromethane (R41)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 147.92,
-      "impedance_m_rayl": 33993.4952,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 229.81,
-      "temperature_c": -270.97,
-      "viscosity_pa_s": 3.7764e-06
-    },
-    "source_id": "C7440597",
-    "substance": "Helium"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 775.85,
-      "impedance_m_rayl": 1292721.27,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1666.2,
-      "temperature_c": -90.6,
-      "viscosity_pa_s": 0.0039169
-    },
-    "source_id": "C142825",
-    "substance": "Heptane"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1698.4,
-      "impedance_m_rayl": 1110227.0960000001,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 653.69,
-      "temperature_c": -100.05,
-      "viscosity_pa_s": 0.00059674
-    },
-    "source_id": "C76164",
-    "substance": "Hexafluoroethane (R116)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 758.53,
-      "impedance_m_rayl": 1254305.2079999999,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1653.6,
-      "temperature_c": -95.32,
-      "viscosity_pa_s": 0.0021122
-    },
-    "source_id": "C110543",
-    "substance": "Hexane"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 77.083,
-      "impedance_m_rayl": 98057.28429999998,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1272.1,
-      "temperature_c": -259.19,
-      "viscosity_pa_s": 2.5758e-05
-    },
-    "source_id": "C1333740",
-    "substance": "Hydrogen"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 992.37,
-      "impedance_m_rayl": 1427226.534,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1438.2,
-      "temperature_c": -85.45,
-      "viscosity_pa_s": 0.00054371
-    },
-    "source_id": "C7783064",
-    "substance": "Hydrogen sulfide"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 740.38,
-      "impedance_m_rayl": 1480760.0,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 2000.0,
-      "temperature_c": -159.42,
-      "viscosity_pa_s": 0.0087778
-    },
-    "source_id": "C75285",
-    "substance": "Isobutane"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 2446.8,
-      "impedance_m_rayl": 1710435.54,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 699.05,
-      "temperature_c": -157.37,
-      "viscosity_pa_s": 0.00045254
-    },
-    "source_id": "C7439909",
-    "substance": "Krypton"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 451.53,
-      "impedance_m_rayl": 694994.976,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1539.2,
-      "temperature_c": -182.46,
-      "viscosity_pa_s": 0.00019391
-    },
-    "source_id": "C74828",
-    "substance": "Methane"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1721.4,
-      "impedance_m_rayl": 2429756.1,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1411.5,
-      "temperature_c": -157.42,
-      "viscosity_pa_s": 0.013509
-    },
-    "source_id": "C75456",
-    "substance": "Methane, chlorodifluoro- (R22)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1392.9,
-      "impedance_m_rayl": 1860357.24,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1335.6,
-      "temperature_c": -121.81,
-      "viscosity_pa_s": 0.00084245
-    },
-    "source_id": "C75105",
-    "substance": "Methane, difluoro- (R32)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 904.61,
-      "impedance_m_rayl": 1470353.094,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1625.4,
-      "temperature_c": -97.54,
-      "viscosity_pa_s": 0.012825
-    },
-    "source_id": "C67561",
-    "substance": "Methanol"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1250.0,
-      "impedance_m_rayl": 796762.5,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 637.41,
-      "temperature_c": -248.59,
-      "viscosity_pa_s": 0.00017157
-    },
-    "source_id": "C7440019",
-    "substance": "Neon"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 867.37,
-      "impedance_m_rayl": 863735.7196999999,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 995.81,
-      "temperature_c": -210.0,
-      "viscosity_pa_s": 0.00031195
-    },
-    "source_id": "C7727379",
-    "substance": "Nitrogen"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 776.25,
-      "impedance_m_rayl": 1199228.625,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1544.9,
-      "temperature_c": -53.45,
-      "viscosity_pa_s": 0.0040465
-    },
-    "source_id": "C111842",
-    "substance": "Nonane"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1680.4,
-      "impedance_m_rayl": 1048519.1880000001,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 623.97,
-      "temperature_c": -24.8,
-      "viscosity_pa_s": 0.00081554
-    },
-    "source_id": "C115253",
-    "substance": "Octafluorocyclobutane (RC318)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 2009.5,
-      "impedance_m_rayl": 2327001.0,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1158.0,
-      "temperature_c": -147.7,
-      "viscosity_pa_s": 0.013743
-    },
-    "source_id": "C76197",
-    "substance": "Octafluoropropane (R218)"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 763.37,
-      "impedance_m_rayl": 1167956.1,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1530.0,
-      "temperature_c": -56.78,
-      "viscosity_pa_s": 0.0022547
-    },
-    "source_id": "C111659",
-    "substance": "Octane"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1306.2,
-      "impedance_m_rayl": 1467776.9400000002,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1123.7,
-      "temperature_c": -218.79,
-      "viscosity_pa_s": 0.00077424
-    },
-    "source_id": "C7782447",
-    "substance": "Oxygen"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 77.057,
-      "impedance_m_rayl": 97531.04490000001,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1265.7,
-      "temperature_c": -259.35,
-      "viscosity_pa_s": 2.5941e-05
-    },
-    "source_id": "B5000001",
-    "substance": "Parahydrogen"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 763.69,
-      "impedance_m_rayl": 1365706.827,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1788.3,
-      "temperature_c": -129.68,
-      "viscosity_pa_s": 0.0035516
-    },
-    "source_id": "C109660",
-    "substance": "Pentane"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 733.16,
-      "impedance_m_rayl": 1566542.9719999998,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 2136.7,
-      "temperature_c": -187.62,
-      "viscosity_pa_s": 0.010971
-    },
-    "source_id": "C74986",
-    "substance": "Propane"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 768.18,
-      "impedance_m_rayl": 1546423.1579999998,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 2013.1,
-      "temperature_c": -185.2,
-      "viscosity_pa_s": 0.01212
-    },
-    "source_id": "C115071",
-    "substance": "Propene"
-  },
-  {
-    "phase": "vapor",
-    "properties": {
-      "density_kg_per_m3": 1.8311,
-      "impedance_m_rayl": 463.50634299999996,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 253.13,
-      "temperature_c": -0.15,
-      "viscosity_pa_s": 8.0428e-06
-    },
-    "source_id": "C74997",
-    "substance": "Propyne"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1628.0,
-      "impedance_m_rayl": 2117702.4,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1300.8,
-      "temperature_c": -75.45,
-      "viscosity_pa_s": 0.0010003
-    },
-    "source_id": "C7446095",
-    "substance": "Sulfur dioxide"
-  },
-  {
-    "phase": "vapor",
-    "properties": {
-      "density_kg_per_m3": 8.2024,
-      "impedance_m_rayl": 957.548176,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 116.74,
-      "temperature_c": -49.595,
-      "viscosity_pa_s": 1.1765e-05
-    },
-    "source_id": "C2551624",
-    "substance": "Sulfur hexafluoride"
-  },
-  {
-    "phase": "liquid",
-    "properties": {
-      "density_kg_per_m3": 1731.2,
-      "impedance_m_rayl": 1471346.88,
-      "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 849.9,
-      "temperature_c": -153.15,
-      "viscosity_pa_s": 0.00040287
-    },
-    "source_id": "C75730",
-    "substance": "Tetrafluoromethane (R14)"
   },
   {
     "phase": "liquid",
@@ -912,15 +28,132 @@
   {
     "phase": "liquid",
     "properties": {
-      "density_kg_per_m3": 1768.6,
-      "impedance_m_rayl": 2167065.5799999996,
+      "density_kg_per_m3": 1193.0,
+      "impedance_m_rayl": 1671631.6,
       "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1225.3,
-      "temperature_c": -110.47,
-      "viscosity_pa_s": 0.013414
+      "speed_of_sound_m_per_s": 1401.2,
+      "temperature_c": -118.59,
+      "viscosity_pa_s": 0.0020181
     },
-    "source_id": "C75694",
-    "substance": "Trichlorofluoromethane (R11)"
+    "source_id": "C75376",
+    "substance": "Ethane, 1,1-difluoro- (R152a)"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 1352.8,
+      "impedance_m_rayl": 1961560.0,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 1450.0,
+      "temperature_c": -138.85,
+      "viscosity_pa_s": 0.0013583
+    },
+    "source_id": "C463581",
+    "substance": "Carbonyl sulfide"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 1392.9,
+      "impedance_m_rayl": 1860357.24,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 1335.6,
+      "temperature_c": -121.81,
+      "viscosity_pa_s": 0.00084245
+    },
+    "source_id": "C75105",
+    "substance": "Methane, difluoro- (R32)"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 1441.3,
+      "impedance_m_rayl": 1859421.13,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 1290.1,
+      "temperature_c": -88.47,
+      "viscosity_pa_s": 0.0031346
+    },
+    "source_id": "C1717006",
+    "substance": "1,1-Dichloro-1-fluoroethane (R141b)"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 1451.1,
+      "impedance_m_rayl": 2115994.02,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 1458.2,
+      "temperature_c": -130.43,
+      "viscosity_pa_s": 0.004087
+    },
+    "source_id": "C75683",
+    "substance": "1-Chloro-1,1-difluoroethane (R142b)"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 1591.2,
+      "impedance_m_rayl": 1782621.3599999999,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 1120.3,
+      "temperature_c": -103.3,
+      "viscosity_pa_s": 0.0021572
+    },
+    "source_id": "C811972",
+    "substance": "Ethane, 1,1,1,2-tetrafluoro- (R134a)"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 1591.9,
+      "impedance_m_rayl": 1773694.9800000002,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 1114.2,
+      "temperature_c": -62.15,
+      "viscosity_pa_s": 0.0058498
+    },
+    "source_id": "C679867",
+    "substance": "1,1,2,2,3-Pentafluoropropane (R245ca)"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 1628.0,
+      "impedance_m_rayl": 2117702.4,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 1300.8,
+      "temperature_c": -75.45,
+      "viscosity_pa_s": 0.0010003
+    },
+    "source_id": "C7446095",
+    "substance": "Sulfur dioxide"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 1645.9,
+      "impedance_m_rayl": 2049310.0899999999,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 1245.1,
+      "temperature_c": -103.15,
+      "viscosity_pa_s": 0.0058133
+    },
+    "source_id": "C460731",
+    "substance": "1,1,1,3,3-Pentafluoropropane (R245fa)"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 1667.8,
+      "impedance_m_rayl": 1624620.658,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 974.11,
+      "temperature_c": -78.55,
+      "viscosity_pa_s": 0.0015964
+    },
+    "source_id": "C690391",
+    "substance": "1,1,1,3,3,3-Hexafluoropropane (R236fa)"
   },
   {
     "phase": "liquid",
@@ -938,15 +171,145 @@
   {
     "phase": "liquid",
     "properties": {
-      "density_kg_per_m3": 983.19,
-      "impedance_m_rayl": 1524927.6900000002,
+      "density_kg_per_m3": 1706.9,
+      "impedance_m_rayl": 1782686.3600000003,
       "pressure_pa": 101320.0,
-      "speed_of_sound_m_per_s": 1551.0,
-      "temperature_c": 60.01,
-      "viscosity_pa_s": 0.00046596
+      "speed_of_sound_m_per_s": 1044.4,
+      "temperature_c": -219.67,
+      "viscosity_pa_s": 0.001273
     },
-    "source_id": "C7732185",
-    "substance": "Water"
+    "source_id": "C7782414",
+    "substance": "Fluorine"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 1721.4,
+      "impedance_m_rayl": 2429756.1,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 1411.5,
+      "temperature_c": -157.42,
+      "viscosity_pa_s": 0.013509
+    },
+    "source_id": "C75456",
+    "substance": "Methane, chlorodifluoro- (R22)"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 1768.6,
+      "impedance_m_rayl": 2167065.5799999996,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 1225.3,
+      "temperature_c": -110.47,
+      "viscosity_pa_s": 0.013414
+    },
+    "source_id": "C75694",
+    "substance": "Trichlorofluoromethane (R11)"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 1771.1,
+      "impedance_m_rayl": 2202717.07,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 1243.7,
+      "temperature_c": -107.15,
+      "viscosity_pa_s": 0.0049632
+    },
+    "source_id": "C306832",
+    "substance": "Ethane, 2,2-dichloro-1,1,1-trifluoro- (R123)"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 1789.2,
+      "impedance_m_rayl": 2209840.92,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 1235.1,
+      "temperature_c": -142.05,
+      "viscosity_pa_s": 0.0049273
+    },
+    "source_id": "C75718",
+    "substance": "Dichlorodifluoromethane (R12)"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 1815.7,
+      "impedance_m_rayl": 1947338.25,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 1072.5,
+      "temperature_c": -166.15,
+      "viscosity_pa_s": 0.0023866
+    },
+    "source_id": "C75729",
+    "substance": "Chlorotrifluoromethane (R13)"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 1852.9,
+      "impedance_m_rayl": 2397467.31,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 1293.9,
+      "temperature_c": -153.15,
+      "viscosity_pa_s": 0.021029
+    },
+    "source_id": "C2837890",
+    "substance": "Ethane, 1-chloro-1,2,2,2-tetrafluoro- (R124)"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 1878.4,
+      "impedance_m_rayl": 1983966.08,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 1056.2,
+      "temperature_c": -126.8,
+      "viscosity_pa_s": 0.0038228
+    },
+    "source_id": "C431890",
+    "substance": "1,1,1,2,3,3,3-Heptafluoropropane (R227ea)"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 2004.5,
+      "impedance_m_rayl": 1644471.755,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 820.39,
+      "temperature_c": -109.94,
+      "viscosity_pa_s": 0.022504
+    },
+    "source_id": "C678262",
+    "substance": "Dodecafluoropentane"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 2009.5,
+      "impedance_m_rayl": 2327001.0,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 1158.0,
+      "temperature_c": -147.7,
+      "viscosity_pa_s": 0.013743
+    },
+    "source_id": "C76197",
+    "substance": "Octafluoropropane (R218)"
+  },
+  {
+    "phase": "liquid",
+    "properties": {
+      "density_kg_per_m3": 2446.8,
+      "impedance_m_rayl": 1710435.54,
+      "pressure_pa": 101320.0,
+      "speed_of_sound_m_per_s": 699.05,
+      "temperature_c": -157.37,
+      "viscosity_pa_s": 0.00045254
+    },
+    "source_id": "C7439909",
+    "substance": "Krypton"
   },
   {
     "phase": "liquid",

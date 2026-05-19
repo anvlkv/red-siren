@@ -102,6 +102,7 @@ impl NodeModelBuilders {
         &self,
         bowl_material: Material,
         clapper_material: Material,
+        clapper_to_bowl_friction: f64,
     ) -> Result<Node, String> {
         let bowl_profile = self.active_profile()?;
         let bowl_base =
@@ -132,6 +133,6 @@ impl NodeModelBuilders {
             .map_err(|err| err.to_string())?;
         let clapper = Body::new(clapper_mesh, clapper_material);
 
-        Ok(Node::new(bowl, clapper))
+        Ok(Node::new(bowl, clapper, clapper_to_bowl_friction))
     }
 }

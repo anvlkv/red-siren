@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Material {
+    /// Stable source identifier for lookup/catalog joins.
+    pub id: String,
     /// Density from CSV `Ro` at `reference_temperature_c` in kg/m^3.
     pub reference_density_kg_per_m3: f64,
     /// Poisson ratio from CSV `mu`.
@@ -18,8 +20,14 @@ pub struct Material {
     pub dln_e_dtemp_per_c: f64,
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Medium {
+    /// Stable source identifier for lookup/catalog joins.
+    pub source_id: String,
+    /// Human-readable substance name.
+    pub substance: String,
+    /// Thermodynamic phase label, e.g. "gas" or "liquid".
+    pub phase: String,
     /// Ambient temperature in degrees Celsius.
     pub temperature_c: f64,
     /// Ambient pressure in Pascals.
@@ -41,6 +49,9 @@ impl Medium {
 
     pub fn standard_air() -> Self {
         Self {
+            source_id: "STANDARD_AIR".to_string(),
+            substance: "Air".to_string(),
+            phase: "gas".to_string(),
             temperature_c: Self::STANDARD_TEMPERATURE_C,
             pressure_pa: Self::STANDARD_PRESSURE_PA,
             density_kg_per_m3: 1.2041,
@@ -60,6 +71,9 @@ impl Medium {
     /// Helper that fills a snapshot from explicitly available properties.
     /// If impedance is missing in source data, pass `None` to compute `rho * c`.
     pub fn from_available(
+        source_id: &str,
+        substance: &str,
+        phase: &str,
         temperature_c: f64,
         pressure_pa: f64,
         density_kg_per_m3: f64,
@@ -68,6 +82,9 @@ impl Medium {
         impedance_m_rayl: Option<f64>,
     ) -> Self {
         Self {
+            source_id: source_id.to_string(),
+            substance: substance.to_string(),
+            phase: phase.to_string(),
             temperature_c,
             pressure_pa,
             density_kg_per_m3,
@@ -99,6 +116,7 @@ impl Material {
     /// Temperature-response coefficients are absent from the CSV; pass `None` to
     /// leave them at zero (no temperature correction until data is available).
     pub fn from_available(
+        id: &str,
         reference_youngs_modulus_mpa: f64,
         poisson_ratio: f64,
         reference_density_kg_per_m3: f64,
@@ -107,6 +125,7 @@ impl Material {
         dln_e_dtemp_per_c: Option<f64>,
     ) -> Self {
         Self {
+            id: id.to_string(),
             reference_youngs_modulus_mpa,
             poisson_ratio,
             reference_density_kg_per_m3,
@@ -146,18 +165,35 @@ mod tests {
 
     #[test]
     fn medium_helpers_compute_impedance_from_available_properties() {
-        let medium = Medium::from_available(20.0, 101_325.0, 998.2, 1482.4, 1.0014e-3, None);
+        let medium = Medium::from_available(
+            "C7732185", "Water", "liquid", 20.0, 101_325.0, 998.2, 1482.4, 1.0014e-3, None,
+        );
         let expected = 998.2 * 1482.4;
         assert!((medium.impedance_m_rayl - expected).abs() <= expected * 1e-12);
+        assert_eq!(medium.source_id, "C7732185");
+        assert_eq!(medium.substance, "Water");
+        assert_eq!(medium.phase, "liquid");
 
-        let overridden =
-            Medium::from_available(20.0, 101_325.0, 998.2, 1482.4, 1.0014e-3, Some(1.0));
+        let overridden = Medium::from_available(
+            "C7732185",
+            "Water",
+            "liquid",
+            20.0,
+            101_325.0,
+            998.2,
+            1482.4,
+            1.0014e-3,
+            Some(1.0),
+        );
         assert_eq!(overridden.impedance_m_rayl, 1.0);
     }
 
     #[test]
     fn medium_snapshot_is_explicit_not_implicit() {
         let medium = Medium {
+            source_id: "TEST_MEDIUM".to_string(),
+            substance: "Synthetic Test Medium".to_string(),
+            phase: "gas".to_string(),
             temperature_c: 20.0,
             pressure_pa: 101_325.0,
             density_kg_per_m3: 2.0,
@@ -170,12 +206,14 @@ mod tests {
         assert_eq!(medium.speed_of_sound_m_per_s, 120.0);
         assert_eq!(medium.viscosity_pa_s, 8.0e-4);
         assert_eq!(medium.impedance_m_rayl, 999.0);
+        assert_eq!(medium.phase, "gas");
     }
 
     #[test]
     fn material_from_available_csv_row_steel_sae_1015() {
         // CSV: E=207000, G=79000, mu=0.3, Ro=7860 (Steel SAE 1015, as-rolled)
-        let m = Material::from_available(207_000.0, 0.3, 7860.0, None, None, None);
+        let m = Material::from_available("D8894772", 207_000.0, 0.3, 7860.0, None, None, None);
+        assert_eq!(m.id, "D8894772");
         assert_eq!(m.reference_youngs_modulus_mpa, 207_000.0);
         assert_eq!(m.poisson_ratio, 0.3);
         assert_eq!(m.reference_density_kg_per_m3, 7860.0);
@@ -200,6 +238,7 @@ mod tests {
     #[test]
     fn material_temperature_response_is_finite_and_reversible_at_reference() {
         let steel_like = Material {
+            id: "STEEL_LIKE".to_string(),
             reference_density_kg_per_m3: 7860.0,
             poisson_ratio: 0.30,
             reference_youngs_modulus_mpa: 207_000.0,

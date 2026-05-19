@@ -1,6 +1,7 @@
 use common::body::materials::{Material, Medium};
 use common::config::{Node, NodeComputedDebug, NodeModelBuilders};
 use common::egui_helpers::{draw_xy_line_chart, run_native_app};
+use common::Meshable;
 use eframe::egui::{self, Color32, Pos2, Rect, Sense, Shape, Stroke};
 use nalgebra::{Point3, Vector3};
 
@@ -22,6 +23,7 @@ struct NodeInspectorApp {
     active_preset: ExampleShapePreset,
     bowl_material: Material,
     clapper_material: Material,
+    clapper_to_bowl_friction: f64,
     medium: Medium,
     resolution: usize,
     mode_count: usize,
@@ -59,6 +61,7 @@ impl Default for NodeInspectorApp {
             builders: NodeModelBuilders::default(),
             active_preset: ExampleShapePreset::Bowl,
             bowl_material: Material {
+                id: "NODE_EGUI_BOWL".to_string(),
                 reference_density_kg_per_m3: 8800.0,
                 poisson_ratio: 0.34,
                 reference_youngs_modulus_mpa: 110_000.0,
@@ -67,6 +70,7 @@ impl Default for NodeInspectorApp {
                 dln_e_dtemp_per_c: -3.0e-4,
             },
             clapper_material: Material {
+                id: "NODE_EGUI_CLAPPER".to_string(),
                 reference_density_kg_per_m3: 7850.0,
                 poisson_ratio: 0.29,
                 reference_youngs_modulus_mpa: 200_000.0,
@@ -74,6 +78,7 @@ impl Default for NodeInspectorApp {
                 linear_thermal_expansion_per_c: 12.0e-6,
                 dln_e_dtemp_per_c: -4.0e-4,
             },
+            clapper_to_bowl_friction: 0.16,
             medium: Medium::standard_air(),
             resolution: 40,
             mode_count: 8,
@@ -170,10 +175,11 @@ impl NodeInspectorApp {
     }
 
     fn build_node_and_debug(&mut self) -> Option<(Node, NodeComputedDebug)> {
-        match self
-            .builders
-            .build_node(self.bowl_material, self.clapper_material)
-        {
+        match self.builders.build_node(
+            self.bowl_material.clone(),
+            self.clapper_material.clone(),
+            self.clapper_to_bowl_friction,
+        ) {
             Ok(node) => match node.computed_debug(self.resolution, self.mode_count, &self.medium) {
                 Some(debug) => {
                     self.last_error = None;
@@ -203,7 +209,7 @@ impl NodeInspectorApp {
                 let mode_structure = &structure.mode_structures[i];
                 let mode_acoustics = &acoustics.mode_acoustics[i];
                 format!(
-                    "#{:02} {:.1}Hz strike[c={:.3},air={:.4},bw={:.1}] jet[c={:.3},air={:.4},lock={:.1}±{:.1},thr={:.3},gain={:.3},tau={:.4},St={:.3}]",
+                    "#{:02} {:.1}Hz strike[c={:.3},air={:.4},bw={:.1}] jet[c={:.3},air={:.4},lock={:.1}±{:.1},thr={:.3},gain={:.3},tau={:.4},St={:.3}] slide[c={:.3},air={:.4},bw={:.1},squeal={:.3}]",
                     i + 1,
                     freq,
                     mode_structure.strike_base.coupling,
@@ -217,15 +223,20 @@ impl NodeInspectorApp {
                     mode_structure.jet_base.vortex_dynamics.small_signal_gain,
                     mode_structure.jet_base.vortex_dynamics.convective_delay_s,
                     mode_structure.jet_base.vortex_dynamics.strouhal_target,
+                    mode_structure.slide_base.coupling,
+                    mode_acoustics.slide.damping_in_air,
+                    mode_acoustics.slide.slide_bandwidth_hz,
+                    mode_acoustics.slide.squeal_tendency,
                 )
             })
             .collect::<Vec<_>>()
             .join(" | ");
 
         let snapshot = format!(
-            "modes={} budget={} acoustic=[{}]",
+            "modes={} budget={} cond={:.2e} acoustic=[{}]",
             structure.frequencies_hz.len(),
             structure.mode_budget,
+            structure.solver_condition_number,
             acoustic_preview,
         );
         if self.last_debug_snapshot.as_deref() == Some(snapshot.as_str()) {
@@ -357,10 +368,7 @@ impl NodeInspectorApp {
             .id_salt("node_medium")
             .default_open(false)
             .show(ui, |ui| {
-                if ui
-                    .button("Compute Impedance From Density x c")
-                    .clicked()
-                {
+                if ui.button("Compute Impedance From Density x c").clicked() {
                     self.medium.impedance_m_rayl = Medium::impedance_from_density_and_speed(
                         self.medium.density_kg_per_m3,
                         self.medium.speed_of_sound_m_per_s,
@@ -410,7 +418,7 @@ impl NodeInspectorApp {
                         &mut self.bowl_material.reference_density_kg_per_m3,
                         500.0..=20000.0,
                     )
-                        .text("bowl density"),
+                    .text("bowl density"),
                 );
                 ui.add(
                     egui::Slider::new(&mut self.bowl_material.poisson_ratio, -0.49..=0.49)
@@ -421,15 +429,12 @@ impl NodeInspectorApp {
                         &mut self.bowl_material.reference_youngs_modulus_mpa,
                         1.0e3..=5.0e5,
                     )
-                        .logarithmic(true)
-                        .text("bowl E (MPa)"),
+                    .logarithmic(true)
+                    .text("bowl E (MPa)"),
                 );
                 ui.add(
-                    egui::Slider::new(
-                        &mut self.bowl_material.dln_e_dtemp_per_c,
-                        -2.0e-3..=2.0e-3,
-                    )
-                    .text("bowl d(ln E)/dT"),
+                    egui::Slider::new(&mut self.bowl_material.dln_e_dtemp_per_c, -2.0e-3..=2.0e-3)
+                        .text("bowl d(ln E)/dT"),
                 );
                 ui.label("Clapper material");
                 ui.add(
@@ -448,8 +453,8 @@ impl NodeInspectorApp {
                         &mut self.clapper_material.reference_youngs_modulus_mpa,
                         1.0e3..=5.0e5,
                     )
-                        .logarithmic(true)
-                        .text("clapper E (MPa)"),
+                    .logarithmic(true)
+                    .text("clapper E (MPa)"),
                 );
                 ui.add(
                     egui::Slider::new(
@@ -457,6 +462,10 @@ impl NodeInspectorApp {
                         -2.0e-3..=2.0e-3,
                     )
                     .text("clapper d(ln E)/dT"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut self.clapper_to_bowl_friction, 0.0..=1.5)
+                        .text("clapper to bowl friction"),
                 );
             });
 
@@ -500,7 +509,7 @@ impl NodeInspectorApp {
         });
     }
 
-    fn draw_3d_preview(&mut self, ui: &mut egui::Ui, node: &Node) {
+    fn draw_3d_preview(&mut self, ui: &mut egui::Ui, node: &Node, debug: &NodeComputedDebug) {
         let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::drag());
         let rect = response.rect;
         if response.dragged() {
@@ -553,6 +562,20 @@ impl NodeInspectorApp {
                     Stroke::NONE
                 },
             ));
+        }
+
+        let mode_points = collect_mode_overlay_points(
+            node,
+            debug,
+            self.camera_yaw,
+            self.camera_pitch,
+            self.zoom,
+            self.pan_x,
+            self.pan_y,
+            rect,
+        );
+        for point in mode_points {
+            painter.circle_filled(point.pos, point.radius_px, point.color);
         }
     }
 
@@ -638,6 +661,9 @@ impl NodeInspectorApp {
                             structure.solver_dropped_near_rigid,
                         ));
                         ui.end_row();
+                        ui.label("Condition number");
+                        ui.monospace(format!("{:.3e}", structure.solver_condition_number));
+                        ui.end_row();
                         ui.label("Medium temperature (C)");
                         ui.monospace(format!("{:.2}", acoustics.medium.temperature_c));
                         ui.end_row();
@@ -649,6 +675,14 @@ impl NodeInspectorApp {
                         ui.end_row();
                     });
 
+                ui.separator();
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("Mode colors:");
+                    for i in 0..structure.mode_structures.len() {
+                        let color = mode_color(i);
+                        ui.colored_label(color, format!("M{:02}", i + 1));
+                    }
+                });
                 ui.separator();
                 ui.label("Modes");
                 for i in 0..structure.mode_structures.len() {
@@ -668,9 +702,14 @@ impl NodeInspectorApp {
                     let jet_damp_air = acoustics.jet_damping_in_air.get(i).copied().unwrap_or(0.0);
                     let jet_damp_medium =
                         acoustics.jet_damping_in_medium.get(i).copied().unwrap_or(0.0);
+                    let slide_damp_air =
+                        acoustics.slide_damping_in_air.get(i).copied().unwrap_or(0.0);
+                    let slide_damp_medium =
+                        acoustics.slide_damping_in_medium.get(i).copied().unwrap_or(0.0);
                     ui.monospace(format!(r#"#{:02}  {:8.2} Hz  
 strike[c={:.3}, damp(a/m)={:.5}/{:.5}, angle={:.3}, bw={:.2}]  
-jet[c={:.3}, damp(a/m)={:.5}/{:.5}, lock={:.2}+/-{:.2}, thr={:.3}, gain={:.3}, tau={:.4}s, St={:.3}, phase={:.3}, rad={:.3e}]"#,
+jet[c={:.3}, damp(a/m)={:.5}/{:.5}, lock={:.2}+/-{:.2}, thr={:.3}, gain={:.3}, tau={:.4}s, St={:.3}, phase={:.3}, rad={:.3e}]  
+slide[c={:.3}, damp(a/m)={:.5}/{:.5}, rough={:.3}, bw={:.2}, squeal={:.3}]"#,
                         i + 1,
                         freq,
                         mode_structure.strike_base.coupling,
@@ -689,6 +728,12 @@ jet[c={:.3}, damp(a/m)={:.5}/{:.5}, lock={:.2}+/-{:.2}, thr={:.3}, gain={:.3}, t
                         mode_structure.jet_base.vortex_dynamics.strouhal_target,
                         mode_acoustics.jet.acoustic_lock_in.phase_sensitivity,
                         mode_acoustics.jet.radiation_efficiency,
+                        mode_structure.slide_base.coupling,
+                        slide_damp_air,
+                        slide_damp_medium,
+                        mode_structure.slide_base.roughness_sensitivity,
+                        mode_acoustics.slide.slide_bandwidth_hz,
+                        mode_acoustics.slide.squeal_tendency,
                     ));
                 }
             });
@@ -722,7 +767,7 @@ impl eframe::App for NodeInspectorApp {
                             egui::vec2(ui.available_width(), 520.0),
                             egui::Layout::top_down(egui::Align::LEFT),
                             |ui| {
-                                self.draw_3d_preview(ui, &node);
+                                self.draw_3d_preview(ui, &node, &debug);
                             },
                         );
                     });
@@ -755,6 +800,13 @@ struct DrawTri {
     p2: Pos2,
     depth: f64,
     fill: Color32,
+}
+
+#[derive(Clone, Copy)]
+struct DrawPoint {
+    pos: Pos2,
+    radius_px: f32,
+    color: Color32,
 }
 
 fn collect_projected_tris(
@@ -818,6 +870,91 @@ fn collect_projected_tris(
     }
 
     tris
+}
+
+fn collect_mode_overlay_points(
+    node: &Node,
+    debug: &NodeComputedDebug,
+    yaw: f64,
+    pitch: f64,
+    zoom: f64,
+    pan_x: f32,
+    pan_y: f32,
+    rect: Rect,
+) -> Vec<DrawPoint> {
+    let (structure, _) = debug;
+    if structure.mode_structures.is_empty() {
+        return vec![];
+    }
+
+    // Displacements are solved on the base shell mesh, so render overlays on the same mesh.
+    let shell_mesh = node
+        .bowl
+        .meshable
+        .base
+        .surface_mesh_data(structure.analysis_resolution);
+    if shell_mesh.vertices.is_empty() {
+        return vec![];
+    }
+
+    let points = &shell_mesh.vertices;
+    let mut transformed = Vec::with_capacity(points.len());
+    for p in points {
+        transformed.push(rotate_point(*p, yaw, pitch));
+    }
+
+    let mut max_abs = 0.0f64;
+    for p in &transformed {
+        max_abs = max_abs.max(p.x.abs()).max(p.y.abs()).max(p.z.abs());
+    }
+    let scale = (rect.width().min(rect.height()) as f64) * 0.42 * zoom / max_abs.max(1e-6);
+
+    let stride = (points.len() / 220).max(1);
+    let mut overlays = Vec::new();
+    for (mode_index, mode) in structure.mode_structures.iter().enumerate() {
+        if mode.vertex_displacement.len() != points.len() {
+            continue;
+        }
+
+        let max_norm = mode
+            .vertex_displacement
+            .iter()
+            .map(|d| d.norm())
+            .fold(0.0f64, f64::max)
+            .max(1e-9);
+        let displacement_scale = (0.15 * structure.bowl_radius_m.max(1e-4)) / max_norm;
+        let color = mode_color(mode_index);
+
+        for i in (0..points.len()).step_by(stride) {
+            let displaced = points[i] + mode.vertex_displacement[i] * displacement_scale;
+            let rotated = rotate_point(displaced, yaw, pitch);
+            overlays.push(DrawPoint {
+                pos: project_to_screen(rotated, rect, scale, pan_x, pan_y),
+                radius_px: 1.8,
+                color,
+            });
+        }
+    }
+
+    overlays
+}
+
+fn mode_color(mode_index: usize) -> Color32 {
+    const PALETTE: [Color32; 12] = [
+        Color32::from_rgb(255, 99, 132),
+        Color32::from_rgb(54, 162, 235),
+        Color32::from_rgb(255, 206, 86),
+        Color32::from_rgb(75, 192, 192),
+        Color32::from_rgb(153, 102, 255),
+        Color32::from_rgb(255, 159, 64),
+        Color32::from_rgb(46, 204, 113),
+        Color32::from_rgb(231, 76, 60),
+        Color32::from_rgb(52, 73, 94),
+        Color32::from_rgb(26, 188, 156),
+        Color32::from_rgb(241, 196, 15),
+        Color32::from_rgb(155, 89, 182),
+    ];
+    PALETTE[mode_index % PALETTE.len()]
 }
 
 fn rotate_point(p: Point3<f64>, yaw: f64, pitch: f64) -> Point3<f64> {

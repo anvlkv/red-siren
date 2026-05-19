@@ -284,6 +284,7 @@ mod tests {
 
     fn steel() -> Material {
         Material {
+            id: "BODY_STEEL_TEST".to_string(),
             reference_density_kg_per_m3: 7800.0,
             poisson_ratio: 0.29,
             reference_youngs_modulus_mpa: 200_000.0,

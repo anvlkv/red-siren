@@ -238,10 +238,12 @@ pub(crate) fn boundary_edges(indices: &[EmbodiedTriangle]) -> Vec<(usize, usize)
         *edge_counts.entry(key).or_insert(0) += 1;
     }
 
-    edge_counts
+    let mut edges: Vec<(usize, usize)> = edge_counts
         .into_iter()
         .filter_map(|(edge, count)| if count == 1 { Some(edge) } else { None })
-        .collect()
+        .collect();
+    edges.sort_unstable();
+    edges
 }
 
 fn oriented_boundary_edges(indices: &[EmbodiedTriangle]) -> Vec<(usize, usize)> {
@@ -254,7 +256,7 @@ fn oriented_boundary_edges(indices: &[EmbodiedTriangle]) -> Vec<(usize, usize)> 
         orientation.entry(key).or_insert((a, b));
     }
 
-    edge_counts
+    let mut edges: Vec<(usize, usize)> = edge_counts
         .into_iter()
         .filter_map(|(key, count)| {
             if count == 1 {
@@ -263,7 +265,9 @@ fn oriented_boundary_edges(indices: &[EmbodiedTriangle]) -> Vec<(usize, usize)> 
                 None
             }
         })
-        .collect()
+        .collect();
+    edges.sort_unstable();
+    edges
 }
 
 fn ordered_boundary_loops(indices: &[EmbodiedTriangle]) -> Option<Vec<Vec<usize>>> {
@@ -431,5 +435,19 @@ mod tests {
             assert!((normal.norm() - 1.0).abs() < 1e-12);
             assert!(normal.z.abs() > 0.999999999);
         }
+    }
+
+    #[test]
+    fn boundary_edges_are_returned_in_sorted_order() {
+        let indices = vec![[5, 3, 4]];
+        let edges = boundary_edges(&indices);
+        assert_eq!(edges, vec![(3, 4), (3, 5), (4, 5)]);
+    }
+
+    #[test]
+    fn oriented_boundary_edges_are_returned_in_sorted_order() {
+        let indices = vec![[5, 3, 4]];
+        let edges = oriented_boundary_edges(&indices);
+        assert_eq!(edges, vec![(3, 4), (4, 5), (5, 3)]);
     }
 }

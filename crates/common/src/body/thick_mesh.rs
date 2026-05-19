@@ -387,6 +387,7 @@ where
         }
         let bridges = boundary_edges(&base_indices);
 
+        // Triangle order is stable: outer shell, inner shell, then boundary bridges.
         let mut indices = Vec::with_capacity(base_indices.len() * 2 + bridges.len() * 2);
         for [a, b, c] in &base_indices {
             indices.push([a * 2, b * 2, c * 2]);
@@ -824,5 +825,58 @@ mod tests {
             .material_thickness_at_vertex(16, 0, inward)
             .expect("thickness");
         assert!(t > 0.0);
+    }
+
+    #[test]
+    fn thick_mesh_indices_are_deterministic_across_calls() {
+        let base = make_body();
+        let map = ThicknessMap::new(vec![ThicknessMapPoint {
+            body_vertex_index: 0,
+            face_thickness: 0.05,
+            backface_thickness: 0.04,
+        }])
+        .expect("map");
+        let thick = ThickMesh::new(base, map);
+
+        let first = thick.mesh_indices(16);
+        let second = thick.mesh_indices(16);
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn thick_mesh_bridge_indices_use_vertex_pair_layout() {
+        let base = make_body();
+        let resolution = 8;
+        let base_indices = base.mesh_indices(resolution);
+        let bridges = boundary_edges(&base_indices);
+        let base_vertex_count = base.sample_points(resolution).len() as u32;
+
+        let map = ThicknessMap::new(vec![ThicknessMapPoint {
+            body_vertex_index: 0,
+            face_thickness: 0.05,
+            backface_thickness: 0.05,
+        }])
+        .expect("map");
+        let thick = ThickMesh::new(base, map);
+        let indices = thick.mesh_indices(resolution);
+
+        let bridge_start = base_indices.len() * 2;
+        let bridge_indices = &indices[bridge_start..];
+        assert_eq!(bridge_indices.len(), bridges.len() * 2);
+
+        for (i, (a, b)) in bridges.iter().enumerate() {
+            let a = *a as u32;
+            let b = *b as u32;
+            let tri0 = bridge_indices[i * 2];
+            let tri1 = bridge_indices[i * 2 + 1];
+
+            assert_eq!(tri0, [a * 2, b * 2, b * 2 + 1]);
+            assert_eq!(tri1, [a * 2, b * 2 + 1, a * 2 + 1]);
+
+            for v in tri0.into_iter().chain(tri1) {
+                assert!(v < base_vertex_count * 2);
+                assert!((v / 2) < base_vertex_count);
+            }
+        }
     }
 }

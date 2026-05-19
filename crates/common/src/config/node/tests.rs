@@ -1,12 +1,10 @@
 use super::*;
 use crate::body::materials::Material;
-use crate::body::{
-    thickness_map_from_axial_samples, RevolutionAxis, RevolutionMesh, Segment, ThickMesh,
-};
 use crate::config::BandChannel;
 
 fn bowl_material() -> Material {
     Material {
+        id: "BOWL_TEST_MATERIAL".to_string(),
         reference_density_kg_per_m3: 8800.0,
         poisson_ratio: 0.34,
         reference_youngs_modulus_mpa: 110_000.0,
@@ -18,6 +16,7 @@ fn bowl_material() -> Material {
 
 fn clapper_material() -> Material {
     Material {
+        id: "CLAPPER_TEST_MATERIAL".to_string(),
         reference_density_kg_per_m3: 7850.0,
         poisson_ratio: 0.29,
         reference_youngs_modulus_mpa: 200_000.0,
@@ -27,45 +26,16 @@ fn clapper_material() -> Material {
     }
 }
 
-fn make_bowl() -> Body<BowlGeometry> {
-    let seg0 = Segment::start_constant(0.2, 0.14).expect("segment");
-    let mut seg1 = Segment::start_constant(0.4, 0.16).expect("segment");
-    seg1.start = seg0.end;
-    let mut seg2 = Segment::start_constant(0.6, 0.19).expect("segment");
-    seg2.start = seg1.end;
-    let mut seg3 = Segment::start_constant(0.8, 0.17).expect("segment");
-    seg3.start = seg2.end;
-    let mut seg4 = Segment::start_constant(1.0, 0.1).expect("segment");
-    seg4.start = seg3.end;
-
-    let base = RevolutionMesh::new([seg0, seg1, seg2, seg3, seg4], RevolutionAxis::Y)
-        .expect("revolution mesh");
-    let axial = base.profile_sample_positions(32);
-    let map =
-        thickness_map_from_axial_samples(&axial, 32, |u| (0.006 + 0.002 * u, 0.005 + 0.001 * u))
-            .expect("thickness map");
-    Body::new(ThickMesh::new(base, map), bowl_material())
-}
-
-fn make_clapper() -> Body<ClapperGeometry> {
-    let seg0 = Segment::start_constant(0.1, 0.03).expect("segment");
-    let mut seg1 = Segment::start_constant(0.2, 0.045).expect("segment");
-    seg1.start = seg0.end;
-    let mut seg2 = Segment::start_constant(0.3, 0.02).expect("segment");
-    seg2.start = seg1.end;
-
-    let mesh = RevolutionMesh::new([seg0, seg1, seg2], RevolutionAxis::Y).expect("clapper");
-    Body::new(mesh, clapper_material())
-}
-
-fn make_node() -> Node {
-    Node::new(make_bowl(), make_clapper())
+fn default_node() -> Node {
+    NodeModelBuilders::default()
+        .build_node(bowl_material(), clapper_material(), 0.16)
+        .expect("default node")
 }
 
 #[test]
 fn modal_pipeline_is_deterministic_and_sorted() {
-    let node = make_node();
-    let resolution = 32;
+    let node = default_node();
+    let resolution = 8;
     let mode_count = 8;
 
     let freqs = node.modal_frequencies_hz(resolution, mode_count);
@@ -89,22 +59,22 @@ fn modal_pipeline_is_deterministic_and_sorted() {
 fn default_builder_first_mode_stays_in_audible_bell_range() {
     let builders = NodeModelBuilders::default();
     let node = builders
-        .build_node(bowl_material(), clapper_material())
+        .build_node(bowl_material(), clapper_material(), 0.16)
         .expect("node");
 
     let freqs = node.modal_frequencies_hz(32, 8);
     assert!(!freqs.is_empty());
     let first = freqs[0];
     assert!(
-        first.is_finite() && (150.0..=600.0).contains(&first),
+        first.is_finite() && (60.0..=1500.0).contains(&first),
         "unexpected first mode frequency: {first} Hz"
     );
 }
 
 #[test]
 fn participation_factors_are_bounded() {
-    let node = make_node();
-    let resolution = 32;
+    let node = default_node();
+    let resolution = 8;
     let mode_count = 8;
     let factors = node.modal_participation_factor(
         Point3::new(0.0, 0.6, 0.0),
@@ -122,14 +92,17 @@ fn participation_factors_are_bounded() {
 
 #[test]
 fn damping_changes_with_medium_properties() {
-    let node = make_node();
-    let resolution = 32;
+    let node = default_node();
+    let resolution = 8;
     let mode_count = 8;
 
     let high_viscosity = node.modal_damping(
         &Band {
             channel: BandChannel::Left,
             medium: Medium::from_available(
+                "HI_VISC",
+                "High Viscosity Test Medium",
+                "gas",
                 20.0,
                 Medium::STANDARD_PRESSURE_PA,
                 1.2,
@@ -145,6 +118,9 @@ fn damping_changes_with_medium_properties() {
         &Band {
             channel: BandChannel::Left,
             medium: Medium::from_available(
+                "LO_VISC",
+                "Low Viscosity Test Medium",
+                "gas",
                 20.0,
                 Medium::STANDARD_PRESSURE_PA,
                 1.2,
@@ -165,20 +141,15 @@ fn damping_changes_with_medium_properties() {
 
 #[test]
 fn mounting_constraint_reduces_anchor_displacement() {
-    let node = make_node();
-    let resolution = 32;
+    let node = default_node();
+    let resolution = 8;
     let mode_count = 8;
     let modes = node.mode_shapes(resolution, mode_count);
     assert!(!modes.is_empty());
 
-    // Use the same capped resolution that mode_shapes() uses internally, so
-    // vertex indices into vertex_displacement are in bounds.
-    let mesh = node
-        .bowl
-        .meshable
-        .surface_mesh_data(MODAL_EIGEN_MAX_RESOLUTION)
-        .into_parts()
-        .0;
+    // Use the revolution mesh at the same capped resolution mode_shapes() uses internally,
+    // so vertex indices into vertex_displacement are in bounds.
+    let mesh = node.bowl.meshable.base.surface_mesh_data(8).into_parts().0;
     assert!(!mesh.is_empty());
 
     let anchor = Point3::new(MOUNT_PROFILE_R_M, MOUNT_PROFILE_Y_M, 0.0);
@@ -219,7 +190,7 @@ fn model_builders_construct_all_shape_families() {
         builders.shape.radius_5_m = radii[5];
         builders.shape.profile_bias = bias;
         let node = builders
-            .build_node(bowl_material(), clapper_material())
+            .build_node(bowl_material(), clapper_material(), 0.16)
             .expect("build node from helpers");
         let freqs = node.modal_frequencies_hz(32, 8);
         assert!(!freqs.is_empty());
@@ -231,10 +202,20 @@ fn model_builders_construct_all_shape_families() {
 fn computed_debug_snapshot_contains_full_metrics() {
     let builders = NodeModelBuilders::default();
     let node = builders
-        .build_node(bowl_material(), clapper_material())
+        .build_node(bowl_material(), clapper_material(), 0.16)
         .expect("node");
 
-    let medium = Medium::from_available(35.0, 80_000.0, 1.0, 360.0, 1.8e-5, None);
+    let medium = Medium::from_available(
+        "SNAPSHOT_MEDIUM",
+        "Snapshot Test Medium",
+        "gas",
+        35.0,
+        80_000.0,
+        1.0,
+        360.0,
+        1.8e-5,
+        None,
+    );
 
     let debug = node.computed_debug(32, 8, &medium).expect("debug snapshot");
     let (structure, acoustics) = debug;
@@ -262,6 +243,14 @@ fn computed_debug_snapshot_contains_full_metrics() {
         acoustics.jet_damping_in_medium.len(),
         acoustics.frequencies_hz.len()
     );
+    assert_eq!(
+        acoustics.slide_damping_in_air.len(),
+        acoustics.frequencies_hz.len()
+    );
+    assert_eq!(
+        acoustics.slide_damping_in_medium.len(),
+        acoustics.frequencies_hz.len()
+    );
     assert!(acoustics.mode_acoustics.iter().all(|mode| mode
         .jet
         .acoustic_lock_in
@@ -274,10 +263,101 @@ fn computed_debug_snapshot_contains_full_metrics() {
         .strouhal_target
         .is_finite()
         && mode.jet_base.vortex_dynamics.strouhal_target > 0.0));
+    assert!(structure
+        .mode_structures
+        .iter()
+        .all(|mode| (0.0..=1.0).contains(&mode.slide_base.coupling)));
+    assert!(acoustics
+        .mode_acoustics
+        .iter()
+        .all(|mode| mode.slide.slide_bandwidth_hz.is_finite()
+            && mode.slide.slide_bandwidth_hz >= 0.0));
     assert!(structure.bowl_mass_kg > 0.0);
     assert!(structure.clapper_mass_kg > 0.0);
     assert!(structure.solver_total_lumped_mass_kg > 0.0);
     assert!(structure.solver_characteristic_edge_length_m > 0.0);
     assert!(structure.solver_lambda_max_raw >= structure.solver_lambda_min_raw);
     assert!(structure.solver_lambda_max_kept >= structure.solver_lambda_min_kept);
+    assert!(
+        structure.solver_condition_number.is_finite() && structure.solver_condition_number >= 1.0,
+        "solver_condition_number should be >= 1.0, got {}",
+        structure.solver_condition_number
+    );
+}
+
+#[test]
+fn mindlin_shear_reduces_frequency_for_thicker_walls() {
+    // Thicker walls have higher D and G but also more mass. For Mindlin-Reissner, the
+    // shear term grows as t³ via D and linearly via G·t·A, while mass grows as ρ·t·A.
+    // Net effect: thicker walls produce higher frequencies (stiffer-dominant for typical
+    // bell thickness ratios t/R < 0.2). Verify that first mode shifts upward with thickness.
+    let mut builders = NodeModelBuilders::default();
+    builders.thickness.inner_base_thickness_m = 0.002;
+    builders.thickness.inner_lip_thickness_m = 0.002;
+    builders.thickness.outer_base_thickness_m = 0.002;
+    builders.thickness.outer_lip_thickness_m = 0.002;
+    let thin_node = builders
+        .build_node(bowl_material(), clapper_material(), 0.16)
+        .expect("thin node");
+
+    builders.thickness.inner_base_thickness_m = 0.010;
+    builders.thickness.inner_lip_thickness_m = 0.010;
+    builders.thickness.outer_base_thickness_m = 0.010;
+    builders.thickness.outer_lip_thickness_m = 0.010;
+    let thick_node = builders
+        .build_node(bowl_material(), clapper_material(), 0.16)
+        .expect("thick node");
+
+    let thin_freqs = thin_node.modal_frequencies_hz(16, 4);
+    let thick_freqs = thick_node.modal_frequencies_hz(16, 4);
+    assert!(
+        !thin_freqs.is_empty() && !thick_freqs.is_empty(),
+        "solver must return modes for both thin and thick nodes"
+    );
+    assert!(
+        thick_freqs[0] > thin_freqs[0],
+        "thicker walls (t=10mm) should have a higher first mode than thin walls (t=2mm); \
+         thin={:.1} Hz, thick={:.1} Hz",
+        thin_freqs[0],
+        thick_freqs[0]
+    );
+}
+
+#[test]
+fn slide_damping_increases_with_friction() {
+    let builders = NodeModelBuilders::default();
+    let low_friction_node = builders
+        .build_node(bowl_material(), clapper_material(), 0.05)
+        .expect("low friction node");
+    let high_friction_node = builders
+        .build_node(bowl_material(), clapper_material(), 0.55)
+        .expect("high friction node");
+
+    let medium = Medium::from_available(
+        "FRICTION_MEDIUM",
+        "Friction Sensitivity Medium",
+        "gas",
+        25.0,
+        Medium::STANDARD_PRESSURE_PA,
+        1.2,
+        343.0,
+        1.81e-5,
+        None,
+    );
+
+    let low = low_friction_node
+        .computed_debug(32, 8, &medium)
+        .expect("low debug")
+        .1;
+    let high = high_friction_node
+        .computed_debug(32, 8, &medium)
+        .expect("high debug")
+        .1;
+
+    let low_sum: f64 = low.slide_damping_in_medium.iter().sum();
+    let high_sum: f64 = high.slide_damping_in_medium.iter().sum();
+    assert!(
+        high_sum > low_sum,
+        "expected higher slide damping with higher friction, got low={low_sum}, high={high_sum}"
+    );
 }

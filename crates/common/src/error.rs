@@ -8,7 +8,7 @@
 //! - Only the `From<tauri::Error>` impl is feature‑gated (`tauri` feature).
 //! - Domain -> AppError conversions are unconditional (cheap, harmless).
 
-mod audio_stream;
+mod audio;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -16,7 +16,7 @@ use thiserror::Error;
 /// Convenient application-wide result type.
 pub type Result<T> = std::result::Result<T, AppError>;
 
-pub use audio_stream::*;
+pub use audio::*;
 
 /// Top-level application error envelope.
 #[derive(Debug, Error, Serialize, Deserialize)]
@@ -33,6 +33,14 @@ pub enum AppError {
     /// Errors related to audio stream handling.
     #[error("audio stream error: {0}")]
     AudioStream(#[from] AudioStreamError),
+
+    /// Errors related to audio device handling.
+    #[error("audio device error: {0}")]
+    AudioDevice(#[from] AudioDeviceError),
+
+    /// Errors related to audio analysis.
+    #[error("audio analysis error: {0}")]
+    AudioAnalysis(#[from] AudioAnalysisError),
 }
 
 impl AppError {

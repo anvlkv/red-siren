@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 common = { workspace = true }
-cpal = { version = "0.17.3" }
+cpal = { version = "0.17.3", features = ["custom"] }
 dasp_sample = "0.11.0"
 dyn-clone = "1.0.20"
 eframe = { workspace = true, optional = true }
@@ -32,7 +32,7 @@ test-log = "0.2"
 [[example]]
 name = "cpal_runtime_egui"
 path = "examples/cpal_runtime_egui.rs"
-required-features = ["egui_testbed"]
+required-features = ["egui"]
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2"

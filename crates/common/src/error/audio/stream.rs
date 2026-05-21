@@ -10,4 +10,12 @@ pub enum AudioStreamError {
     UnsupportedSampleFormat(String),
     #[error("build stream failed: {0}")]
     BuildStream(String),
+    #[error("thread join error: {op}")]
+    ThreadJoin { op: String },
+    #[error("control channel send error: {op}")]
+    ControlChannelSend { op: String },
+    #[error("control channel receive timeout: {op}")]
+    ControlTimeout { op: String },
+    #[error("audio stream backend missing")]
+    BackendMissing,
 }

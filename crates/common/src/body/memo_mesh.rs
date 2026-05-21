@@ -1,19 +1,20 @@
 use crate::body::meshable::{
     EmbodiedBounds, EmbodiedPoint3, EmbodiedTriangle, EmbodiedVector3, Meshable,
 };
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{OnceLock, RwLock};
 
-/// A memoizing wrapper around a boxed `Embodied` implementation that caches
-/// `Embodied` method results for each resolution.
+/// A memoizing wrapper around a `Meshable` implementation that caches
+/// `Meshable` method results for each resolution.
 ///
 /// This allows expensive geometry computations to be reused when the same
 /// resolution (and optional per-vertex parameters) are requested multiple times.
 ///
 /// # Example
 /// ```ignore
-/// let body: Box<dyn Embodied<...>> = Box::new(RevolutionBody::new(...)?);
-/// let memo = MemoBody::new(body);
+/// let body = RevolutionBody::new(...)?;
+/// let memo = MemoMesh::new(body);
 /// // First call computes and caches
 /// let points1 = memo.sample_points(256);
 /// // Second call with same resolution reuses cache
@@ -21,20 +22,24 @@ use std::sync::{OnceLock, RwLock};
 /// // Different resolution creates new cache entry
 /// let points3 = memo.sample_points(512);
 /// ```
-pub struct MemoMesh {
-    inner: Box<
-        dyn Meshable<
-            Vertex = EmbodiedPoint3,
-            Index = EmbodiedTriangle,
-            Bounds = EmbodiedBounds,
-            Vector = EmbodiedVector3,
-        >,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MemoMesh<M>
+where
+    M: Meshable<
+        Vertex = EmbodiedPoint3,
+        Index = EmbodiedTriangle,
+        Bounds = EmbodiedBounds,
+        Vector = EmbodiedVector3,
     >,
+{
+    inner: M,
+    #[serde(skip, default)]
     cache: RwLock<HashMap<usize, ResolutionCache>>,
+    #[serde(skip, default)]
     opt_resolution_cache: OnceLock<usize>,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct ResolutionCache {
     sample_points: Option<Vec<EmbodiedPoint3>>,
     mesh_indices: Option<Vec<EmbodiedTriangle>>,
@@ -53,18 +58,17 @@ fn direction_key(direction: EmbodiedVector3) -> [u64; 3] {
     ]
 }
 
-impl MemoMesh {
-    /// Wrap a boxed `Embodied` implementation with memoization.
-    pub fn new(
-        inner: Box<
-            dyn Meshable<
-                Vertex = EmbodiedPoint3,
-                Index = EmbodiedTriangle,
-                Bounds = EmbodiedBounds,
-                Vector = EmbodiedVector3,
-            >,
-        >,
-    ) -> Self {
+impl<M> MemoMesh<M>
+where
+    M: Meshable<
+        Vertex = EmbodiedPoint3,
+        Index = EmbodiedTriangle,
+        Bounds = EmbodiedBounds,
+        Vector = EmbodiedVector3,
+    >,
+{
+    /// Wrap a `Meshable` implementation with memoization.
+    pub fn new(inner: M) -> Self {
         MemoMesh {
             inner,
             cache: RwLock::new(HashMap::new()),
@@ -93,7 +97,15 @@ impl MemoMesh {
     }
 }
 
-impl Meshable for MemoMesh {
+impl<M> Meshable for MemoMesh<M>
+where
+    M: Meshable<
+        Vertex = EmbodiedPoint3,
+        Index = EmbodiedTriangle,
+        Bounds = EmbodiedBounds,
+        Vector = EmbodiedVector3,
+    >,
+{
     type Vertex = EmbodiedPoint3;
     type Index = EmbodiedTriangle;
     type Bounds = EmbodiedBounds;
@@ -254,6 +266,66 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    struct SerializableMeshable {
+        label: String,
+    }
+
+    impl Meshable for SerializableMeshable {
+        type Vertex = EmbodiedPoint3;
+        type Index = EmbodiedTriangle;
+        type Bounds = EmbodiedBounds;
+        type Vector = EmbodiedVector3;
+
+        fn sample_points(&self, resolution: usize) -> Vec<Self::Vertex> {
+            vec![EmbodiedPoint3::new(resolution as f64, 0.0, 0.0)]
+        }
+
+        fn mesh_indices(&self, resolution: usize) -> Vec<Self::Index> {
+            vec![[resolution as u32, 0, 0]]
+        }
+
+        fn bounding_box(&self, resolution: usize) -> Self::Bounds {
+            (
+                EmbodiedPoint3::new(resolution as f64, 0.0, 0.0),
+                EmbodiedPoint3::new(resolution as f64 + 1.0, 1.0, 1.0),
+            )
+        }
+
+        fn material_volume_m3(&self, resolution: usize) -> f64 {
+            resolution as f64 * 0.5
+        }
+
+        fn cavity_volume_m3(&self, resolution: usize) -> Option<f64> {
+            Some(resolution as f64 * 0.25)
+        }
+
+        fn surface_normal_at_vertex(
+            &self,
+            resolution: usize,
+            vertex_index: usize,
+        ) -> Option<Self::Vector> {
+            Some(EmbodiedVector3::new(
+                resolution as f64,
+                vertex_index as f64,
+                1.0,
+            ))
+        }
+
+        fn material_thickness_at_vertex(
+            &self,
+            resolution: usize,
+            vertex_index: usize,
+            direction: Self::Vector,
+        ) -> Option<f64> {
+            Some(resolution as f64 + vertex_index as f64 + direction.x + direction.y + direction.z)
+        }
+
+        fn opt_resolution(&self) -> usize {
+            42
+        }
+    }
+
     #[derive(Default)]
     struct Counters {
         sample_points: AtomicUsize,
@@ -347,10 +419,10 @@ mod tests {
         }
     }
 
-    fn make_memo_body() -> (MemoMesh, Arc<Counters>) {
+    fn make_memo_body() -> (MemoMesh<CountingEmbodied>, Arc<Counters>) {
         let counters = Arc::new(Counters::default());
         let body = CountingEmbodied::new(Arc::clone(&counters));
-        (MemoMesh::new(Box::new(body)), counters)
+        (MemoMesh::new(body), counters)
     }
 
     #[test]
@@ -481,6 +553,29 @@ mod tests {
                 .material_thickness_at_vertex
                 .load(Ordering::Relaxed),
             2
+        );
+    }
+
+    #[test]
+    fn serializes_only_the_inner_meshable() {
+        let memo = MemoMesh::new(SerializableMeshable {
+            label: String::from("counting"),
+        });
+
+        let _ = memo.sample_points(8);
+        let _ = memo.mesh_indices(8);
+
+        let json = serde_json::to_value(&memo).expect("serialize memo mesh");
+        assert_eq!(json, serde_json::json!({"inner": {"label": "counting"}}));
+
+        let restored: MemoMesh<SerializableMeshable> =
+            serde_json::from_value(json).expect("deserialize memo mesh");
+        assert_eq!(restored.inner.label, "counting");
+        assert_eq!(restored.cache_size(), 0);
+        assert!(!restored.is_cached(8));
+        assert_eq!(
+            restored.sample_points(8),
+            vec![EmbodiedPoint3::new(8.0, 0.0, 0.0)]
         );
     }
 }

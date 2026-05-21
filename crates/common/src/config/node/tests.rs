@@ -149,7 +149,7 @@ fn mounting_constraint_reduces_anchor_displacement() {
 
     // Use the revolution mesh at the same capped resolution mode_shapes() uses internally,
     // so vertex indices into vertex_displacement are in bounds.
-    let mesh = node.bowl.meshable.base.surface_mesh_data(8).into_parts().0;
+    let mesh = node.bowl.meshable.inner().base.surface_mesh_data(8).into_parts().0;
     assert!(!mesh.is_empty());
 
     let anchor = Point3::new(MOUNT_PROFILE_R_M, MOUNT_PROFILE_Y_M, 0.0);

@@ -166,7 +166,12 @@ impl Node {
         // ThickMesh adds inner/outer layers with short stitching edges (~thickness) that
         // dominate mean_edge_length and inflate laplacian_length_scale at finer resolutions.
         // Volume, mass, and density computations continue to use ThickMesh.
-        let mesh = self.bowl.meshable.base.surface_mesh_data(resolution);
+        let mesh = self
+            .bowl
+            .meshable
+            .inner()
+            .base
+            .surface_mesh_data(resolution);
         if mesh.vertices.is_empty() || mesh.indices.is_empty() {
             None
         } else {

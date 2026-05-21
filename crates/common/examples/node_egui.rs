@@ -35,6 +35,10 @@ struct NodeInspectorApp {
     wireframe: bool,
     last_error: Option<String>,
     last_debug_snapshot: Option<String>,
+    cached_node_signature: Option<String>,
+    cached_node: Option<Node>,
+    cached_debug_signature: Option<String>,
+    cached_debug: Option<NodeComputedDebug>,
 }
 
 #[derive(Clone, Copy)]
@@ -90,6 +94,10 @@ impl Default for NodeInspectorApp {
             wireframe: true,
             last_error: None,
             last_debug_snapshot: None,
+            cached_node_signature: None,
+            cached_node: None,
+            cached_debug_signature: None,
+            cached_debug: None,
         }
     }
 }
@@ -174,27 +182,81 @@ impl NodeInspectorApp {
         self.builders.shape.sampling_density = controls.sampling_density;
     }
 
-    fn build_node_and_debug(&mut self) -> Option<(Node, NodeComputedDebug)> {
-        match self.builders.build_node(
-            self.bowl_material.clone(),
-            self.clapper_material.clone(),
+    fn node_signature(&self) -> String {
+        serde_json::to_string(&(
+            &self.builders,
+            &self.bowl_material,
+            &self.clapper_material,
             self.clapper_to_bowl_friction,
-        ) {
-            Ok(node) => match node.computed_debug(self.resolution, self.mode_count, &self.medium) {
-                Some(debug) => {
-                    self.last_error = None;
-                    Some((node, debug))
+        ))
+        .unwrap_or_else(|err| format!("signature-error:{err}"))
+    }
+
+    fn debug_signature(&self) -> String {
+        serde_json::to_string(&(self.resolution, self.mode_count, &self.medium))
+            .unwrap_or_else(|err| format!("signature-error:{err}"))
+    }
+
+    fn build_node_and_debug(&mut self) -> Option<(Node, NodeComputedDebug)> {
+        let node_signature = self.node_signature();
+        let geometry_changed = self
+            .cached_node_signature
+            .as_deref()
+            .map(|signature| signature != node_signature)
+            .unwrap_or(true);
+
+        if geometry_changed {
+            match self.builders.build_node(
+                self.bowl_material.clone(),
+                self.clapper_material.clone(),
+                self.clapper_to_bowl_friction,
+            ) {
+                Ok(node) => {
+                    self.cached_node_signature = Some(node_signature);
+                    self.cached_node = Some(node);
+                    self.cached_debug_signature = None;
+                    self.cached_debug = None;
+                    self.last_debug_snapshot = None;
                 }
-                None => {
-                    self.last_error = Some("computed debug snapshot unavailable".to_string());
-                    None
+                Err(err) => {
+                    self.cached_node_signature = None;
+                    self.cached_node = None;
+                    self.cached_debug_signature = None;
+                    self.cached_debug = None;
+                    self.last_error = Some(err);
+                    return None;
                 }
-            },
-            Err(err) => {
-                self.last_error = Some(err);
-                None
             }
         }
+
+        let debug_signature = self.debug_signature();
+        let debug = if self
+            .cached_debug_signature
+            .as_deref()
+            .map(|signature| signature != debug_signature)
+            .unwrap_or(true)
+        {
+            let node = self.cached_node.as_ref()?;
+            match node.computed_debug(self.resolution, self.mode_count, &self.medium) {
+                Some(debug) => {
+                    self.cached_debug_signature = Some(debug_signature);
+                    self.cached_debug = Some(debug.clone());
+                    debug
+                }
+                None => {
+                    self.cached_debug_signature = None;
+                    self.cached_debug = None;
+                    self.last_error = Some("computed debug snapshot unavailable".to_string());
+                    return None;
+                }
+            }
+        } else {
+            self.cached_debug.clone()?
+        };
+
+        self.last_error = None;
+        let node = self.cached_node.as_ref()?.clone();
+        Some((node, debug))
     }
 
     fn print_debug_snapshot_once_for_change(&mut self, debug: &NodeComputedDebug) {
@@ -490,18 +552,18 @@ impl NodeInspectorApp {
 
     fn top_charts(&self, ui: &mut egui::Ui, node: &Node) {
         ui.columns(3, |cols| {
-            let bowl_pts = node.bowl.meshable.base.sampled_profile_points(80);
+            let bowl_pts = node.bowl.meshable.inner().base.sampled_profile_points(80);
             draw_xy_line_chart(&mut cols[0], "Bowl profile", &bowl_pts, "y", "r");
 
-            let clapper_pts = node.clapper.meshable.sampled_profile_points(80);
+            let clapper_pts = node.clapper.meshable.inner().sampled_profile_points(80);
             draw_xy_line_chart(&mut cols[1], "Clapper profile", &clapper_pts, "y", "r");
 
-            let radial = node.bowl.meshable.base.profile_sample_positions(40);
+            let radial = node.bowl.meshable.inner().base.profile_sample_positions(40);
             let thickness_pts = radial
                 .iter()
                 .enumerate()
                 .map(|(i, u)| {
-                    let (face, back) = node.bowl.meshable.thickness_map.sample(i);
+                    let (face, back) = node.bowl.meshable.inner().thickness_map.sample(i);
                     (*u, face + back)
                 })
                 .collect::<Vec<_>>();
@@ -741,19 +803,19 @@ slide[c={:.3}, damp(a/m)={:.5}/{:.5}, rough={:.3}, bw={:.2}, squeal={:.3}]"#,
 }
 
 impl eframe::App for NodeInspectorApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let state = self.build_node_and_debug();
 
-        egui::SidePanel::left("node_controls")
-            .min_width(300.0)
-            .max_width(420.0)
-            .show(ctx, |ui| {
+        egui::Panel::left("node_controls")
+            .min_size(300.0)
+            .max_size(420.0)
+            .show_inside(ui, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     self.left_controls(ui);
                 });
             });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show_inside(ui, |ui| {
             if let Some((node, debug)) = state {
                 self.print_debug_snapshot_once_for_change(&debug);
                 egui::ScrollArea::vertical().show(ui, |ui| {
@@ -789,7 +851,7 @@ impl eframe::App for NodeInspectorApp {
             }
         });
 
-        ctx.request_repaint();
+        ui.ctx().request_repaint();
     }
 }
 
@@ -891,6 +953,7 @@ fn collect_mode_overlay_points(
     let shell_mesh = node
         .bowl
         .meshable
+        .inner()
         .base
         .surface_mesh_data(structure.analysis_resolution);
     if shell_mesh.vertices.is_empty() {

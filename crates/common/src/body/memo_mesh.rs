@@ -3,7 +3,7 @@ use crate::body::meshable::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{OnceLock, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 
 /// A memoizing wrapper around a `Meshable` implementation that caches
 /// `Meshable` method results for each resolution.
@@ -22,7 +22,7 @@ use std::sync::{OnceLock, RwLock};
 /// // Different resolution creates new cache entry
 /// let points3 = memo.sample_points(512);
 /// ```
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MemoMesh<M>
 where
     M: Meshable<
@@ -34,7 +34,7 @@ where
 {
     inner: M,
     #[serde(skip, default)]
-    cache: RwLock<HashMap<usize, ResolutionCache>>,
+    cache: Arc<RwLock<HashMap<usize, ResolutionCache>>>,
     #[serde(skip, default)]
     opt_resolution_cache: OnceLock<usize>,
 }
@@ -71,9 +71,14 @@ where
     pub fn new(inner: M) -> Self {
         MemoMesh {
             inner,
-            cache: RwLock::new(HashMap::new()),
+            cache: Arc::new(RwLock::new(HashMap::new())),
             opt_resolution_cache: OnceLock::new(),
         }
+    }
+
+    /// Borrow the wrapped meshable.
+    pub fn inner(&self) -> &M {
+        &self.inner
     }
 
     /// Clear all cached resolutions.

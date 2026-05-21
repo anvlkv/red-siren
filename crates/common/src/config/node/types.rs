@@ -2,7 +2,7 @@ use nalgebra::Vector3;
 use serde::{Deserialize, Serialize};
 
 use crate::body::materials::Medium;
-use crate::{Body, RevolutionMesh, ThickMesh};
+use crate::{Body, MemoMesh, RevolutionMesh, ThickMesh};
 
 /// Structural properties of the node (FEM-computed, medium-independent).
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -54,9 +54,9 @@ pub struct NodeComputedAcoustics {
 /// Kept for compatibility; combines structure and acoustics.
 pub type NodeComputedDebug = (NodeComputedStructure, NodeComputedAcoustics);
 
-pub type BowlGeometry = ThickMesh<RevolutionMesh<5>>;
+pub type BowlGeometry = MemoMesh<ThickMesh<RevolutionMesh<5>>>;
 
-pub type ClapperGeometry = RevolutionMesh<3>;
+pub type ClapperGeometry = MemoMesh<RevolutionMesh<3>>;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Node {

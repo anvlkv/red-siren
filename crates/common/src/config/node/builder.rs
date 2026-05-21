@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::body::materials::Material;
 use crate::{
-    thickness_map_from_axial_samples, Body, RevolutionAxis, RevolutionMesh, Segment, ThickMesh,
+    thickness_map_from_axial_samples, Body, MemoMesh, RevolutionAxis, RevolutionMesh, Segment,
+    ThickMesh,
 };
 
 use super::shape_profile::ShapeProfileBuilder;
@@ -126,12 +127,15 @@ impl NodeModelBuilders {
         )
         .ok_or_else(|| "failed to build bowl thickness map".to_string())?;
 
-        let bowl = Body::new(ThickMesh::new(bowl_base, thickness_map), bowl_material);
+        let bowl = Body::new(
+            MemoMesh::new(ThickMesh::new(bowl_base, thickness_map)),
+            bowl_material,
+        );
 
         let clapper_profile = self.clapper.build_profile()?;
         let clapper_mesh = RevolutionMesh::new(clapper_profile, RevolutionAxis::Y)
             .map_err(|err| err.to_string())?;
-        let clapper = Body::new(clapper_mesh, clapper_material);
+        let clapper = Body::new(MemoMesh::new(clapper_mesh), clapper_material);
 
         Ok(Node::new(bowl, clapper, clapper_to_bowl_friction))
     }

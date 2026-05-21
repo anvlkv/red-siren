@@ -166,7 +166,7 @@ pub(super) fn per_vertex_thickness(
 ) -> Vec<f64> {
     (0..vertex_count)
         .map(|i| {
-            let (face_t, back_t) = node.bowl.meshable.thickness_map.sample(i);
+            let (face_t, back_t) = node.bowl.meshable.inner().thickness_map.sample(i);
             (face_t + back_t)
                 .max(MODAL_EPSILON)
                 .min(fallback_thickness * 10.0)

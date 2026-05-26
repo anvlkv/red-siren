@@ -2,7 +2,7 @@ use nalgebra::Vector3;
 use serde::{Deserialize, Serialize};
 
 use crate::body::materials::Medium;
-use crate::{Body, MemoMesh, RevolutionMesh, ThickMesh};
+use crate::{Body, ImperfectMesh, MemoMesh, RevolutionMesh, ThickMesh};
 
 /// Structural properties of the node (FEM-computed, medium-independent).
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -34,7 +34,7 @@ pub struct NodeComputedStructure {
     pub solver_dropped_near_rigid: usize,
     pub solver_condition_number: f64,
     pub frequencies_hz: Vec<f64>,
-    pub mode_structures: Vec<ModeStructure>,
+    pub path_modes: Vec<PathMode>,
 }
 
 /// Acoustic properties of the node (medium-dependent, recomputable).
@@ -54,9 +54,9 @@ pub struct NodeComputedAcoustics {
 /// Kept for compatibility; combines structure and acoustics.
 pub type NodeComputedDebug = (NodeComputedStructure, NodeComputedAcoustics);
 
-pub type BowlGeometry = MemoMesh<ThickMesh<RevolutionMesh<5>>>;
+pub type BowlGeometry = MemoMesh<ImperfectMesh<ThickMesh<ImperfectMesh<RevolutionMesh<5>>>>>;
 
-pub type ClapperGeometry = MemoMesh<RevolutionMesh<3>>;
+pub type ClapperGeometry = MemoMesh<ImperfectMesh<RevolutionMesh<3>>>;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Node {
@@ -66,12 +66,31 @@ pub struct Node {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct ModeStructure {
-    pub frequency_hz: f64,
+pub struct StrikeModeStructure {
+    pub mode_index: usize,
     pub vertex_displacement: Vec<Vector3<f64>>,
     pub strike_base: StrikeStructuralBase,
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
+pub struct JetModeStructure {
+    pub mode_index: usize,
+    pub rim_response: f64,
     pub jet_base: JetStructuralBase,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct SlideModeStructure {
+    pub mode_index: usize,
+    pub vertex_displacement: Vec<Vector3<f64>>,
     pub slide_base: SlideStructuralBase,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum PathMode {
+    Strike(StrikeModeStructure),
+    Jet(JetModeStructure),
+    Slide(SlideModeStructure),
 }
 
 /// Vortex shedding dynamics for jet excitation.
@@ -112,11 +131,28 @@ pub struct SlideStructuralBase {
     pub coupling: f64,
     /// Sensitivity to surface roughness and slip irregularity [0, 1]
     pub roughness_sensitivity: f64,
+    /// Contact-state interaction metrics derived from clapper-bowl friction dynamics.
+    pub contact_state: SlideContactState,
+}
+
+/// Structural contact-state descriptors for clapper-bowl slide interaction.
+#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
+pub struct SlideContactState {
+    /// Proxy for average contact normal load [0, 1]
+    pub normal_load_proxy: f64,
+    /// Slip drive intensity from frictional forcing [0, 1]
+    pub slip_drive: f64,
+    /// Stick-slip propensity under current mode and friction conditions [0, 1]
+    pub stick_slip_propensity: f64,
+    /// Intermittency of contact over the cycle [0, 1]
+    pub contact_intermittency: f64,
 }
 
 /// Acoustic properties of strike excitation (medium-dependent, computed on-demand).
 #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 pub struct StrikeAcousticsInMedium {
+    /// Effective resonance frequency used for strike response [Hz]
+    pub frequency_hz: f64,
     /// Damping due to air viscosity [0, 1]
     pub damping_in_air: f64,
     /// Resonant bandwidth of impact response [Hz]
@@ -126,6 +162,8 @@ pub struct StrikeAcousticsInMedium {
 /// Acoustic properties of jet excitation (medium-dependent, computed on-demand).
 #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 pub struct JetAcousticsInMedium {
+    /// Effective resonance frequency used for jet lock-in [Hz]
+    pub frequency_hz: f64,
     /// Damping due to air viscosity [0, 1]
     pub damping_in_air: f64,
     /// Acoustic cavity resonance (quarter-wave lock-in)
@@ -137,12 +175,16 @@ pub struct JetAcousticsInMedium {
 /// Acoustic properties of slide excitation (medium-dependent, computed on-demand).
 #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 pub struct SlideAcousticsInMedium {
+    /// Effective resonance frequency used for slide response [Hz]
+    pub frequency_hz: f64,
     /// Damping for sustained rubbing/sliding in the given medium [0, 1]
     pub damping_in_air: f64,
     /// Effective bandwidth of friction-noise excitation [Hz]
     pub slide_bandwidth_hz: f64,
     /// Tonal squeal tendency under slide lock-in conditions [0, 1]
     pub squeal_tendency: f64,
+    /// Aggregate interaction gain from contact-state-driven friction excitation [0, 1]
+    pub friction_interaction_gain: f64,
 }
 
 /// Complete acoustic response for both excitation paths (medium-dependent).

@@ -22,41 +22,6 @@ pub struct ThicknessMap {
     pub points: Vec<ThicknessMapPoint>,
 }
 
-/// Build a `ThicknessMap` by evaluating a thickness function over axial positions.
-///
-/// `axial_positions` is expected to come from a profile sampler such as
-/// `RevolutionBody::profile_sample_positions`. The generated map repeats each
-/// axial thickness value across all theta samples to match revolution mesh
-/// indexing (`j * axial_len + i`).
-pub fn thickness_map_from_axial_samples<F>(
-    axial_positions: &[f64],
-    theta_samples: usize,
-    mut thickness_at_u: F,
-) -> Option<ThicknessMap>
-where
-    F: FnMut(f64) -> (f64, f64),
-{
-    if axial_positions.is_empty() || theta_samples == 0 {
-        return None;
-    }
-
-    let axial_len = axial_positions.len();
-    let mut points = Vec::with_capacity(axial_len * theta_samples);
-
-    for j in 0..theta_samples {
-        for (i, u) in axial_positions.iter().enumerate() {
-            let (face_thickness, backface_thickness) = thickness_at_u(u.clamp(0.0, 1.0));
-            points.push(ThicknessMapPoint {
-                body_vertex_index: j * axial_len + i,
-                face_thickness,
-                backface_thickness,
-            });
-        }
-    }
-
-    ThicknessMap::new(points)
-}
-
 impl ThicknessMap {
     pub fn new(points: Vec<ThicknessMapPoint>) -> Option<Self> {
         if points.is_empty() {
@@ -614,36 +579,6 @@ mod tests {
         assert_eq!(map.points[0].body_vertex_index, 2);
         assert_eq!(map.points[0].face_thickness, 0.3);
         assert_eq!(map.points[0].backface_thickness, 0.6);
-    }
-
-    #[test]
-    fn thickness_map_from_axial_samples_expands_across_theta() {
-        let map = thickness_map_from_axial_samples(&[0.0, 0.5, 1.0], 2, |u| (u * 0.4, u * 0.2))
-            .expect("map");
-
-        assert_eq!(map.points.len(), 6);
-        assert_eq!(map.points[0].body_vertex_index, 0);
-        assert_eq!(map.points[2].body_vertex_index, 2);
-        assert_eq!(map.points[3].body_vertex_index, 3);
-
-        let (face_0, back_0) = map.sample(0);
-        assert!((face_0 - 0.0).abs() < 1e-10);
-        assert!((back_0 - 0.0).abs() < 1e-10);
-
-        let (face_mid, back_mid) = map.sample(4);
-        assert!((face_mid - 0.2).abs() < 1e-10);
-        assert!((back_mid - 0.1).abs() < 1e-10);
-
-        let (face_end, back_end) = map.sample(5);
-        assert!((face_end - 0.4).abs() < 1e-10);
-        assert!((back_end - 0.2).abs() < 1e-10);
-    }
-
-    #[test]
-    fn thickness_map_from_axial_samples_rejects_invalid_input() {
-        assert!(thickness_map_from_axial_samples(&[], 8, |_u| (0.1, 0.1)).is_none());
-        assert!(thickness_map_from_axial_samples(&[0.0, 1.0], 0, |_u| (0.1, 0.1)).is_none());
-        assert!(thickness_map_from_axial_samples(&[0.0, 1.0], 2, |_u| (f64::NAN, 0.1)).is_none());
     }
 
     #[test]

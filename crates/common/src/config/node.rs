@@ -10,11 +10,6 @@ const MODAL_EPSILON: f64 = 1e-12;
 const MIN_MODE_COUNT: usize = 1;
 const MOUNT_PROFILE_R_M: f64 = 0.0;
 const MOUNT_PROFILE_Y_M: f64 = 0.0;
-/// Hard cap on the mesh resolution used for the FEM eigen solve.
-/// At resolution > ~12 the active-DOF count grows quadratically and
-/// the dense O(N^3) symmetric_eigen becomes intractable in debug builds.
-const MODAL_EIGEN_MAX_RESOLUTION: usize = 8;
-
 mod acoustics;
 mod builder;
 mod shape_profile;
@@ -42,7 +37,7 @@ impl Node {
     }
 
     pub fn modal_frequencies_hz(&self, resolution: usize, mode_count: usize) -> Vec<f64> {
-        let resolution = solver::analysis_resolution(self, resolution);
+        let resolution = solver::analysis_resolution(resolution);
         let bowl_mesh = match self.bowl_surface_mesh(resolution) {
             Some(mesh) => mesh,
             None => return vec![],
@@ -56,7 +51,12 @@ impl Node {
             None => return vec![],
         };
 
-        let pvt = per_vertex_thickness(self, bowl_mesh.vertex_count(), descriptor.thickness_m);
+        let pvt = per_vertex_thickness(
+            self,
+            resolution,
+            bowl_mesh.vertex_count(),
+            descriptor.thickness_m,
+        );
         solver::solve_scalar_modes(mode_count, &bowl_mesh, descriptor, &pvt)
             .modes
             .into_iter()
@@ -64,13 +64,13 @@ impl Node {
             .collect()
     }
 
-    pub fn mode_shapes(&self, resolution: usize, mode_count: usize) -> Vec<ModeStructure> {
-        let resolution = solver::analysis_resolution(self, resolution);
+    pub fn mode_shapes(&self, resolution: usize, mode_count: usize) -> Vec<StrikeModeStructure> {
+        let resolution = solver::analysis_resolution(resolution);
         let bowl_mesh = match self.bowl_surface_mesh(resolution) {
             Some(mesh) => mesh,
             None => return vec![],
         };
-        self.mode_shapes_from_mesh(mode_count, resolution, &bowl_mesh)
+        self.strike_mode_shapes_from_mesh(mode_count, resolution, &bowl_mesh)
     }
 
     pub fn modal_participation_factor(
@@ -80,13 +80,13 @@ impl Node {
         resolution: usize,
         mode_count: usize,
     ) -> Vec<f64> {
-        let resolution = solver::analysis_resolution(self, resolution);
+        let resolution = solver::analysis_resolution(resolution);
         let bowl_mesh = match self.bowl_surface_mesh(resolution) {
             Some(mesh) => mesh,
             None => return vec![],
         };
 
-        let modes = self.mode_shapes_from_mesh(mode_count, resolution, &bowl_mesh);
+        let modes = self.strike_mode_shapes_from_mesh(mode_count, resolution, &bowl_mesh);
         if modes.is_empty() {
             return vec![];
         }
@@ -124,7 +124,7 @@ impl Node {
     }
 
     pub fn modal_damping(&self, band: &Band, resolution: usize, mode_count: usize) -> Vec<f64> {
-        let resolution = solver::analysis_resolution(self, resolution);
+        let resolution = solver::analysis_resolution(resolution);
         let bowl_mesh = match self.bowl_surface_mesh(resolution) {
             Some(mesh) => mesh,
             None => return vec![],
@@ -144,7 +144,12 @@ impl Node {
             None => return vec![],
         };
 
-        let pvt = per_vertex_thickness(self, bowl_mesh.vertex_count(), descriptor.thickness_m);
+        let pvt = per_vertex_thickness(
+            self,
+            resolution,
+            bowl_mesh.vertex_count(),
+            descriptor.thickness_m,
+        );
         solver::solve_scalar_modes(mode_count, &bowl_mesh, descriptor, &pvt)
             .modes
             .into_iter()
@@ -162,14 +167,13 @@ impl Node {
     }
 
     fn bowl_surface_mesh(&self, resolution: usize) -> Option<SurfaceMesh<Point3<f64>, [u32; 3]>> {
-        // Use the base revolution mesh (2-D shell surface) for the FEM eigensolve.
-        // ThickMesh adds inner/outer layers with short stitching edges (~thickness) that
-        // dominate mean_edge_length and inflate laplacian_length_scale at finer resolutions.
-        // Volume, mass, and density computations continue to use ThickMesh.
+        // Use shell mesh (Revolution) for modal solve performance; thick mesh is
+        // still used for mass/material computations and deriving per-vertex thickness.
         let mesh = self
             .bowl
             .meshable
             .inner()
+            .base
             .base
             .surface_mesh_data(resolution);
         if mesh.vertices.is_empty() || mesh.indices.is_empty() {
@@ -179,12 +183,12 @@ impl Node {
         }
     }
 
-    fn mode_shapes_from_mesh(
+    fn strike_mode_shapes_from_mesh(
         &self,
         mode_count: usize,
         resolution: usize,
         bowl_mesh: &SurfaceMesh<Point3<f64>, [u32; 3]>,
-    ) -> Vec<ModeStructure> {
+    ) -> Vec<StrikeModeStructure> {
         if bowl_mesh.vertex_count() < 3 {
             return vec![];
         }
@@ -194,31 +198,43 @@ impl Node {
             None => return vec![],
         };
 
-        let pvt = per_vertex_thickness(self, bowl_mesh.vertex_count(), descriptor.thickness_m);
+        let pvt = per_vertex_thickness(
+            self,
+            resolution,
+            bowl_mesh.vertex_count(),
+            descriptor.thickness_m,
+        );
         let solved = solver::solve_scalar_modes(mode_count, bowl_mesh, descriptor, &pvt);
         if solved.modes.is_empty() {
             return vec![];
         }
 
-        self.mode_shapes_from_solved_modes(resolution, bowl_mesh, descriptor, &solved.modes)
+        self.structural_paths_from_solved_modes(resolution, bowl_mesh, descriptor, &solved.modes)
+            .0
     }
 
-    fn mode_shapes_from_solved_modes(
+    fn structural_paths_from_solved_modes(
         &self,
         resolution: usize,
         bowl_mesh: &SurfaceMesh<Point3<f64>, [u32; 3]>,
         descriptor: BowlDescriptor,
         solved_modes: &[ScalarMode],
-    ) -> Vec<ModeStructure> {
+    ) -> (
+        Vec<StrikeModeStructure>,
+        Vec<JetModeStructure>,
+        Vec<SlideModeStructure>,
+    ) {
         if solved_modes.is_empty() {
-            return vec![];
+            return (vec![], vec![], vec![]);
         }
 
         let normals = mesh_vertex_normals(&bowl_mesh.vertices, &bowl_mesh.indices, MODAL_EPSILON);
         let (bounds_min, bounds_max) = self.bowl.meshable.bounding_box(resolution);
         let y_span = (bounds_max.y - bounds_min.y).abs().max(MODAL_EPSILON);
 
-        let mut modes = Vec::with_capacity(solved_modes.len());
+        let mut strike_modes = Vec::with_capacity(solved_modes.len());
+        let mut jet_modes = Vec::with_capacity(solved_modes.len());
+        let mut slide_modes = Vec::with_capacity(solved_modes.len());
         for (i, solved_mode) in solved_modes.iter().enumerate() {
             let frequency_hz = solved_mode.frequency_hz;
             let (m, _n) = acoustics::mode_index_pair(i);
@@ -243,7 +259,7 @@ impl Node {
                 y_span,
                 0.9,
             );
-            let slide_coupling = acoustics::average_coupling(
+            let geometric_slide_coupling = acoustics::average_coupling(
                 &bowl_mesh.vertices,
                 &displacement,
                 bounds_min.y,
@@ -264,17 +280,35 @@ impl Node {
                 (effective_aperture_m / convective_speed_m_per_s).clamp(1e-6, 0.25);
             let threshold_drive = (((1.0 - jet_coupling) * 0.45) + 0.05).clamp(0.0, 2.0);
             let small_signal_gain = (jet_coupling * 1.2 / 0.04).clamp(0.0, 40.0);
-            let roughness_sensitivity =
-                (0.35 + slide_coupling * 0.55 + self.clapper_to_bowl_friction * 0.25)
-                    .clamp(0.0, 1.0);
-
-            modes.push(ModeStructure {
+            let contact_state = acoustics::slide_contact_state_for_mode(
+                self,
+                i,
                 frequency_hz,
-                vertex_displacement: displacement,
+                descriptor,
+                geometric_slide_coupling,
+            );
+            let slide_coupling = (geometric_slide_coupling
+                * (0.72 + 0.28 * contact_state.normal_load_proxy)
+                + 0.18 * contact_state.slip_drive
+                + 0.1 * contact_state.stick_slip_propensity
+                - 0.08 * contact_state.contact_intermittency)
+                .clamp(0.0, 1.0);
+            let roughness_sensitivity = (0.2
+                + geometric_slide_coupling * 0.35
+                + contact_state.stick_slip_propensity * 0.45)
+                .clamp(0.0, 1.0);
+
+            strike_modes.push(StrikeModeStructure {
+                mode_index: i,
+                vertex_displacement: displacement.clone(),
                 strike_base: StrikeStructuralBase {
                     coupling: strike_coupling,
                     angle_sensitivity,
                 },
+            });
+            jet_modes.push(JetModeStructure {
+                mode_index: i,
+                rim_response: jet_coupling,
                 jet_base: JetStructuralBase {
                     coupling: jet_coupling,
                     vortex_dynamics: JetVortexDynamics {
@@ -284,14 +318,19 @@ impl Node {
                         small_signal_gain,
                     },
                 },
+            });
+            slide_modes.push(SlideModeStructure {
+                mode_index: i,
+                vertex_displacement: displacement,
                 slide_base: SlideStructuralBase {
                     coupling: slide_coupling,
                     roughness_sensitivity,
+                    contact_state,
                 },
             });
         }
 
-        modes
+        (strike_modes, jet_modes, slide_modes)
     }
 
     fn compute_strike_acoustics_for_mode(
@@ -311,6 +350,7 @@ impl Node {
         let impact_bandwidth_hz = ((0.01 + damping_in_air * 0.8) * frequency_hz).max(0.0);
 
         StrikeAcousticsInMedium {
+            frequency_hz,
             damping_in_air,
             impact_bandwidth_hz,
         }
@@ -319,7 +359,7 @@ impl Node {
     fn compute_jet_acoustics_for_mode(
         &self,
         mode_index: usize,
-        frequency_hz: f64,
+        structural_frequency_hz: f64,
         medium: &Medium,
         descriptor: BowlDescriptor,
         _strike_base: &StrikeStructuralBase,
@@ -330,28 +370,30 @@ impl Node {
         let damping_in_air = acoustics::jet_path_damping_for_medium(
             self,
             mode_index,
-            frequency_hz,
+            structural_frequency_hz,
             medium,
             descriptor,
         );
 
         let speed_of_sound_m_per_s = medium.speed_of_sound_m_per_s;
 
+        let acoustic_center_hz =
+            (speed_of_sound_m_per_s / (4.0 * descriptor.radius_m.max(MODAL_EPSILON))).max(1.0);
+        let frequency_hz = (0.65 * structural_frequency_hz + 0.35 * acoustic_center_hz).max(1.0);
+
         let ka = 2.0 * std::f64::consts::PI * frequency_hz * descriptor.radius_m
             / speed_of_sound_m_per_s.max(MODAL_EPSILON);
         let radiation_efficiency = acoustics::radiation_efficiency_from_ka(ka, m);
 
-        let acoustic_center_hz =
-            (speed_of_sound_m_per_s / (4.0 * descriptor.radius_m.max(MODAL_EPSILON))).max(1.0);
-        let lock_center_hz = (0.65 * frequency_hz + 0.35 * acoustic_center_hz).max(1.0);
         let lock_bandwidth_hz =
-            ((0.02 + 0.07 * jet_base.coupling + 0.15 * damping_in_air) * lock_center_hz).max(0.5);
+            ((0.02 + 0.07 * jet_base.coupling + 0.15 * damping_in_air) * frequency_hz).max(0.5);
         let phase_sensitivity = (1.0 / ((m + 1) as f64).sqrt()).clamp(0.2, 1.0);
 
         JetAcousticsInMedium {
+            frequency_hz,
             damping_in_air,
             acoustic_lock_in: AcousticLockIn {
-                lock_center_hz,
+                lock_center_hz: frequency_hz,
                 lock_bandwidth_hz,
                 phase_sensitivity,
             },
@@ -362,27 +404,46 @@ impl Node {
     fn compute_slide_acoustics_for_mode(
         &self,
         mode_index: usize,
-        frequency_hz: f64,
+        structural_frequency_hz: f64,
         medium: &Medium,
         descriptor: BowlDescriptor,
         slide_base: &SlideStructuralBase,
     ) -> SlideAcousticsInMedium {
+        let slide_frequency_hz = (structural_frequency_hz
+            * (1.0 + 0.06 * slide_base.contact_state.slip_drive
+                - 0.035 * slide_base.contact_state.contact_intermittency))
+            .max(1.0);
         let damping_in_air = acoustics::slide_path_damping_for_medium(
             self,
             mode_index,
-            frequency_hz,
+            slide_frequency_hz,
             medium,
             descriptor,
         );
-        let slide_bandwidth_hz =
-            ((0.015 + 0.25 * slide_base.coupling + damping_in_air * 0.6) * frequency_hz).max(0.2);
-        let squeal_tendency =
-            (slide_base.roughness_sensitivity * (1.0 - damping_in_air)).clamp(0.0, 1.0);
+        let friction_interaction_gain = (0.25 * slide_base.contact_state.normal_load_proxy
+            + 0.35 * slide_base.contact_state.slip_drive
+            + 0.25 * slide_base.contact_state.stick_slip_propensity
+            + 0.15 * (1.0 - slide_base.contact_state.contact_intermittency))
+            .clamp(0.0, 1.0);
+        let slide_bandwidth_hz = ((0.01
+            + 0.2 * slide_base.coupling
+            + 0.45 * friction_interaction_gain
+            + damping_in_air * 0.45)
+            * slide_frequency_hz)
+            .max(0.2);
+        let squeal_tendency = ((slide_base.roughness_sensitivity
+            * (0.55 + 0.45 * slide_base.contact_state.stick_slip_propensity)
+            * (1.0 - damping_in_air)
+            * (0.7 + 0.3 * friction_interaction_gain))
+            - 0.2 * slide_base.contact_state.contact_intermittency)
+            .clamp(0.0, 1.0);
 
         SlideAcousticsInMedium {
+            frequency_hz: slide_frequency_hz,
             damping_in_air,
             slide_bandwidth_hz,
             squeal_tendency,
+            friction_interaction_gain,
         }
     }
 
@@ -392,7 +453,7 @@ impl Node {
         mode_count: usize,
         medium: &Medium,
     ) -> Option<NodeComputedDebug> {
-        let analysis_resolution = solver::analysis_resolution(self, resolution);
+        let analysis_resolution = solver::analysis_resolution(resolution);
         let bowl_mesh = self.bowl_surface_mesh(analysis_resolution)?;
         if bowl_mesh.vertex_count() < 3 {
             return None;
@@ -404,7 +465,12 @@ impl Node {
             &bowl_mesh,
             Some(medium.temperature_c),
         )?;
-        let pvt = per_vertex_thickness(self, bowl_mesh.vertex_count(), descriptor.thickness_m);
+        let pvt = per_vertex_thickness(
+            self,
+            analysis_resolution,
+            bowl_mesh.vertex_count(),
+            descriptor.thickness_m,
+        );
         let solved = solver::solve_scalar_modes(mode_count, &bowl_mesh, descriptor, &pvt);
         if solved.modes.is_empty() {
             return None;
@@ -416,7 +482,7 @@ impl Node {
             .map(|mode| mode.frequency_hz)
             .collect::<Vec<_>>();
 
-        let mode_structures = self.mode_shapes_from_solved_modes(
+        let (strike_modes, jet_modes, slide_modes) = self.structural_paths_from_solved_modes(
             analysis_resolution,
             &bowl_mesh,
             descriptor,
@@ -529,19 +595,30 @@ impl Node {
                     mode.frequency_hz,
                     medium,
                     descriptor,
-                    &mode_structures[i].strike_base,
-                    &mode_structures[i].jet_base,
+                    &strike_modes[i].strike_base,
+                    &jet_modes[i].jet_base,
                 );
                 let slide = self.compute_slide_acoustics_for_mode(
                     i,
                     mode.frequency_hz,
                     medium,
                     descriptor,
-                    &mode_structures[i].slide_base,
+                    &slide_modes[i].slide_base,
                 );
                 ModeInteractionAcoustics { strike, jet, slide }
             })
             .collect();
+
+        let mut path_modes = Vec::with_capacity(solved.modes.len() * 3);
+        for ((strike_mode, jet_mode), slide_mode) in strike_modes
+            .into_iter()
+            .zip(jet_modes.into_iter())
+            .zip(slide_modes.into_iter())
+        {
+            path_modes.push(PathMode::Strike(strike_mode));
+            path_modes.push(PathMode::Jet(jet_mode));
+            path_modes.push(PathMode::Slide(slide_mode));
+        }
 
         let bowl_surface_area_m2 =
             mesh_surface_area_m2(&bowl_mesh.vertices, &bowl_mesh.indices).max(MODAL_EPSILON);
@@ -577,7 +654,7 @@ impl Node {
             solver_dropped_near_rigid: solved.diagnostics.dropped_near_rigid,
             solver_condition_number: solved.diagnostics.condition_number,
             frequencies_hz: frequencies_hz.clone(),
-            mode_structures,
+            path_modes,
         };
 
         let acoustics = NodeComputedAcoustics {

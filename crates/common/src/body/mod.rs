@@ -1,3 +1,4 @@
+mod imperfect_mesh;
 pub mod materials;
 mod memo_mesh;
 mod meshable;
@@ -5,6 +6,7 @@ mod revolution_mesh;
 mod segment;
 mod thick_mesh;
 
+pub use imperfect_mesh::ImperfectMesh;
 use materials::Material;
 pub use memo_mesh::MemoMesh;
 pub use meshable::{
@@ -14,9 +16,7 @@ pub use meshable::{
 pub use revolution_mesh::{RevolutionAxis, RevolutionBodyError, RevolutionMesh};
 pub use segment::*;
 use serde::{Deserialize, Serialize};
-pub use thick_mesh::{
-    thickness_map_from_axial_samples, ThickMesh, ThicknessMap, ThicknessMapPoint,
-};
+pub use thick_mesh::{ThickMesh, ThicknessMap, ThicknessMapPoint};
 
 use crate::body::meshable::EmbodiedVector3;
 

@@ -1,9 +1,16 @@
 use common::body::materials::{Material, Medium};
-use common::config::{Node, NodeComputedDebug, NodeModelBuilders};
-use common::egui_helpers::{draw_xy_line_chart, run_native_app};
+use common::config::{
+    JetModeStructure, JetStructuralBase, JetVortexDynamics, Node, NodeComputedDebug,
+    NodeComputedStructure, NodeModelBuilders, PathMode, SlideContactState, SlideModeStructure,
+    SlideStructuralBase, StrikeModeStructure, StrikeStructuralBase,
+};
+use common::egui_helpers::{draw_xy_line_chart, draw_xy_multi_line_chart_sized, run_native_app};
 use common::Meshable;
 use eframe::egui::{self, Color32, Pos2, Rect, Sense, Shape, Stroke};
 use nalgebra::{Point3, Vector3};
+use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::thread;
+use std::time::Duration;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ExampleShapePreset {
@@ -12,33 +19,56 @@ enum ExampleShapePreset {
     Bottle,
 }
 
+struct NodeAnalysisInputs {
+    builders: NodeModelBuilders,
+    bowl_material: Material,
+    clapper_material: Material,
+    clapper_to_bowl_friction: f64,
+    seed: Option<u64>,
+    medium: Medium,
+    resolution: usize,
+    mode_count: usize,
+    node_signature: String,
+    debug_signature: String,
+}
+
+struct PendingAnalysis {
+    node_signature: String,
+    debug_signature: String,
+    receiver: Receiver<AnalysisResult>,
+}
+
+enum AnalysisResult {
+    Ready(ReadyAnalysis),
+    Error(String),
+}
+
+struct ReadyAnalysis {
+    node_signature: String,
+    debug_signature: String,
+    debug: NodeComputedDebug,
+    display: DisplayCache,
+}
+
+struct DisplayCache {
+    bowl_profile: Vec<(f64, f64)>,
+    clapper_profile: Vec<(f64, f64)>,
+    thickness_face_profile: Vec<(f64, f64)>,
+    thickness_back_profile: Vec<(f64, f64)>,
+    bowl_preview: MeshPreview,
+    clapper_preview: MeshPreview,
+    shell_overlay_points: Vec<Point3<f64>>,
+}
+
+struct MeshPreview {
+    points: Vec<Point3<f64>>,
+    indices: Vec<[u32; 3]>,
+}
+
 fn main() -> eframe::Result<()> {
     run_native_app("Node inspector", [1480.0, 980.0], |_cc| {
         NodeInspectorApp::default()
     })
-}
-
-struct NodeInspectorApp {
-    builders: NodeModelBuilders,
-    active_preset: ExampleShapePreset,
-    bowl_material: Material,
-    clapper_material: Material,
-    clapper_to_bowl_friction: f64,
-    medium: Medium,
-    resolution: usize,
-    mode_count: usize,
-    camera_yaw: f64,
-    camera_pitch: f64,
-    zoom: f64,
-    pan_x: f32,
-    pan_y: f32,
-    wireframe: bool,
-    last_error: Option<String>,
-    last_debug_snapshot: Option<String>,
-    cached_node_signature: Option<String>,
-    cached_node: Option<Node>,
-    cached_debug_signature: Option<String>,
-    cached_debug: Option<NodeComputedDebug>,
 }
 
 #[derive(Clone, Copy)]
@@ -57,6 +87,30 @@ struct ShapeControlValues {
     segment_bias_3: f64,
     segment_bias_4: f64,
     sampling_density: f64,
+}
+
+struct NodeInspectorApp {
+    builders: NodeModelBuilders,
+    active_preset: ExampleShapePreset,
+    bowl_material: Material,
+    clapper_material: Material,
+    clapper_to_bowl_friction: f64,
+    medium: Medium,
+    use_seed: bool,
+    seed: u64,
+    analysis_resolution: usize,
+    mode_count: usize,
+    camera_yaw: f64,
+    camera_pitch: f64,
+    zoom: f64,
+    pan_x: f32,
+    pan_y: f32,
+    wireframe: bool,
+    last_error: Option<String>,
+    last_debug_snapshot: Option<String>,
+    pending_analysis: Option<PendingAnalysis>,
+    queued_analysis: Option<NodeAnalysisInputs>,
+    ready_analysis: Option<ReadyAnalysis>,
 }
 
 impl Default for NodeInspectorApp {
@@ -84,7 +138,9 @@ impl Default for NodeInspectorApp {
             },
             clapper_to_bowl_friction: 0.16,
             medium: Medium::standard_air(),
-            resolution: 40,
+            use_seed: false,
+            seed: 7,
+            analysis_resolution: 8,
             mode_count: 8,
             camera_yaw: 0.65,
             camera_pitch: 0.45,
@@ -94,10 +150,9 @@ impl Default for NodeInspectorApp {
             wireframe: true,
             last_error: None,
             last_debug_snapshot: None,
-            cached_node_signature: None,
-            cached_node: None,
-            cached_debug_signature: None,
-            cached_debug: None,
+            pending_analysis: None,
+            queued_analysis: None,
+            ready_analysis: None,
         }
     }
 }
@@ -188,79 +243,122 @@ impl NodeInspectorApp {
             &self.bowl_material,
             &self.clapper_material,
             self.clapper_to_bowl_friction,
+            self.use_seed,
+            self.seed,
         ))
         .unwrap_or_else(|err| format!("signature-error:{err}"))
     }
 
     fn debug_signature(&self) -> String {
-        serde_json::to_string(&(self.resolution, self.mode_count, &self.medium))
+        serde_json::to_string(&(self.analysis_resolution, self.mode_count, &self.medium))
             .unwrap_or_else(|err| format!("signature-error:{err}"))
     }
 
-    fn build_node_and_debug(&mut self) -> Option<(Node, NodeComputedDebug)> {
-        let node_signature = self.node_signature();
-        let geometry_changed = self
-            .cached_node_signature
-            .as_deref()
-            .map(|signature| signature != node_signature)
-            .unwrap_or(true);
+    fn analysis_inputs(&self) -> NodeAnalysisInputs {
+        NodeAnalysisInputs {
+            builders: self.builders.clone(),
+            bowl_material: self.bowl_material.clone(),
+            clapper_material: self.clapper_material.clone(),
+            clapper_to_bowl_friction: self.clapper_to_bowl_friction,
+            seed: self.use_seed.then_some(self.seed),
+            medium: self.medium.clone(),
+            resolution: self.analysis_resolution,
+            mode_count: self.mode_count,
+            node_signature: self.node_signature(),
+            debug_signature: self.debug_signature(),
+        }
+    }
 
-        if geometry_changed {
-            match self.builders.build_node(
-                self.bowl_material.clone(),
-                self.clapper_material.clone(),
-                self.clapper_to_bowl_friction,
-            ) {
-                Ok(node) => {
-                    self.cached_node_signature = Some(node_signature);
-                    self.cached_node = Some(node);
-                    self.cached_debug_signature = None;
-                    self.cached_debug = None;
-                    self.last_debug_snapshot = None;
-                }
-                Err(err) => {
-                    self.cached_node_signature = None;
-                    self.cached_node = None;
-                    self.cached_debug_signature = None;
-                    self.cached_debug = None;
-                    self.last_error = Some(err);
-                    return None;
-                }
+    fn ensure_analysis_requested(&mut self) {
+        let inputs = self.analysis_inputs();
+
+        let ready_matches = self
+            .ready_analysis
+            .as_ref()
+            .map(|ready| {
+                ready.node_signature == inputs.node_signature
+                    && ready.debug_signature == inputs.debug_signature
+            })
+            .unwrap_or(false);
+        if ready_matches {
+            return;
+        }
+
+        self.ready_analysis = None;
+
+        let pending_matches = self
+            .pending_analysis
+            .as_ref()
+            .map(|pending| {
+                pending.node_signature == inputs.node_signature
+                    && pending.debug_signature == inputs.debug_signature
+            })
+            .unwrap_or(false);
+        if pending_matches {
+            self.queued_analysis = None;
+            return;
+        }
+
+        if self.pending_analysis.is_some() {
+            // Supersede stale work immediately so the latest caller request does not wait
+            // behind an already-running analysis for older inputs.
+            self.pending_analysis = Some(spawn_analysis(inputs));
+            self.queued_analysis = None;
+            self.last_error = None;
+            self.last_debug_snapshot = None;
+            return;
+        }
+
+        self.pending_analysis = Some(spawn_analysis(inputs));
+        self.queued_analysis = None;
+        self.last_error = None;
+        self.last_debug_snapshot = None;
+    }
+
+    fn poll_analysis(&mut self) {
+        let result = match self.pending_analysis.as_ref() {
+            Some(pending) => match pending.receiver.try_recv() {
+                Ok(result) => Some(result),
+                Err(TryRecvError::Empty) => None,
+                Err(TryRecvError::Disconnected) => Some(AnalysisResult::Error(
+                    "analysis worker disconnected".to_string(),
+                )),
+            },
+            None => None,
+        };
+
+        let Some(result) = result else {
+            return;
+        };
+
+        self.pending_analysis = None;
+        match result {
+            AnalysisResult::Ready(ready) => {
+                self.last_error = None;
+                self.ready_analysis = Some(ready);
+            }
+            AnalysisResult::Error(message) => {
+                self.last_error = Some(message);
             }
         }
 
-        let debug_signature = self.debug_signature();
-        let debug = if self
-            .cached_debug_signature
-            .as_deref()
-            .map(|signature| signature != debug_signature)
-            .unwrap_or(true)
-        {
-            let node = self.cached_node.as_ref()?;
-            match node.computed_debug(self.resolution, self.mode_count, &self.medium) {
-                Some(debug) => {
-                    self.cached_debug_signature = Some(debug_signature);
-                    self.cached_debug = Some(debug.clone());
-                    debug
-                }
-                None => {
-                    self.cached_debug_signature = None;
-                    self.cached_debug = None;
-                    self.last_error = Some("computed debug snapshot unavailable".to_string());
-                    return None;
-                }
-            }
-        } else {
-            self.cached_debug.clone()?
-        };
+        if let Some(next_inputs) = self.queued_analysis.take() {
+            self.pending_analysis = Some(spawn_analysis(next_inputs));
+            self.last_debug_snapshot = None;
+        }
+    }
 
-        self.last_error = None;
-        let node = self.cached_node.as_ref()?.clone();
-        Some((node, debug))
+    fn analysis_is_pending(&self) -> bool {
+        self.pending_analysis.is_some()
+    }
+
+    fn analysis_has_queued_work(&self) -> bool {
+        self.queued_analysis.is_some()
     }
 
     fn print_debug_snapshot_once_for_change(&mut self, debug: &NodeComputedDebug) {
         let (structure, acoustics) = debug;
+        let mode_view = build_path_mode_view(structure);
         let acoustic_preview = debug
             .1
             .frequencies_hz
@@ -268,26 +366,73 @@ impl NodeInspectorApp {
             .enumerate()
             .take(4)
             .map(|(i, freq)| {
-                let mode_structure = &structure.mode_structures[i];
+                let strike_base = mode_view
+                    .strike
+                    .get(i)
+                    .and_then(|m| *m)
+                    .map(|m| m.strike_base)
+                    .unwrap_or(StrikeStructuralBase {
+                        coupling: 0.0,
+                        angle_sensitivity: 0.0,
+                    });
+                let jet = mode_view
+                    .jet
+                    .get(i)
+                    .and_then(|m| *m)
+                    .copied()
+                    .unwrap_or(JetModeStructure {
+                        mode_index: i,
+                        rim_response: 0.0,
+                        jet_base: JetStructuralBase {
+                            coupling: 0.0,
+                            vortex_dynamics: JetVortexDynamics {
+                                strouhal_target: 0.0,
+                                convective_delay_s: 0.0,
+                                threshold_drive: 0.0,
+                                small_signal_gain: 0.0,
+                            },
+                        },
+                    });
+                let slide_base = mode_view
+                    .slide
+                    .get(i)
+                    .and_then(|m| *m)
+                    .map(|m| m.slide_base)
+                    .unwrap_or(SlideStructuralBase {
+                        coupling: 0.0,
+                        roughness_sensitivity: 0.0,
+                        contact_state: SlideContactState {
+                            normal_load_proxy: 0.0,
+                            slip_drive: 0.0,
+                            stick_slip_propensity: 0.0,
+                            contact_intermittency: 0.0,
+                        },
+                    });
                 let mode_acoustics = &acoustics.mode_acoustics[i];
                 format!(
-                    "#{:02} {:.1}Hz strike[c={:.3},air={:.4},bw={:.1}] jet[c={:.3},air={:.4},lock={:.1}±{:.1},thr={:.3},gain={:.3},tau={:.4},St={:.3}] slide[c={:.3},air={:.4},bw={:.1},squeal={:.3}]",
+                    "#{:02} {:.1}Hz strike[c={:.3},air={:.4},bw={:.1}] jet[c={:.3},rim={:.3},air={:.4},lock={:.1}±{:.1},thr={:.3},gain={:.3},tau={:.4},St={:.3}] slide[c={:.3},n={:.3},slip={:.3},stick={:.3},int={:.3},air={:.4},bw={:.1},gain={:.3},squeal={:.3}]",
                     i + 1,
                     freq,
-                    mode_structure.strike_base.coupling,
+                    strike_base.coupling,
                     mode_acoustics.strike.damping_in_air,
                     mode_acoustics.strike.impact_bandwidth_hz,
-                    mode_structure.jet_base.coupling,
+                    jet.jet_base.coupling,
+                    jet.rim_response,
                     mode_acoustics.jet.damping_in_air,
                     mode_acoustics.jet.acoustic_lock_in.lock_center_hz,
                     mode_acoustics.jet.acoustic_lock_in.lock_bandwidth_hz,
-                    mode_structure.jet_base.vortex_dynamics.threshold_drive,
-                    mode_structure.jet_base.vortex_dynamics.small_signal_gain,
-                    mode_structure.jet_base.vortex_dynamics.convective_delay_s,
-                    mode_structure.jet_base.vortex_dynamics.strouhal_target,
-                    mode_structure.slide_base.coupling,
+                    jet.jet_base.vortex_dynamics.threshold_drive,
+                    jet.jet_base.vortex_dynamics.small_signal_gain,
+                    jet.jet_base.vortex_dynamics.convective_delay_s,
+                    jet.jet_base.vortex_dynamics.strouhal_target,
+                    slide_base.coupling,
+                    slide_base.contact_state.normal_load_proxy,
+                    slide_base.contact_state.slip_drive,
+                    slide_base.contact_state.stick_slip_propensity,
+                    slide_base.contact_state.contact_intermittency,
                     mode_acoustics.slide.damping_in_air,
                     mode_acoustics.slide.slide_bandwidth_hz,
+                    mode_acoustics.slide.friction_interaction_gain,
                     mode_acoustics.slide.squeal_tendency,
                 )
             })
@@ -313,7 +458,9 @@ impl NodeInspectorApp {
         ui.heading("Node Helpers");
         ui.label("Generic profile builder with example presets");
 
-        ui.add(egui::Slider::new(&mut self.resolution, 12..=96).text("analysis resolution"));
+        ui.add(
+            egui::Slider::new(&mut self.analysis_resolution, 2..=96).text("analysis resolution"),
+        );
         ui.add(egui::Slider::new(&mut self.mode_count, 1..=24).text("mode count"));
 
         egui::CollapsingHeader::new("Shape Profile")
@@ -423,6 +570,20 @@ impl NodeInspectorApp {
                         0.001..=0.02,
                     )
                     .text("outer lip"),
+                );
+            });
+
+        egui::CollapsingHeader::new("Random Seed")
+            .id_salt("node_seed")
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.checkbox(&mut self.use_seed, "use deterministic seed");
+                ui.add_enabled(
+                    self.use_seed,
+                    egui::DragValue::new(&mut self.seed)
+                        .speed(1.0)
+                        .range(0_u64..=u64::MAX)
+                        .prefix("seed "),
                 );
             });
 
@@ -550,28 +711,50 @@ impl NodeInspectorApp {
         }
     }
 
-    fn top_charts(&self, ui: &mut egui::Ui, node: &Node) {
+    fn top_charts(&self, ui: &mut egui::Ui, display: &DisplayCache) {
         ui.columns(3, |cols| {
-            let bowl_pts = node.bowl.meshable.inner().base.sampled_profile_points(80);
-            draw_xy_line_chart(&mut cols[0], "Bowl profile", &bowl_pts, "y", "r");
-
-            let clapper_pts = node.clapper.meshable.inner().sampled_profile_points(80);
-            draw_xy_line_chart(&mut cols[1], "Clapper profile", &clapper_pts, "y", "r");
-
-            let radial = node.bowl.meshable.inner().base.profile_sample_positions(40);
-            let thickness_pts = radial
-                .iter()
-                .enumerate()
-                .map(|(i, u)| {
-                    let (face, back) = node.bowl.meshable.inner().thickness_map.sample(i);
-                    (*u, face + back)
-                })
-                .collect::<Vec<_>>();
-            draw_xy_line_chart(&mut cols[2], "Thickness profile", &thickness_pts, "u", "m");
+            draw_xy_line_chart(
+                &mut cols[0],
+                "Bowl profile",
+                &display.bowl_profile,
+                "y",
+                "r",
+            );
+            draw_xy_line_chart(
+                &mut cols[1],
+                "Clapper profile",
+                &display.clapper_profile,
+                "y",
+                "r",
+            );
+            draw_xy_multi_line_chart_sized(
+                &mut cols[2],
+                "Thickness profile",
+                155.0,
+                &[
+                    (
+                        "face",
+                        display.thickness_face_profile.as_slice(),
+                        Color32::from_rgb(116, 192, 252),
+                    ),
+                    (
+                        "back",
+                        display.thickness_back_profile.as_slice(),
+                        Color32::from_rgb(250, 176, 5),
+                    ),
+                ],
+                "idx",
+                "m",
+            );
         });
     }
 
-    fn draw_3d_preview(&mut self, ui: &mut egui::Ui, node: &Node, debug: &NodeComputedDebug) {
+    fn draw_3d_preview(
+        &mut self,
+        ui: &mut egui::Ui,
+        display: &DisplayCache,
+        debug: &NodeComputedDebug,
+    ) {
         let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::drag());
         let rect = response.rect;
         if response.dragged() {
@@ -581,13 +764,10 @@ impl NodeInspectorApp {
         }
         painter.rect_filled(rect, 6.0, Color32::from_rgb(17, 22, 28));
 
-        let bowl_mesh = node.bowl.surface_mesh(28);
-        let clapper_mesh = node.clapper.surface_mesh(24);
-
         let mut tris = Vec::new();
         tris.extend(collect_projected_tris(
-            &bowl_mesh.0,
-            &bowl_mesh.1,
+            &display.bowl_preview.points,
+            &display.bowl_preview.indices,
             self.camera_yaw,
             self.camera_pitch,
             self.zoom,
@@ -597,8 +777,8 @@ impl NodeInspectorApp {
             Color32::from_rgb(91, 151, 219),
         ));
         tris.extend(collect_projected_tris(
-            &clapper_mesh.0,
-            &clapper_mesh.1,
+            &display.clapper_preview.points,
+            &display.clapper_preview.indices,
             self.camera_yaw,
             self.camera_pitch,
             self.zoom,
@@ -627,7 +807,7 @@ impl NodeInspectorApp {
         }
 
         let mode_points = collect_mode_overlay_points(
-            node,
+            &display.shell_overlay_points,
             debug,
             self.camera_yaw,
             self.camera_pitch,
@@ -649,7 +829,7 @@ impl NodeInspectorApp {
             .show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(format!(
-                        "resolution: req {} / analysis {} / modes {}",
+                        "resolution: requested {} / analysis {} / modes {}",
                         structure.requested_resolution,
                         structure.analysis_resolution,
                         structure.frequencies_hz.len()
@@ -740,17 +920,62 @@ impl NodeInspectorApp {
                 ui.separator();
                 ui.horizontal_wrapped(|ui| {
                     ui.label("Mode colors:");
-                    for i in 0..structure.mode_structures.len() {
+                    for i in 0..structure.frequencies_hz.len() {
                         let color = mode_color(i);
                         ui.colored_label(color, format!("M{:02}", i + 1));
                     }
                 });
                 ui.separator();
                 ui.label("Modes");
-                for i in 0..structure.mode_structures.len() {
-                    let mode_structure = &structure.mode_structures[i];
+                let mode_view = build_path_mode_view(structure);
+                for i in 0..structure.frequencies_hz.len() {
+                    let strike_base = mode_view
+                        .strike
+                        .get(i)
+                        .and_then(|m| *m)
+                        .map(|m| m.strike_base)
+                        .unwrap_or(StrikeStructuralBase {
+                            coupling: 0.0,
+                            angle_sensitivity: 0.0,
+                        });
+                    let jet = mode_view
+                        .jet
+                        .get(i)
+                        .and_then(|m| *m)
+                        .copied()
+                        .unwrap_or(JetModeStructure {
+                            mode_index: i,
+                            rim_response: 0.0,
+                            jet_base: JetStructuralBase {
+                                coupling: 0.0,
+                                vortex_dynamics: JetVortexDynamics {
+                                    strouhal_target: 0.0,
+                                    convective_delay_s: 0.0,
+                                    threshold_drive: 0.0,
+                                    small_signal_gain: 0.0,
+                                },
+                            },
+                        });
+                    let slide_base = mode_view
+                        .slide
+                        .get(i)
+                        .and_then(|m| *m)
+                        .map(|m| m.slide_base)
+                        .unwrap_or(SlideStructuralBase {
+                            coupling: 0.0,
+                            roughness_sensitivity: 0.0,
+                            contact_state: SlideContactState {
+                                normal_load_proxy: 0.0,
+                                slip_drive: 0.0,
+                                stick_slip_propensity: 0.0,
+                                contact_intermittency: 0.0,
+                            },
+                        });
                     let mode_acoustics = &acoustics.mode_acoustics[i];
-                    let freq = mode_structure.frequency_hz;
+                    let structural_frequency_hz = structure.frequencies_hz[i];
+                    let strike_frequency_hz = mode_acoustics.strike.frequency_hz;
+                    let jet_frequency_hz = mode_acoustics.jet.frequency_hz;
+                    let slide_frequency_hz = mode_acoustics.slide.frequency_hz;
                     let strike_damp_air = acoustics
                         .strike_damping_in_air
                         .get(i)
@@ -768,33 +993,42 @@ impl NodeInspectorApp {
                         acoustics.slide_damping_in_air.get(i).copied().unwrap_or(0.0);
                     let slide_damp_medium =
                         acoustics.slide_damping_in_medium.get(i).copied().unwrap_or(0.0);
-                    ui.monospace(format!(r#"#{:02}  {:8.2} Hz  
+                    ui.monospace(format!(r#"#{:02}  struct={:8.2} Hz  strike={:8.2} Hz  jet={:8.2} Hz  slide={:8.2} Hz  
 strike[c={:.3}, damp(a/m)={:.5}/{:.5}, angle={:.3}, bw={:.2}]  
-jet[c={:.3}, damp(a/m)={:.5}/{:.5}, lock={:.2}+/-{:.2}, thr={:.3}, gain={:.3}, tau={:.4}s, St={:.3}, phase={:.3}, rad={:.3e}]  
-slide[c={:.3}, damp(a/m)={:.5}/{:.5}, rough={:.3}, bw={:.2}, squeal={:.3}]"#,
+jet[c={:.3}, rim={:.3}, damp(a/m)={:.5}/{:.5}, lock={:.2}+/-{:.2}, thr={:.3}, gain={:.3}, tau={:.4}s, St={:.3}, phase={:.3}, rad={:.3e}]  
+slide[c={:.3}, damp(a/m)={:.5}/{:.5}, rough={:.3}, n={:.3}, slip={:.3}, stick={:.3}, int={:.3}, bw={:.2}, gain={:.3}, squeal={:.3}]"#,
                         i + 1,
-                        freq,
-                        mode_structure.strike_base.coupling,
+                        structural_frequency_hz,
+                        strike_frequency_hz,
+                        jet_frequency_hz,
+                        slide_frequency_hz,
+                        strike_base.coupling,
                         strike_damp_air,
                         strike_damp_medium,
-                        mode_structure.strike_base.angle_sensitivity,
+                        strike_base.angle_sensitivity,
                         mode_acoustics.strike.impact_bandwidth_hz,
-                        mode_structure.jet_base.coupling,
+                        jet.jet_base.coupling,
+                        jet.rim_response,
                         jet_damp_air,
                         jet_damp_medium,
                         mode_acoustics.jet.acoustic_lock_in.lock_center_hz,
                         mode_acoustics.jet.acoustic_lock_in.lock_bandwidth_hz,
-                        mode_structure.jet_base.vortex_dynamics.threshold_drive,
-                        mode_structure.jet_base.vortex_dynamics.small_signal_gain,
-                        mode_structure.jet_base.vortex_dynamics.convective_delay_s,
-                        mode_structure.jet_base.vortex_dynamics.strouhal_target,
+                        jet.jet_base.vortex_dynamics.threshold_drive,
+                        jet.jet_base.vortex_dynamics.small_signal_gain,
+                        jet.jet_base.vortex_dynamics.convective_delay_s,
+                        jet.jet_base.vortex_dynamics.strouhal_target,
                         mode_acoustics.jet.acoustic_lock_in.phase_sensitivity,
                         mode_acoustics.jet.radiation_efficiency,
-                        mode_structure.slide_base.coupling,
+                        slide_base.coupling,
                         slide_damp_air,
                         slide_damp_medium,
-                        mode_structure.slide_base.roughness_sensitivity,
+                        slide_base.roughness_sensitivity,
+                        slide_base.contact_state.normal_load_proxy,
+                        slide_base.contact_state.slip_drive,
+                        slide_base.contact_state.stick_slip_propensity,
+                        slide_base.contact_state.contact_intermittency,
                         mode_acoustics.slide.slide_bandwidth_hz,
+                        mode_acoustics.slide.friction_interaction_gain,
                         mode_acoustics.slide.squeal_tendency,
                     ));
                 }
@@ -804,7 +1038,8 @@ slide[c={:.3}, damp(a/m)={:.5}/{:.5}, rough={:.3}, bw={:.2}, squeal={:.3}]"#,
 
 impl eframe::App for NodeInspectorApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let state = self.build_node_and_debug();
+        self.ensure_analysis_requested();
+        self.poll_analysis();
 
         egui::Panel::left("node_controls")
             .min_size(300.0)
@@ -815,12 +1050,23 @@ impl eframe::App for NodeInspectorApp {
                 });
             });
 
+        self.ensure_analysis_requested();
+        self.poll_analysis();
+
         egui::CentralPanel::default().show_inside(ui, |ui| {
-            if let Some((node, debug)) = state {
-                self.print_debug_snapshot_once_for_change(&debug);
+            if let Some(ready) = self.ready_analysis.take() {
+                self.print_debug_snapshot_once_for_change(&ready.debug);
                 egui::ScrollArea::vertical().show(ui, |ui| {
+                    if self.analysis_is_pending() {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label("Refreshing analysis in the background.");
+                        });
+                        ui.add_space(6.0);
+                    }
+
                     ui.group(|ui| {
-                        self.top_charts(ui, &node);
+                        self.top_charts(ui, &ready.display);
                     });
 
                     ui.add_space(6.0);
@@ -829,29 +1075,39 @@ impl eframe::App for NodeInspectorApp {
                             egui::vec2(ui.available_width(), 520.0),
                             egui::Layout::top_down(egui::Align::LEFT),
                             |ui| {
-                                self.draw_3d_preview(ui, &node, &debug);
+                                self.draw_3d_preview(ui, &ready.display, &ready.debug);
                             },
                         );
                     });
 
                     ui.add_space(6.0);
                     ui.group(|ui| {
-                        self.bottom_debug(ui, &debug);
+                        self.bottom_debug(ui, &ready.debug);
                     });
                 });
+                self.ready_analysis = Some(ready);
             } else {
                 ui.centered_and_justified(|ui| {
-                    ui.colored_label(
-                        Color32::from_rgb(255, 120, 120),
-                        self.last_error
-                            .clone()
-                            .unwrap_or_else(|| "unable to build node".to_string()),
-                    );
+                    if self.analysis_is_pending() {
+                        ui.vertical_centered(|ui| {
+                            ui.spinner();
+                            ui.label("Computing node analysis...");
+                        });
+                    } else {
+                        ui.colored_label(
+                            Color32::from_rgb(255, 120, 120),
+                            self.last_error
+                                .clone()
+                                .unwrap_or_else(|| "unable to build node".to_string()),
+                        );
+                    }
                 });
             }
         });
 
-        ui.ctx().request_repaint();
+        if self.analysis_is_pending() || self.analysis_has_queued_work() {
+            ui.ctx().request_repaint_after(Duration::from_millis(50));
+        }
     }
 }
 
@@ -869,6 +1125,38 @@ struct DrawPoint {
     pos: Pos2,
     radius_px: f32,
     color: Color32,
+}
+
+struct PathModeView<'a> {
+    strike: Vec<Option<&'a StrikeModeStructure>>,
+    jet: Vec<Option<&'a JetModeStructure>>,
+    slide: Vec<Option<&'a SlideModeStructure>>,
+}
+
+fn build_path_mode_view(structure: &NodeComputedStructure) -> PathModeView<'_> {
+    let mode_len = structure.frequencies_hz.len();
+    let mut view = PathModeView {
+        strike: vec![None; mode_len],
+        jet: vec![None; mode_len],
+        slide: vec![None; mode_len],
+    };
+
+    for path_mode in &structure.path_modes {
+        match path_mode {
+            PathMode::Strike(mode) if mode.mode_index < mode_len => {
+                view.strike[mode.mode_index] = Some(mode);
+            }
+            PathMode::Jet(mode) if mode.mode_index < mode_len => {
+                view.jet[mode.mode_index] = Some(mode);
+            }
+            PathMode::Slide(mode) if mode.mode_index < mode_len => {
+                view.slide[mode.mode_index] = Some(mode);
+            }
+            _ => {}
+        }
+    }
+
+    view
 }
 
 fn collect_projected_tris(
@@ -935,7 +1223,7 @@ fn collect_projected_tris(
 }
 
 fn collect_mode_overlay_points(
-    node: &Node,
+    points: &[Point3<f64>],
     debug: &NodeComputedDebug,
     yaw: f64,
     pitch: f64,
@@ -945,22 +1233,11 @@ fn collect_mode_overlay_points(
     rect: Rect,
 ) -> Vec<DrawPoint> {
     let (structure, _) = debug;
-    if structure.mode_structures.is_empty() {
+    let mode_view = build_path_mode_view(structure);
+    if mode_view.strike.iter().all(|m| m.is_none()) || points.is_empty() {
         return vec![];
     }
 
-    // Displacements are solved on the base shell mesh, so render overlays on the same mesh.
-    let shell_mesh = node
-        .bowl
-        .meshable
-        .inner()
-        .base
-        .surface_mesh_data(structure.analysis_resolution);
-    if shell_mesh.vertices.is_empty() {
-        return vec![];
-    }
-
-    let points = &shell_mesh.vertices;
     let mut transformed = Vec::with_capacity(points.len());
     for p in points {
         transformed.push(rotate_point(*p, yaw, pitch));
@@ -974,8 +1251,12 @@ fn collect_mode_overlay_points(
 
     let stride = (points.len() / 220).max(1);
     let mut overlays = Vec::new();
-    for (mode_index, mode) in structure.mode_structures.iter().enumerate() {
-        if mode.vertex_displacement.len() != points.len() {
+    for (mode_index, mode_opt) in mode_view.strike.iter().enumerate() {
+        let Some(mode) = mode_opt else {
+            continue;
+        };
+        let point_count = points.len().min(mode.vertex_displacement.len());
+        if point_count == 0 {
             continue;
         }
 
@@ -988,7 +1269,7 @@ fn collect_mode_overlay_points(
         let displacement_scale = (0.15 * structure.bowl_radius_m.max(1e-4)) / max_norm;
         let color = mode_color(mode_index);
 
-        for i in (0..points.len()).step_by(stride) {
+        for i in (0..point_count).step_by(stride) {
             let displaced = points[i] + mode.vertex_displacement[i] * displacement_scale;
             let rotated = rotate_point(displaced, yaw, pitch);
             overlays.push(DrawPoint {
@@ -1047,4 +1328,163 @@ fn scale_color(c: Color32, factor: f32) -> Color32 {
     let g = (c.g() as f32 * factor).clamp(0.0, 255.0) as u8;
     let b = (c.b() as f32 * factor).clamp(0.0, 255.0) as u8;
     Color32::from_rgb(r, g, b)
+}
+
+fn radial_profile_from_points(points: &[Point3<f64>], bins: usize) -> Vec<(f64, f64)> {
+    if points.is_empty() || bins < 2 {
+        return vec![];
+    }
+
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for point in points {
+        min_y = min_y.min(point.y);
+        max_y = max_y.max(point.y);
+    }
+    if !min_y.is_finite() || !max_y.is_finite() {
+        return vec![];
+    }
+    let span = (max_y - min_y).max(1.0e-12);
+
+    let mut max_radius_by_bin = vec![0.0f64; bins];
+    let mut has_point = vec![false; bins];
+    for point in points {
+        let t = ((point.y - min_y) / span).clamp(0.0, 1.0);
+        let index = ((t * (bins - 1) as f64).round() as usize).min(bins - 1);
+        let radius = (point.x * point.x + point.z * point.z).sqrt();
+        if radius.is_finite() {
+            max_radius_by_bin[index] = max_radius_by_bin[index].max(radius);
+            has_point[index] = true;
+        }
+    }
+
+    (0..bins)
+        .filter(|&i| has_point[i])
+        .map(|i| {
+            let y = min_y + (i as f64 / (bins - 1) as f64) * span;
+            (y, max_radius_by_bin[i])
+        })
+        .collect()
+}
+
+fn spawn_analysis(inputs: NodeAnalysisInputs) -> PendingAnalysis {
+    let node_signature = inputs.node_signature.clone();
+    let debug_signature = inputs.debug_signature.clone();
+    let (sender, receiver) = mpsc::channel();
+
+    thread::spawn(move || {
+        let result = run_analysis(inputs);
+        let _ = sender.send(result);
+    });
+
+    PendingAnalysis {
+        node_signature,
+        debug_signature,
+        receiver,
+    }
+}
+
+fn run_analysis(inputs: NodeAnalysisInputs) -> AnalysisResult {
+    let node = match inputs.builders.build_node(
+        inputs.bowl_material,
+        inputs.clapper_material,
+        inputs.clapper_to_bowl_friction,
+        inputs.seed,
+    ) {
+        Ok(node) => node,
+        Err(err) => return AnalysisResult::Error(err),
+    };
+
+    let Some(debug) = node.computed_debug(inputs.resolution, inputs.mode_count, &inputs.medium)
+    else {
+        return AnalysisResult::Error("computed debug snapshot unavailable".to_string());
+    };
+
+    AnalysisResult::Ready(ReadyAnalysis {
+        node_signature: inputs.node_signature,
+        debug_signature: inputs.debug_signature,
+        display: build_display_cache(
+            &node,
+            &debug,
+            inputs.builders.thickness.inner_base_thickness_m,
+            inputs.builders.thickness.inner_lip_thickness_m,
+            inputs.builders.thickness.outer_base_thickness_m,
+            inputs.builders.thickness.outer_lip_thickness_m,
+        ),
+        debug,
+    })
+}
+
+fn build_display_cache(
+    node: &Node,
+    debug: &NodeComputedDebug,
+    inner_base_thickness_m: f64,
+    inner_lip_thickness_m: f64,
+    outer_base_thickness_m: f64,
+    outer_lip_thickness_m: f64,
+) -> DisplayCache {
+    let bowl_mesh = node.bowl.surface_mesh(80);
+    let clapper_mesh = node.clapper.surface_mesh(80);
+    let bowl_preview = node.bowl.surface_mesh(28);
+    let clapper_preview = node.clapper.surface_mesh(24);
+    let shell_resolution = 40;
+    let shell_mesh = node.bowl.meshable.surface_mesh_data(shell_resolution);
+
+    let (min_y, max_y) = shell_mesh
+        .vertices
+        .iter()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(min_v, max_v), p| {
+            (min_v.min(p.y), max_v.max(p.y))
+        });
+    let y_span = (max_y - min_y).abs().max(1.0e-12);
+    let bins = 64usize;
+    let thickness_face_profile = (0..bins)
+        .map(|i| {
+            let u = if bins <= 1 {
+                0.0
+            } else {
+                i as f64 / (bins - 1) as f64
+            };
+            let y = min_y + y_span * u;
+            let face =
+                inner_base_thickness_m + (inner_lip_thickness_m - inner_base_thickness_m) * u;
+            (y, face)
+        })
+        .collect::<Vec<_>>();
+    let thickness_back_profile = (0..bins)
+        .map(|i| {
+            let u = if bins <= 1 {
+                0.0
+            } else {
+                i as f64 / (bins - 1) as f64
+            };
+            let y = min_y + y_span * u;
+            let back =
+                outer_base_thickness_m + (outer_lip_thickness_m - outer_base_thickness_m) * u;
+            (y, back)
+        })
+        .collect::<Vec<_>>();
+
+    DisplayCache {
+        bowl_profile: radial_profile_from_points(&bowl_mesh.0, 80),
+        clapper_profile: radial_profile_from_points(&clapper_mesh.0, 80),
+        thickness_face_profile,
+        thickness_back_profile,
+        bowl_preview: MeshPreview {
+            points: bowl_preview.0,
+            indices: bowl_preview.1,
+        },
+        clapper_preview: MeshPreview {
+            points: clapper_preview.0,
+            indices: clapper_preview.1,
+        },
+        // Match modal displacement vertex count by using the same shell path as the solver.
+        shell_overlay_points: node
+            .bowl
+            .meshable
+            .inner()
+            .base
+            .base
+            .sample_points(debug.0.analysis_resolution),
+    }
 }

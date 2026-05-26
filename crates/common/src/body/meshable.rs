@@ -58,7 +58,10 @@ pub trait Meshable {
     type Bounds;
     type Vector;
 
-    /// Sample surface vertices given a resolution hint.
+    /// Optimal resolution hint for sampling this geometry, if any. This can be used by downstream code to avoid unnecessary sampling at very high resolutions.
+    fn opt_resolution(&self) -> usize;
+
+    /// Sample surface vertices at the resolution requested by the caller.
     fn sample_points(&self, resolution: usize) -> Vec<Self::Vertex>;
 
     /// Iterate sampled vertices without requiring downstream call sites to spell out
@@ -75,8 +78,10 @@ pub trait Meshable {
         self.mesh_indices(resolution).into_iter()
     }
 
-    /// Retrieve vertices and triangle topology together. This allows consumers to sample once
-    /// and iterate over both collections repeatedly without re-querying the mesh provider.
+    /// Retrieve vertices and triangle topology together using the caller-provided resolution.
+    ///
+    /// Implementations should honor the resolution argument directly rather than silently
+    /// substituting a different value.
     fn surface_mesh_data(&self, resolution: usize) -> SurfaceMesh<Self::Vertex, Self::Index> {
         SurfaceMesh::new(
             self.sample_points(resolution),
@@ -85,20 +90,92 @@ pub trait Meshable {
     }
 
     /// Compute the axis-aligned bounding box of the surface.
-    fn bounding_box(&self, resolution: usize) -> Self::Bounds;
+    fn bounding_box(&self, resolution: usize) -> Self::Bounds
+    where
+        Self: Meshable<
+            Vertex = EmbodiedPoint3,
+            Index = EmbodiedTriangle,
+            Bounds = EmbodiedBounds,
+            Vector = EmbodiedVector3,
+        >,
+    {
+        let points = self.sample_points(resolution);
+        if points.is_empty() {
+            let zero = EmbodiedPoint3::origin();
+            return (zero, zero);
+        }
+
+        let mut min = points[0];
+        let mut max = points[0];
+        for point in &points {
+            min.x = min.x.min(point.x);
+            min.y = min.y.min(point.y);
+            min.z = min.z.min(point.z);
+            max.x = max.x.max(point.x);
+            max.y = max.y.max(point.y);
+            max.z = max.z.max(point.z);
+        }
+
+        (min, max)
+    }
 
     /// Compute material volume in cubic meters (m^3) using the given resolution.
-    fn material_volume_m3(&self, resolution: usize) -> f64;
+    fn material_volume_m3(&self, resolution: usize) -> f64
+    where
+        Self: Meshable<
+            Vertex = EmbodiedPoint3,
+            Index = EmbodiedTriangle,
+            Bounds = EmbodiedBounds,
+            Vector = EmbodiedVector3,
+        >,
+    {
+        let points = self.sample_points(resolution);
+        let indices = self.mesh_indices(resolution);
+        if points.is_empty() || indices.is_empty() {
+            return 0.0;
+        }
+
+        mesh_signed_volume(&points, &indices).abs()
+    }
 
     /// Compute enclosed cavity volume in cubic meters (m^3), if well-defined.
-    fn cavity_volume_m3(&self, resolution: usize) -> Option<f64>;
+    fn cavity_volume_m3(&self, resolution: usize) -> Option<f64>
+    where
+        Self: Meshable<
+            Vertex = EmbodiedPoint3,
+            Index = EmbodiedTriangle,
+            Bounds = EmbodiedBounds,
+            Vector = EmbodiedVector3,
+        >,
+    {
+        let points = self.sample_points(resolution);
+        let indices = self.mesh_indices(resolution);
+        cavity_volume_from_shell(&points, &indices)
+    }
 
     /// Compute a surface normal at a sampled vertex index.
     fn surface_normal_at_vertex(
         &self,
         resolution: usize,
         vertex_index: usize,
-    ) -> Option<Self::Vector>;
+    ) -> Option<Self::Vector>
+    where
+        Self: Meshable<
+            Vertex = EmbodiedPoint3,
+            Index = EmbodiedTriangle,
+            Bounds = EmbodiedBounds,
+            Vector = EmbodiedVector3,
+        >,
+    {
+        let points = self.sample_points(resolution);
+        let indices = self.mesh_indices(resolution);
+        if points.len() < 3 || indices.is_empty() || vertex_index >= points.len() {
+            return None;
+        }
+
+        let normals = mesh_vertex_normals(&points, &indices, 1e-12);
+        normals.get(vertex_index).copied()
+    }
 
     /// Compute material thickness at a sampled vertex index in the given direction.
     fn material_thickness_at_vertex(
@@ -106,10 +183,23 @@ pub trait Meshable {
         resolution: usize,
         vertex_index: usize,
         direction: Self::Vector,
-    ) -> Option<f64>;
+    ) -> Option<f64>
+    where
+        Self: Meshable<
+            Vertex = EmbodiedPoint3,
+            Index = EmbodiedTriangle,
+            Bounds = EmbodiedBounds,
+            Vector = EmbodiedVector3,
+        >,
+    {
+        let points = self.sample_points(resolution);
+        let indices = self.mesh_indices(resolution);
+        if points.len() < 3 || indices.is_empty() {
+            return None;
+        }
 
-    /// Optimal resolution hint for sampling this geometry, if any. This can be used by downstream code to avoid unnecessary sampling at very high resolutions.
-    fn opt_resolution(&self) -> usize;
+        directional_thickness_from_mesh(&points, &indices, vertex_index, direction)
+    }
 }
 
 /// Default mesh output aliases used by RevolutionBody.
@@ -189,6 +279,96 @@ pub fn mesh_vertex_normals(
     }
 
     normals
+}
+
+fn incident_triangles(
+    indices: &[EmbodiedTriangle],
+    vertex_index: usize,
+) -> Vec<(usize, [usize; 3])> {
+    indices
+        .iter()
+        .enumerate()
+        .filter_map(|(tri_idx, [a, b, c])| {
+            let tri = [*a as usize, *b as usize, *c as usize];
+            if tri.contains(&vertex_index) {
+                Some((tri_idx, tri))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn ray_triangle_hit_distance(
+    origin: EmbodiedPoint3,
+    direction: EmbodiedVector3,
+    p0: EmbodiedPoint3,
+    p1: EmbodiedPoint3,
+    p2: EmbodiedPoint3,
+) -> Option<f64> {
+    const EPSILON: f64 = 1e-9;
+
+    let e1 = p1 - p0;
+    let e2 = p2 - p0;
+    let h = direction.cross(&e2);
+    let a = e1.dot(&h);
+    if a.abs() < EPSILON {
+        return None;
+    }
+
+    let f = 1.0 / a;
+    let s = origin - p0;
+    let u = f * s.dot(&h);
+    if !(0.0..=1.0).contains(&u) {
+        return None;
+    }
+
+    let q = s.cross(&e1);
+    let v = f * direction.dot(&q);
+    if v < 0.0 || u + v > 1.0 {
+        return None;
+    }
+
+    let t = f * e2.dot(&q);
+    if t > EPSILON {
+        Some(t)
+    } else {
+        None
+    }
+}
+
+pub(crate) fn directional_thickness_from_mesh(
+    points: &[EmbodiedPoint3],
+    indices: &[EmbodiedTriangle],
+    vertex_index: usize,
+    direction: EmbodiedVector3,
+) -> Option<f64> {
+    const EPSILON: f64 = 1e-9;
+
+    if vertex_index >= points.len() {
+        return None;
+    }
+
+    let dir = direction.try_normalize(EPSILON)?;
+    let origin = points[vertex_index];
+
+    let incident: std::collections::HashSet<usize> = incident_triangles(indices, vertex_index)
+        .into_iter()
+        .map(|(tri_idx, _)| tri_idx)
+        .collect();
+
+    indices
+        .iter()
+        .enumerate()
+        .filter(|(tri_idx, _)| !incident.contains(tri_idx))
+        .filter_map(|(_tri_idx, [a, b, c])| {
+            let (a, b, c) = (*a as usize, *b as usize, *c as usize);
+            if a >= points.len() || b >= points.len() || c >= points.len() {
+                return None;
+            }
+            ray_triangle_hit_distance(origin, dir, points[a], points[b], points[c])
+        })
+        .min_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal))
 }
 
 pub(crate) fn mesh_signed_volume(points: &[EmbodiedPoint3], indices: &[EmbodiedTriangle]) -> f64 {
@@ -393,6 +573,85 @@ pub(crate) fn cavity_volume_from_shell(
 mod tests {
     use super::*;
 
+    #[derive(Clone, Debug)]
+    struct DefaultTetraMesh;
+
+    impl Meshable for DefaultTetraMesh {
+        type Vertex = EmbodiedPoint3;
+        type Index = EmbodiedTriangle;
+        type Bounds = EmbodiedBounds;
+        type Vector = EmbodiedVector3;
+
+        fn sample_points(&self, _resolution: usize) -> Vec<Self::Vertex> {
+            vec![
+                EmbodiedPoint3::new(0.0, 0.0, 0.0),
+                EmbodiedPoint3::new(1.0, 0.0, 0.0),
+                EmbodiedPoint3::new(0.0, 1.0, 0.0),
+                EmbodiedPoint3::new(0.0, 0.0, 1.0),
+            ]
+        }
+
+        fn mesh_indices(&self, _resolution: usize) -> Vec<Self::Index> {
+            vec![[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]]
+        }
+
+        fn opt_resolution(&self) -> usize {
+            4
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    struct ResolutionFloorMesh;
+
+    impl Meshable for ResolutionFloorMesh {
+        type Vertex = EmbodiedPoint3;
+        type Index = EmbodiedTriangle;
+        type Bounds = EmbodiedBounds;
+        type Vector = EmbodiedVector3;
+
+        fn sample_points(&self, resolution: usize) -> Vec<Self::Vertex> {
+            vec![
+                EmbodiedPoint3::new(resolution as f64, 0.0, 0.0),
+                EmbodiedPoint3::new(resolution as f64 + 1.0, 0.0, 0.0),
+            ]
+        }
+
+        fn mesh_indices(&self, _resolution: usize) -> Vec<Self::Index> {
+            vec![]
+        }
+
+        fn opt_resolution(&self) -> usize {
+            9
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    struct PlaneMesh;
+
+    impl Meshable for PlaneMesh {
+        type Vertex = EmbodiedPoint3;
+        type Index = EmbodiedTriangle;
+        type Bounds = EmbodiedBounds;
+        type Vector = EmbodiedVector3;
+
+        fn sample_points(&self, _resolution: usize) -> Vec<Self::Vertex> {
+            vec![
+                EmbodiedPoint3::new(0.0, 0.0, 0.0),
+                EmbodiedPoint3::new(1.0, 0.0, 0.0),
+                EmbodiedPoint3::new(1.0, 1.0, 0.0),
+                EmbodiedPoint3::new(0.0, 1.0, 0.0),
+            ]
+        }
+
+        fn mesh_indices(&self, _resolution: usize) -> Vec<Self::Index> {
+            vec![[0, 1, 2], [0, 2, 3]]
+        }
+
+        fn opt_resolution(&self) -> usize {
+            3
+        }
+    }
+
     #[test]
     fn mesh_surface_area_unit_square_two_triangles() {
         let points = vec![
@@ -449,5 +708,36 @@ mod tests {
         let indices = vec![[5, 3, 4]];
         let edges = oriented_boundary_edges(&indices);
         assert_eq!(edges, vec![(3, 4), (4, 5), (5, 3)]);
+    }
+
+    #[test]
+    fn meshable_defaults_compute_bounds_volume_and_cavity() {
+        let mesh = DefaultTetraMesh;
+
+        let (min, max) = mesh.bounding_box(1);
+        assert_eq!(min, EmbodiedPoint3::new(0.0, 0.0, 0.0));
+        assert_eq!(max, EmbodiedPoint3::new(1.0, 1.0, 1.0));
+
+        let volume = mesh.material_volume_m3(1);
+        assert!((volume - (1.0 / 6.0)).abs() < 1e-12);
+
+        let cavity = mesh.cavity_volume_m3(1).expect("cavity volume");
+        assert!((cavity - (1.0 / 6.0)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn meshable_default_normal_and_thickness_are_computed() {
+        let plane = PlaneMesh;
+        let normal = plane
+            .surface_normal_at_vertex(1, 0)
+            .expect("vertex normal for plane");
+        assert!((normal.norm() - 1.0).abs() < 1e-12);
+        assert!(normal.z > 0.999999999);
+
+        let tetra = DefaultTetraMesh;
+        let thickness = tetra
+            .material_thickness_at_vertex(1, 0, EmbodiedVector3::new(1.0, 1.0, 1.0))
+            .expect("thickness from vertex through opposite face");
+        assert!(thickness > 0.5);
     }
 }

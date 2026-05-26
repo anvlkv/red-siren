@@ -1,13 +1,19 @@
 use serde::{Deserialize, Serialize};
 
+use fastrand::Rng;
+
 use crate::body::materials::Material;
 use crate::{
-    thickness_map_from_axial_samples, Body, MemoMesh, RevolutionAxis, RevolutionMesh, Segment,
-    ThickMesh,
+    Body, ImperfectMesh, MemoMesh, Meshable, RevolutionAxis, RevolutionMesh, Segment, ThickMesh,
+    ThicknessMap, ThicknessMapPoint,
 };
 
 use super::shape_profile::ShapeProfileBuilder;
 use super::{Node, MODAL_EPSILON};
+
+const BOWL_BASE_SHELL_DEVIATION_SCALE_M: f64 = 0.0015;
+const BOWL_THICK_SHELL_DEVIATION_SCALE_M: f64 = 0.0025;
+const CLAPPER_DEVIATION_SCALE_M: f64 = 0.0025;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ClapperShapeBuilder {
@@ -104,38 +110,98 @@ impl NodeModelBuilders {
         bowl_material: Material,
         clapper_material: Material,
         clapper_to_bowl_friction: f64,
+        seed: Option<u64>,
     ) -> Result<Node, String> {
-        let bowl_profile = self.active_profile()?;
-        let bowl_base =
-            RevolutionMesh::new(bowl_profile, RevolutionAxis::Y).map_err(|err| err.to_string())?;
-        let axial_samples = bowl_base.profile_sample_positions(self.thickness.sample_budget.max(8));
-        let thickness_map = thickness_map_from_axial_samples(
-            &axial_samples,
-            self.thickness.sample_budget.max(8),
-            |u| {
-                let u = u.clamp(0.0, 1.0);
-                let face = self.thickness.inner_base_thickness_m
-                    + (self.thickness.inner_lip_thickness_m
-                        - self.thickness.inner_base_thickness_m)
-                        * u;
-                let back = self.thickness.outer_base_thickness_m
-                    + (self.thickness.outer_lip_thickness_m
-                        - self.thickness.outer_base_thickness_m)
-                        * u;
-                (face.max(MODAL_EPSILON), back.max(MODAL_EPSILON))
-            },
-        )
-        .ok_or_else(|| "failed to build bowl thickness map".to_string())?;
-
-        let bowl = Body::new(
-            MemoMesh::new(ThickMesh::new(bowl_base, thickness_map)),
-            bowl_material,
+        log::trace!(
+            "node build start seed={seed:?} friction={clapper_to_bowl_friction:.4} thickness_samples={}",
+            self.thickness.sample_budget
         );
 
+        let mut seed_rng = seed.map(Rng::with_seed);
+        let mut next_rng = || {
+            seed_rng
+                .as_mut()
+                .map(|rng| Rng::with_seed(rng.u64(..)))
+                .unwrap_or_else(Rng::new)
+        };
+
+        let bowl_profile = self.active_profile()?;
+        log::trace!("node build progress: bowl profile generated");
+        let bowl_base_mesh =
+            RevolutionMesh::new(bowl_profile, RevolutionAxis::Y).map_err(|err| err.to_string())?;
+        log::trace!("node build progress: bowl revolution mesh generated");
+
+        // Build inner imperfect mesh first and derive thickness points from its actual
+        // sampled vertices (instead of relying on axial profile-position indexing).
+        let theta_samples = self.thickness.sample_budget.max(8);
+        let bowl_base = ImperfectMesh::new(
+            bowl_base_mesh,
+            BOWL_BASE_SHELL_DEVIATION_SCALE_M,
+            next_rng(),
+        );
+        let bowl_points = bowl_base.sample_points(theta_samples);
+        if bowl_points.is_empty() {
+            return Err("failed to sample bowl points for thickness map".to_string());
+        }
+
+        let (min_y, max_y) = bowl_points
+            .iter()
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(min_v, max_v), p| {
+                (min_v.min(p.y), max_v.max(p.y))
+            });
+        let y_span = (max_y - min_y).abs().max(MODAL_EPSILON);
+
+        let mut thickness_points = Vec::with_capacity(bowl_points.len());
+        for (i, p) in bowl_points.iter().enumerate() {
+            let u = ((p.y - min_y) / y_span).clamp(0.0, 1.0);
+            let face = self.thickness.inner_base_thickness_m
+                + (self.thickness.inner_lip_thickness_m - self.thickness.inner_base_thickness_m)
+                    * u;
+            let back = self.thickness.outer_base_thickness_m
+                + (self.thickness.outer_lip_thickness_m - self.thickness.outer_base_thickness_m)
+                    * u;
+            thickness_points.push(ThicknessMapPoint {
+                body_vertex_index: i,
+                face_thickness: face.max(MODAL_EPSILON),
+                backface_thickness: back.max(MODAL_EPSILON),
+            });
+        }
+
+        let thickness_map = ThicknessMap::new(thickness_points)
+            .ok_or_else(|| "failed to build bowl thickness map".to_string())?;
+        log::trace!(
+            "node build progress: thickness map generated points={} theta_samples={} y_range=[{:.6e},{:.6e}]",
+            bowl_points.len(),
+            theta_samples,
+            min_y,
+            max_y
+        );
+
+        let bowl_shell = ThickMesh::new(bowl_base, thickness_map);
+        let bowl = Body::new(
+            MemoMesh::new(ImperfectMesh::new(
+                bowl_shell,
+                BOWL_THICK_SHELL_DEVIATION_SCALE_M,
+                next_rng(),
+            )),
+            bowl_material,
+        );
+        log::trace!("node build progress: bowl meshables wrapped (imperfect+thick+memo)");
+
         let clapper_profile = self.clapper.build_profile()?;
+        log::trace!("node build progress: clapper profile generated");
         let clapper_mesh = RevolutionMesh::new(clapper_profile, RevolutionAxis::Y)
             .map_err(|err| err.to_string())?;
-        let clapper = Body::new(MemoMesh::new(clapper_mesh), clapper_material);
+        let clapper = Body::new(
+            MemoMesh::new(ImperfectMesh::new(
+                clapper_mesh,
+                CLAPPER_DEVIATION_SCALE_M,
+                next_rng(),
+            )),
+            clapper_material,
+        );
+        log::trace!("node build progress: clapper meshables wrapped (imperfect+memo)");
+        log::trace!("node build complete");
 
         Ok(Node::new(bowl, clapper, clapper_to_bowl_friction))
     }

@@ -3,7 +3,7 @@ use nalgebra::{Point3, Vector3};
 use crate::body::materials::Medium;
 
 use super::solver::BowlDescriptor;
-use super::{Node, MODAL_EPSILON};
+use super::{Node, SlideContactState, MODAL_EPSILON};
 
 pub(super) fn standard_air_medium() -> Medium {
     Medium::standard_air()
@@ -106,6 +106,46 @@ pub(super) fn average_coupling(
         0.0
     } else {
         (weighted_sum / weight_sum).clamp(0.0, 1.0)
+    }
+}
+
+pub(super) fn slide_contact_state_for_mode(
+    node: &Node,
+    mode_index: usize,
+    frequency_hz: f64,
+    descriptor: BowlDescriptor,
+    geometric_slide_coupling: f64,
+) -> SlideContactState {
+    let friction = node.clapper_to_bowl_friction.max(0.0);
+    let mode_scale = 1.0 + mode_index as f64 * 0.08;
+    let mode_weight = 1.0 / mode_scale.sqrt();
+    let frequency_weight = (0.7 + 0.3 * (frequency_hz / 900.0).clamp(0.0, 1.5)).clamp(0.5, 1.3);
+
+    let normal_load_proxy = (descriptor.clapper_mass_ratio.sqrt()
+        * (0.35 + 0.65 * geometric_slide_coupling)
+        * mode_weight)
+        .clamp(0.0, 1.0);
+
+    let slip_drive = (friction
+        * normal_load_proxy
+        * frequency_weight
+        * (0.75 + 0.25 * geometric_slide_coupling)
+        * mode_scale.powf(0.2))
+    .clamp(0.0, 1.0);
+
+    let stick_slip_propensity =
+        (slip_drive * (0.6 + 0.4 * (1.0 - geometric_slide_coupling)) * (0.9 + 0.1 * mode_scale))
+            .clamp(0.0, 1.0);
+
+    let contact_intermittency =
+        (0.2 + friction * 0.45 + (1.0 - normal_load_proxy) * 0.25 + mode_index as f64 * 0.015)
+            .clamp(0.0, 1.0);
+
+    SlideContactState {
+        normal_load_proxy,
+        slip_drive,
+        stick_slip_propensity,
+        contact_intermittency,
     }
 }
 

@@ -2,10 +2,7 @@ use nalgebra::{DMatrix, Point3};
 
 use crate::{mesh_surface_area_m2, nearest_vertex_index, Meshable, SurfaceMesh};
 
-use super::{
-    Node, MIN_MODE_COUNT, MODAL_EIGEN_MAX_RESOLUTION, MODAL_EPSILON, MOUNT_PROFILE_R_M,
-    MOUNT_PROFILE_Y_M,
-};
+use super::{Node, MIN_MODE_COUNT, MODAL_EPSILON, MOUNT_PROFILE_R_M, MOUNT_PROFILE_Y_M};
 
 /// Shear correction factor for Mindlin-Reissner thick-shell transverse shear (Reissner value).
 const MINDLIN_SHEAR_CORRECTION: f64 = 5.0 / 6.0;
@@ -157,21 +154,59 @@ pub(super) fn bowl_descriptor(
 }
 
 /// Compute per-vertex shell thickness [m] from the bowl's `ThicknessMap`.
-/// Returns `face_thickness + backface_thickness` for each base-mesh vertex index.
-/// If a vertex index is out of range the average descriptor thickness is used as fallback.
+/// Uses fully wrapped thick-mesh vertices so both intentional ImperfectMesh
+/// perturbation passes influence thickness. For shell vertex i, thickness is
+/// measured as distance between paired thick vertices (2*i, 2*i+1).
 pub(super) fn per_vertex_thickness(
     node: &Node,
+    resolution: usize,
     vertex_count: usize,
     fallback_thickness: f64,
 ) -> Vec<f64> {
-    (0..vertex_count)
+    log::trace!(
+        "solver progress: per_vertex_thickness start resolution={} vertex_count={} fallback_thickness_m={:.6e}",
+        resolution,
+        vertex_count,
+        fallback_thickness
+    );
+
+    let thick_points = node.bowl.meshable.sample_points(resolution);
+
+    let thickness = (0..vertex_count)
         .map(|i| {
-            let (face_t, back_t) = node.bowl.meshable.inner().thickness_map.sample(i);
-            (face_t + back_t)
+            let outer_index = i.saturating_mul(2);
+            let inner_index = outer_index.saturating_add(1);
+
+            let thick = if inner_index < thick_points.len() {
+                Some((thick_points[outer_index] - thick_points[inner_index]).norm())
+            } else {
+                None
+            };
+
+            thick
+                .filter(|v| v.is_finite() && *v > 0.0)
+                .unwrap_or(fallback_thickness)
                 .max(MODAL_EPSILON)
                 .min(fallback_thickness * 10.0)
         })
-        .collect()
+        .collect::<Vec<_>>();
+
+    if log::log_enabled!(log::Level::Trace) {
+        let (min_t, max_t) = thickness
+            .iter()
+            .copied()
+            .fold((f64::INFINITY, 0.0f64), |(min_v, max_v), t| {
+                (min_v.min(t), max_v.max(t))
+            });
+        log::trace!(
+            "solver progress: per_vertex_thickness complete samples={} min_m={:.6e} max_m={:.6e}",
+            thickness.len(),
+            min_t,
+            max_t
+        );
+    }
+
+    thickness
 }
 
 /// Mindlin-Reissner thick-shell modal solver.
@@ -191,7 +226,16 @@ pub(super) fn solve_scalar_modes(
     pvt: &[f64],
 ) -> ScalarSolve {
     let vertex_count = bowl_mesh.vertex_count();
+    log::trace!(
+        "solver progress: start mode_count={} vertices={} triangles={} pvt_samples={}",
+        mode_count,
+        vertex_count,
+        bowl_mesh.indices.len(),
+        pvt.len()
+    );
+
     if vertex_count < 3 {
+        log::trace!("solver progress: abort due to insufficient vertices");
         return ScalarSolve {
             modes: vec![],
             constrained_count: 0,
@@ -280,12 +324,23 @@ pub(super) fn solve_scalar_modes(
             *m += per_vertex;
         }
     }
+    log::trace!(
+        "solver progress: assembled mass+laplacian total_lumped_mass_kg={:.6e} clapper_mass_kg={:.6e}",
+        total_bowl_lumped_mass,
+        clapper_mass_kg
+    );
 
     let active: Vec<usize> = (0..vertex_count)
         .filter(|&i| !constrained[i] && lumped_mass[i] > MODAL_EPSILON)
         .collect();
     let constrained_count = constrained.iter().filter(|c| **c).count();
+    log::trace!(
+        "solver progress: constraints resolved constrained={} active={}",
+        constrained_count,
+        active.len()
+    );
     if active.len() <= MIN_MODE_COUNT {
+        log::trace!("solver progress: abort due to insufficient active vertices");
         return ScalarSolve {
             modes: vec![],
             constrained_count,
@@ -372,7 +427,17 @@ pub(super) fn solve_scalar_modes(
         }
     }
 
+    log::trace!(
+        "solver progress: reduced system ready active_dofs={} characteristic_edge_length_m={:.6e}",
+        active_count,
+        characteristic_edge_length_m
+    );
+
     let eigen = scaled_k.symmetric_eigen();
+    log::trace!(
+        "solver progress: eigen decomposition complete eigen_count={}",
+        eigen.eigenvalues.len()
+    );
 
     let raw_finite: Vec<f64> = eigen
         .eigenvalues
@@ -468,6 +533,15 @@ pub(super) fn solve_scalar_modes(
         0.0
     };
 
+    log::trace!(
+        "solver progress: complete kept_modes={} dropped_non_finite={} dropped_non_positive={} dropped_near_rigid={} condition_number={:.6e}",
+        solved_modes.len(),
+        dropped_non_finite,
+        dropped_non_positive,
+        dropped_near_rigid,
+        condition_number
+    );
+
     ScalarSolve {
         modes: solved_modes,
         constrained_count,
@@ -487,10 +561,8 @@ pub(super) fn solve_scalar_modes(
     }
 }
 
-pub(super) fn analysis_resolution(node: &Node, resolution: usize) -> usize {
-    let requested = resolution.max(8);
-    let optimal = node.bowl.meshable.opt_resolution().max(8);
-    requested.min(optimal).min(MODAL_EIGEN_MAX_RESOLUTION)
+pub(super) fn analysis_resolution(resolution: usize) -> usize {
+    resolution
 }
 
 fn mount_constrained_vertices(

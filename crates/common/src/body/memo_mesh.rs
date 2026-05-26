@@ -10,18 +10,6 @@ use std::sync::{Arc, OnceLock, RwLock};
 ///
 /// This allows expensive geometry computations to be reused when the same
 /// resolution (and optional per-vertex parameters) are requested multiple times.
-///
-/// # Example
-/// ```ignore
-/// let body = RevolutionBody::new(...)?;
-/// let memo = MemoMesh::new(body);
-/// // First call computes and caches
-/// let points1 = memo.sample_points(256);
-/// // Second call with same resolution reuses cache
-/// let points2 = memo.sample_points(256);
-/// // Different resolution creates new cache entry
-/// let points3 = memo.sample_points(512);
-/// ```
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MemoMesh<M>
 where

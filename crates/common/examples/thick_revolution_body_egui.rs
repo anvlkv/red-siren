@@ -1,6 +1,6 @@
 use common::body::{
-    thickness_map_from_axial_samples, EmbodiedPoint3, EmbodiedTriangle, Meshable, RevolutionAxis,
-    RevolutionMesh, ThickMesh,
+    EmbodiedPoint3, EmbodiedTriangle, Meshable, RevolutionAxis, RevolutionMesh, ThickMesh,
+    ThicknessMap, ThicknessMapPoint,
 };
 use common::egui_helpers::{
     draw_depth_wireframe, draw_segment_chart_sized, draw_xy_multi_line_chart_sized, run_native_app,
@@ -116,14 +116,21 @@ impl ThickRevolutionBodyApp {
         }
 
         let axial_positions = body.profile_sample_positions(self.resolution);
-        let thickness_map =
-            thickness_map_from_axial_samples(&axial_positions, self.resolution, |u| {
+        let mut thickness_points = Vec::with_capacity(axial_positions.len() * self.resolution);
+        for j in 0..self.resolution {
+            for (i, u) in axial_positions.iter().enumerate() {
                 let face_t = face_segment.start + u * face_span;
                 let backface_t = backface_segment.start + u * back_span;
                 let face = face_segment.evaluate(face_t).max(0.0);
                 let backface = backface_segment.evaluate(backface_t).max(0.0);
-                (face, backface)
-            })
+                thickness_points.push(ThicknessMapPoint {
+                    body_vertex_index: j * axial_positions.len() + i,
+                    face_thickness: face,
+                    backface_thickness: backface,
+                });
+            }
+        }
+        let thickness_map = ThicknessMap::new(thickness_points)
             .ok_or_else(|| "thickness map construction failed (invalid values)".to_string())?;
 
         Ok((body.clone(), ThickMesh::new(body, thickness_map)))

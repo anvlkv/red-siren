@@ -33,21 +33,17 @@ pub struct NodeComputedStructure {
     pub solver_dropped_non_positive: usize,
     pub solver_dropped_near_rigid: usize,
     pub solver_condition_number: f64,
-    pub frequencies_hz: Vec<f64>,
-    pub path_modes: Vec<PathMode>,
+    pub strike_modes: Vec<StrikeModeStructure>,
+    pub jet_mode: JetModeStructure,
+    pub slide_modes: Vec<SlideModeStructure>,
 }
 
 /// Acoustic properties of the node (medium-dependent, recomputable).
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct NodeComputedAcoustics {
-    pub frequencies_hz: Vec<f64>,
-    pub mode_acoustics: Vec<ModeInteractionAcoustics>,
-    pub strike_damping_in_air: Vec<f64>,
-    pub strike_damping_in_medium: Vec<f64>,
-    pub jet_damping_in_air: Vec<f64>,
-    pub jet_damping_in_medium: Vec<f64>,
-    pub slide_damping_in_air: Vec<f64>,
-    pub slide_damping_in_medium: Vec<f64>,
+    pub strike_modes: Vec<StrikeAcousticsInMedium>,
+    pub jet_mode: JetAcousticsInMedium,
+    pub slide_modes: Vec<SlideAcousticsInMedium>,
     pub medium: Medium,
 }
 
@@ -68,13 +64,15 @@ pub struct Node {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct StrikeModeStructure {
     pub mode_index: usize,
+    pub frequency_hz: f64,
     pub vertex_displacement: Vec<Vector3<f64>>,
     pub strike_base: StrikeStructuralBase,
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 pub struct JetModeStructure {
-    pub mode_index: usize,
+    pub source_mode_index: usize,
+    pub structural_frequency_hz: f64,
     pub rim_response: f64,
     pub jet_base: JetStructuralBase,
 }
@@ -82,15 +80,9 @@ pub struct JetModeStructure {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct SlideModeStructure {
     pub mode_index: usize,
+    pub frequency_hz: f64,
     pub vertex_displacement: Vec<Vector3<f64>>,
     pub slide_base: SlideStructuralBase,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub enum PathMode {
-    Strike(StrikeModeStructure),
-    Jet(JetModeStructure),
-    Slide(SlideModeStructure),
 }
 
 /// Vortex shedding dynamics for jet excitation.
@@ -151,6 +143,7 @@ pub struct SlideContactState {
 /// Acoustic properties of strike excitation (medium-dependent, computed on-demand).
 #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 pub struct StrikeAcousticsInMedium {
+    pub mode_index: usize,
     /// Effective resonance frequency used for strike response [Hz]
     pub frequency_hz: f64,
     /// Damping due to air viscosity [0, 1]
@@ -162,6 +155,7 @@ pub struct StrikeAcousticsInMedium {
 /// Acoustic properties of jet excitation (medium-dependent, computed on-demand).
 #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 pub struct JetAcousticsInMedium {
+    pub source_mode_index: usize,
     /// Effective resonance frequency used for jet lock-in [Hz]
     pub frequency_hz: f64,
     /// Damping due to air viscosity [0, 1]
@@ -175,6 +169,7 @@ pub struct JetAcousticsInMedium {
 /// Acoustic properties of slide excitation (medium-dependent, computed on-demand).
 #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 pub struct SlideAcousticsInMedium {
+    pub mode_index: usize,
     /// Effective resonance frequency used for slide response [Hz]
     pub frequency_hz: f64,
     /// Damping for sustained rubbing/sliding in the given medium [0, 1]
@@ -185,14 +180,6 @@ pub struct SlideAcousticsInMedium {
     pub squeal_tendency: f64,
     /// Aggregate interaction gain from contact-state-driven friction excitation [0, 1]
     pub friction_interaction_gain: f64,
-}
-
-/// Complete acoustic response for both excitation paths (medium-dependent).
-#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
-pub struct ModeInteractionAcoustics {
-    pub strike: StrikeAcousticsInMedium,
-    pub jet: JetAcousticsInMedium,
-    pub slide: SlideAcousticsInMedium,
 }
 
 /// Acoustic cavity resonance (quarter-wave lock-in).

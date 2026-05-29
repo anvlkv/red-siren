@@ -1,9 +1,5 @@
 use common::body::materials::{Material, Medium};
-use common::config::{
-    JetModeStructure, JetStructuralBase, JetVortexDynamics, Node, NodeComputedDebug,
-    NodeComputedStructure, NodeModelBuilders, PathMode, SlideContactState, SlideModeStructure,
-    SlideStructuralBase, StrikeModeStructure, StrikeStructuralBase,
-};
+use common::config::{Node, NodeComputedDebug, NodeModelBuilders};
 use common::egui_helpers::{draw_xy_line_chart, draw_xy_multi_line_chart_sized, run_native_app};
 use common::Meshable;
 use eframe::egui::{self, Color32, Pos2, Rect, Sense, Shape, Stroke};
@@ -11,6 +7,12 @@ use nalgebra::{Point3, Vector3};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread;
 use std::time::Duration;
+
+fn main() -> eframe::Result<()> {
+    run_native_app("Node inspector", [1480.0, 980.0], |_cc| {
+        NodeInspectorApp::default()
+    })
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ExampleShapePreset {
@@ -63,12 +65,6 @@ struct DisplayCache {
 struct MeshPreview {
     points: Vec<Point3<f64>>,
     indices: Vec<[u32; 3]>,
-}
-
-fn main() -> eframe::Result<()> {
-    run_native_app("Node inspector", [1480.0, 980.0], |_cc| {
-        NodeInspectorApp::default()
-    })
 }
 
 #[derive(Clone, Copy)]
@@ -358,93 +354,60 @@ impl NodeInspectorApp {
 
     fn print_debug_snapshot_once_for_change(&mut self, debug: &NodeComputedDebug) {
         let (structure, acoustics) = debug;
-        let mode_view = build_path_mode_view(structure);
-        let acoustic_preview = debug
-            .1
-            .frequencies_hz
+        let strike_preview = structure
+            .strike_modes
             .iter()
-            .enumerate()
-            .take(4)
-            .map(|(i, freq)| {
-                let strike_base = mode_view
-                    .strike
-                    .get(i)
-                    .and_then(|m| *m)
-                    .map(|m| m.strike_base)
-                    .unwrap_or(StrikeStructuralBase {
-                        coupling: 0.0,
-                        angle_sensitivity: 0.0,
-                    });
-                let jet = mode_view
-                    .jet
-                    .get(i)
-                    .and_then(|m| *m)
-                    .copied()
-                    .unwrap_or(JetModeStructure {
-                        mode_index: i,
-                        rim_response: 0.0,
-                        jet_base: JetStructuralBase {
-                            coupling: 0.0,
-                            vortex_dynamics: JetVortexDynamics {
-                                strouhal_target: 0.0,
-                                convective_delay_s: 0.0,
-                                threshold_drive: 0.0,
-                                small_signal_gain: 0.0,
-                            },
-                        },
-                    });
-                let slide_base = mode_view
-                    .slide
-                    .get(i)
-                    .and_then(|m| *m)
-                    .map(|m| m.slide_base)
-                    .unwrap_or(SlideStructuralBase {
-                        coupling: 0.0,
-                        roughness_sensitivity: 0.0,
-                        contact_state: SlideContactState {
-                            normal_load_proxy: 0.0,
-                            slip_drive: 0.0,
-                            stick_slip_propensity: 0.0,
-                            contact_intermittency: 0.0,
-                        },
-                    });
-                let mode_acoustics = &acoustics.mode_acoustics[i];
+            .zip(acoustics.strike_modes.iter())
+            .take(3)
+            .map(|(s, a)| {
                 format!(
-                    "#{:02} {:.1}Hz strike[c={:.3},air={:.4},bw={:.1}] jet[c={:.3},rim={:.3},air={:.4},lock={:.1}±{:.1},thr={:.3},gain={:.3},tau={:.4},St={:.3}] slide[c={:.3},n={:.3},slip={:.3},stick={:.3},int={:.3},air={:.4},bw={:.1},gain={:.3},squeal={:.3}]",
-                    i + 1,
-                    freq,
-                    strike_base.coupling,
-                    mode_acoustics.strike.damping_in_air,
-                    mode_acoustics.strike.impact_bandwidth_hz,
-                    jet.jet_base.coupling,
-                    jet.rim_response,
-                    mode_acoustics.jet.damping_in_air,
-                    mode_acoustics.jet.acoustic_lock_in.lock_center_hz,
-                    mode_acoustics.jet.acoustic_lock_in.lock_bandwidth_hz,
-                    jet.jet_base.vortex_dynamics.threshold_drive,
-                    jet.jet_base.vortex_dynamics.small_signal_gain,
-                    jet.jet_base.vortex_dynamics.convective_delay_s,
-                    jet.jet_base.vortex_dynamics.strouhal_target,
-                    slide_base.coupling,
-                    slide_base.contact_state.normal_load_proxy,
-                    slide_base.contact_state.slip_drive,
-                    slide_base.contact_state.stick_slip_propensity,
-                    slide_base.contact_state.contact_intermittency,
-                    mode_acoustics.slide.damping_in_air,
-                    mode_acoustics.slide.slide_bandwidth_hz,
-                    mode_acoustics.slide.friction_interaction_gain,
-                    mode_acoustics.slide.squeal_tendency,
+                    "S#{:02}@{:.1}Hz[c={:.3},air={:.4},bw={:.1}]",
+                    s.mode_index + 1,
+                    a.frequency_hz,
+                    s.strike_base.coupling,
+                    a.damping_in_air,
+                    a.impact_bandwidth_hz
                 )
             })
             .collect::<Vec<_>>()
-            .join(" | ");
+            .join(" ");
+        let jet_preview = format!(
+            "J<src={} struct={:.1}Hz lock={:.1}Hz bw={:.1} rim={:.3} air={:.4}>",
+            structure.jet_mode.source_mode_index + 1,
+            structure.jet_mode.structural_frequency_hz,
+            acoustics.jet_mode.acoustic_lock_in.lock_center_hz,
+            acoustics.jet_mode.acoustic_lock_in.lock_bandwidth_hz,
+            structure.jet_mode.rim_response,
+            acoustics.jet_mode.damping_in_air,
+        );
+        let slide_preview = structure
+            .slide_modes
+            .iter()
+            .zip(acoustics.slide_modes.iter())
+            .take(3)
+            .map(|(s, a)| {
+                format!(
+                    "L#{:02}@{:.1}Hz[c={:.3},slip={:.3},air={:.4},gain={:.3}]",
+                    s.mode_index + 1,
+                    a.frequency_hz,
+                    s.slide_base.coupling,
+                    s.slide_base.contact_state.slip_drive,
+                    a.damping_in_air,
+                    a.friction_interaction_gain
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
 
         let snapshot = format!(
-            "modes={} budget={} cond={:.2e} acoustic=[{}]",
-            structure.frequencies_hz.len(),
+            "strike={} slide={} budget={} cond={:.2e} acoustic=[{} | {} | {}]",
+            structure.strike_modes.len(),
+            structure.slide_modes.len(),
             structure.mode_budget,
             structure.solver_condition_number,
-            acoustic_preview,
+            strike_preview,
+            jet_preview,
+            slide_preview,
         );
         if self.last_debug_snapshot.as_deref() == Some(snapshot.as_str()) {
             return;
@@ -832,7 +795,7 @@ impl NodeInspectorApp {
                         "resolution: requested {} / analysis {} / modes {}",
                         structure.requested_resolution,
                         structure.analysis_resolution,
-                        structure.frequencies_hz.len()
+                        structure.strike_modes.len()
                     ));
                     ui.separator();
                     ui.label(format!(
@@ -920,116 +883,74 @@ impl NodeInspectorApp {
                 ui.separator();
                 ui.horizontal_wrapped(|ui| {
                     ui.label("Mode colors:");
-                    for i in 0..structure.frequencies_hz.len() {
+                    for i in 0..structure.strike_modes.len() {
                         let color = mode_color(i);
                         ui.colored_label(color, format!("M{:02}", i + 1));
                     }
                 });
                 ui.separator();
-                ui.label("Modes");
-                let mode_view = build_path_mode_view(structure);
-                for i in 0..structure.frequencies_hz.len() {
-                    let strike_base = mode_view
-                        .strike
-                        .get(i)
-                        .and_then(|m| *m)
-                        .map(|m| m.strike_base)
-                        .unwrap_or(StrikeStructuralBase {
-                            coupling: 0.0,
-                            angle_sensitivity: 0.0,
-                        });
-                    let jet = mode_view
-                        .jet
-                        .get(i)
-                        .and_then(|m| *m)
-                        .copied()
-                        .unwrap_or(JetModeStructure {
-                            mode_index: i,
-                            rim_response: 0.0,
-                            jet_base: JetStructuralBase {
-                                coupling: 0.0,
-                                vortex_dynamics: JetVortexDynamics {
-                                    strouhal_target: 0.0,
-                                    convective_delay_s: 0.0,
-                                    threshold_drive: 0.0,
-                                    small_signal_gain: 0.0,
-                                },
-                            },
-                        });
-                    let slide_base = mode_view
-                        .slide
-                        .get(i)
-                        .and_then(|m| *m)
-                        .map(|m| m.slide_base)
-                        .unwrap_or(SlideStructuralBase {
-                            coupling: 0.0,
-                            roughness_sensitivity: 0.0,
-                            contact_state: SlideContactState {
-                                normal_load_proxy: 0.0,
-                                slip_drive: 0.0,
-                                stick_slip_propensity: 0.0,
-                                contact_intermittency: 0.0,
-                            },
-                        });
-                    let mode_acoustics = &acoustics.mode_acoustics[i];
-                    let structural_frequency_hz = structure.frequencies_hz[i];
-                    let strike_frequency_hz = mode_acoustics.strike.frequency_hz;
-                    let jet_frequency_hz = mode_acoustics.jet.frequency_hz;
-                    let slide_frequency_hz = mode_acoustics.slide.frequency_hz;
-                    let strike_damp_air = acoustics
-                        .strike_damping_in_air
-                        .get(i)
-                        .copied()
-                        .unwrap_or(0.0);
-                    let strike_damp_medium = acoustics
-                        .strike_damping_in_medium
-                        .get(i)
-                        .copied()
-                        .unwrap_or(0.0);
-                    let jet_damp_air = acoustics.jet_damping_in_air.get(i).copied().unwrap_or(0.0);
-                    let jet_damp_medium =
-                        acoustics.jet_damping_in_medium.get(i).copied().unwrap_or(0.0);
-                    let slide_damp_air =
-                        acoustics.slide_damping_in_air.get(i).copied().unwrap_or(0.0);
-                    let slide_damp_medium =
-                        acoustics.slide_damping_in_medium.get(i).copied().unwrap_or(0.0);
-                    ui.monospace(format!(r#"#{:02}  struct={:8.2} Hz  strike={:8.2} Hz  jet={:8.2} Hz  slide={:8.2} Hz  
-strike[c={:.3}, damp(a/m)={:.5}/{:.5}, angle={:.3}, bw={:.2}]  
-jet[c={:.3}, rim={:.3}, damp(a/m)={:.5}/{:.5}, lock={:.2}+/-{:.2}, thr={:.3}, gain={:.3}, tau={:.4}s, St={:.3}, phase={:.3}, rad={:.3e}]  
-slide[c={:.3}, damp(a/m)={:.5}/{:.5}, rough={:.3}, n={:.3}, slip={:.3}, stick={:.3}, int={:.3}, bw={:.2}, gain={:.3}, squeal={:.3}]"#,
+                ui.label("Strike modes");
+                for (i, (strike_mode, strike_acoustics)) in structure
+                    .strike_modes
+                    .iter()
+                    .zip(acoustics.strike_modes.iter())
+                    .enumerate()
+                {
+                    ui.monospace(format!(
+                        "S#{:02}  struct={:8.2} Hz  strike={:8.2} Hz\nstrike[c={:.3}, angle={:.3}, damp={:.5}, bw={:.2}]",
                         i + 1,
-                        structural_frequency_hz,
-                        strike_frequency_hz,
-                        jet_frequency_hz,
-                        slide_frequency_hz,
-                        strike_base.coupling,
-                        strike_damp_air,
-                        strike_damp_medium,
-                        strike_base.angle_sensitivity,
-                        mode_acoustics.strike.impact_bandwidth_hz,
-                        jet.jet_base.coupling,
-                        jet.rim_response,
-                        jet_damp_air,
-                        jet_damp_medium,
-                        mode_acoustics.jet.acoustic_lock_in.lock_center_hz,
-                        mode_acoustics.jet.acoustic_lock_in.lock_bandwidth_hz,
-                        jet.jet_base.vortex_dynamics.threshold_drive,
-                        jet.jet_base.vortex_dynamics.small_signal_gain,
-                        jet.jet_base.vortex_dynamics.convective_delay_s,
-                        jet.jet_base.vortex_dynamics.strouhal_target,
-                        mode_acoustics.jet.acoustic_lock_in.phase_sensitivity,
-                        mode_acoustics.jet.radiation_efficiency,
-                        slide_base.coupling,
-                        slide_damp_air,
-                        slide_damp_medium,
-                        slide_base.roughness_sensitivity,
-                        slide_base.contact_state.normal_load_proxy,
-                        slide_base.contact_state.slip_drive,
-                        slide_base.contact_state.stick_slip_propensity,
-                        slide_base.contact_state.contact_intermittency,
-                        mode_acoustics.slide.slide_bandwidth_hz,
-                        mode_acoustics.slide.friction_interaction_gain,
-                        mode_acoustics.slide.squeal_tendency,
+                        strike_mode.frequency_hz,
+                        strike_acoustics.frequency_hz,
+                        strike_mode.strike_base.coupling,
+                        strike_mode.strike_base.angle_sensitivity,
+                        strike_acoustics.damping_in_air,
+                        strike_acoustics.impact_bandwidth_hz,
+                    ));
+                }
+
+                ui.separator();
+                ui.label("Jet mode");
+                ui.monospace(format!(
+                    "J<src={}>  struct={:8.2} Hz  jet={:8.2} Hz\njet[c={:.3}, rim={:.3}, damp={:.5}, lock={:.2}+/-{:.2}, thr={:.3}, gain={:.3}, tau={:.4}s, St={:.3}, phase={:.3}, rad={:.3e}]",
+                    structure.jet_mode.source_mode_index + 1,
+                    structure.jet_mode.structural_frequency_hz,
+                    acoustics.jet_mode.frequency_hz,
+                    structure.jet_mode.jet_base.coupling,
+                    structure.jet_mode.rim_response,
+                    acoustics.jet_mode.damping_in_air,
+                    acoustics.jet_mode.acoustic_lock_in.lock_center_hz,
+                    acoustics.jet_mode.acoustic_lock_in.lock_bandwidth_hz,
+                    structure.jet_mode.jet_base.vortex_dynamics.threshold_drive,
+                    structure.jet_mode.jet_base.vortex_dynamics.small_signal_gain,
+                    structure.jet_mode.jet_base.vortex_dynamics.convective_delay_s,
+                    structure.jet_mode.jet_base.vortex_dynamics.strouhal_target,
+                    acoustics.jet_mode.acoustic_lock_in.phase_sensitivity,
+                    acoustics.jet_mode.radiation_efficiency,
+                ));
+
+                ui.separator();
+                ui.label("Slide modes");
+                for (i, (slide_mode, slide_acoustics)) in structure
+                    .slide_modes
+                    .iter()
+                    .zip(acoustics.slide_modes.iter())
+                    .enumerate()
+                {
+                    ui.monospace(format!(
+                        "L#{:02}  struct={:8.2} Hz  slide={:8.2} Hz\nslide[c={:.3}, rough={:.3}, n={:.3}, slip={:.3}, stick={:.3}, int={:.3}, damp={:.5}, bw={:.2}, gain={:.3}, squeal={:.3}]",
+                        i + 1,
+                        slide_mode.frequency_hz,
+                        slide_acoustics.frequency_hz,
+                        slide_mode.slide_base.coupling,
+                        slide_mode.slide_base.roughness_sensitivity,
+                        slide_mode.slide_base.contact_state.normal_load_proxy,
+                        slide_mode.slide_base.contact_state.slip_drive,
+                        slide_mode.slide_base.contact_state.stick_slip_propensity,
+                        slide_mode.slide_base.contact_state.contact_intermittency,
+                        slide_acoustics.damping_in_air,
+                        slide_acoustics.slide_bandwidth_hz,
+                        slide_acoustics.friction_interaction_gain,
+                        slide_acoustics.squeal_tendency,
                     ));
                 }
             });
@@ -1127,38 +1048,6 @@ struct DrawPoint {
     color: Color32,
 }
 
-struct PathModeView<'a> {
-    strike: Vec<Option<&'a StrikeModeStructure>>,
-    jet: Vec<Option<&'a JetModeStructure>>,
-    slide: Vec<Option<&'a SlideModeStructure>>,
-}
-
-fn build_path_mode_view(structure: &NodeComputedStructure) -> PathModeView<'_> {
-    let mode_len = structure.frequencies_hz.len();
-    let mut view = PathModeView {
-        strike: vec![None; mode_len],
-        jet: vec![None; mode_len],
-        slide: vec![None; mode_len],
-    };
-
-    for path_mode in &structure.path_modes {
-        match path_mode {
-            PathMode::Strike(mode) if mode.mode_index < mode_len => {
-                view.strike[mode.mode_index] = Some(mode);
-            }
-            PathMode::Jet(mode) if mode.mode_index < mode_len => {
-                view.jet[mode.mode_index] = Some(mode);
-            }
-            PathMode::Slide(mode) if mode.mode_index < mode_len => {
-                view.slide[mode.mode_index] = Some(mode);
-            }
-            _ => {}
-        }
-    }
-
-    view
-}
-
 fn collect_projected_tris(
     points: &[Point3<f64>],
     indices: &[[u32; 3]],
@@ -1233,8 +1122,7 @@ fn collect_mode_overlay_points(
     rect: Rect,
 ) -> Vec<DrawPoint> {
     let (structure, _) = debug;
-    let mode_view = build_path_mode_view(structure);
-    if mode_view.strike.iter().all(|m| m.is_none()) || points.is_empty() {
+    if structure.strike_modes.is_empty() || points.is_empty() {
         return vec![];
     }
 
@@ -1251,10 +1139,7 @@ fn collect_mode_overlay_points(
 
     let stride = (points.len() / 220).max(1);
     let mut overlays = Vec::new();
-    for (mode_index, mode_opt) in mode_view.strike.iter().enumerate() {
-        let Some(mode) = mode_opt else {
-            continue;
-        };
+    for (mode_index, mode) in structure.strike_modes.iter().enumerate() {
         let point_count = points.len().min(mode.vertex_displacement.len());
         if point_count == 0 {
             continue;

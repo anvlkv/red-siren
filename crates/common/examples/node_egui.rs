@@ -1,5 +1,5 @@
 use common::body::materials::{Material, Medium};
-use common::config::{Node, NodeComputedDebug, NodeModelBuilders};
+use common::config::{Node, NodeComputedDebug, NodeComputedStructure, NodeModelBuilders};
 use common::egui_helpers::{draw_xy_line_chart, draw_xy_multi_line_chart_sized, run_native_app};
 use common::Meshable;
 use eframe::egui::{self, Color32, Pos2, Rect, Sense, Shape, Stroke};
@@ -31,12 +31,13 @@ struct NodeAnalysisInputs {
     resolution: usize,
     mode_count: usize,
     node_signature: String,
-    debug_signature: String,
+    acoustic_signature: String,
+    cached_structure: Option<NodeComputedStructure>,
 }
 
 struct PendingAnalysis {
     node_signature: String,
-    debug_signature: String,
+    acoustic_signature: String,
     receiver: Receiver<AnalysisResult>,
 }
 
@@ -47,11 +48,11 @@ enum AnalysisResult {
 
 struct ReadyAnalysis {
     node_signature: String,
-    debug_signature: String,
+    acoustic_signature: String,
     debug: NodeComputedDebug,
-    display: DisplayCache,
 }
 
+#[derive(Clone)]
 struct DisplayCache {
     bowl_profile: Vec<(f64, f64)>,
     clapper_profile: Vec<(f64, f64)>,
@@ -62,6 +63,7 @@ struct DisplayCache {
     shell_overlay_points: Vec<Point3<f64>>,
 }
 
+#[derive(Clone)]
 struct MeshPreview {
     points: Vec<Point3<f64>>,
     indices: Vec<[u32; 3]>,
@@ -107,6 +109,9 @@ struct NodeInspectorApp {
     pending_analysis: Option<PendingAnalysis>,
     queued_analysis: Option<NodeAnalysisInputs>,
     ready_analysis: Option<ReadyAnalysis>,
+    live_display: Option<DisplayCache>,
+    live_display_signature: Option<String>,
+    recompute_requested: bool,
 }
 
 impl Default for NodeInspectorApp {
@@ -149,6 +154,9 @@ impl Default for NodeInspectorApp {
             pending_analysis: None,
             queued_analysis: None,
             ready_analysis: None,
+            live_display: None,
+            live_display_signature: None,
+            recompute_requested: true,
         }
     }
 }
@@ -241,16 +249,22 @@ impl NodeInspectorApp {
             self.clapper_to_bowl_friction,
             self.use_seed,
             self.seed,
+            self.analysis_resolution,
+            self.mode_count,
         ))
         .unwrap_or_else(|err| format!("signature-error:{err}"))
     }
 
-    fn debug_signature(&self) -> String {
-        serde_json::to_string(&(self.analysis_resolution, self.mode_count, &self.medium))
-            .unwrap_or_else(|err| format!("signature-error:{err}"))
+    fn acoustic_signature(&self) -> String {
+        serde_json::to_string(&self.medium).unwrap_or_else(|err| format!("signature-error:{err}"))
     }
 
     fn analysis_inputs(&self) -> NodeAnalysisInputs {
+        let node_signature = self.node_signature();
+        let cached_structure = self.ready_analysis.as_ref().and_then(|ready| {
+            (ready.node_signature == node_signature).then_some(ready.debug.0.clone())
+        });
+
         NodeAnalysisInputs {
             builders: self.builders.clone(),
             bowl_material: self.bowl_material.clone(),
@@ -260,8 +274,64 @@ impl NodeInspectorApp {
             medium: self.medium.clone(),
             resolution: self.analysis_resolution,
             mode_count: self.mode_count,
-            node_signature: self.node_signature(),
-            debug_signature: self.debug_signature(),
+            node_signature,
+            acoustic_signature: self.acoustic_signature(),
+            cached_structure,
+        }
+    }
+
+    fn display_signature(&self) -> String {
+        serde_json::to_string(&(
+            &self.builders,
+            &self.bowl_material,
+            &self.clapper_material,
+            self.clapper_to_bowl_friction,
+            self.use_seed,
+            self.seed,
+            self.analysis_resolution,
+        ))
+        .unwrap_or_else(|err| format!("signature-error:{err}"))
+    }
+
+    fn ensure_live_display(&mut self) {
+        let signature = self.display_signature();
+        if self.live_display_signature.as_deref() == Some(signature.as_str()) {
+            return;
+        }
+
+        let node = match self.builders.build_node(
+            self.bowl_material.clone(),
+            self.clapper_material.clone(),
+            self.clapper_to_bowl_friction,
+            self.use_seed.then_some(self.seed),
+        ) {
+            Ok(node) => node,
+            Err(err) => {
+                self.live_display = None;
+                self.live_display_signature = None;
+                self.last_error = Some(err);
+                return;
+            }
+        };
+
+        self.live_display = Some(build_display_cache(
+            &node,
+            self.analysis_resolution,
+            self.builders.thickness.inner_base_thickness_m,
+            self.builders.thickness.inner_lip_thickness_m,
+            self.builders.thickness.outer_base_thickness_m,
+            self.builders.thickness.outer_lip_thickness_m,
+        ));
+        self.live_display_signature = Some(signature);
+    }
+
+    fn analysis_is_stale(&self) -> bool {
+        match &self.ready_analysis {
+            Some(ready) => {
+                ready.node_signature != self.node_signature()
+                    || ready.acoustic_signature != self.acoustic_signature()
+            }
+            None => true,
         }
     }
 
@@ -273,7 +343,7 @@ impl NodeInspectorApp {
             .as_ref()
             .map(|ready| {
                 ready.node_signature == inputs.node_signature
-                    && ready.debug_signature == inputs.debug_signature
+                    && ready.acoustic_signature == inputs.acoustic_signature
             })
             .unwrap_or(false);
         if ready_matches {
@@ -287,7 +357,7 @@ impl NodeInspectorApp {
             .as_ref()
             .map(|pending| {
                 pending.node_signature == inputs.node_signature
-                    && pending.debug_signature == inputs.debug_signature
+                    && pending.acoustic_signature == inputs.acoustic_signature
             })
             .unwrap_or(false);
         if pending_matches {
@@ -365,7 +435,7 @@ impl NodeInspectorApp {
                     s.mode_index + 1,
                     a.frequency_hz,
                     s.strike_base.coupling,
-                    a.damping_in_air,
+                    a.damping_in_medium,
                     a.impact_bandwidth_hz
                 )
             })
@@ -378,7 +448,7 @@ impl NodeInspectorApp {
             acoustics.jet_mode.acoustic_lock_in.lock_center_hz,
             acoustics.jet_mode.acoustic_lock_in.lock_bandwidth_hz,
             structure.jet_mode.rim_response,
-            acoustics.jet_mode.damping_in_air,
+            acoustics.jet_mode.damping_in_medium,
         );
         let slide_preview = structure
             .slide_modes
@@ -392,7 +462,7 @@ impl NodeInspectorApp {
                     a.frequency_hz,
                     s.slide_base.coupling,
                     s.slide_base.contact_state.slip_drive,
-                    a.damping_in_air,
+                    a.damping_in_medium,
                     a.friction_interaction_gain
                 )
             })
@@ -425,6 +495,12 @@ impl NodeInspectorApp {
             egui::Slider::new(&mut self.analysis_resolution, 2..=96).text("analysis resolution"),
         );
         ui.add(egui::Slider::new(&mut self.mode_count, 1..=24).text("mode count"));
+        if ui.button("Recompute analysis").clicked() {
+            self.recompute_requested = true;
+        }
+        if self.analysis_is_stale() {
+            ui.small("Inputs changed. Click Recompute analysis to refresh results.");
+        }
 
         egui::CollapsingHeader::new("Shape Profile")
             .id_salt("node_shape_profile")
@@ -665,6 +741,7 @@ impl NodeInspectorApp {
                 ui.add(egui::Slider::new(&mut self.pan_x, -480.0..=480.0).text("pan x"));
                 ui.add(egui::Slider::new(&mut self.pan_y, -360.0..=360.0).text("pan y"));
                 ui.checkbox(&mut self.wireframe, "wireframe overlay");
+                ui.small("Front faces use cool hues, back faces use warm hues.");
                 ui.small("Drag in preview to pan");
             });
 
@@ -716,7 +793,7 @@ impl NodeInspectorApp {
         &mut self,
         ui: &mut egui::Ui,
         display: &DisplayCache,
-        debug: &NodeComputedDebug,
+        debug: Option<&NodeComputedDebug>,
     ) {
         let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::drag());
         let rect = response.rect;
@@ -738,6 +815,7 @@ impl NodeInspectorApp {
             self.pan_y,
             rect,
             Color32::from_rgb(91, 151, 219),
+            Color32::from_rgb(228, 129, 113),
         ));
         tris.extend(collect_projected_tris(
             &display.clapper_preview.points,
@@ -749,6 +827,7 @@ impl NodeInspectorApp {
             self.pan_y,
             rect,
             Color32::from_rgb(220, 179, 105),
+            Color32::from_rgb(186, 122, 74),
         ));
 
         tris.sort_by(|a, b| {
@@ -769,18 +848,20 @@ impl NodeInspectorApp {
             ));
         }
 
-        let mode_points = collect_mode_overlay_points(
-            &display.shell_overlay_points,
-            debug,
-            self.camera_yaw,
-            self.camera_pitch,
-            self.zoom,
-            self.pan_x,
-            self.pan_y,
-            rect,
-        );
-        for point in mode_points {
-            painter.circle_filled(point.pos, point.radius_px, point.color);
+        if let Some(debug) = debug {
+            let mode_points = collect_mode_overlay_points(
+                &display.shell_overlay_points,
+                debug,
+                self.camera_yaw,
+                self.camera_pitch,
+                self.zoom,
+                self.pan_x,
+                self.pan_y,
+                rect,
+            );
+            for point in mode_points {
+                painter.circle_filled(point.pos, point.radius_px, point.color);
+            }
         }
     }
 
@@ -903,7 +984,7 @@ impl NodeInspectorApp {
                         strike_acoustics.frequency_hz,
                         strike_mode.strike_base.coupling,
                         strike_mode.strike_base.angle_sensitivity,
-                        strike_acoustics.damping_in_air,
+                        strike_acoustics.damping_in_medium,
                         strike_acoustics.impact_bandwidth_hz,
                     ));
                 }
@@ -917,7 +998,7 @@ impl NodeInspectorApp {
                     acoustics.jet_mode.frequency_hz,
                     structure.jet_mode.jet_base.coupling,
                     structure.jet_mode.rim_response,
-                    acoustics.jet_mode.damping_in_air,
+                    acoustics.jet_mode.damping_in_medium,
                     acoustics.jet_mode.acoustic_lock_in.lock_center_hz,
                     acoustics.jet_mode.acoustic_lock_in.lock_bandwidth_hz,
                     structure.jet_mode.jet_base.vortex_dynamics.threshold_drive,
@@ -947,7 +1028,7 @@ impl NodeInspectorApp {
                         slide_mode.slide_base.contact_state.slip_drive,
                         slide_mode.slide_base.contact_state.stick_slip_propensity,
                         slide_mode.slide_base.contact_state.contact_intermittency,
-                        slide_acoustics.damping_in_air,
+                        slide_acoustics.damping_in_medium,
                         slide_acoustics.slide_bandwidth_hz,
                         slide_acoustics.friction_interaction_gain,
                         slide_acoustics.squeal_tendency,
@@ -959,7 +1040,11 @@ impl NodeInspectorApp {
 
 impl eframe::App for NodeInspectorApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        self.ensure_analysis_requested();
+        self.ensure_live_display();
+        if self.recompute_requested {
+            self.ensure_analysis_requested();
+            self.recompute_requested = false;
+        }
         self.poll_analysis();
 
         egui::Panel::left("node_controls")
@@ -971,12 +1056,16 @@ impl eframe::App for NodeInspectorApp {
                 });
             });
 
-        self.ensure_analysis_requested();
-        self.poll_analysis();
-
         egui::CentralPanel::default().show_inside(ui, |ui| {
-            if let Some(ready) = self.ready_analysis.take() {
-                self.print_debug_snapshot_once_for_change(&ready.debug);
+            if let Some(display) = self.live_display.clone() {
+                let debug_for_overlay = self.ready_analysis.as_ref().and_then(|ready| {
+                    (ready.node_signature == self.node_signature()).then_some(ready.debug.clone())
+                });
+
+                if let Some(debug) = debug_for_overlay.as_ref() {
+                    self.print_debug_snapshot_once_for_change(debug);
+                }
+
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     if self.analysis_is_pending() {
                         ui.horizontal(|ui| {
@@ -987,7 +1076,7 @@ impl eframe::App for NodeInspectorApp {
                     }
 
                     ui.group(|ui| {
-                        self.top_charts(ui, &ready.display);
+                        self.top_charts(ui, &display);
                     });
 
                     ui.add_space(6.0);
@@ -996,17 +1085,22 @@ impl eframe::App for NodeInspectorApp {
                             egui::vec2(ui.available_width(), 520.0),
                             egui::Layout::top_down(egui::Align::LEFT),
                             |ui| {
-                                self.draw_3d_preview(ui, &ready.display, &ready.debug);
+                                self.draw_3d_preview(ui, &display, debug_for_overlay.as_ref());
                             },
                         );
                     });
 
                     ui.add_space(6.0);
-                    ui.group(|ui| {
-                        self.bottom_debug(ui, &ready.debug);
-                    });
+                    if let Some(debug) = debug_for_overlay.as_ref() {
+                        ui.group(|ui| {
+                            self.bottom_debug(ui, debug);
+                        });
+                    } else if self.analysis_is_stale() {
+                        ui.group(|ui| {
+                            ui.label("Analysis is stale. Click Recompute analysis to refresh modal data.");
+                        });
+                    }
                 });
-                self.ready_analysis = Some(ready);
             } else {
                 ui.centered_and_justified(|ui| {
                     if self.analysis_is_pending() {
@@ -1057,7 +1151,8 @@ fn collect_projected_tris(
     pan_x: f32,
     pan_y: f32,
     rect: Rect,
-    base_color: Color32,
+    front_face_color: Color32,
+    back_face_color: Color32,
 ) -> Vec<DrawTri> {
     if points.is_empty() || indices.is_empty() {
         return vec![];
@@ -1085,13 +1180,15 @@ fn collect_projected_tris(
         let b = transformed[ib];
         let c = transformed[ic];
         let normal = (b - a).cross(&(c - a));
-        if normal.z >= 0.0 {
-            continue;
-        }
 
         let light_dir = Vector3::new(0.35, -0.4, -1.0).normalize();
         let lambert = normal.normalize().dot(&light_dir).abs().clamp(0.1, 1.0);
         let shade = 0.25 + lambert * 0.75;
+        let base_color = if normal.z < 0.0 {
+            front_face_color
+        } else {
+            back_face_color
+        };
         let fill = scale_color(base_color, shade as f32);
 
         let p0 = project_to_screen(a, rect, scale, pan_x, pan_y);
@@ -1254,7 +1351,7 @@ fn radial_profile_from_points(points: &[Point3<f64>], bins: usize) -> Vec<(f64, 
 
 fn spawn_analysis(inputs: NodeAnalysisInputs) -> PendingAnalysis {
     let node_signature = inputs.node_signature.clone();
-    let debug_signature = inputs.debug_signature.clone();
+    let acoustic_signature = inputs.acoustic_signature.clone();
     let (sender, receiver) = mpsc::channel();
 
     thread::spawn(move || {
@@ -1264,7 +1361,7 @@ fn spawn_analysis(inputs: NodeAnalysisInputs) -> PendingAnalysis {
 
     PendingAnalysis {
         node_signature,
-        debug_signature,
+        acoustic_signature,
         receiver,
     }
 }
@@ -1280,29 +1377,30 @@ fn run_analysis(inputs: NodeAnalysisInputs) -> AnalysisResult {
         Err(err) => return AnalysisResult::Error(err),
     };
 
-    let Some(debug) = node.computed_debug(inputs.resolution, inputs.mode_count, &inputs.medium)
-    else {
-        return AnalysisResult::Error("computed debug snapshot unavailable".to_string());
+    let structure = match inputs.cached_structure {
+        Some(cached) => cached,
+        None => match node.computed_structure(inputs.resolution, inputs.mode_count) {
+            Some(structure) => structure,
+            None => return AnalysisResult::Error("computed structure unavailable".to_string()),
+        },
     };
+
+    let acoustics = match node.computed_acoustics_from_structure(&structure, &inputs.medium) {
+        Some(acoustics) => acoustics,
+        None => return AnalysisResult::Error("computed acoustics unavailable".to_string()),
+    };
+    let debug = (structure, acoustics);
 
     AnalysisResult::Ready(ReadyAnalysis {
         node_signature: inputs.node_signature,
-        debug_signature: inputs.debug_signature,
-        display: build_display_cache(
-            &node,
-            &debug,
-            inputs.builders.thickness.inner_base_thickness_m,
-            inputs.builders.thickness.inner_lip_thickness_m,
-            inputs.builders.thickness.outer_base_thickness_m,
-            inputs.builders.thickness.outer_lip_thickness_m,
-        ),
+        acoustic_signature: inputs.acoustic_signature,
         debug,
     })
 }
 
 fn build_display_cache(
     node: &Node,
-    debug: &NodeComputedDebug,
+    overlay_resolution: usize,
     inner_base_thickness_m: f64,
     inner_lip_thickness_m: f64,
     outer_base_thickness_m: f64,
@@ -1370,6 +1468,6 @@ fn build_display_cache(
             .inner()
             .base
             .base
-            .sample_points(debug.0.analysis_resolution),
+            .sample_points(overlay_resolution),
     }
 }

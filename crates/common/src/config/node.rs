@@ -20,9 +20,9 @@ pub use builder::*;
 pub use shape_profile::*;
 pub use types::*;
 
+use acoustics::{jet, shared, slide, strike};
 use solver::per_vertex_thickness;
 use solver::{BowlDescriptor, ScalarMode};
-use acoustics::{jet, shared, slide, strike};
 
 impl Node {
     pub fn new(
@@ -156,13 +156,7 @@ impl Node {
             .into_iter()
             .enumerate()
             .map(|(i, mode)| {
-                strike::damping_for_medium(
-                    self,
-                    i,
-                    mode.frequency_hz,
-                    &band.medium,
-                    descriptor,
-                )
+                strike::damping_for_medium(self, i, mode.frequency_hz, &band.medium, descriptor)
             })
             .collect()
     }
@@ -362,24 +356,18 @@ impl Node {
         )
     }
 
-    pub fn computed_debug(
+    pub fn computed_structure(
         &self,
         resolution: usize,
         mode_count: usize,
-        medium: &Medium,
-    ) -> Option<NodeComputedDebug> {
+    ) -> Option<NodeComputedStructure> {
         let analysis_resolution = solver::analysis_resolution(resolution);
         let bowl_mesh = self.bowl_surface_mesh(analysis_resolution)?;
         if bowl_mesh.vertex_count() < 3 {
             return None;
         }
 
-        let descriptor = solver::bowl_descriptor(
-            self,
-            analysis_resolution,
-            &bowl_mesh,
-            Some(medium.temperature_c),
-        )?;
+        let descriptor = solver::bowl_descriptor(self, analysis_resolution, &bowl_mesh, None)?;
         let pvt = per_vertex_thickness(
             self,
             analysis_resolution,
@@ -398,31 +386,13 @@ impl Node {
             &solved.modes,
         );
 
-        let strike_acoustics = strike_modes
-            .iter()
-            .map(|mode| {
-                strike::acoustics_for_mode(
-                    self,
-                    mode.mode_index,
-                    mode.frequency_hz,
-                    medium,
-                    descriptor,
-                )
-            })
-            .collect::<Vec<_>>();
-        let jet_acoustics = jet::acoustics_for_mode(self, &jet_mode, medium, descriptor);
-        let slide_acoustics = slide_modes
-            .iter()
-            .map(|mode| slide::acoustics_for_mode(self, mode, medium, descriptor))
-            .collect::<Vec<_>>();
-
         let bowl_surface_area_m2 =
             mesh_surface_area_m2(&bowl_mesh.vertices, &bowl_mesh.indices).max(MODAL_EPSILON);
         let bowl_volume_m3 = self.bowl.meshable.material_volume_m3(analysis_resolution);
         let bowl_mass_kg = self.bowl.mass_kg(analysis_resolution);
         let clapper_mass_kg = self.clapper.mass_kg(analysis_resolution);
 
-        let structure = NodeComputedStructure {
+        Some(NodeComputedStructure {
             requested_resolution: resolution,
             analysis_resolution,
             mode_budget: mode_count,
@@ -452,14 +422,62 @@ impl Node {
             strike_modes,
             jet_mode,
             slide_modes,
-        };
+        })
+    }
 
-        let acoustics = NodeComputedAcoustics {
+    pub fn computed_acoustics_from_structure(
+        &self,
+        structure: &NodeComputedStructure,
+        medium: &Medium,
+    ) -> Option<NodeComputedAcoustics> {
+        let bowl_mesh = self.bowl_surface_mesh(structure.analysis_resolution)?;
+        if bowl_mesh.vertex_count() < 3 {
+            return None;
+        }
+
+        let descriptor = solver::bowl_descriptor(
+            self,
+            structure.analysis_resolution,
+            &bowl_mesh,
+            Some(medium.temperature_c),
+        )?;
+
+        let strike_acoustics = structure
+            .strike_modes
+            .iter()
+            .map(|mode| {
+                strike::acoustics_for_mode(
+                    self,
+                    mode.mode_index,
+                    mode.frequency_hz,
+                    medium,
+                    descriptor,
+                )
+            })
+            .collect::<Vec<_>>();
+        let jet_acoustics = jet::acoustics_for_mode(self, &structure.jet_mode, medium, descriptor);
+        let slide_acoustics = structure
+            .slide_modes
+            .iter()
+            .map(|mode| slide::acoustics_for_mode(self, mode, medium, descriptor))
+            .collect::<Vec<_>>();
+
+        Some(NodeComputedAcoustics {
             strike_modes: strike_acoustics,
             jet_mode: jet_acoustics,
             slide_modes: slide_acoustics,
             medium: medium.clone(),
-        };
+        })
+    }
+
+    pub fn computed_debug(
+        &self,
+        resolution: usize,
+        mode_count: usize,
+        medium: &Medium,
+    ) -> Option<NodeComputedDebug> {
+        let structure = self.computed_structure(resolution, mode_count)?;
+        let acoustics = self.computed_acoustics_from_structure(&structure, medium)?;
 
         Some((structure, acoustics))
     }

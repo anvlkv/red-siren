@@ -147,7 +147,7 @@ pub struct StrikeAcousticsInMedium {
     /// Effective resonance frequency used for strike response [Hz]
     pub frequency_hz: f64,
     /// Damping due to air viscosity [0, 1]
-    pub damping_in_air: f64,
+    pub damping_in_medium: f64,
     /// Resonant bandwidth of impact response [Hz]
     pub impact_bandwidth_hz: f64,
 }
@@ -159,7 +159,7 @@ pub struct JetAcousticsInMedium {
     /// Effective resonance frequency used for jet lock-in [Hz]
     pub frequency_hz: f64,
     /// Damping due to air viscosity [0, 1]
-    pub damping_in_air: f64,
+    pub damping_in_medium: f64,
     /// Acoustic cavity resonance (quarter-wave lock-in)
     pub acoustic_lock_in: AcousticLockIn,
     /// Acoustic radiation efficiency
@@ -173,7 +173,7 @@ pub struct SlideAcousticsInMedium {
     /// Effective resonance frequency used for slide response [Hz]
     pub frequency_hz: f64,
     /// Damping for sustained rubbing/sliding in the given medium [0, 1]
-    pub damping_in_air: f64,
+    pub damping_in_medium: f64,
     /// Effective bandwidth of friction-noise excitation [Hz]
     pub slide_bandwidth_hz: f64,
     /// Tonal squeal tendency under slide lock-in conditions [0, 1]

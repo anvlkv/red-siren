@@ -84,7 +84,7 @@ pub(crate) fn acoustics_for_mode(
         * (1.0 + 0.06 * slide_base.contact_state.slip_drive
             - 0.035 * slide_base.contact_state.contact_intermittency))
         .max(1.0);
-    let damping_in_air =
+    let damping_in_medium =
         damping_for_medium(node, mode_index, slide_frequency_hz, medium, descriptor);
     let friction_interaction_gain = (0.25 * slide_base.contact_state.normal_load_proxy
         + 0.35 * slide_base.contact_state.slip_drive
@@ -94,12 +94,12 @@ pub(crate) fn acoustics_for_mode(
     let slide_bandwidth_hz = ((0.01
         + 0.2 * slide_base.coupling
         + 0.45 * friction_interaction_gain
-        + damping_in_air * 0.45)
+        + damping_in_medium * 0.45)
         * slide_frequency_hz)
         .max(0.2);
     let squeal_tendency = ((slide_base.roughness_sensitivity
         * (0.55 + 0.45 * slide_base.contact_state.stick_slip_propensity)
-        * (1.0 - damping_in_air)
+        * (1.0 - damping_in_medium)
         * (0.7 + 0.3 * friction_interaction_gain))
         - 0.2 * slide_base.contact_state.contact_intermittency)
         .clamp(0.0, 1.0);
@@ -109,7 +109,7 @@ pub(crate) fn acoustics_for_mode(
     SlideAcousticsInMedium {
         mode_index,
         frequency_hz: slide_frequency_hz,
-        damping_in_air,
+        damping_in_medium,
         slide_bandwidth_hz,
         squeal_tendency,
         friction_interaction_gain,

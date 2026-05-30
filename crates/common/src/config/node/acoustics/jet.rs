@@ -35,7 +35,7 @@ pub(crate) fn acoustics_for_mode(
     let structural_frequency_hz = jet_mode.structural_frequency_hz;
     let (m, _n) = shared::mode_index_pair(mode_index);
 
-    let damping_in_air = damping_for_medium(
+    let damping_in_medium = damping_for_medium(
         node,
         mode_index,
         structural_frequency_hz,
@@ -52,7 +52,7 @@ pub(crate) fn acoustics_for_mode(
         / speed_of_sound_m_per_s.max(MODAL_EPSILON);
     let radiation_efficiency = shared::radiation_efficiency_from_ka(ka, m);
 
-    let lock_bandwidth_hz = ((0.02 + 0.07 * jet_mode.jet_base.coupling + 0.15 * damping_in_air)
+    let lock_bandwidth_hz = ((0.02 + 0.07 * jet_mode.jet_base.coupling + 0.15 * damping_in_medium)
         * frequency_hz)
         .max(0.5);
     let phase_sensitivity = (1.0 / ((m + 1) as f64).sqrt()).clamp(0.2, 1.0);
@@ -60,7 +60,7 @@ pub(crate) fn acoustics_for_mode(
     JetAcousticsInMedium {
         source_mode_index: mode_index,
         frequency_hz,
-        damping_in_air,
+        damping_in_medium,
         acoustic_lock_in: AcousticLockIn {
             lock_center_hz: frequency_hz,
             lock_bandwidth_hz,

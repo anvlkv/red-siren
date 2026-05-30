@@ -14,8 +14,13 @@ pub(crate) fn damping_for_medium(
     medium: &Medium,
     descriptor: BowlDescriptor,
 ) -> f64 {
-    let c = shared::damping_components_for_medium(node, mode_index, frequency_hz, medium, descriptor);
-    (c.structural + c.medium_viscous + c.radiation * 0.02 + c.clapper_coupling * 1.6 + c.friction_drive * 0.25)
+    let c =
+        shared::damping_components_for_medium(node, mode_index, frequency_hz, medium, descriptor);
+    (c.structural
+        + c.medium_viscous
+        + c.radiation * 0.02
+        + c.clapper_coupling * 1.6
+        + c.friction_drive * 0.25)
         .clamp(1e-5, 0.95)
 }
 
@@ -27,13 +32,13 @@ pub(crate) fn acoustics_for_mode(
     medium: &Medium,
     descriptor: BowlDescriptor,
 ) -> StrikeAcousticsInMedium {
-    let damping_in_air = damping_for_medium(node, mode_index, frequency_hz, medium, descriptor);
-    let impact_bandwidth_hz = ((0.01 + damping_in_air * 0.8) * frequency_hz).max(0.0);
+    let damping_in_medium = damping_for_medium(node, mode_index, frequency_hz, medium, descriptor);
+    let impact_bandwidth_hz = ((0.01 + damping_in_medium * 0.8) * frequency_hz).max(0.0);
 
     StrikeAcousticsInMedium {
         mode_index,
         frequency_hz,
-        damping_in_air,
+        damping_in_medium,
         impact_bandwidth_hz,
     }
 }

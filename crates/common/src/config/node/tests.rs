@@ -91,6 +91,85 @@ fn path_acoustics_expose_distinct_effective_frequencies() {
 }
 
 #[test]
+fn two_step_compute_matches_computed_debug() {
+    let node = default_node();
+    let medium = Medium::standard_air();
+
+    let direct = node
+        .computed_debug(8, 4, &medium)
+        .expect("computed debug snapshot");
+    let structure = node
+        .computed_structure(8, 4)
+        .expect("computed structure snapshot");
+    let acoustics = node
+        .computed_acoustics_from_structure(&structure, &medium)
+        .expect("computed acoustics snapshot");
+
+    assert_eq!(direct.0.analysis_resolution, structure.analysis_resolution);
+    assert_eq!(direct.0.mode_budget, structure.mode_budget);
+    assert_eq!(direct.0.strike_modes.len(), structure.strike_modes.len());
+    assert_eq!(direct.0.slide_modes.len(), structure.slide_modes.len());
+
+    assert_eq!(direct.1.strike_modes.len(), acoustics.strike_modes.len());
+    assert_eq!(direct.1.slide_modes.len(), acoustics.slide_modes.len());
+    let lock_center_delta = (direct.1.jet_mode.acoustic_lock_in.lock_center_hz
+        - acoustics.jet_mode.acoustic_lock_in.lock_center_hz)
+        .abs();
+    assert!(
+        lock_center_delta < 0.2,
+        "expected small lock-center drift between equivalent paths, got delta={lock_center_delta}"
+    );
+}
+
+#[test]
+fn medium_changes_recompute_acoustics_without_structure_recompute() {
+    let node = default_node();
+    let structure = node
+        .computed_structure(8, 4)
+        .expect("computed structure snapshot");
+
+    let air = Medium::standard_air();
+    let heavy_medium = Medium::from_available(
+        "HEAVY_MEDIUM",
+        "Heavy Medium",
+        "gas",
+        10.0,
+        Medium::STANDARD_PRESSURE_PA,
+        3.2,
+        220.0,
+        4.0e-5,
+        None,
+    );
+
+    let air_acoustics = node
+        .computed_acoustics_from_structure(&structure, &air)
+        .expect("air acoustics");
+    let heavy_acoustics = node
+        .computed_acoustics_from_structure(&structure, &heavy_medium)
+        .expect("heavy acoustics");
+
+    assert_eq!(structure.mode_budget, 4);
+    assert_eq!(structure.strike_modes.len(), air_acoustics.strike_modes.len());
+    assert_eq!(structure.strike_modes.len(), heavy_acoustics.strike_modes.len());
+
+    let air_damping_sum: f64 = air_acoustics
+        .strike_modes
+        .iter()
+        .map(|mode| mode.damping_in_medium)
+        .sum();
+    let heavy_damping_sum: f64 = heavy_acoustics
+        .strike_modes
+        .iter()
+        .map(|mode| mode.damping_in_medium)
+        .sum();
+
+    assert!(
+        (air_damping_sum - heavy_damping_sum).abs() > 1e-6,
+        "expected medium-only acoustics recompute to change damping"
+    );
+}
+
+#[test]
 fn default_builder_first_mode_stays_in_audible_bell_range() {
     let builders = NodeModelBuilders::default();
     let node = builders
@@ -268,11 +347,20 @@ fn computed_debug_snapshot_contains_full_metrics() {
     assert_eq!(structure.strike_modes.len(), acoustics.strike_modes.len());
     assert_eq!(structure.slide_modes.len(), acoustics.slide_modes.len());
     assert!(
-        acoustics.jet_mode.acoustic_lock_in.lock_bandwidth_hz.is_finite()
+        acoustics
+            .jet_mode
+            .acoustic_lock_in
+            .lock_bandwidth_hz
+            .is_finite()
             && acoustics.jet_mode.acoustic_lock_in.lock_bandwidth_hz >= 0.0
     );
     assert!(
-        structure.jet_mode.jet_base.vortex_dynamics.strouhal_target.is_finite()
+        structure
+            .jet_mode
+            .jet_base
+            .vortex_dynamics
+            .strouhal_target
+            .is_finite()
             && structure.jet_mode.jet_base.vortex_dynamics.strouhal_target > 0.0
             && (0.0..=1.0).contains(&structure.jet_mode.rim_response)
     );
@@ -375,20 +463,29 @@ fn slide_damping_increases_with_friction() {
     let high_structure = &high.0;
     let high_acoustics = &high.1;
 
-    let mean_metric = |modes: &[SlideModeStructure], extractor: fn(&SlideContactState) -> f64| -> f64 {
-        let values = modes
-            .iter()
-            .map(|mode| extractor(&mode.slide_base.contact_state))
-            .collect::<Vec<_>>();
-        if values.is_empty() {
-            0.0
-        } else {
-            values.iter().sum::<f64>() / values.len() as f64
-        }
-    };
+    let mean_metric =
+        |modes: &[SlideModeStructure], extractor: fn(&SlideContactState) -> f64| -> f64 {
+            let values = modes
+                .iter()
+                .map(|mode| extractor(&mode.slide_base.contact_state))
+                .collect::<Vec<_>>();
+            if values.is_empty() {
+                0.0
+            } else {
+                values.iter().sum::<f64>() / values.len() as f64
+            }
+        };
 
-    let low_sum: f64 = low_acoustics.slide_modes.iter().map(|m| m.damping_in_air).sum();
-    let high_sum: f64 = high_acoustics.slide_modes.iter().map(|m| m.damping_in_air).sum();
+    let low_sum: f64 = low_acoustics
+        .slide_modes
+        .iter()
+        .map(|m| m.damping_in_medium)
+        .sum();
+    let high_sum: f64 = high_acoustics
+        .slide_modes
+        .iter()
+        .map(|m| m.damping_in_medium)
+        .sum();
     assert!(
         high_sum > low_sum,
         "expected higher slide damping with higher friction, got low={low_sum}, high={high_sum}"
@@ -415,16 +512,12 @@ fn slide_damping_increases_with_friction() {
         (high_gain - low_gain).abs() > 1e-6,
         "expected friction interaction gain to change with friction, got low={low_gain}, high={high_gain}"
     );
-    assert!(
-        low_acoustics
-            .slide_modes
-            .iter()
-            .all(|mode| (0.0..=1.0).contains(&mode.friction_interaction_gain))
-    );
-    assert!(
-        high_acoustics
-            .slide_modes
-            .iter()
-            .all(|mode| (0.0..=1.0).contains(&mode.friction_interaction_gain))
-    );
+    assert!(low_acoustics
+        .slide_modes
+        .iter()
+        .all(|mode| (0.0..=1.0).contains(&mode.friction_interaction_gain)));
+    assert!(high_acoustics
+        .slide_modes
+        .iter()
+        .all(|mode| (0.0..=1.0).contains(&mode.friction_interaction_gain)));
 }

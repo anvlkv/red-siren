@@ -1,6 +1,9 @@
 use common::body::materials::{Material, Medium};
 use common::config::{Node, NodeComputedDebug, NodeComputedStructure, NodeModelBuilders};
-use common::egui_helpers::{draw_xy_line_chart, draw_xy_multi_line_chart_sized, run_native_app};
+use common::egui_helpers::{
+    draw_xy_line_chart, draw_xy_multi_line_chart_sized, run_native_app,
+    show_action_error_messages, show_scrolled_left_panel_inside, CameraControls,
+};
 use common::Meshable;
 use eframe::egui::{self, Color32, Pos2, Rect, Sense, Shape, Stroke};
 use nalgebra::{Point3, Vector3};
@@ -98,11 +101,7 @@ struct NodeInspectorApp {
     seed: u64,
     analysis_resolution: usize,
     mode_count: usize,
-    camera_yaw: f64,
-    camera_pitch: f64,
-    zoom: f64,
-    pan_x: f32,
-    pan_y: f32,
+    camera: CameraControls,
     wireframe: bool,
     last_error: Option<String>,
     last_debug_snapshot: Option<String>,
@@ -143,11 +142,7 @@ impl Default for NodeInspectorApp {
             seed: 7,
             analysis_resolution: 8,
             mode_count: 8,
-            camera_yaw: 0.65,
-            camera_pitch: 0.45,
-            zoom: 1.45,
-            pan_x: 0.0,
-            pan_y: 0.0,
+            camera: CameraControls::orbit_zoom_pan(0.45, 0.65, 1.45, 0.0, 0.0),
             wireframe: true,
             last_error: None,
             last_debug_snapshot: None,
@@ -735,20 +730,16 @@ impl NodeInspectorApp {
             .id_salt("node_preview")
             .default_open(false)
             .show(ui, |ui| {
-                ui.add(egui::Slider::new(&mut self.camera_yaw, -3.14..=3.14).text("yaw"));
-                ui.add(egui::Slider::new(&mut self.camera_pitch, -1.35..=1.35).text("pitch"));
-                ui.add(egui::Slider::new(&mut self.zoom, 0.35..=3.5).text("zoom"));
-                ui.add(egui::Slider::new(&mut self.pan_x, -480.0..=480.0).text("pan x"));
-                ui.add(egui::Slider::new(&mut self.pan_y, -360.0..=360.0).text("pan y"));
+                self.camera.show_collapsing(ui, "Camera", "node_camera");
                 ui.checkbox(&mut self.wireframe, "wireframe overlay");
                 ui.small("Front faces use cool hues, back faces use warm hues.");
                 ui.small("Drag in preview to pan");
             });
 
-        if let Some(err) = &self.last_error {
-            ui.separator();
-            ui.colored_label(Color32::from_rgb(255, 120, 120), format!("Error: {err}"));
-        }
+        ui.separator();
+        let action_message = None;
+        let error_message = self.last_error.as_ref().map(|err| format!("Error: {err}"));
+        show_action_error_messages(ui, &action_message, &error_message);
     }
 
     fn top_charts(&self, ui: &mut egui::Ui, display: &DisplayCache) {
@@ -799,20 +790,28 @@ impl NodeInspectorApp {
         let rect = response.rect;
         if response.dragged() {
             let delta = ui.ctx().input(|input| input.pointer.delta());
-            self.pan_x += delta.x;
-            self.pan_y += delta.y;
+            if let Some(pan_x) = &mut self.camera.pan_x {
+                *pan_x += delta.x;
+            }
+            if let Some(pan_y) = &mut self.camera.pan_y {
+                *pan_y += delta.y;
+            }
         }
         painter.rect_filled(rect, 6.0, Color32::from_rgb(17, 22, 28));
+
+        let zoom = self.camera.zoom.unwrap_or(1.0);
+        let pan_x = self.camera.pan_x.unwrap_or(0.0);
+        let pan_y = self.camera.pan_y.unwrap_or(0.0);
 
         let mut tris = Vec::new();
         tris.extend(collect_projected_tris(
             &display.bowl_preview.points,
             &display.bowl_preview.indices,
-            self.camera_yaw,
-            self.camera_pitch,
-            self.zoom,
-            self.pan_x,
-            self.pan_y,
+            self.camera.yaw,
+            self.camera.pitch,
+            zoom,
+            pan_x,
+            pan_y,
             rect,
             Color32::from_rgb(91, 151, 219),
             Color32::from_rgb(228, 129, 113),
@@ -820,11 +819,11 @@ impl NodeInspectorApp {
         tris.extend(collect_projected_tris(
             &display.clapper_preview.points,
             &display.clapper_preview.indices,
-            self.camera_yaw,
-            self.camera_pitch,
-            self.zoom,
-            self.pan_x,
-            self.pan_y,
+            self.camera.yaw,
+            self.camera.pitch,
+            zoom,
+            pan_x,
+            pan_y,
             rect,
             Color32::from_rgb(220, 179, 105),
             Color32::from_rgb(186, 122, 74),
@@ -852,11 +851,11 @@ impl NodeInspectorApp {
             let mode_points = collect_mode_overlay_points(
                 &display.shell_overlay_points,
                 debug,
-                self.camera_yaw,
-                self.camera_pitch,
-                self.zoom,
-                self.pan_x,
-                self.pan_y,
+                self.camera.yaw,
+                self.camera.pitch,
+                zoom,
+                pan_x,
+                pan_y,
                 rect,
             );
             for point in mode_points {
@@ -1047,14 +1046,9 @@ impl eframe::App for NodeInspectorApp {
         }
         self.poll_analysis();
 
-        egui::Panel::left("node_controls")
-            .min_size(300.0)
-            .max_size(420.0)
-            .show_inside(ui, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    self.left_controls(ui);
-                });
-            });
+        show_scrolled_left_panel_inside(ui, "node_controls", 300.0, Some(420.0), |ui| {
+            self.left_controls(ui);
+        });
 
         egui::CentralPanel::default().show_inside(ui, |ui| {
             if let Some(display) = self.live_display.clone() {

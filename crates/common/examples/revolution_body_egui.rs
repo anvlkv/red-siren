@@ -1,6 +1,7 @@
 use common::body::{Meshable, RevolutionAxis, RevolutionMesh};
 use common::egui_helpers::{
-    draw_depth_wireframe, draw_segment_chart_sized, run_native_app, DirectSegmentConfig,
+    draw_depth_wireframe, draw_segment_chart_sized, run_native_app,
+    show_scrolled_left_panel_inside, show_validation_status, CameraControls, DirectSegmentConfig,
     MeshProjector,
 };
 use eframe::egui::{self, Color32};
@@ -24,8 +25,7 @@ struct RevolutionBodyApp {
     axis: RevolutionAxis,
     resolution: usize,
     validation_error: Option<String>,
-    camera_pitch: f64,
-    camera_yaw: f64,
+    camera: CameraControls,
 }
 
 impl Default for RevolutionBodyApp {
@@ -44,8 +44,7 @@ impl Default for RevolutionBodyApp {
             axis: RevolutionAxis::Y,
             resolution: 16,
             validation_error: None,
-            camera_pitch: 0.5,
-            camera_yaw: 0.7,
+            camera: CameraControls::orbit(0.5, 0.7),
         }
     }
 }
@@ -118,33 +117,16 @@ impl RevolutionBodyApp {
                 ui.add(egui::Slider::new(&mut self.resolution, 4..=48).text("Resolution"));
             });
 
-        egui::CollapsingHeader::new("Camera Control")
-            .id_salt("revolution_camera")
-            .default_open(false)
-            .show(ui, |ui| {
-                ui.add(
-                    egui::Slider::new(
-                        &mut self.camera_pitch,
-                        -std::f64::consts::PI..=std::f64::consts::PI,
-                    )
-                    .text("Pitch"),
-                );
-                ui.add(
-                    egui::Slider::new(
-                        &mut self.camera_yaw,
-                        -std::f64::consts::PI..=std::f64::consts::PI,
-                    )
-                    .text("Yaw"),
-                );
-            });
+        self.camera
+            .show_collapsing(ui, "Camera Control", "revolution_camera");
 
         ui.separator();
 
         // Validation and error display
         match self.try_build_body() {
             Ok(_) => {
-                ui.colored_label(Color32::GREEN, "✓ Valid configuration");
                 self.validation_error = None;
+                show_validation_status(ui, None, "Valid configuration");
 
                 // Show mesh statistics
                 ui.separator();
@@ -155,8 +137,8 @@ impl RevolutionBodyApp {
                 }
             }
             Err(err) => {
-                ui.colored_label(Color32::LIGHT_RED, format!("✗ {}", err));
                 self.validation_error = Some(err);
+                show_validation_status(ui, self.validation_error.as_deref(), "Valid configuration");
             }
         }
     }
@@ -213,17 +195,12 @@ fn draw_3d_mesh<const N: usize>(
 // ─── eframe app ──────────────────────────────────────────────────────────────
 
 impl eframe::App for RevolutionBodyApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::SidePanel::left("controls")
-            .min_width(300.0)
-            .max_width(400.0)
-            .show(ctx, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    self.show_controls(ui);
-                });
-            });
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        show_scrolled_left_panel_inside(ui, "controls", 300.0, Some(400.0), |ui| {
+            self.show_controls(ui);
+        });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show_inside(ui, |ui| {
             if let Ok(body) = self.try_build_body() {
                 let (stats_vertices, stats_triangles) = self.get_mesh_stats().unwrap_or((0, 0));
                 ui.heading("2D Profile Preview");
@@ -238,8 +215,8 @@ impl eframe::App for RevolutionBodyApp {
                     draw_3d_mesh(
                         ui,
                         &body,
-                        self.camera_pitch,
-                        self.camera_yaw,
+                        self.camera.pitch,
+                        self.camera.yaw,
                         self.resolution,
                     );
                 });
@@ -255,7 +232,6 @@ impl eframe::App for RevolutionBodyApp {
                 });
             }
         });
-
-        ctx.request_repaint();
+        ui.ctx().request_repaint();
     }
 }

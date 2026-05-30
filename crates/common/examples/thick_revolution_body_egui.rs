@@ -4,7 +4,8 @@ use common::body::{
 };
 use common::egui_helpers::{
     draw_depth_wireframe, draw_segment_chart_sized, draw_xy_multi_line_chart_sized, run_native_app,
-    CurveKind, DirectSegmentConfig, MeshProjector,
+    show_scrolled_left_panel_inside, show_validation_status, CameraControls, CurveKind,
+    DirectSegmentConfig, MeshProjector,
 };
 use eframe::egui::{self, Color32, Shape, Stroke};
 use nalgebra::Vector3;
@@ -31,8 +32,7 @@ struct ThickRevolutionBodyApp {
     axis: RevolutionAxis,
     resolution: usize,
     validation_error: Option<String>,
-    camera_pitch: f64,
-    camera_yaw: f64,
+    camera: CameraControls,
     selected_vertex_index: usize,
     probe_mode: ProbeMode,
     manual_direction: [f64; 3],
@@ -72,8 +72,7 @@ impl Default for ThickRevolutionBodyApp {
             axis: RevolutionAxis::Y,
             resolution: 16,
             validation_error: None,
-            camera_pitch: 0.5,
-            camera_yaw: 0.7,
+            camera: CameraControls::orbit(0.5, 0.7),
             selected_vertex_index: 0,
             probe_mode: ProbeMode::Normal,
             manual_direction: [0.0, -1.0, 0.0],
@@ -272,25 +271,7 @@ impl ThickRevolutionBodyApp {
                 ui.add(egui::Slider::new(&mut self.resolution, 4..=48).text("Resolution"));
             });
 
-        egui::CollapsingHeader::new("Camera Control")
-            .id_salt("camera")
-            .default_open(false)
-            .show(ui, |ui| {
-                ui.add(
-                    egui::Slider::new(
-                        &mut self.camera_pitch,
-                        -std::f64::consts::PI..=std::f64::consts::PI,
-                    )
-                    .text("Pitch"),
-                );
-                ui.add(
-                    egui::Slider::new(
-                        &mut self.camera_yaw,
-                        -std::f64::consts::PI..=std::f64::consts::PI,
-                    )
-                    .text("Yaw"),
-                );
-            });
+        self.camera.show_collapsing(ui, "Camera Control", "camera");
 
         egui::CollapsingHeader::new("Vertex Analysis")
             .id_salt("vertex_analysis")
@@ -331,12 +312,12 @@ impl ThickRevolutionBodyApp {
 
         match scene {
             Ok((_, _thick_body)) => {
-                ui.colored_label(Color32::GREEN, "✓ Valid configuration");
                 self.validation_error = None;
+                show_validation_status(ui, None, "Valid configuration");
             }
             Err(err) => {
-                ui.colored_label(Color32::LIGHT_RED, format!("✗ {}", err));
                 self.validation_error = Some(err);
+                show_validation_status(ui, self.validation_error.as_deref(), "Valid configuration");
             }
         }
     }
@@ -466,17 +447,12 @@ fn draw_3d_mesh<M>(
 }
 
 impl eframe::App for ThickRevolutionBodyApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::SidePanel::left("controls")
-            .min_width(320.0)
-            .max_width(430.0)
-            .show(ctx, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    self.show_controls(ui);
-                });
-            });
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        show_scrolled_left_panel_inside(ui, "controls", 320.0, Some(430.0), |ui| {
+            self.show_controls(ui);
+        });
 
-        egui::CentralPanel::default().show(ctx, |ui| match self.try_build_scene() {
+        egui::CentralPanel::default().show_inside(ui, |ui| match self.try_build_scene() {
             Ok((body, thick_body)) => {
                 let selected_normal = thick_body
                     .surface_normal_at_vertex(self.resolution, self.selected_vertex_index);
@@ -547,8 +523,8 @@ impl eframe::App for ThickRevolutionBodyApp {
                         draw_3d_mesh(
                             ui,
                             &thick_body,
-                            self.camera_pitch,
-                            self.camera_yaw,
+                            self.camera.pitch,
+                            self.camera.yaw,
                             self.resolution,
                             Some(self.selected_vertex_index),
                             display_probe_direction,
@@ -625,7 +601,6 @@ impl eframe::App for ThickRevolutionBodyApp {
                 });
             }
         });
-
-        ctx.request_repaint();
+        ui.ctx().request_repaint();
     }
 }

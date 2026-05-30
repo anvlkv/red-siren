@@ -1,7 +1,15 @@
 use std::collections::BTreeMap;
 
-use common::{device::DeviceData, playback_quality::PlaybackQuality};
-use eframe::egui::{self, Color32, RichText};
+use common::{
+    device::DeviceData,
+    egui_helpers::{
+        enum_combo, find_selected_device,
+        selected_device_label as helper_selected_device_label,
+        show_action_error_messages, show_device_combo, show_frequency_peaks, StatusTone,
+    },
+    playback_quality::PlaybackQuality,
+};
+use eframe::egui::{self, RichText};
 use fundsp::prelude::*;
 
 use crate::{
@@ -85,12 +93,12 @@ impl RuntimeTestbed {
 
         ui.horizontal(|ui| {
             ui.label("Status");
-            let color = match self.transport {
-                TransportState::Stopped => Color32::from_rgb(160, 160, 160),
-                TransportState::Running => Color32::from_rgb(102, 204, 122),
-                TransportState::Paused => Color32::from_rgb(255, 196, 92),
+            let tone = match self.transport {
+                TransportState::Stopped => StatusTone::Idle,
+                TransportState::Running => StatusTone::Success,
+                TransportState::Paused => StatusTone::Warning,
             };
-            ui.colored_label(color, self.transport.label());
+            ui.colored_label(tone.color(), self.transport.label());
         });
 
         ui.checkbox(
@@ -145,28 +153,24 @@ impl RuntimeTestbed {
         ui.separator();
         ui.label(RichText::new("Source and quality").strong());
 
-        egui::ComboBox::from_label("Excitement source")
-            .selected_text(source_label(self.source))
-            .show_ui(ui, |ui| {
-                ui.selectable_value(
-                    &mut self.source,
-                    ExcitementSource::Entropy,
-                    source_label(ExcitementSource::Entropy),
-                );
-                ui.selectable_value(
-                    &mut self.source,
-                    ExcitementSource::Mic,
-                    source_label(ExcitementSource::Mic),
-                );
-            });
+        enum_combo(
+            ui,
+            "Excitement source",
+            "runtime_source_combo",
+            &mut self.source,
+            &[
+                (ExcitementSource::Entropy, source_label(ExcitementSource::Entropy)),
+                (ExcitementSource::Mic, source_label(ExcitementSource::Mic)),
+            ],
+        );
 
-        egui::ComboBox::from_label("Playback quality")
-            .selected_text(self.quality_label())
-            .show_ui(ui, |ui| {
-                for quality in quality_options() {
-                    ui.selectable_value(&mut self.quality, quality, quality_label(quality));
-                }
-            });
+        enum_combo(
+            ui,
+            "Playback quality",
+            "runtime_quality_combo",
+            &mut self.quality,
+            &quality_options().map(|quality| (quality, quality_label(quality))),
+        );
 
         if ui.button("Apply quality").clicked() {
             self.apply_quality_if_possible();
@@ -196,44 +200,33 @@ impl RuntimeTestbed {
             self.set_action("Refreshed CPAL device list");
         }
 
-        egui::ComboBox::from_label("Output device")
-            .selected_text(selected_device_label(self.selected_output()))
-            .show_ui(ui, |ui| {
-                for device in self.devices.iter().filter(|device| device.supports_output) {
-                    ui.selectable_value(
-                        &mut self.output_choice,
-                        Some(device_key(device)),
-                        device.to_string(),
-                    );
-                }
-            });
+        show_device_combo(
+            ui,
+            "Output device",
+            "runtime_output_device",
+            &self.devices,
+            &mut self.output_choice,
+            |device| device.supports_output,
+        );
         if ui.button("Apply output device").clicked() {
             self.apply_output_selection();
         }
 
-        egui::ComboBox::from_label("Input device")
-            .selected_text(selected_device_label(self.selected_input()))
-            .show_ui(ui, |ui| {
-                for device in self.devices.iter().filter(|device| device.supports_input) {
-                    ui.selectable_value(
-                        &mut self.input_choice,
-                        Some(device_key(device)),
-                        device.to_string(),
-                    );
-                }
-            });
+        show_device_combo(
+            ui,
+            "Input device",
+            "runtime_input_device",
+            &self.devices,
+            &mut self.input_choice,
+            |device| device.supports_input,
+        );
         if ui.button("Apply input device").clicked() {
             self.apply_input_selection();
         }
 
         ui.separator();
         ui.label(RichText::new("Messages").strong());
-        if let Some(action) = &self.last_action {
-            ui.colored_label(Color32::from_rgb(120, 195, 255), action);
-        }
-        if let Some(error) = &self.last_error {
-            ui.colored_label(Color32::from_rgb(255, 120, 120), error);
-        }
+        show_action_error_messages(ui, &self.last_action, &self.last_error);
 
         self.handle_source_change(previous_source);
     }
@@ -277,10 +270,10 @@ impl RuntimeTestbed {
                 if let Some(snapshot) = &self.diagnostics {
                     ui.label(format!("Input samples captured: {}", snapshot.input_len));
                     ui.label("Left peaks");
-                    render_peaks(ui, &snapshot.left_peaks);
+                    show_frequency_peaks(ui, &snapshot.left_peaks, "No peaks yet");
                     ui.separator();
                     ui.label("Right peaks");
-                    render_peaks(ui, &snapshot.right_peaks);
+                    show_frequency_peaks(ui, &snapshot.right_peaks, "No peaks yet");
                 } else {
                     ui.label("No diagnostics captured yet.");
                 }
@@ -297,25 +290,11 @@ impl RuntimeTestbed {
     }
 
     fn selected_output(&self) -> Option<DeviceData> {
-        self.output_choice
-            .as_ref()
-            .and_then(|key| {
-                self.devices
-                    .iter()
-                    .find(|device| device_key(device) == *key)
-            })
-            .cloned()
+        find_selected_device(&self.devices, self.output_choice.as_deref()).cloned()
     }
 
     fn selected_input(&self) -> Option<DeviceData> {
-        self.input_choice
-            .as_ref()
-            .and_then(|key| {
-                self.devices
-                    .iter()
-                    .find(|device| device_key(device) == *key)
-            })
-            .cloned()
+        find_selected_device(&self.devices, self.input_choice.as_deref()).cloned()
     }
 
     fn rebuild_engine(&mut self) {
@@ -590,25 +569,8 @@ fn strongest_peaks(spectrum: &BTreeMap<u32, f32>, limit: usize) -> Vec<(u32, f32
     peaks
 }
 
-fn render_peaks(ui: &mut egui::Ui, peaks: &[(u32, f32)]) {
-    if peaks.is_empty() {
-        ui.small("No peaks yet");
-        return;
-    }
-
-    for (frequency, amplitude) in peaks {
-        ui.monospace(format!("{frequency:>5} Hz  {amplitude:.4}"));
-    }
-}
-
-fn device_key(device: &DeviceData) -> String {
-    format!("{}::{}", device.host_id, device.device_id)
-}
-
 fn selected_device_label(device: Option<DeviceData>) -> String {
-    device
-        .map(|device| device.to_string())
-        .unwrap_or_else(|| "Default device".to_string())
+    helper_selected_device_label(device.as_ref())
 }
 
 fn source_label(source: ExcitementSource) -> &'static str {

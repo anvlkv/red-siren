@@ -332,6 +332,17 @@ pub fn draw_xy_multi_line_chart_sized(
     );
 }
 
+pub fn show_frequency_peaks(ui: &mut Ui, peaks: &[(u32, f32)], empty_label: &str) {
+    if peaks.is_empty() {
+        ui.small(empty_label);
+        return;
+    }
+
+    for (frequency, amplitude) in peaks {
+        ui.monospace(format!("{frequency:>5} Hz  {amplitude:.4}"));
+    }
+}
+
 pub struct MeshProjector {
     center: Pos2,
     scale: f32,

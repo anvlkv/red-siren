@@ -1,5 +1,8 @@
 use common::body::Segment;
-use common::egui_helpers::{draw_segment_chart, run_native_app, CurveKind, DirectSegmentConfig};
+use common::egui_helpers::{
+    draw_segment_chart, run_native_app, show_scrolled_left_panel_inside, CurveKind,
+    DirectSegmentConfig,
+};
 use eframe::egui::{self, Color32};
 
 fn main() -> eframe::Result<()> {
@@ -219,24 +222,19 @@ impl SegmentApp {
 // ─── eframe app ──────────────────────────────────────────────────────────────
 
 impl eframe::App for SegmentApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let preview = self.preview_result();
 
-        egui::SidePanel::left("controls")
-            .min_width(300.0)
-            .show(ctx, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    self.show_controls(ui, &preview);
-                });
-            });
+        show_scrolled_left_panel_inside(ui, "controls", 300.0, None, |ui| {
+            self.show_controls(ui, &preview);
+        });
 
-        egui::CentralPanel::default().show(ctx, move |ui| {
+        egui::CentralPanel::default().show_inside(ui, move |ui| {
             let segments = preview.as_ref().ok().map(|segments| segments.as_slice());
             let error = preview.as_ref().err().map(|err| err.as_str());
             draw_segment_chart(ui, segments, error);
         });
-
-        ctx.request_repaint();
+        ui.ctx().request_repaint();
     }
 }
 

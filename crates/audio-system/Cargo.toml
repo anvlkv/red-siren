@@ -39,4 +39,4 @@ objc = "0.2"
 
 [features]
 default = []
-egui = ["dep:eframe", "dep:egui"]
+egui = ["dep:eframe", "dep:egui", "common/egui"]

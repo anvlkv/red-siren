@@ -1,8 +1,8 @@
 use common::body::materials::{Material, Medium};
 use common::config::{Node, NodeComputedDebug, NodeComputedStructure, NodeModelBuilders};
 use common::egui_helpers::{
-    draw_xy_line_chart, draw_xy_multi_line_chart_sized, run_native_app,
-    show_action_error_messages, show_scrolled_left_panel_inside, CameraControls,
+    draw_xy_line_chart, draw_xy_multi_line_chart_sized, run_native_app, show_action_error_messages,
+    show_scrolled_left_panel_inside, CameraControls,
 };
 use common::Meshable;
 use eframe::egui::{self, Color32, Pos2, Rect, Sense, Shape, Stroke};
@@ -12,7 +12,7 @@ use std::thread;
 use std::time::Duration;
 
 fn main() -> eframe::Result<()> {
-    run_native_app("Node inspector", [1480.0, 980.0], |_cc| {
+    run_native_app("Node inspector", [1480.0, 980.0], None, |_cc| {
         NodeInspectorApp::default()
     })
 }

@@ -339,7 +339,7 @@ pub fn show_frequency_peaks(ui: &mut Ui, peaks: &[(u32, f32)], empty_label: &str
     }
 
     for (frequency, amplitude) in peaks {
-        ui.monospace(format!("{frequency:>5} Hz  {amplitude:.4}"));
+        ui.monospace(format!("{frequency:>5} Hz  {amplitude:.6e}"));
     }
 }
 

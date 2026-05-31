@@ -34,6 +34,11 @@ name = "cpal_runtime_egui"
 path = "examples/cpal_runtime_egui.rs"
 required-features = ["egui"]
 
+[[example]]
+name = "node_sound_egui"
+path = "examples/node_sound_egui.rs"
+required-features = ["egui"]
+
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2"
 

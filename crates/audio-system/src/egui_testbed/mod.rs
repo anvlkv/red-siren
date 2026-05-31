@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
+use std::time::{Duration, Instant};
 
 use common::{
     device::DeviceData,
     egui_helpers::{
-        enum_combo, find_selected_device,
-        selected_device_label as helper_selected_device_label,
+        enum_combo, find_selected_device, selected_device_label as helper_selected_device_label,
         show_action_error_messages, show_device_combo, show_frequency_peaks, StatusTone,
     },
     playback_quality::PlaybackQuality,
@@ -18,18 +18,20 @@ use crate::{
     PlaybackQualityGate,
 };
 
-const STARTER_FREQ_HZ: f32 = 440.0;
+const DEFAULT_EXPERIMENT_FREQ_HZ: f32 = 440.0;
+const DIAGNOSTIC_POLL_MS: u64 = 80;
+const DIAGNOSTIC_WARMUP_MS: u64 = 180;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-enum TransportState {
+pub enum RuntimeTransportState {
     #[default]
     Stopped,
     Running,
     Paused,
 }
 
-impl TransportState {
-    fn label(self) -> &'static str {
+impl RuntimeTransportState {
+    pub fn label(self) -> &'static str {
         match self {
             Self::Stopped => "Stopped",
             Self::Running => "Running",
@@ -43,6 +45,8 @@ struct DiagnosticSnapshot {
     input_len: usize,
     left_peaks: Vec<(u32, f32)>,
     right_peaks: Vec<(u32, f32)>,
+    left_max: f32,
+    right_max: f32,
 }
 
 pub struct RuntimeTestbed {
@@ -53,9 +57,13 @@ pub struct RuntimeTestbed {
     input_choice: Option<String>,
     quality: PlaybackQuality,
     source: ExcitementSource,
-    transport: TransportState,
+    transport: RuntimeTransportState,
     diagnostics: Option<DiagnosticSnapshot>,
-    auto_load_sine_on_start: bool,
+    last_network_loaded_at: Option<Instant>,
+    last_diagnostics_poll_at: Option<Instant>,
+    diagnostics_status: String,
+    startup_network_builder: Option<Box<dyn Fn(f64) -> Net + Send + Sync>>,
+    auto_load_experiment_on_start: bool,
     last_action: Option<String>,
     last_error: Option<String>,
 }
@@ -71,9 +79,13 @@ impl Default for RuntimeTestbed {
             input_choice: None,
             quality: PlaybackQuality::Medium,
             source: ExcitementSource::Entropy,
-            transport: TransportState::Stopped,
+            transport: RuntimeTransportState::Stopped,
             diagnostics: None,
-            auto_load_sine_on_start: true,
+            last_network_loaded_at: None,
+            last_diagnostics_poll_at: None,
+            diagnostics_status: "idle".to_string(),
+            startup_network_builder: None,
+            auto_load_experiment_on_start: true,
             last_action: None,
             last_error: None,
         };
@@ -84,6 +96,53 @@ impl Default for RuntimeTestbed {
 }
 
 impl RuntimeTestbed {
+    pub fn transport_state(&self) -> RuntimeTransportState {
+        self.transport
+    }
+
+    pub fn start_transport(&mut self) {
+        self.handle_start();
+    }
+
+    pub fn pause_transport(&mut self) {
+        self.handle_pause();
+    }
+
+    pub fn resume_transport(&mut self) {
+        self.handle_resume();
+    }
+
+    pub fn stop_transport(&mut self) {
+        self.handle_stop();
+    }
+
+    pub fn render_runtime_messages(&self, ui: &mut egui::Ui) {
+        show_action_error_messages(ui, &self.last_action, &self.last_error);
+    }
+
+    pub fn set_startup_network_builder<F>(&mut self, builder: F)
+    where
+        F: Fn(f64) -> Net + Send + Sync + 'static,
+    {
+        self.startup_network_builder = Some(Box::new(builder));
+    }
+
+    pub fn apply_custom_network<F>(&mut self, action_label: impl Into<String>, factory: F)
+    where
+        F: FnOnce(f64) -> Result<Net, String>,
+    {
+        let sample_rate = self.current_sample_rate();
+        let net = match factory(sample_rate) {
+            Ok(net) => net,
+            Err(err) => {
+                self.set_error(err);
+                return;
+            }
+        };
+
+        self.apply_network(net, action_label.into());
+    }
+
     pub fn render_controls(&mut self, ui: &mut egui::Ui) {
         let previous_source = self.source;
 
@@ -94,16 +153,16 @@ impl RuntimeTestbed {
         ui.horizontal(|ui| {
             ui.label("Status");
             let tone = match self.transport {
-                TransportState::Stopped => StatusTone::Idle,
-                TransportState::Running => StatusTone::Success,
-                TransportState::Paused => StatusTone::Warning,
+                RuntimeTransportState::Stopped => StatusTone::Idle,
+                RuntimeTransportState::Running => StatusTone::Success,
+                RuntimeTransportState::Paused => StatusTone::Warning,
             };
             ui.colored_label(tone.color(), self.transport.label());
         });
 
         ui.checkbox(
-            &mut self.auto_load_sine_on_start,
-            "Auto-load starter sine graph",
+            &mut self.auto_load_experiment_on_start,
+            "Auto-load experiment graph",
         );
 
         ui.separator();
@@ -111,7 +170,7 @@ impl RuntimeTestbed {
         ui.horizontal_wrapped(|ui| {
             if ui
                 .add_enabled(
-                    self.transport == TransportState::Stopped,
+                    self.transport == RuntimeTransportState::Stopped,
                     egui::Button::new("Start"),
                 )
                 .clicked()
@@ -121,7 +180,7 @@ impl RuntimeTestbed {
 
             if ui
                 .add_enabled(
-                    self.transport == TransportState::Running,
+                    self.transport == RuntimeTransportState::Running,
                     egui::Button::new("Pause"),
                 )
                 .clicked()
@@ -131,7 +190,7 @@ impl RuntimeTestbed {
 
             if ui
                 .add_enabled(
-                    self.transport == TransportState::Paused,
+                    self.transport == RuntimeTransportState::Paused,
                     egui::Button::new("Resume"),
                 )
                 .clicked()
@@ -141,7 +200,7 @@ impl RuntimeTestbed {
 
             if ui
                 .add_enabled(
-                    self.transport != TransportState::Stopped,
+                    self.transport != RuntimeTransportState::Stopped,
                     egui::Button::new("Stop"),
                 )
                 .clicked()
@@ -159,7 +218,10 @@ impl RuntimeTestbed {
             "runtime_source_combo",
             &mut self.source,
             &[
-                (ExcitementSource::Entropy, source_label(ExcitementSource::Entropy)),
+                (
+                    ExcitementSource::Entropy,
+                    source_label(ExcitementSource::Entropy),
+                ),
                 (ExcitementSource::Mic, source_label(ExcitementSource::Mic)),
             ],
         );
@@ -182,16 +244,18 @@ impl RuntimeTestbed {
         ));
 
         ui.separator();
-        ui.label(RichText::new("Starter graph").strong());
+        ui.label(RichText::new("Experiment graphs").strong());
         ui.horizontal_wrapped(|ui| {
-            if ui.button("Load sine graph").clicked() {
-                self.apply_starter_network();
+            if ui.button("Load experiment graph").clicked() {
+                self.apply_startup_network();
             }
             if ui.button("Load silence graph").clicked() {
                 self.apply_silence_network();
             }
         });
-        ui.small("The starter graph sinks the runtime input and emits a stereo sine beep.");
+        ui.small(
+            "The experiment graph sinks runtime input and emits your locally defined test signal.",
+        );
 
         ui.separator();
         ui.label(RichText::new("Devices").strong());
@@ -232,17 +296,16 @@ impl RuntimeTestbed {
     }
 
     pub fn render_diagnostics(&mut self, ui: &mut egui::Ui) {
+        self.poll_diagnostics_if_needed();
+
         ui.heading("Runtime diagnostics");
         ui.label("This demo tracks requested quality and selected devices locally because the example does not reach into Engine internals.");
         ui.separator();
 
         ui.horizontal_wrapped(|ui| {
-            if ui.button("Refresh diagnostics").clicked() {
-                self.refresh_diagnostics();
-            }
-
             ui.label(format!("Selected quality: {}", self.quality_label()));
             ui.label(format!("Source: {}", source_label(self.source)));
+            ui.label(format!("Diagnostics: {}", self.diagnostics_status));
         });
 
         ui.separator();
@@ -259,8 +322,8 @@ impl RuntimeTestbed {
                 ));
                 ui.label(format!("Transport: {}", self.transport.label()));
                 ui.label(format!(
-                    "Auto-load sine on start: {}",
-                    yes_no(self.auto_load_sine_on_start)
+                    "Auto-load experiment on start: {}",
+                    yes_no(self.auto_load_experiment_on_start)
                 ));
                 ui.label(format!("Known devices: {}", self.devices.len()));
             });
@@ -269,6 +332,10 @@ impl RuntimeTestbed {
                 ui.label(RichText::new("Snapshot").strong());
                 if let Some(snapshot) = &self.diagnostics {
                     ui.label(format!("Input samples captured: {}", snapshot.input_len));
+                    ui.label(format!(
+                        "Max L/R: {:.3e} / {:.3e}",
+                        snapshot.left_max, snapshot.right_max
+                    ));
                     ui.label("Left peaks");
                     show_frequency_peaks(ui, &snapshot.left_peaks, "No peaks yet");
                     ui.separator();
@@ -320,8 +387,10 @@ impl RuntimeTestbed {
     fn apply_quality_if_possible(&mut self) {
         match self.engine.on_quality_change(self.quality) {
             Ok(()) => {
-                if self.transport != TransportState::Stopped && self.auto_load_sine_on_start {
-                    self.apply_starter_network();
+                if self.transport != RuntimeTransportState::Stopped
+                    && self.auto_load_experiment_on_start
+                {
+                    self.apply_startup_network();
                 } else {
                     self.set_action(format!("Applied {} quality", self.quality_label()));
                 }
@@ -335,13 +404,13 @@ impl RuntimeTestbed {
 
         match self.engine.start(self.source) {
             Ok(()) => {
-                self.transport = TransportState::Running;
+                self.transport = RuntimeTransportState::Running;
                 self.set_action(format!(
                     "Started runtime with {} source",
                     source_label(self.source)
                 ));
-                if self.auto_load_sine_on_start {
-                    self.apply_starter_network();
+                if self.auto_load_experiment_on_start {
+                    self.apply_startup_network();
                 }
             }
             Err(err) => self.set_error(err),
@@ -351,7 +420,7 @@ impl RuntimeTestbed {
     fn handle_pause(&mut self) {
         match self.engine.pause() {
             Ok(()) => {
-                self.transport = TransportState::Paused;
+                self.transport = RuntimeTransportState::Paused;
                 self.set_action("Paused output stream");
             }
             Err(err) => self.set_error(err),
@@ -361,7 +430,7 @@ impl RuntimeTestbed {
     fn handle_resume(&mut self) {
         match self.engine.resume() {
             Ok(()) => {
-                self.transport = TransportState::Running;
+                self.transport = RuntimeTransportState::Running;
                 self.set_action("Resumed output stream");
             }
             Err(err) => self.set_error(err),
@@ -371,7 +440,7 @@ impl RuntimeTestbed {
     fn handle_stop(&mut self) {
         match self.engine.stop() {
             Ok(()) => {
-                self.transport = TransportState::Stopped;
+                self.transport = RuntimeTransportState::Stopped;
                 self.diagnostics = None;
                 self.set_action("Stopped runtime");
             }
@@ -379,46 +448,69 @@ impl RuntimeTestbed {
         }
     }
 
-    fn apply_starter_network(&mut self) {
+    fn apply_startup_network(&mut self) {
         let sample_rate = self.current_sample_rate();
-        let mut replaced = false;
+        let net = if let Some(builder) = &self.startup_network_builder {
+            builder(sample_rate)
+        } else {
+            default_experiment_net(sample_rate)
+        };
 
+        self.apply_network(
+            net,
+            format!(
+                "Loaded experiment graph at {:.0} Hz",
+                DEFAULT_EXPERIMENT_FREQ_HZ
+            ),
+        );
+    }
+
+    fn apply_silence_network(&mut self) {
+        let sample_rate = self.current_sample_rate();
+        self.apply_network(
+            silent_stereo_net(sample_rate),
+            "Loaded silent passthrough graph".to_string(),
+        );
+    }
+
+    fn apply_network(&mut self, net: Net, success_message: String) {
+        let mut replaced = false;
         let result = self.engine.with_runtime(|rt| {
-            rt.set_inner_network(starter_sine_net(sample_rate));
+            rt.set_inner_network(net);
             replaced = true;
             Ok(())
         });
 
         match result {
             Ok(()) if replaced => {
-                self.set_action(format!(
-                    "Loaded starter sine graph at {:.0} Hz",
-                    STARTER_FREQ_HZ
-                ));
+                self.last_network_loaded_at = Some(Instant::now());
+                self.last_diagnostics_poll_at = None;
+                self.diagnostics = None;
+                self.diagnostics_status = "warming up".to_string();
+                self.set_action(success_message);
             }
             Ok(()) => self.set_error("Runtime is not active yet"),
             Err(err) => self.set_error(err),
         }
     }
 
-    fn apply_silence_network(&mut self) {
-        let sample_rate = self.current_sample_rate();
-        let mut replaced = false;
-
-        let result = self.engine.with_runtime(|rt| {
-            rt.set_inner_network(silent_stereo_net(sample_rate));
-            replaced = true;
-            Ok(())
-        });
-
-        match result {
-            Ok(()) if replaced => self.set_action("Loaded silent passthrough graph"),
-            Ok(()) => self.set_error("Runtime is not active yet"),
-            Err(err) => self.set_error(err),
-        }
-    }
-
     fn refresh_diagnostics(&mut self) {
+        if self.transport != RuntimeTransportState::Running {
+            self.diagnostics_status = "stopped".to_string();
+            return;
+        }
+
+        if let Some(loaded_at) = self.last_network_loaded_at {
+            let elapsed = loaded_at.elapsed();
+            if elapsed < Duration::from_millis(DIAGNOSTIC_WARMUP_MS) {
+                self.diagnostics_status = format!(
+                    "warming up ({:03} ms)",
+                    (Duration::from_millis(DIAGNOSTIC_WARMUP_MS) - elapsed).as_millis()
+                );
+                return;
+            }
+        }
+
         let sample_rate = self.current_sample_rate();
         let mut snapshot = None;
 
@@ -429,6 +521,8 @@ impl RuntimeTestbed {
                 input_len,
                 left_peaks: strongest_peaks(&left, 5),
                 right_peaks: strongest_peaks(&right, 5),
+                left_max: max_peak(&left),
+                right_max: max_peak(&right),
             });
             Ok(())
         });
@@ -436,18 +530,44 @@ impl RuntimeTestbed {
         match result {
             Ok(()) => {
                 if let Some(snapshot) = snapshot {
-                    self.diagnostics = Some(snapshot);
-                    self.set_action("Refreshed runtime diagnostics");
+                    if snapshot.left_max <= f32::EPSILON && snapshot.right_max <= f32::EPSILON {
+                        self.diagnostics_status = "stale or silent".to_string();
+                        self.diagnostics = Some(snapshot);
+                    } else {
+                        self.diagnostics = Some(snapshot);
+                        self.diagnostics_status = "live".to_string();
+                    }
                 } else {
+                    self.diagnostics_status = "runtime unavailable".to_string();
                     self.set_error("Runtime is not active yet");
                 }
             }
-            Err(err) => self.set_error(err),
+            Err(err) => {
+                self.diagnostics_status = "analysis error".to_string();
+                self.set_error(err)
+            }
+        }
+    }
+
+    fn poll_diagnostics_if_needed(&mut self) {
+        if self.transport != RuntimeTransportState::Running {
+            return;
+        }
+
+        let now = Instant::now();
+        let should_poll = self
+            .last_diagnostics_poll_at
+            .map(|last| now.duration_since(last) >= Duration::from_millis(DIAGNOSTIC_POLL_MS))
+            .unwrap_or(true);
+
+        if should_poll {
+            self.refresh_diagnostics();
+            self.last_diagnostics_poll_at = Some(now);
         }
     }
 
     fn apply_output_selection(&mut self) {
-        if self.transport == TransportState::Stopped {
+        if self.transport == RuntimeTransportState::Stopped {
             self.set_action("Output device selection will apply on next start");
             return;
         }
@@ -462,10 +582,10 @@ impl RuntimeTestbed {
             .select_output_device(device.host_id.clone(), device.device_id.clone())
         {
             Ok(()) => {
-                self.transport = TransportState::Running;
+                self.transport = RuntimeTransportState::Running;
                 self.set_action(format!("Applied output device: {device}"));
-                if self.auto_load_sine_on_start {
-                    self.apply_starter_network();
+                if self.auto_load_experiment_on_start {
+                    self.apply_startup_network();
                 }
             }
             Err(err) => self.set_error(err),
@@ -473,12 +593,13 @@ impl RuntimeTestbed {
     }
 
     fn apply_input_selection(&mut self) {
-        if self.transport != TransportState::Stopped && self.source != ExcitementSource::Mic {
+        if self.transport != RuntimeTransportState::Stopped && self.source != ExcitementSource::Mic
+        {
             self.set_action("Input device selection will apply when starting with Mic source");
             return;
         }
 
-        if self.transport == TransportState::Stopped {
+        if self.transport == RuntimeTransportState::Stopped {
             self.set_action("Input device selection will apply on next start");
             return;
         }
@@ -498,7 +619,7 @@ impl RuntimeTestbed {
     }
 
     fn handle_source_change(&mut self, previous: ExcitementSource) {
-        if self.transport == TransportState::Stopped || previous == self.source {
+        if self.transport == RuntimeTransportState::Stopped || previous == self.source {
             return;
         }
 
@@ -527,10 +648,12 @@ fn build_engine(
     )
 }
 
-fn starter_sine_net(sample_rate: f64) -> Net {
+fn default_experiment_net(sample_rate: f64) -> Net {
     let mut net = Net::new(1, 2);
     let input_id = net.push(Box::new(sink()));
-    let tone_id = net.push(Box::new(sine_hz::<f32>(STARTER_FREQ_HZ) >> split::<U2>()));
+    let tone_id = net.push(Box::new(
+        sine_hz::<f32>(DEFAULT_EXPERIMENT_FREQ_HZ) >> split::<U2>(),
+    ));
 
     net.connect_input(0, input_id, 0);
     net.connect_output(tone_id, 0, 0);
@@ -567,6 +690,13 @@ fn strongest_peaks(spectrum: &BTreeMap<u32, f32>, limit: usize) -> Vec<(u32, f32
     });
     peaks.truncate(limit);
     peaks
+}
+
+fn max_peak(spectrum: &BTreeMap<u32, f32>) -> f32 {
+    spectrum
+        .values()
+        .copied()
+        .fold(0.0_f32, |acc, value| acc.max(value))
 }
 
 fn selected_device_label(device: Option<DeviceData>) -> String {

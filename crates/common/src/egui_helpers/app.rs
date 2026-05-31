@@ -86,16 +86,23 @@ impl CameraControls {
     }
 }
 
-fn init_terminal_logger() {
+fn init_terminal_logger(logger_filter_extra: Option<&str>) {
     static LOGGER_INIT: Once = Once::new();
 
     LOGGER_INIT.call_once(|| {
-        let mut builder =
-            env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(concat!(
-                "warn,",
-                env!("CARGO_PKG_NAME"),
-                "=trace"
-            )));
+        println!(
+            "Initializing terminal logger for eframe app: {}",
+            env!("CARGO_PKG_NAME")
+        );
+        let mut default_filter = format!("warn,{}=trace", env!("CARGO_PKG_NAME"));
+        if let Some(extra) = logger_filter_extra.filter(|value| !value.trim().is_empty()) {
+            default_filter.push(',');
+            default_filter.push_str(extra);
+        }
+
+        let mut builder = env_logger::Builder::from_env(
+            env_logger::Env::default().default_filter_or(default_filter),
+        );
         builder
             .format_timestamp_millis()
             .format_target(true)
@@ -108,13 +115,14 @@ fn init_terminal_logger() {
 pub fn run_native_app<T, F>(
     title: &'static str,
     inner_size: [f32; 2],
+    logger_filter_extra: Option<&str>,
     app_creator: F,
 ) -> eframe::Result<()>
 where
     T: eframe::App + 'static,
     F: FnOnce(&eframe::CreationContext<'_>) -> T + 'static,
 {
-    init_terminal_logger();
+    init_terminal_logger(logger_filter_extra);
     log::info!(
         "starting native app title={title} inner_size={}x{}",
         inner_size[0],

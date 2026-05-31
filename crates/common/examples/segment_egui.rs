@@ -6,7 +6,7 @@ use common::egui_helpers::{
 use eframe::egui::{self, Color32};
 
 fn main() -> eframe::Result<()> {
-    run_native_app("Segment preview", [1100.0, 720.0], |_cc| {
+    run_native_app("Segment preview", [1100.0, 720.0], None, |_cc| {
         SegmentApp::default()
     })
 }

@@ -20,6 +20,7 @@ fn main() -> eframe::Result<()> {
     run_native_app(
         "Thick RevolutionBody - Surface Mesh Viewer",
         [1450.0, 920.0],
+        None,
         |_cc| ThickRevolutionBodyApp::default(),
     )
 }

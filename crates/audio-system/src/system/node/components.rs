@@ -1,3 +1,5 @@
+use std::ops::Mul;
+
 use common::config::{
     AcousticLockIn, JetAcousticsInMedium, JetModeStructure, JetStructuralBase, JetVortexDynamics,
     SlideAcousticsInMedium, SlideContactState, SlideModeStructure, SlideStructuralBase,
@@ -31,21 +33,27 @@ fn strike_component<F: Real>(
 
     let gain = (1.0 - damping) * (0.05 + coupling).powf(1.1) * (0.05 + angle_sensitivity).powf(0.6);
 
+    log::debug!("strike mode: freq={frequency_hz}Hz, Q={q}, gain={gain}",);
+
     resonator_hz::<F>(convert(*frequency_hz), convert(q)) * constant(convert::<f64, f32>(gain))
 }
 
-pub type StrikeModalComponent<F, N> = MultiBus<N, StrikeComponent<F>>;
+pub type StrikeModalComponent<F, N> = Pipe<Split<N>, Reduce<N, StrikeComponent<F>, FrameAdd<U1>>>;
 
 /// Build multi-mode strike response component.
 pub fn strike_modal_component<F: Real, N: Size<f32> + Size<StrikeComponent<F>>>(
     modes: &[StrikeAcousticsInMedium],
     mode_structures: &[StrikeModeStructure],
-) -> An<StrikeModalComponent<F, N>> {
+) -> An<StrikeModalComponent<F, N>>
+where
+    U1: Mul<N, Output = N>,
+{
     debug_assert_eq!(modes.len(), mode_structures.len());
 
-    busi::<N, _, _>(|i| {
-        strike_component::<F>(&modes[i as usize], &mode_structures[i as usize].strike_base)
-    })
+    split::<N>()
+        >> sumi::<N, _, _>(|i| {
+            strike_component::<F>(&modes[i as usize], &mode_structures[i as usize].strike_base)
+        })
 }
 
 type SlideComponent<F> = Binop<FrameMul<U1>, Resonator<F, U1>, Constant<U1>>;
@@ -101,29 +109,36 @@ fn slide_component<F: Real>(
         * (0.75 + 0.25 * stick_slip)
         * (1.0 - 0.30 * intermittency);
 
+    log::debug!("slide mode: freq={frequency_hz}Hz, Q={q}, gain={gain}",);
+
     resonator_hz::<F>(convert(*frequency_hz), convert(q)) * constant(convert::<f64, f32>(gain))
 }
 
 pub type SlideModalComponent<F, N> =
-    Pipe<Binop<FrameMul<U1>, Noise, Pass>, MultiBus<N, SlideComponent<F>>>;
-type JetLoopFilter = Binop<FrameMul<U1>, FixedSvf<f32, LowpassMode<f32>>, Constant<U1>>;
-type JetFeedbackLoop = Pipe<Pipe<Delay, JetLoopFilter>, Shaper<Tanh>>;
-type JetFeedback = Feedback<U1, JetFeedbackLoop, FrameId<U1>>;
-type JetResonatorGain<F> = Binop<FrameMul<U1>, Resonator<F, U1>, Constant<U1>>;
-type JetModalComponent<F> = Pipe<JetFeedback, JetResonatorGain<F>>;
+    Pipe<Pipe<Pinkpass<F>, Split<N>>, Reduce<N, SlideComponent<F>, FrameAdd<U1>>>;
 
 /// Build multi-mode slide response component.
 pub fn slide_modal_component<F: Real, N: Size<f32> + Size<SlideComponent<F>>>(
     modes: &[SlideAcousticsInMedium],
     mode_structures: &[SlideModeStructure],
-) -> An<SlideModalComponent<F, N>> {
+) -> An<SlideModalComponent<F, N>>
+where
+    U1: Mul<N, Output = N>,
+{
     debug_assert_eq!(modes.len(), mode_structures.len());
 
-    (noise() * pass())
-        >> busi::<N, _, _>(|i| {
+    pinkpass()
+        >> split::<N>()
+        >> sumi::<N, _, _>(|i| {
             slide_component::<F>(&modes[i as usize], &mode_structures[i as usize].slide_base)
         })
 }
+
+type JetLoopFilter = Binop<FrameMul<U1>, FixedSvf<f32, LowpassMode<f32>>, Constant<U1>>;
+type JetFeedbackLoop = Pipe<Pipe<Delay, JetLoopFilter>, Shaper<Tanh>>;
+type JetFeedback = Feedback<U1, JetFeedbackLoop, FrameId<U1>>;
+type JetResonatorGain<F> = Binop<FrameMul<U1>, Resonator<F, U1>, Constant<U1>>;
+pub type JetModalComponent<F> = Pipe<JetFeedback, JetResonatorGain<F>>;
 
 /// Build single-mode jet lock-in response component for one node.
 pub fn jet_modal_component<F: Real>(
@@ -192,6 +207,8 @@ pub fn jet_modal_component<F: Real>(
         * (0.30 + 0.70 * onset_bias)
         * (1.0 - 0.40 * damping))
         .clamp(0.0, 1.25);
+
+    log::debug!("jet mode: freq={frequency_hz}Hz, lock_center={lock_center_eff_hz}Hz, Q={q}, loop_gain={loop_gain}, output_gain={output_gain}",);
 
     feedback::<U1, _>(
         delay(convective_delay_s)

@@ -13,6 +13,7 @@ fn main() -> eframe::Result<()> {
     run_native_app(
         "RevolutionBody - Surface Mesh Viewer",
         [1400.0, 900.0],
+        None,
         |_cc| RevolutionBodyApp::default(),
     )
 }

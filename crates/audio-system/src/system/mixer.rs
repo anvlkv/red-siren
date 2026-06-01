@@ -205,7 +205,7 @@ mod tests {
         assert_audio_unit_snapshot!(
             "mixer_stereo_to_mono",
             create_mixer::<f32, U2, U1>(),
-            stereo_sine_cosine_input(SNAP_LEN),
+            stereo_sine_cosine_input(),
             low_sr_snapshot_config(SNAP_LEN)
         );
     }
@@ -215,7 +215,7 @@ mod tests {
         assert_audio_unit_snapshot!(
             "mixer_stereo_passthru",
             create_mixer::<f32, U2, U2>(),
-            stereo_sine_cosine_input(SNAP_LEN),
+            stereo_sine_cosine_input(),
             low_sr_snapshot_config(SNAP_LEN)
         );
     }
@@ -225,7 +225,7 @@ mod tests {
         assert_audio_unit_snapshot!(
             "mixer_stereo_to_3ch",
             create_mixer::<f32, U2, U3>(),
-            stereo_sine_cosine_input(SNAP_LEN),
+            stereo_sine_cosine_input(),
             low_sr_snapshot_config(SNAP_LEN)
         );
     }
@@ -235,7 +235,7 @@ mod tests {
         assert_audio_unit_snapshot!(
             "mixer_stereo_to_4ch",
             create_mixer::<f32, U2, U4>(),
-            stereo_sine_cosine_input(SNAP_LEN),
+            stereo_sine_cosine_input(),
             low_sr_snapshot_config(SNAP_LEN)
         );
     }
@@ -245,7 +245,7 @@ mod tests {
         assert_audio_unit_snapshot!(
             "mixer_stereo_to_5ch",
             create_mixer::<f32, U2, U5>(),
-            stereo_sine_cosine_input(SNAP_LEN),
+            stereo_sine_cosine_input(),
             low_sr_snapshot_config(SNAP_LEN)
         );
     }
@@ -255,7 +255,7 @@ mod tests {
         assert_audio_unit_snapshot!(
             "mixer_stereo_to_5_1",
             create_mixer::<f32, U2, U6>(),
-            stereo_sine_cosine_input(SNAP_LEN),
+            stereo_sine_cosine_input(),
             low_sr_snapshot_config(SNAP_LEN)
         );
     }
@@ -265,7 +265,7 @@ mod tests {
         assert_audio_unit_snapshot!(
             "mixer_stereo_to_7_1",
             create_mixer::<f32, U2, U8>(),
-            stereo_sine_cosine_input(SNAP_LEN),
+            stereo_sine_cosine_input(),
             low_sr_snapshot_config(SNAP_LEN)
         );
     }

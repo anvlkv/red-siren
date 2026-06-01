@@ -5,11 +5,11 @@ use common::{
     device::DeviceData,
     egui_helpers::{
         enum_combo, find_selected_device, selected_device_label as helper_selected_device_label,
-        show_action_error_messages, show_device_combo, show_frequency_peaks, StatusTone,
+        show_action_error_messages, show_device_combo, show_frequency_spectrum_chart, StatusTone,
     },
     playback_quality::PlaybackQuality,
 };
-use eframe::egui::{self, RichText};
+use eframe::egui::{self};
 use fundsp::prelude::*;
 
 use crate::{
@@ -19,7 +19,6 @@ use crate::{
 };
 
 const DEFAULT_EXPERIMENT_FREQ_HZ: f32 = 440.0;
-const DIAGNOSTIC_POLL_MS: u64 = 80;
 const DIAGNOSTIC_WARMUP_MS: u64 = 180;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -43,8 +42,8 @@ impl RuntimeTransportState {
 #[derive(Clone, Debug, Default)]
 struct DiagnosticSnapshot {
     input_len: usize,
-    left_peaks: Vec<(u32, f32)>,
-    right_peaks: Vec<(u32, f32)>,
+    left_spectrum: BTreeMap<u32, f32>,
+    right_spectrum: BTreeMap<u32, f32>,
     left_max: f32,
     right_max: f32,
 }
@@ -60,10 +59,8 @@ pub struct RuntimeTestbed {
     transport: RuntimeTransportState,
     diagnostics: Option<DiagnosticSnapshot>,
     last_network_loaded_at: Option<Instant>,
-    last_diagnostics_poll_at: Option<Instant>,
     diagnostics_status: String,
     startup_network_builder: Option<Box<dyn Fn(f64) -> Net + Send + Sync>>,
-    auto_load_experiment_on_start: bool,
     last_action: Option<String>,
     last_error: Option<String>,
 }
@@ -82,10 +79,8 @@ impl Default for RuntimeTestbed {
             transport: RuntimeTransportState::Stopped,
             diagnostics: None,
             last_network_loaded_at: None,
-            last_diagnostics_poll_at: None,
             diagnostics_status: "idle".to_string(),
             startup_network_builder: None,
-            auto_load_experiment_on_start: true,
             last_action: None,
             last_error: None,
         };
@@ -146,172 +141,192 @@ impl RuntimeTestbed {
     pub fn render_controls(&mut self, ui: &mut egui::Ui) {
         let previous_source = self.source;
 
-        ui.heading("Runtime gate");
-        ui.label("Reusable egui control surface for Engine + RuntimeSubsystem.");
-        ui.separator();
+        ui.heading("Runtime controls");
+        ui.label("Minimal control surface for Engine + RuntimeSubsystem demos.");
 
-        ui.horizontal(|ui| {
-            ui.label("Status");
-            let tone = match self.transport {
-                RuntimeTransportState::Stopped => StatusTone::Idle,
-                RuntimeTransportState::Running => StatusTone::Success,
-                RuntimeTransportState::Paused => StatusTone::Warning,
-            };
-            ui.colored_label(tone.color(), self.transport.label());
-        });
+        egui::CollapsingHeader::new("Status")
+            .id_salt("runtime_status_section")
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Transport");
+                    let tone = match self.transport {
+                        RuntimeTransportState::Stopped => StatusTone::Idle,
+                        RuntimeTransportState::Running => StatusTone::Success,
+                        RuntimeTransportState::Paused => StatusTone::Warning,
+                    };
+                    ui.colored_label(tone.color(), self.transport.label());
+                });
+                ui.small(format!(
+                    "Requested sample rate for diagnostics: {:.0} Hz",
+                    self.current_sample_rate()
+                ));
+            });
 
-        ui.checkbox(
-            &mut self.auto_load_experiment_on_start,
-            "Auto-load experiment graph",
-        );
+        egui::CollapsingHeader::new("Transport")
+            .id_salt("runtime_transport_section")
+            .default_open(true)
+            .show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    if ui
+                        .add_enabled(
+                            self.transport == RuntimeTransportState::Stopped,
+                            egui::Button::new("Start"),
+                        )
+                        .clicked()
+                    {
+                        self.handle_start();
+                    }
 
-        ui.separator();
-        ui.label(RichText::new("Transport").strong());
-        ui.horizontal_wrapped(|ui| {
-            if ui
-                .add_enabled(
-                    self.transport == RuntimeTransportState::Stopped,
-                    egui::Button::new("Start"),
-                )
-                .clicked()
-            {
-                self.handle_start();
-            }
+                    if ui
+                        .add_enabled(
+                            self.transport == RuntimeTransportState::Running,
+                            egui::Button::new("Pause"),
+                        )
+                        .clicked()
+                    {
+                        self.handle_pause();
+                    }
 
-            if ui
-                .add_enabled(
-                    self.transport == RuntimeTransportState::Running,
-                    egui::Button::new("Pause"),
-                )
-                .clicked()
-            {
-                self.handle_pause();
-            }
+                    if ui
+                        .add_enabled(
+                            self.transport == RuntimeTransportState::Paused,
+                            egui::Button::new("Resume"),
+                        )
+                        .clicked()
+                    {
+                        self.handle_resume();
+                    }
 
-            if ui
-                .add_enabled(
-                    self.transport == RuntimeTransportState::Paused,
-                    egui::Button::new("Resume"),
-                )
-                .clicked()
-            {
-                self.handle_resume();
-            }
+                    if ui
+                        .add_enabled(
+                            self.transport != RuntimeTransportState::Stopped,
+                            egui::Button::new("Stop"),
+                        )
+                        .clicked()
+                    {
+                        self.handle_stop();
+                    }
+                });
+            });
 
-            if ui
-                .add_enabled(
-                    self.transport != RuntimeTransportState::Stopped,
-                    egui::Button::new("Stop"),
-                )
-                .clicked()
-            {
-                self.handle_stop();
-            }
-        });
+        egui::CollapsingHeader::new("Source and quality")
+            .id_salt("runtime_source_quality_section")
+            .default_open(false)
+            .show(ui, |ui| {
+                enum_combo(
+                    ui,
+                    "Excitement source",
+                    "runtime_source_combo",
+                    &mut self.source,
+                    &[
+                        (
+                            ExcitementSource::Entropy,
+                            source_label(ExcitementSource::Entropy),
+                        ),
+                        (ExcitementSource::Mic, source_label(ExcitementSource::Mic)),
+                    ],
+                );
 
-        ui.separator();
-        ui.label(RichText::new("Source and quality").strong());
+                enum_combo(
+                    ui,
+                    "Playback quality",
+                    "runtime_quality_combo",
+                    &mut self.quality,
+                    &quality_options().map(|quality| (quality, quality_label(quality))),
+                );
 
-        enum_combo(
-            ui,
-            "Excitement source",
-            "runtime_source_combo",
-            &mut self.source,
-            &[
-                (
-                    ExcitementSource::Entropy,
-                    source_label(ExcitementSource::Entropy),
-                ),
-                (ExcitementSource::Mic, source_label(ExcitementSource::Mic)),
-            ],
-        );
+                if ui.button("Apply quality").clicked() {
+                    self.apply_quality_if_possible();
+                }
+            });
 
-        enum_combo(
-            ui,
-            "Playback quality",
-            "runtime_quality_combo",
-            &mut self.quality,
-            &quality_options().map(|quality| (quality, quality_label(quality))),
-        );
+        egui::CollapsingHeader::new("Experiment graphs")
+            .id_salt("runtime_graphs_section")
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button("Load experiment graph").clicked() {
+                        self.apply_startup_network();
+                    }
+                    if ui.button("Load silence graph").clicked() {
+                        self.apply_silence_network();
+                    }
+                });
+                ui.small("Use these to switch the RuntimeSubsystem inner network for the demo.");
+            });
 
-        if ui.button("Apply quality").clicked() {
-            self.apply_quality_if_possible();
-        }
+        egui::CollapsingHeader::new("Devices")
+            .id_salt("runtime_devices_section")
+            .default_open(false)
+            .show(ui, |ui| {
+                if ui.button("Refresh device list").clicked() {
+                    self.refresh_devices();
+                    self.set_action("Refreshed CPAL device list");
+                }
 
-        ui.small(format!(
-            "Requested sample rate for diagnostics: {:.0} Hz",
-            self.current_sample_rate()
-        ));
+                show_device_combo(
+                    ui,
+                    "Output device",
+                    "runtime_output_device",
+                    &self.devices,
+                    &mut self.output_choice,
+                    |device| device.supports_output,
+                );
+                if ui.button("Apply output device").clicked() {
+                    self.apply_output_selection();
+                }
 
-        ui.separator();
-        ui.label(RichText::new("Experiment graphs").strong());
-        ui.horizontal_wrapped(|ui| {
-            if ui.button("Load experiment graph").clicked() {
-                self.apply_startup_network();
-            }
-            if ui.button("Load silence graph").clicked() {
-                self.apply_silence_network();
-            }
-        });
-        ui.small(
-            "The experiment graph sinks runtime input and emits your locally defined test signal.",
-        );
+                show_device_combo(
+                    ui,
+                    "Input device",
+                    "runtime_input_device",
+                    &self.devices,
+                    &mut self.input_choice,
+                    |device| device.supports_input,
+                );
+                if ui.button("Apply input device").clicked() {
+                    self.apply_input_selection();
+                }
+            });
 
-        ui.separator();
-        ui.label(RichText::new("Devices").strong());
-        if ui.button("Refresh device list").clicked() {
-            self.refresh_devices();
-            self.set_action("Refreshed CPAL device list");
-        }
-
-        show_device_combo(
-            ui,
-            "Output device",
-            "runtime_output_device",
-            &self.devices,
-            &mut self.output_choice,
-            |device| device.supports_output,
-        );
-        if ui.button("Apply output device").clicked() {
-            self.apply_output_selection();
-        }
-
-        show_device_combo(
-            ui,
-            "Input device",
-            "runtime_input_device",
-            &self.devices,
-            &mut self.input_choice,
-            |device| device.supports_input,
-        );
-        if ui.button("Apply input device").clicked() {
-            self.apply_input_selection();
-        }
-
-        ui.separator();
-        ui.label(RichText::new("Messages").strong());
-        show_action_error_messages(ui, &self.last_action, &self.last_error);
+        egui::CollapsingHeader::new("Messages")
+            .id_salt("runtime_messages_section")
+            .default_open(self.last_error.is_some())
+            .show(ui, |ui| {
+                show_action_error_messages(ui, &self.last_action, &self.last_error);
+                if self.last_action.is_none() && self.last_error.is_none() {
+                    ui.small("No messages yet.");
+                }
+            });
 
         self.handle_source_change(previous_source);
     }
 
     pub fn render_diagnostics(&mut self, ui: &mut egui::Ui) {
-        self.poll_diagnostics_if_needed();
+        if self.transport == RuntimeTransportState::Running {
+            self.refresh_diagnostics();
+            ui.ctx().request_repaint();
+        }
 
         ui.heading("Runtime diagnostics");
-        ui.label("This demo tracks requested quality and selected devices locally because the example does not reach into Engine internals.");
-        ui.separator();
+        ui.label("Live snapshot of RuntimeSubsystem input and output spectrum.");
 
-        ui.horizontal_wrapped(|ui| {
-            ui.label(format!("Selected quality: {}", self.quality_label()));
-            ui.label(format!("Source: {}", source_label(self.source)));
-            ui.label(format!("Diagnostics: {}", self.diagnostics_status));
-        });
+        egui::CollapsingHeader::new("Status")
+            .id_salt("runtime_diagnostics_status_section")
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(format!("Selected quality: {}", self.quality_label()));
+                    ui.label(format!("Source: {}", source_label(self.source)));
+                    ui.label(format!("Diagnostics: {}", self.diagnostics_status));
+                });
+            });
 
-        ui.separator();
-        ui.columns(2, |cols| {
-            cols[0].group(|ui| {
-                ui.label(RichText::new("Configuration").strong());
+        egui::CollapsingHeader::new("Configuration")
+            .id_salt("runtime_diagnostics_config_section")
+            .default_open(false)
+            .show(ui, |ui| {
                 ui.label(format!(
                     "Output device: {}",
                     selected_device_label(self.selected_output())
@@ -321,31 +336,49 @@ impl RuntimeTestbed {
                     selected_device_label(self.selected_input())
                 ));
                 ui.label(format!("Transport: {}", self.transport.label()));
-                ui.label(format!(
-                    "Auto-load experiment on start: {}",
-                    yes_no(self.auto_load_experiment_on_start)
-                ));
                 ui.label(format!("Known devices: {}", self.devices.len()));
             });
 
-            cols[1].group(|ui| {
-                ui.label(RichText::new("Snapshot").strong());
+        egui::CollapsingHeader::new("Snapshot")
+            .id_salt("runtime_diagnostics_snapshot_section")
+            .default_open(true)
+            .show(ui, |ui| {
                 if let Some(snapshot) = &self.diagnostics {
                     ui.label(format!("Input samples captured: {}", snapshot.input_len));
                     ui.label(format!(
                         "Max L/R: {:.3e} / {:.3e}",
                         snapshot.left_max, snapshot.right_max
                     ));
-                    ui.label("Left peaks");
-                    show_frequency_peaks(ui, &snapshot.left_peaks, "No peaks yet");
-                    ui.separator();
-                    ui.label("Right peaks");
-                    show_frequency_peaks(ui, &snapshot.right_peaks, "No peaks yet");
+
+                    egui::CollapsingHeader::new("Left spectrum")
+                        .id_salt("runtime_left_spectrum_section")
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            show_frequency_spectrum_chart(
+                                ui,
+                                "runtime_left_spectrum_plot",
+                                &snapshot.left_spectrum,
+                                "No left-channel spectrum yet",
+                                egui::Color32::from_rgb(120, 195, 255),
+                            );
+                        });
+
+                    egui::CollapsingHeader::new("Right spectrum")
+                        .id_salt("runtime_right_spectrum_section")
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            show_frequency_spectrum_chart(
+                                ui,
+                                "runtime_right_spectrum_plot",
+                                &snapshot.right_spectrum,
+                                "No right-channel spectrum yet",
+                                egui::Color32::from_rgb(102, 204, 122),
+                            );
+                        });
                 } else {
                     ui.label("No diagnostics captured yet.");
                 }
             });
-        });
     }
 
     fn refresh_devices(&mut self) {
@@ -386,15 +419,7 @@ impl RuntimeTestbed {
 
     fn apply_quality_if_possible(&mut self) {
         match self.engine.on_quality_change(self.quality) {
-            Ok(()) => {
-                if self.transport != RuntimeTransportState::Stopped
-                    && self.auto_load_experiment_on_start
-                {
-                    self.apply_startup_network();
-                } else {
-                    self.set_action(format!("Applied {} quality", self.quality_label()));
-                }
-            }
+            Ok(()) => self.set_action(format!("Applied {} quality", self.quality_label())),
             Err(err) => self.set_error(err),
         }
     }
@@ -409,9 +434,6 @@ impl RuntimeTestbed {
                     "Started runtime with {} source",
                     source_label(self.source)
                 ));
-                if self.auto_load_experiment_on_start {
-                    self.apply_startup_network();
-                }
             }
             Err(err) => self.set_error(err),
         }
@@ -456,13 +478,7 @@ impl RuntimeTestbed {
             default_experiment_net(sample_rate)
         };
 
-        self.apply_network(
-            net,
-            format!(
-                "Loaded experiment graph at {:.0} Hz",
-                DEFAULT_EXPERIMENT_FREQ_HZ
-            ),
-        );
+        self.apply_network(net, format!("Loaded experiment graph",));
     }
 
     fn apply_silence_network(&mut self) {
@@ -484,7 +500,6 @@ impl RuntimeTestbed {
         match result {
             Ok(()) if replaced => {
                 self.last_network_loaded_at = Some(Instant::now());
-                self.last_diagnostics_poll_at = None;
                 self.diagnostics = None;
                 self.diagnostics_status = "warming up".to_string();
                 self.set_action(success_message);
@@ -519,8 +534,8 @@ impl RuntimeTestbed {
             let (left, right) = rt.output_spectrum(sample_rate, 20.0, 20_000.0)?;
             snapshot = Some(DiagnosticSnapshot {
                 input_len,
-                left_peaks: strongest_peaks(&left, 5),
-                right_peaks: strongest_peaks(&right, 5),
+                left_spectrum: left.clone(),
+                right_spectrum: right.clone(),
                 left_max: max_peak(&left),
                 right_max: max_peak(&right),
             });
@@ -549,23 +564,6 @@ impl RuntimeTestbed {
         }
     }
 
-    fn poll_diagnostics_if_needed(&mut self) {
-        if self.transport != RuntimeTransportState::Running {
-            return;
-        }
-
-        let now = Instant::now();
-        let should_poll = self
-            .last_diagnostics_poll_at
-            .map(|last| now.duration_since(last) >= Duration::from_millis(DIAGNOSTIC_POLL_MS))
-            .unwrap_or(true);
-
-        if should_poll {
-            self.refresh_diagnostics();
-            self.last_diagnostics_poll_at = Some(now);
-        }
-    }
-
     fn apply_output_selection(&mut self) {
         if self.transport == RuntimeTransportState::Stopped {
             self.set_action("Output device selection will apply on next start");
@@ -584,9 +582,6 @@ impl RuntimeTestbed {
             Ok(()) => {
                 self.transport = RuntimeTransportState::Running;
                 self.set_action(format!("Applied output device: {device}"));
-                if self.auto_load_experiment_on_start {
-                    self.apply_startup_network();
-                }
             }
             Err(err) => self.set_error(err),
         }
@@ -676,22 +671,6 @@ fn silent_stereo_net(sample_rate: f64) -> Net {
     net
 }
 
-fn strongest_peaks(spectrum: &BTreeMap<u32, f32>, limit: usize) -> Vec<(u32, f32)> {
-    let mut peaks = spectrum
-        .iter()
-        .map(|(frequency, amplitude)| (*frequency, *amplitude))
-        .collect::<Vec<_>>();
-    peaks.sort_by(|left, right| {
-        right
-            .1
-            .partial_cmp(&left.1)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| left.0.cmp(&right.0))
-    });
-    peaks.truncate(limit);
-    peaks
-}
-
 fn max_peak(spectrum: &BTreeMap<u32, f32>) -> f32 {
     spectrum
         .values()
@@ -727,13 +706,5 @@ fn quality_label(quality: PlaybackQuality) -> &'static str {
         PlaybackQuality::Medium => "Medium",
         PlaybackQuality::HiFi => "HiFi",
         PlaybackQuality::Ultra => "Ultra",
-    }
-}
-
-fn yes_no(value: bool) -> &'static str {
-    if value {
-        "yes"
-    } else {
-        "no"
     }
 }

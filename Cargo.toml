@@ -12,13 +12,12 @@ audio-system = { path = "crates/audio-system" }
 common = { path = "crates/common" }
 console_error_panic_hook = "0.1.7"
 fastrand = "2.4.1"
-rand = "0.10.1"
 fundsp = { version = "0.23", default-features = false, features = ["std"] }
 insta = "1.47.2"
 js-sys = "0.3"
 log = "0.4"
 mint = { version = "0.5.9", features = ["serde"] }
-nalgebra = { version = "0.33", features = ["serde-serialize"] }
+nalgebra = { version = "0.35", features = ["serde-serialize"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 strum = { version = "0.28.0", features = ["derive"] }
@@ -30,3 +29,4 @@ wasm-bindgen-futures = "0.4.72"
 web-sys = "0.3"
 eframe = { version = "0.34" }
 egui = { version = "0.34" }
+enum2egui = { version = "0.34" }

@@ -65,21 +65,21 @@ impl eframe::App for RuntimeDemoApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         show_scrolled_left_panel_inside(ui, "runtime_controls", 360.0, None, |ui| {
             self.testbed.render_controls(ui);
-        });
-        let response = ui.add(egui::Button::new("Excite (hold mouse or Space)"));
-        let pointer_held = response.is_pointer_button_down_on();
-        let key_held = ui.ctx().input(|input| input.key_down(egui::Key::Space));
+            let response = ui.add(egui::Button::new("Excite (hold mouse or Space)"));
+            let pointer_held = response.is_pointer_button_down_on();
+            let key_held = ui.ctx().input(|input| input.key_down(egui::Key::Space));
 
-        if pointer_held || key_held {
-            self.seq.lock().push_relative(
-                0.0,
-                1.0,
-                Fade::Smooth,
-                0.0,
-                0.01,
-                Box::new(impulse::<U1>()),
-            );
-        }
+            if pointer_held || key_held {
+                self.seq.lock().push_relative(
+                    0.0,
+                    1.0,
+                    Fade::Smooth,
+                    0.0,
+                    0.01,
+                    Box::new(impulse::<U1>()),
+                );
+            }
+        });
         egui::CentralPanel::default().show_inside(ui, |ui| self.testbed.render_diagnostics(ui));
     }
 }

@@ -10,6 +10,7 @@ dasp_sample = "0.11.0"
 dyn-clone = "1.0.20"
 eframe = { workspace = true, optional = true }
 egui = { workspace = true, optional = true }
+enum2egui = { workspace = true, optional = true }
 fastrand = { workspace = true }
 fundsp = { workspace = true, default-features = false, features = ["std"] }
 log = { workspace = true }
@@ -44,4 +45,4 @@ objc = "0.2"
 
 [features]
 default = []
-egui = ["dep:eframe", "dep:egui", "common/egui"]
+egui = ["dep:eframe", "dep:egui", "dep:enum2egui", "common/egui"]

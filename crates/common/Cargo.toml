@@ -7,6 +7,7 @@ edition = "2024"
 const-primes = "0.10.5"
 eframe = { workspace = true, optional = true }
 egui = { workspace = true, optional = true }
+enum2egui = { workspace = true, optional = true }
 env_logger = { version = "0.11", optional = true }
 fastrand = { workspace = true }
 log.workspace = true
@@ -44,5 +45,5 @@ path = "examples/thick_revolution_body_egui.rs"
 required-features = ["egui"]
 
 [features]
-egui = ["dep:eframe", "dep:egui", "dep:env_logger"]
+egui = ["dep:eframe", "dep:egui", "dep:env_logger", "dep:enum2egui"]
 test-util = []

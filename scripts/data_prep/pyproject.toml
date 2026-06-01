@@ -1,9 +1,0 @@
-[project]
-name = "red-siren-data-prep"
-version = "0.1.0"
-description = "Data-preparation scripts for Red Siren (material/medium JSON generation and NIST crawling)"
-requires-python = ">=3.11"
-dependencies = [
-    "playwright>=1.40",
-]
-

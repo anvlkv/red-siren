@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use eframe::egui;
 use std::sync::Once;
 
@@ -202,4 +204,81 @@ pub fn enum_combo<T: Copy + PartialEq>(
                 ui.selectable_value(current, *value, *name);
             }
         });
+}
+
+pub fn show_frequency_spectrum_chart(
+    ui: &mut egui::Ui,
+    id_salt: impl std::hash::Hash,
+    spectrum: &BTreeMap<u32, f32>,
+    empty_label: &str,
+    color: egui::Color32,
+) {
+    if spectrum.is_empty() {
+        ui.small(empty_label);
+        return;
+    }
+
+    ui.push_id(id_salt, |ui| {
+        let chart_height = 180.0;
+        let chart_size = egui::vec2(ui.available_width(), chart_height);
+        let (rect, response) = ui.allocate_exact_size(chart_size, egui::Sense::hover());
+        let painter = ui.painter_at(rect);
+
+        let min_freq = *spectrum.keys().next().unwrap_or(&20) as f32;
+        let max_freq = *spectrum.keys().next_back().unwrap_or(&20_000) as f32;
+        let max_amp = spectrum
+            .values()
+            .copied()
+            .fold(f32::EPSILON, |acc, value| acc.max(value));
+
+        painter.rect_stroke(
+            rect,
+            4.0,
+            egui::Stroke::new(1.0_f32, ui.visuals().widgets.noninteractive.bg_stroke.color),
+            egui::StrokeKind::Middle,
+        );
+
+        for (frequency, amplitude) in spectrum {
+            let freq = *frequency as f32;
+            let amp = *amplitude;
+
+            let x_t = if (max_freq - min_freq).abs() <= f32::EPSILON {
+                0.0
+            } else {
+                (freq - min_freq) / (max_freq - min_freq)
+            };
+            let bar_height = (amp / max_amp).clamp(0.0, 1.0) * rect.height();
+            let x = egui::lerp(rect.left()..=rect.right(), x_t);
+            let bar_rect = egui::Rect::from_min_max(
+                egui::pos2(x - 1.5, rect.bottom() - bar_height),
+                egui::pos2(x + 1.5, rect.bottom()),
+            );
+            painter.rect_filled(bar_rect, 0.0, color);
+        }
+
+        let text_color = ui.visuals().weak_text_color();
+        painter.text(
+            egui::pos2(rect.left() + 6.0, rect.top() + 6.0),
+            egui::Align2::LEFT_TOP,
+            format!("{min_freq:.0} Hz"),
+            egui::FontId::monospace(11.0),
+            text_color,
+        );
+        painter.text(
+            egui::pos2(rect.right() - 6.0, rect.top() + 6.0),
+            egui::Align2::RIGHT_TOP,
+            format!("{max_freq:.0} Hz"),
+            egui::FontId::monospace(11.0),
+            text_color,
+        );
+        painter.text(
+            egui::pos2(rect.right() - 6.0, rect.bottom() - 6.0),
+            egui::Align2::RIGHT_BOTTOM,
+            format!("max {:.2e}", max_amp),
+            egui::FontId::monospace(11.0),
+            text_color,
+        );
+
+        response.on_hover_text("Live frequency snapshot");
+    });
 }

@@ -40,7 +40,7 @@ fn main() -> eframe::Result<()> {
                 path_spacing_hz: 3.0,
                 num_modes: 8,
                 mode_spacing_hz: 10.0,
-                mode_decay_s: 8.0,
+                mode_decay_s: 0.2,
             };
 
             let seq = sequencer::Sequencer::new(0, 1, sequencer::ReplayMode::None);

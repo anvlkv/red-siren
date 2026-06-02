@@ -44,6 +44,7 @@ fn decide(
 ) -> Decision {
     const MAX_BUFFER_SIZE_I: isize = MAX_BUFFER_SIZE as isize;
     const MIN_BUFFER_SIZE_I: isize = 8;
+    const PROCESS_BIG_DELTA_THRESHOLD_I: isize = (MAX_BUFFER_SIZE as isize) * 2;
 
     // -y — suboptimal (smaller) callback buffer size
     // 0 — optimal callback buffer size
@@ -95,20 +96,32 @@ fn decide(
             fill_size: deficit.unsigned_abs(),
             mode: ProcessingMode::Process,
         },
-        // plenty of capacity, moderate deficit, buffer much larger than optimal — go big
-        (_, MIN_BUFFER_SIZE_I..MAX_BUFFER_SIZE_I, 64..) => Decision {
+        // plenty of capacity, moderate deficit, callback somewhat larger than optimal
+        // still prefer small-batch processing to avoid queue overshoot.
+        (_, MIN_BUFFER_SIZE_I..MAX_BUFFER_SIZE_I, 1..PROCESS_BIG_DELTA_THRESHOLD_I) => Decision {
+            fill_size: deficit.unsigned_abs(),
+            mode: ProcessingMode::Process,
+        },
+        // plenty of capacity, moderate deficit, callback much larger than optimal — go big
+        (_, MIN_BUFFER_SIZE_I..MAX_BUFFER_SIZE_I, PROCESS_BIG_DELTA_THRESHOLD_I..) => Decision {
             fill_size: deficit.unsigned_abs(),
             mode: ProcessingMode::ProcessBig,
         },
-        // plenty of capacity, large deficit, buffer within moderate excess — go big for throughput
-        (_, MAX_BUFFER_SIZE_I.., ..MAX_BUFFER_SIZE_I) => Decision {
+        // plenty of capacity, large deficit, callback no larger than optimal
+        // keep batching small unless we're clearly in catch-up.
+        (_, MAX_BUFFER_SIZE_I.., ..=0) => Decision {
+            fill_size: deficit.unsigned_abs(),
+            mode: ProcessingMode::Process,
+        },
+        // plenty of capacity, large deficit, callback larger than optimal — go big for throughput.
+        (_, MAX_BUFFER_SIZE_I.., 1..MAX_BUFFER_SIZE_I) => Decision {
             fill_size: deficit.unsigned_abs(),
             mode: ProcessingMode::ProcessBig,
         },
     }
 }
 
-const BUFFER_CAP_MS: f64 = 75_f64;
+const BUFFER_CAP_MS: f64 = 50_f64;
 
 static TELEMETRY_CHANNEL_CLOSED: AtomicBool = AtomicBool::new(false);
 
@@ -233,29 +246,35 @@ pub fn playback_callback<const N: usize>(
                     }
                 }
                 ProcessingMode::Process => {
-                    let remainder = (fill_size % MAX_BUFFER_SIZE).min(1);
-                    for _ in 0..(fill_size / MAX_BUFFER_SIZE + remainder).max(1) {
-                        process_in_buf
-                            .buffer_mut()
-                            .channel_f32_mut(0)
-                            .fill_with(|| {
-                                input_buffer
+                    let mut remaining = fill_size;
+
+                    while remaining > 0 {
+                        let chunk = remaining.min(MAX_BUFFER_SIZE);
+
+                        {
+                            let input_channel = process_in_buf.buffer_mut().channel_f32_mut(0);
+                            for sample in input_channel.iter_mut().take(chunk) {
+                                *sample = input_buffer
                                     .as_ref()
                                     .and_then(|b| b.pop())
-                                    .unwrap_or_default()
-                            });
+                                    .unwrap_or_default();
+                            }
+                        }
 
                         backend.process(
-                            MAX_BUFFER_SIZE,
+                            chunk,
                             &process_in_buf.buffer_ref(),
                             &mut process_out_buf.buffer_mut(),
                         );
-                        for i in 0..MAX_BUFFER_SIZE {
+
+                        for i in 0..chunk {
                             let mut it = 0..N;
                             frame_scratch
                                 .fill_with(|| process_out_buf.at_f32(it.next().unwrap(), i));
                             output_buffer.push_back(frame_scratch);
                         }
+
+                        remaining -= chunk;
                     }
                 }
                 ProcessingMode::ProcessBig => {
@@ -325,4 +344,217 @@ pub fn playback_callback<const N: usize>(
             }
         },
     ) as Box<super::GenType>
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    use cpal::StreamInstant;
+    use fundsp::prelude::{pass, split, Net, U2};
+
+    #[test]
+    fn decide_capacity_exceeded_returns_none() {
+        let decision = decide(64, 64, 64, 0);
+        assert_eq!(decision.mode, ProcessingMode::None);
+        assert_eq!(decision.fill_size, 0);
+    }
+
+    #[test]
+    fn decide_small_remaining_capacity_uses_tick() {
+        let decision = decide(64, 64, 64, 5);
+        assert_eq!(decision.mode, ProcessingMode::Tick);
+        assert_eq!(decision.fill_size, 5);
+    }
+
+    #[test]
+    fn decide_large_negative_deficit_uses_single_tick() {
+        let decision = decide(64, 64, 200, 100);
+        assert_eq!(decision.mode, ProcessingMode::Tick);
+        assert_eq!(decision.fill_size, 1);
+    }
+
+    #[test]
+    fn decide_small_negative_deficit_backfills_with_tick() {
+        let decision = decide(64, 64, 100, 100);
+        assert_eq!(decision.mode, ProcessingMode::Tick);
+        assert_eq!(decision.fill_size, 28);
+    }
+
+    #[test]
+    fn decide_large_deficit_and_large_delta_uses_process_big() {
+        let decision = decide(128, 64, 0, 100);
+        assert_eq!(decision.mode, ProcessingMode::ProcessBig);
+        assert_eq!(decision.fill_size, 64);
+    }
+
+    #[test]
+    fn decide_moderate_deficit_and_small_positive_delta_uses_process() {
+        let decision = decide(96, 64, 32, 100);
+        assert_eq!(decision.mode, ProcessingMode::Process);
+        assert_eq!(decision.fill_size, 32);
+    }
+
+    #[test]
+    fn decide_slight_deficit_uses_tick() {
+        let decision = decide(64, 64, 60, 100);
+        assert_eq!(decision.mode, ProcessingMode::Tick);
+        assert_eq!(decision.fill_size, 4);
+    }
+
+    #[test]
+    fn decide_moderate_deficit_with_non_positive_delta_uses_process() {
+        let decision = decide(32, 64, 40, 100);
+        assert_eq!(decision.mode, ProcessingMode::Process);
+        assert_eq!(decision.fill_size, 24);
+    }
+
+    #[test]
+    fn decide_moderate_deficit_with_mid_positive_delta_uses_process() {
+        let decision = decide(128, 64, 24, 100);
+        assert_eq!(decision.mode, ProcessingMode::Process);
+        assert_eq!(decision.fill_size, 40);
+    }
+
+    #[test]
+    fn decide_moderate_deficit_with_very_large_delta_uses_process_big() {
+        let decision = decide(192, 64, 24, 100);
+        assert_eq!(decision.mode, ProcessingMode::ProcessBig);
+        assert_eq!(decision.fill_size, 40);
+    }
+
+    #[test]
+    fn decide_large_deficit_with_non_positive_delta_uses_process() {
+        let decision = decide(32, 64, 0, 100);
+        assert_eq!(decision.mode, ProcessingMode::Process);
+        assert_eq!(decision.fill_size, 64);
+    }
+
+    #[test]
+    fn decide_large_deficit_with_small_positive_delta_uses_process_big() {
+        let decision = decide(96, 64, 0, 100);
+        assert_eq!(decision.mode, ProcessingMode::ProcessBig);
+        assert_eq!(decision.fill_size, 64);
+    }
+
+    fn test_backend() -> NetBackend {
+        let mut net = Net::new(1, 2);
+        let passthrough_id = net.push(Box::new(pass() >> split::<U2>()));
+        net.connect_input(0, passthrough_id, 0);
+        net.connect_output(passthrough_id, 0, 0);
+        net.connect_output(passthrough_id, 1, 1);
+        net.set_sample_rate(44_100.0);
+        net.check();
+        net.backend()
+    }
+
+    fn output_ts() -> OutputStreamTimestamp {
+        let callback = StreamInstant::new(1, 0);
+        let playback = callback
+            .add(Duration::from_millis(2))
+            .expect("timestamp add should not overflow");
+
+        OutputStreamTimestamp { callback, playback }
+    }
+
+    fn invoke_callback(
+        callback: &mut Box<crate::rt::stream::GenType>,
+        frames: usize,
+    ) -> (Vec<f32>, Vec<f32>) {
+        let mut left = vec![0.0_f32; frames];
+        let mut right = vec![0.0_f32; frames];
+        let mut channels = [left.as_mut_slice(), right.as_mut_slice()];
+        callback(output_ts(), &mut channels);
+        (left, right)
+    }
+
+    fn test_cfg(
+        quality: Arc<RwLock<PlaybackQualityGate>>,
+        telemetry: telemetry::TelemetrySender,
+    ) -> PlaybackCallbackConfig {
+        PlaybackCallbackConfig {
+            input_buffer: None,
+            sample_rate: 44_100,
+            buffer_target_frames: PlaybackQualityGate::Medium.buffer_size(None) as usize,
+            sample_type: SampleType::F32,
+            quality,
+            telemetry,
+        }
+    }
+
+    #[test]
+    fn playback_callback_emits_telemetry_message() {
+        TELEMETRY_CHANNEL_CLOSED.store(false, Ordering::Relaxed);
+        let (telemetry_tx, telemetry_rx) = telemetry::create_telemetry_channel();
+        let quality = Arc::new(RwLock::new(PlaybackQualityGate::Medium));
+        let mut callback = playback_callback::<2>(test_backend(), test_cfg(quality, telemetry_tx));
+
+        let (_left, _right) = invoke_callback(&mut callback, 128);
+        let msg = telemetry_rx
+            .try_recv()
+            .expect("telemetry message should be available after callback");
+
+        assert_eq!(msg.buffer_size, 128);
+        assert_eq!(msg.sample_type, SampleType::F32);
+        assert_eq!(msg.quality, PlaybackQualityGate::Medium);
+    }
+
+    #[test]
+    fn playback_callback_reacts_to_quality_changes() {
+        TELEMETRY_CHANNEL_CLOSED.store(false, Ordering::Relaxed);
+        let (telemetry_tx, telemetry_rx) = telemetry::create_telemetry_channel();
+        let quality = Arc::new(RwLock::new(PlaybackQualityGate::Medium));
+        let mut callback =
+            playback_callback::<2>(test_backend(), test_cfg(quality.clone(), telemetry_tx));
+
+        let (_left, _right) = invoke_callback(&mut callback, 96);
+        let _ = telemetry_rx.try_recv();
+
+        *quality.write() = PlaybackQualityGate::LoFi;
+        let (_left2, _right2) = invoke_callback(&mut callback, 96);
+        let msg = telemetry_rx
+            .try_recv()
+            .expect("telemetry should reflect updated quality gate");
+
+        assert_eq!(
+            msg.target_buffer_frames,
+            PlaybackQualityGate::LoFi.buffer_size(None) as usize
+        );
+        assert_eq!(msg.quality, PlaybackQualityGate::LoFi);
+    }
+
+    #[test]
+    fn playback_callback_handles_larger_callback_buffer_resize_path() {
+        TELEMETRY_CHANNEL_CLOSED.store(false, Ordering::Relaxed);
+        let (telemetry_tx, telemetry_rx) = telemetry::create_telemetry_channel();
+        let quality = Arc::new(RwLock::new(PlaybackQualityGate::Medium));
+        let mut callback = playback_callback::<2>(test_backend(), test_cfg(quality, telemetry_tx));
+
+        let (_left, _right) = invoke_callback(&mut callback, 64);
+        let _ = telemetry_rx.try_recv();
+
+        let (_left2, _right2) = invoke_callback(&mut callback, MAX_BUFFER_SIZE * 3);
+        let msg = telemetry_rx
+            .try_recv()
+            .expect("telemetry should be emitted for resized callback");
+
+        assert_eq!(msg.buffer_size, MAX_BUFFER_SIZE * 3);
+    }
+
+    #[test]
+    fn playback_callback_tolerates_closed_telemetry_channel() {
+        TELEMETRY_CHANNEL_CLOSED.store(false, Ordering::Relaxed);
+        let (telemetry_tx, telemetry_rx) = telemetry::create_telemetry_channel();
+        drop(telemetry_rx);
+
+        let quality = Arc::new(RwLock::new(PlaybackQualityGate::Medium));
+        let mut callback = playback_callback::<2>(test_backend(), test_cfg(quality, telemetry_tx));
+
+        let (_left, _right) = invoke_callback(&mut callback, 64);
+        let (_left2, _right2) = invoke_callback(&mut callback, 64);
+
+        assert!(TELEMETRY_CHANNEL_CLOSED.load(Ordering::Relaxed));
+        TELEMETRY_CHANNEL_CLOSED.store(false, Ordering::Relaxed);
+    }
 }

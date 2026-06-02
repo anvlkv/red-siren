@@ -36,7 +36,7 @@ use super::stream::{spawn_owned_output_stream, Control};
 
 const CONTROL_INVOKE_TIMEOUT_MS: u64 = 500;
 
-const INPUT_BUFFER_DURATION_MS: f64 = 20_f64;
+const INPUT_BUFFER_DURATION_MS: f64 = 15_f64;
 
 /// CPAL-backed stream engine managing the audio runtime subsystem and device streams.
 pub struct Engine {

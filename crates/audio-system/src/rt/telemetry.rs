@@ -81,12 +81,12 @@ impl PlaybackTelemetry {
     // Durations in seconds
     const HISTORY_DURATION_S: f64 = 3.0;
     const SUSTAIN_S: f64 = Self::HISTORY_DURATION_S * 0.25;
-    const DEGRADE_S: f64 = Self::HISTORY_DURATION_S * 0.1;
+    const DEGRADE_S: f64 = Self::HISTORY_DURATION_S * (1.0 / 30.0);
     const UPGRADE_S: f64 = Self::HISTORY_DURATION_S * 0.75;
 
     // Thresholds in %
-    const DEGRADE_THR: f64 = 0.85;
-    const UPGRADE_THR: f64 = 0.6;
+    const DEGRADE_THR: f64 = 0.8;
+    const UPGRADE_THR: f64 = 0.7;
 
     pub fn new(
         sample_rate: u32,
@@ -470,7 +470,7 @@ mod tests {
         let sr = 100;
         let buffer_frames = 10; // 0.1s per buffer
         let mut t = telemetry(sr, PlaybackQualityGate::HiFi, Some(buffer_frames));
-        // Make processing_time ~0.09s per msg => ratio ~0.9 > DEGRADE_THR 0.85
+        // Make processing_time ~0.09s per msg => ratio ~0.9 > DEGRADE_THR 0.8
         let mut got = false;
         for _ in 0..30 {
             let m = msg(

@@ -8,7 +8,9 @@ use std::{
 };
 
 use audio_system::egui_testbed::{RuntimeTestbed, RuntimeTransportState};
-use common::egui_helpers::{run_native_app, show_buffer_line_chart, show_scrolled_left_panel_inside};
+use common::egui_helpers::{
+    run_native_app, show_buffer_line_chart, show_scrolled_left_panel_inside,
+};
 use eframe::egui;
 use enum2egui::GuiInspect;
 use fundsp::prelude::*;
@@ -35,7 +37,7 @@ fn main() -> eframe::Result<()> {
                 path_spacing_hz: 3.0,
                 num_modes: 8,
                 mode_spacing_hz: 10.0,
-                mode_decay_s: 8.0,
+                mode_decay_s: 1.2,
             };
             let mut app = RuntimeDemoApp {
                 testbed: RuntimeTestbed::default(),

@@ -1,5 +1,12 @@
 use std::collections::BTreeMap;
-use std::time::{Duration, Instant};
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread::{self, JoinHandle},
+    time::{Duration, Instant},
+};
 
 use common::{
     device::DeviceData,
@@ -7,19 +14,28 @@ use common::{
         enum_combo, find_selected_device, selected_device_label as helper_selected_device_label,
         show_action_error_messages, show_device_combo, show_frequency_spectrum_chart, StatusTone,
     },
+    error::{AppError, AudioAnalysisError},
     playback_quality::PlaybackQuality,
 };
 use eframe::egui::{self};
 use fundsp::prelude::*;
+use parking_lot::Mutex;
 
 use crate::{
     create_telemetry_channel,
-    rt::{engine::Engine, telemetry::TelemetryReceiver, ExcitementSource},
+    rt::{
+        engine::Engine,
+        telemetry::{Message as TelemetryMessage, TelemetryReceiver},
+        ExcitementSource,
+    },
     PlaybackQualityGate,
 };
 
 const DEFAULT_EXPERIMENT_FREQ_HZ: f32 = 440.0;
 const DIAGNOSTIC_WARMUP_MS: u64 = 180;
+const TELEMETRY_LOG_INTERVAL_MS: u64 = 1000;
+const SPECTRUM_WORKER_POLL_INTERVAL_MS: u64 = 16;
+const SPECTRUM_WORKER_LOG_INTERVAL_MS: u64 = 1000;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum RuntimeTransportState {
@@ -49,8 +65,12 @@ struct DiagnosticSnapshot {
 }
 
 pub struct RuntimeTestbed {
-    engine: Engine,
-    _telemetry_rx: TelemetryReceiver,
+    engine: Arc<Engine>,
+    telemetry_rx: TelemetryReceiver,
+    latest_telemetry: Option<TelemetryMessage>,
+    latest_telemetry_received_at: Option<Instant>,
+    latest_telemetry_drain_count: usize,
+    last_telemetry_log_at: Option<Instant>,
     devices: Vec<DeviceData>,
     output_choice: Option<String>,
     input_choice: Option<String>,
@@ -58,6 +78,9 @@ pub struct RuntimeTestbed {
     source: ExcitementSource,
     transport: RuntimeTransportState,
     diagnostics: Option<DiagnosticSnapshot>,
+    spectrum_shared: Arc<Mutex<SpectrumSharedState>>,
+    spectrum_worker: Option<SpectrumWorker>,
+    last_spectrum_worker_log_at: Option<Instant>,
     last_network_loaded_at: Option<Instant>,
     diagnostics_status: String,
     startup_network_builder: Option<Box<dyn Fn(f64) -> Net + Send + Sync>>,
@@ -65,12 +88,37 @@ pub struct RuntimeTestbed {
     last_error: Option<String>,
 }
 
+#[derive(Clone, Debug, Default)]
+struct SpectrumSharedState {
+    diagnostics: Option<DiagnosticSnapshot>,
+    status: String,
+    updated_at: Option<Instant>,
+}
+
+struct SpectrumWorker {
+    should_stop: Arc<AtomicBool>,
+    join_handle: Option<JoinHandle<()>>,
+}
+
+impl SpectrumWorker {
+    fn stop(&mut self) {
+        self.should_stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.join_handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
 impl Default for RuntimeTestbed {
     fn default() -> Self {
         let (engine, telemetry_rx) = build_engine(None, None);
         let mut app = Self {
             engine,
-            _telemetry_rx: telemetry_rx,
+            telemetry_rx,
+            latest_telemetry: None,
+            latest_telemetry_received_at: None,
+            latest_telemetry_drain_count: 0,
+            last_telemetry_log_at: None,
             devices: Vec::new(),
             output_choice: None,
             input_choice: None,
@@ -78,6 +126,13 @@ impl Default for RuntimeTestbed {
             source: ExcitementSource::Entropy,
             transport: RuntimeTransportState::Stopped,
             diagnostics: None,
+            spectrum_shared: Arc::new(Mutex::new(SpectrumSharedState {
+                diagnostics: None,
+                status: "idle".to_string(),
+                updated_at: None,
+            })),
+            spectrum_worker: None,
+            last_spectrum_worker_log_at: None,
             last_network_loaded_at: None,
             diagnostics_status: "idle".to_string(),
             startup_network_builder: None,
@@ -304,8 +359,11 @@ impl RuntimeTestbed {
     }
 
     pub fn render_diagnostics(&mut self, ui: &mut egui::Ui) {
+        self.refresh_telemetry();
+        self.sync_spectrum_worker();
+
         if self.transport == RuntimeTransportState::Running {
-            self.refresh_diagnostics();
+            self.refresh_diagnostics_from_worker();
             ui.ctx().request_repaint();
         }
 
@@ -321,6 +379,36 @@ impl RuntimeTestbed {
                     ui.label(format!("Source: {}", source_label(self.source)));
                     ui.label(format!("Diagnostics: {}", self.diagnostics_status));
                 });
+
+                if let Some(telemetry) = self.latest_telemetry {
+                    let sample_rate = self.current_sample_rate();
+                    let queue_before_ms = frames_to_ms(
+                        telemetry.queue_depth_frames_before_fill,
+                        sample_rate,
+                    );
+                    let queue_after_ms =
+                        frames_to_ms(telemetry.queue_depth_frames_after_fill, sample_rate);
+                    let target_ms = frames_to_ms(telemetry.target_buffer_frames, sample_rate);
+                    let callback_age_ms = telemetry.callback_started_at.elapsed().as_secs_f64() * 1000.0;
+                    let latest_rx_age_ms = self
+                        .latest_telemetry_received_at
+                        .map(|at| at.elapsed().as_secs_f64() * 1000.0)
+                        .unwrap_or_default();
+
+                    ui.small(format!(
+                        "Callback queue before/after fill: {:.1} / {:.1} ms (target {:.1} ms)",
+                        queue_before_ms, queue_after_ms, target_ms
+                    ));
+                    ui.small(format!(
+                        "Produced {} frames, callback age {:.1} ms, telemetry receive age {:.1} ms (last drain {})",
+                        telemetry.produced_frames,
+                        callback_age_ms,
+                        latest_rx_age_ms,
+                        self.latest_telemetry_drain_count
+                    ));
+                } else {
+                    ui.small("Telemetry: waiting for callback messages");
+                }
             });
 
         egui::CollapsingHeader::new("Configuration")
@@ -344,7 +432,6 @@ impl RuntimeTestbed {
             .default_open(true)
             .show(ui, |ui| {
                 if let Some(snapshot) = &self.diagnostics {
-                    ui.label(format!("Input samples captured: {}", snapshot.input_len));
                     ui.label(format!(
                         "Max L/R: {:.3e} / {:.3e}",
                         snapshot.left_max, snapshot.right_max
@@ -398,10 +485,71 @@ impl RuntimeTestbed {
     }
 
     fn rebuild_engine(&mut self) {
+        self.stop_spectrum_worker();
         let (engine, telemetry_rx) = build_engine(self.selected_output(), self.selected_input());
         self.engine = engine;
-        self._telemetry_rx = telemetry_rx;
+        self.telemetry_rx = telemetry_rx;
+        self.latest_telemetry = None;
+        self.latest_telemetry_received_at = None;
+        self.latest_telemetry_drain_count = 0;
+        self.last_telemetry_log_at = None;
+        self.last_spectrum_worker_log_at = None;
+        *self.spectrum_shared.lock() = SpectrumSharedState {
+            diagnostics: None,
+            status: "idle".to_string(),
+            updated_at: None,
+        };
         self.apply_quality_if_possible();
+    }
+
+    fn refresh_telemetry(&mut self) {
+        let mut drained = 0;
+        while let Ok(message) = self.telemetry_rx.try_recv() {
+            self.latest_telemetry = Some(message);
+            self.latest_telemetry_received_at = Some(Instant::now());
+            drained += 1;
+        }
+
+        if drained > 0 {
+            self.latest_telemetry_drain_count = drained;
+        }
+
+        if self.transport == RuntimeTransportState::Running {
+            if let Some(telemetry) = self.latest_telemetry {
+                let now = Instant::now();
+                let should_log = self.last_telemetry_log_at.is_none_or(|last| {
+                    now.duration_since(last) >= Duration::from_millis(TELEMETRY_LOG_INTERVAL_MS)
+                });
+
+                if should_log {
+                    self.last_telemetry_log_at = Some(now);
+                    let sample_rate = self.current_sample_rate();
+                    let queue_before_ms =
+                        frames_to_ms(telemetry.queue_depth_frames_before_fill, sample_rate);
+                    let queue_after_ms =
+                        frames_to_ms(telemetry.queue_depth_frames_after_fill, sample_rate);
+                    let target_ms = frames_to_ms(telemetry.target_buffer_frames, sample_rate);
+                    let callback_age_ms =
+                        telemetry.callback_started_at.elapsed().as_secs_f64() * 1000.0;
+                    let telemetry_rx_age_ms = self
+                        .latest_telemetry_received_at
+                        .map(|at| at.elapsed().as_secs_f64() * 1000.0)
+                        .unwrap_or_default();
+
+                    log::debug!(
+                        "latency_diag queue_before_ms={:.1} queue_after_ms={:.1} target_ms={:.1} produced_frames={} callback_age_ms={:.1} rx_age_ms={:.1} drain_count={} mode={:?}",
+                        queue_before_ms,
+                        queue_after_ms,
+                        target_ms,
+                        telemetry.produced_frames,
+                        callback_age_ms,
+                        telemetry_rx_age_ms,
+                        self.latest_telemetry_drain_count,
+                        telemetry.mode,
+                    );
+                }
+            }
+        }
     }
 
     fn set_error(&mut self, error: impl ToString) {
@@ -419,7 +567,13 @@ impl RuntimeTestbed {
 
     fn apply_quality_if_possible(&mut self) {
         match self.engine.on_quality_change(self.quality) {
-            Ok(()) => self.set_action(format!("Applied {} quality", self.quality_label())),
+            Ok(()) => {
+                self.set_action(format!("Applied {} quality", self.quality_label()));
+                if self.transport == RuntimeTransportState::Running {
+                    self.stop_spectrum_worker();
+                    self.start_spectrum_worker();
+                }
+            }
             Err(err) => self.set_error(err),
         }
     }
@@ -430,6 +584,7 @@ impl RuntimeTestbed {
         match self.engine.start(self.source) {
             Ok(()) => {
                 self.transport = RuntimeTransportState::Running;
+                self.start_spectrum_worker();
                 self.set_action(format!(
                     "Started runtime with {} source",
                     source_label(self.source)
@@ -443,6 +598,7 @@ impl RuntimeTestbed {
         match self.engine.pause() {
             Ok(()) => {
                 self.transport = RuntimeTransportState::Paused;
+                self.stop_spectrum_worker();
                 self.set_action("Paused output stream");
             }
             Err(err) => self.set_error(err),
@@ -453,6 +609,7 @@ impl RuntimeTestbed {
         match self.engine.resume() {
             Ok(()) => {
                 self.transport = RuntimeTransportState::Running;
+                self.start_spectrum_worker();
                 self.set_action("Resumed output stream");
             }
             Err(err) => self.set_error(err),
@@ -463,6 +620,7 @@ impl RuntimeTestbed {
         match self.engine.stop() {
             Ok(()) => {
                 self.transport = RuntimeTransportState::Stopped;
+                self.stop_spectrum_worker();
                 self.diagnostics = None;
                 self.set_action("Stopped runtime");
             }
@@ -499,9 +657,18 @@ impl RuntimeTestbed {
 
         match result {
             Ok(()) if replaced => {
+                self.stop_spectrum_worker();
                 self.last_network_loaded_at = Some(Instant::now());
                 self.diagnostics = None;
                 self.diagnostics_status = "warming up".to_string();
+                *self.spectrum_shared.lock() = SpectrumSharedState {
+                    diagnostics: None,
+                    status: "warming up".to_string(),
+                    updated_at: None,
+                };
+                if self.transport == RuntimeTransportState::Running {
+                    self.start_spectrum_worker();
+                }
                 self.set_action(success_message);
             }
             Ok(()) => self.set_error("Runtime is not active yet"),
@@ -509,7 +676,7 @@ impl RuntimeTestbed {
         }
     }
 
-    fn refresh_diagnostics(&mut self) {
+    fn refresh_diagnostics_from_worker(&mut self) {
         if self.transport != RuntimeTransportState::Running {
             self.diagnostics_status = "stopped".to_string();
             return;
@@ -518,6 +685,7 @@ impl RuntimeTestbed {
         if let Some(loaded_at) = self.last_network_loaded_at {
             let elapsed = loaded_at.elapsed();
             if elapsed < Duration::from_millis(DIAGNOSTIC_WARMUP_MS) {
+                self.diagnostics = None;
                 self.diagnostics_status = format!(
                     "warming up ({:03} ms)",
                     (Duration::from_millis(DIAGNOSTIC_WARMUP_MS) - elapsed).as_millis()
@@ -526,41 +694,169 @@ impl RuntimeTestbed {
             }
         }
 
-        let sample_rate = self.current_sample_rate();
-        let mut snapshot = None;
+        let shared = self.spectrum_shared.lock();
+        self.diagnostics = shared.diagnostics.clone();
+        self.diagnostics_status = if shared.status.is_empty() {
+            "waiting for worker".to_string()
+        } else {
+            shared.status.clone()
+        };
 
-        let result = self.engine.with_runtime(|rt| {
-            let input_len = rt.input_snapshot().len();
-            let (left, right) = rt.output_spectrum(sample_rate, 20.0, 20_000.0)?;
-            snapshot = Some(DiagnosticSnapshot {
-                input_len,
-                left_spectrum: left.clone(),
-                right_spectrum: right.clone(),
-                left_max: max_peak(&left),
-                right_max: max_peak(&right),
-            });
-            Ok(())
+        let now = Instant::now();
+        let should_log = self.last_spectrum_worker_log_at.is_none_or(|last| {
+            now.duration_since(last) >= Duration::from_millis(SPECTRUM_WORKER_LOG_INTERVAL_MS)
         });
+        if should_log {
+            self.last_spectrum_worker_log_at = Some(now);
+            let age_ms = shared
+                .updated_at
+                .map(|at| at.elapsed().as_secs_f64() * 1000.0)
+                .unwrap_or(-1.0);
+            log::debug!(
+                "spectrum_ui_diag status={} has_snapshot={} snapshot_age_ms={:.1} worker_running={}",
+                self.diagnostics_status,
+                self.diagnostics.is_some(),
+                age_ms,
+                self.spectrum_worker.is_some(),
+            );
+        }
+    }
 
-        match result {
-            Ok(()) => {
-                if let Some(snapshot) = snapshot {
-                    if snapshot.left_max <= f32::EPSILON && snapshot.right_max <= f32::EPSILON {
-                        self.diagnostics_status = "stale or silent".to_string();
-                        self.diagnostics = Some(snapshot);
-                    } else {
-                        self.diagnostics = Some(snapshot);
-                        self.diagnostics_status = "live".to_string();
+    fn sync_spectrum_worker(&mut self) {
+        match (
+            self.transport == RuntimeTransportState::Running,
+            self.spectrum_worker.is_some(),
+        ) {
+            (true, false) => self.start_spectrum_worker(),
+            (false, true) => self.stop_spectrum_worker(),
+            _ => {}
+        }
+    }
+
+    fn start_spectrum_worker(&mut self) {
+        if self.spectrum_worker.is_some() {
+            return;
+        }
+
+        *self.spectrum_shared.lock() = SpectrumSharedState {
+            diagnostics: None,
+            status: "waiting for audio".to_string(),
+            updated_at: None,
+        };
+
+        let engine = self.engine.clone();
+        let shared = self.spectrum_shared.clone();
+        let sample_rate = self.current_sample_rate();
+        let should_stop = Arc::new(AtomicBool::new(false));
+        let should_stop_for_thread = should_stop.clone();
+
+        let spawn_result = thread::Builder::new()
+            .name("runtime_spectrum_worker".to_string())
+            .spawn(move || {
+                let poll_interval = Duration::from_millis(SPECTRUM_WORKER_POLL_INTERVAL_MS);
+                let mut last_log_at: Option<Instant> = None;
+
+                while !should_stop_for_thread.load(Ordering::Relaxed) {
+                    let mut worker_snapshot: Option<DiagnosticSnapshot> = None;
+                    let mut worker_status = "runtime unavailable".to_string();
+
+                    let result = engine.with_runtime(|rt| {
+                        let input_len = rt.input_snapshot().len();
+                        let (left, right) = rt.output_spectrum(sample_rate, 20.0, 20_000.0)?;
+                        let snapshot = DiagnosticSnapshot {
+                            input_len,
+                            left_spectrum: left.clone(),
+                            right_spectrum: right.clone(),
+                            left_max: max_peak(&left),
+                            right_max: max_peak(&right),
+                        };
+
+                        worker_status = if snapshot.left_max <= f32::EPSILON
+                            && snapshot.right_max <= f32::EPSILON
+                        {
+                            "stale or silent".to_string()
+                        } else {
+                            "live".to_string()
+                        };
+                        worker_snapshot = Some(snapshot);
+                        Ok(())
+                    });
+
+                    match result {
+                        Ok(()) => {
+                            if worker_snapshot.is_none() {
+                                worker_status = "runtime unavailable".to_string();
+                            }
+                        }
+                        Err(err) => {
+                            if matches!(
+                                err,
+                                AppError::AudioAnalysis(AudioAnalysisError::EmptyOutputBuffer)
+                            ) {
+                                worker_status = "waiting for audio".to_string();
+                            } else {
+                                worker_status = "analysis error".to_string();
+                                log::debug!("spectrum_worker_diag analysis_error={}", err);
+                            }
+                        }
                     }
-                } else {
-                    self.diagnostics_status = "runtime unavailable".to_string();
-                    self.set_error("Runtime is not active yet");
+
+                    let now = Instant::now();
+                    {
+                        let mut shared = shared.lock();
+                        shared.diagnostics = worker_snapshot;
+                        shared.status = worker_status.clone();
+                        shared.updated_at = Some(now);
+                    }
+
+                    let should_log = last_log_at.is_none_or(|last| {
+                        now.duration_since(last)
+                            >= Duration::from_millis(SPECTRUM_WORKER_LOG_INTERVAL_MS)
+                    });
+                    if should_log {
+                        last_log_at = Some(now);
+                        let shared = shared.lock();
+                        let bins = shared
+                            .diagnostics
+                            .as_ref()
+                            .map(|d| d.left_spectrum.len())
+                            .unwrap_or_default();
+                        log::debug!(
+                            "spectrum_worker_diag poll_interval_ms={} status={} has_snapshot={} left_bins={}",
+                            SPECTRUM_WORKER_POLL_INTERVAL_MS,
+                            shared.status,
+                            shared.diagnostics.is_some(),
+                            bins,
+                        );
+                    }
+
+                    thread::sleep(poll_interval);
                 }
+
+                log::debug!("spectrum_worker_diag stopped=true");
+            });
+
+        match spawn_result {
+            Ok(handle) => {
+                self.spectrum_worker = Some(SpectrumWorker {
+                    should_stop,
+                    join_handle: Some(handle),
+                });
+                log::debug!(
+                    "spectrum_worker_diag started=true poll_interval_ms={}",
+                    SPECTRUM_WORKER_POLL_INTERVAL_MS
+                );
             }
             Err(err) => {
-                self.diagnostics_status = "analysis error".to_string();
-                self.set_error(err)
+                log::error!("spectrum_worker_diag started=false error={}", err);
             }
+        }
+    }
+
+    fn stop_spectrum_worker(&mut self) {
+        if let Some(mut worker) = self.spectrum_worker.take() {
+            worker.stop();
+            log::debug!("spectrum_worker_diag stop_requested=true");
         }
     }
 
@@ -635,12 +931,18 @@ impl RuntimeTestbed {
 fn build_engine(
     output_device: Option<DeviceData>,
     input_device: Option<DeviceData>,
-) -> (Engine, TelemetryReceiver) {
+) -> (Arc<Engine>, TelemetryReceiver) {
     let (telemetry, telemetry_rx) = create_telemetry_channel();
     (
-        Engine::new(telemetry, output_device, input_device),
+        Arc::new(Engine::new(telemetry, output_device, input_device)),
         telemetry_rx,
     )
+}
+
+impl Drop for RuntimeTestbed {
+    fn drop(&mut self) {
+        self.stop_spectrum_worker();
+    }
 }
 
 fn default_experiment_net(sample_rate: f64) -> Net {
@@ -706,5 +1008,13 @@ fn quality_label(quality: PlaybackQuality) -> &'static str {
         PlaybackQuality::Medium => "Medium",
         PlaybackQuality::HiFi => "HiFi",
         PlaybackQuality::Ultra => "Ultra",
+    }
+}
+
+fn frames_to_ms(frames: usize, sample_rate: f64) -> f64 {
+    if sample_rate <= 0.0 {
+        0.0
+    } else {
+        (frames as f64 / sample_rate) * 1000.0
     }
 }

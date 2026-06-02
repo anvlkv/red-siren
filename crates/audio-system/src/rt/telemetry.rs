@@ -1,4 +1,8 @@
-use std::{collections::VecDeque, sync::Arc, time::Duration};
+use std::{
+    collections::VecDeque,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use fundsp::thingbuf::mpsc::{channel, Receiver, Sender};
 
@@ -14,15 +18,39 @@ pub fn create_telemetry_channel() -> (TelemetrySender, TelemetryReceiver) {
     (Arc::new(sx), Arc::new(rx))
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct Message {
     pub mode: ProcessingMode,
     pub filled_size: usize,
     pub buffer_size: usize,
+    pub queue_depth_frames_before_fill: usize,
+    pub queue_depth_frames_after_fill: usize,
+    pub target_buffer_frames: usize,
+    pub produced_frames: usize,
+    pub callback_started_at: Instant,
     pub processing_time: Duration,
     pub estimated_latency: Option<Duration>,
     pub quality: PlaybackQualityGate,
     pub sample_type: SampleType,
+}
+
+impl Default for Message {
+    fn default() -> Self {
+        Self {
+            mode: ProcessingMode::default(),
+            filled_size: 0,
+            buffer_size: 0,
+            queue_depth_frames_before_fill: 0,
+            queue_depth_frames_after_fill: 0,
+            target_buffer_frames: 0,
+            produced_frames: 0,
+            callback_started_at: Instant::now(),
+            processing_time: Duration::ZERO,
+            estimated_latency: None,
+            quality: PlaybackQualityGate::default(),
+            sample_type: SampleType::default(),
+        }
+    }
 }
 
 impl Message {
@@ -359,6 +387,11 @@ mod tests {
             mode: ProcessingMode::Tick,
             buffer_size: buffer_frames,
             filled_size: filled_frames,
+            queue_depth_frames_before_fill: buffer_frames,
+            queue_depth_frames_after_fill: buffer_frames,
+            target_buffer_frames: buffer_frames,
+            produced_frames: 0,
+            callback_started_at: Instant::now(),
             processing_time: Duration::from_millis(processing_ms),
             estimated_latency: estimated_latency_ms.map(Duration::from_millis),
             quality,

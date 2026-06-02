@@ -1,20 +1,20 @@
 use std::collections::VecDeque;
 use std::sync::{
-    Arc,
     atomic::{AtomicBool, Ordering},
+    Arc,
 };
 use std::time::Instant;
 
 use crate::quality::{PlaybackQualityGate, SampleType};
-use crate::rt::ProcessingMode;
 use crate::rt::telemetry;
+use crate::rt::ProcessingMode;
 
 use cpal::OutputStreamTimestamp;
-use fundsp::MAX_BUFFER_SIZE;
 use fundsp::buffer::BufferVec;
 use fundsp::prelude::{AudioUnit, BigBlockAdapter, NetBackend};
 use fundsp::setting::TrySendError;
 use fundsp::thingbuf::ThingBuf;
+use fundsp::MAX_BUFFER_SIZE;
 use parking_lot::RwLock;
 
 pub struct PlaybackCallbackConfig {
@@ -211,13 +211,13 @@ pub fn playback_callback<const N: usize>(
                 frames_per_output_buffer = num_frames;
             }
 
-            let remainig_filled = output_buffer.len();
-            let remainig_cap = output_buffer.capacity() - remainig_filled;
+            let remaining_filled = output_buffer.len();
+            let remaining_cap = output_buffer.capacity() - remaining_filled;
             let Decision { fill_size, mode } = decide(
                 frames_per_output_buffer as isize,
                 buffer_target_frames as isize,
-                remainig_filled as isize,
-                remainig_cap as isize,
+                remaining_filled as isize,
+                remaining_cap as isize,
             );
 
             match mode {
@@ -295,11 +295,18 @@ pub fn playback_callback<const N: usize>(
             }
 
             let processing_time = Instant::now().duration_since(start_ts);
+            let queue_depth_frames_after_fill = output_buffer.len();
+            let produced_frames = queue_depth_frames_after_fill.saturating_sub(remaining_filled);
 
             let summary = telemetry::Message {
                 mode,
                 filled_size: fill_size,
                 buffer_size: num_frames,
+                queue_depth_frames_before_fill: remaining_filled,
+                queue_depth_frames_after_fill,
+                target_buffer_frames: buffer_target_frames,
+                produced_frames,
+                callback_started_at: start_ts,
                 processing_time,
                 estimated_latency: ts
                     .playback

@@ -8,13 +8,16 @@ use crate::system::memo::memo;
 
 pub struct Node<F: Real + 'static> {
     pub key: NodeKey,
-    paths_modal_net: Net,
     pub path_spread_coeff: Shared,
     pub mode_spacing_coeff: Shared,
+    pub snoop: Snoop,
+    paths_modal_net: Net,
     _sample_type: PhantomData<F>,
 }
 
 impl<F: Real + 'static> Node<F> {
+    const SNOOP_SIZE: usize = 256;
+
     pub fn new(config: config::Node) -> Self {
         let mut paths_modal_net = Net::new(3, 1);
         let path_spread_coeff = Shared::new(0.0);
@@ -43,7 +46,9 @@ impl<F: Real + 'static> Node<F> {
         paths_modal_net.connect_input(1, second_path_id, 0);
         paths_modal_net.connect_input(2, third_path_id, 0);
 
-        let join_id = paths_modal_net.push(Box::new(pass() + pass() + pass()));
+        let (snoop, snoop_be) = snoop(Self::SNOOP_SIZE);
+
+        let join_id = paths_modal_net.push(Box::new((pass() + pass() + pass()) >> snoop_be));
 
         paths_modal_net.connect(first_path_id, 0, join_id, 0);
         paths_modal_net.connect(second_path_id, 0, join_id, 1);
@@ -56,6 +61,7 @@ impl<F: Real + 'static> Node<F> {
             paths_modal_net,
             path_spread_coeff,
             mode_spacing_coeff,
+            snoop,
             _sample_type: PhantomData,
         }
     }

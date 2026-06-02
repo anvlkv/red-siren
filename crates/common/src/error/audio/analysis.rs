@@ -7,4 +7,7 @@ pub enum AudioAnalysisError {
     /// A generic error for spectrum analyzer failures.
     #[error("spectrum analyzer error: {0}")]
     SpectrumAnalyzerError(String),
+    /// No audio data was available for analysis.
+    #[error("no audio data available for analysis")]
+    EmptyOutputBuffer,
 }

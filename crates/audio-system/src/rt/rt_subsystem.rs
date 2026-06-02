@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, sync::Arc, thread, time::Duration};
 
-use common::error::Result;
+use common::error::{AudioAnalysisError, Result};
 use fundsp::prelude::*;
 use parking_lot::RwLock;
 
@@ -34,6 +34,25 @@ pub struct RuntimeSubsystem {
 }
 
 impl RuntimeSubsystem {
+    fn reset_analysis_state(&self) {
+        {
+            let mut snoops = self.processed_output_snoops.write();
+            let _ = snoops.0.get();
+            let _ = snoops.1.get();
+        }
+
+        {
+            let mut raw_input = self.raw_input_snoops.write();
+            let _ = raw_input.get();
+        }
+
+        {
+            let mut spectrum_buffer = self.spectrum_buffer.write();
+            spectrum_buffer[0].fill(0.0);
+            spectrum_buffer[1].fill(0.0);
+        }
+    }
+
     pub fn new(sample_type: SampleType, num_channels: usize, inner_net: Option<Net>) -> Self {
         let spectrum_buffer = Arc::new(RwLock::new(
             [[0_f32; output_analyzer::OUTPUT_ANALYZER_FFT_WINDOW_SIZE]; 2],
@@ -111,6 +130,7 @@ impl RuntimeSubsystem {
             }
         }
         *self.processed_output_snoops.write() = (l_snoop, r_snoop);
+        self.reset_analysis_state();
         self.sample_type = sample_type;
     }
 
@@ -127,6 +147,7 @@ impl RuntimeSubsystem {
             }
         }
         *self.processed_output_snoops.write() = (l_snoop, r_snoop);
+        self.reset_analysis_state();
         self.num_channels = num_channels;
     }
 
@@ -171,6 +192,7 @@ impl RuntimeSubsystem {
                 dsp_network.commit();
             }
         }
+        self.reset_analysis_state();
         self.fade_in();
     }
 
@@ -182,6 +204,7 @@ impl RuntimeSubsystem {
     ) -> Result<(BTreeMap<u32, f32>, BTreeMap<u32, f32>)> {
         let (l_data, r_data) = {
             let mut snoops = self.processed_output_snoops.write();
+
             (
                 snoops
                     .0
@@ -197,6 +220,10 @@ impl RuntimeSubsystem {
                     .collect::<Vec<f32>>(),
             )
         };
+
+        if l_data.len() == 0 || r_data.len() == 0 {
+            return Err(AudioAnalysisError::EmptyOutputBuffer.into());
+        }
 
         let (l_window, r_window) = {
             let mut spectrum_buffer = self.spectrum_buffer.write();

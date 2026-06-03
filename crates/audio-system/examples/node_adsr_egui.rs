@@ -24,6 +24,7 @@ const WINDOW_SIZE: [f32; 2] = [1180.0, 760.0];
 const NODE_SNOOP_WINDOW_SIZE: usize = 256;
 const SNAPSHOT_LOG_INTERVAL_MS: u64 = 1000;
 const NODE_SNOOP_POLL_INTERVAL_MS: u64 = 5;
+const NODE_SNOOP_NONZERO_EPSILON: f32 = 1.0e-6;
 
 fn main() -> eframe::Result<()> {
     run_native_app(
@@ -51,6 +52,8 @@ fn main() -> eframe::Result<()> {
                 node_rt: Arc::new(Mutex::new(Node::new(node_cfg))),
                 seq: Arc::new(Mutex::new(seq)),
                 trigger_prev_down: false,
+                trigger_seq: 0,
+                trigger_last_at: None,
                 adsr_dur_0: Arc::new(Shared::new(0.10)),
                 adsr_weight_0: Arc::new(Shared::new(1.00)),
                 adsr_dur_1: Arc::new(Shared::new(0.18)),
@@ -63,6 +66,10 @@ fn main() -> eframe::Result<()> {
                 node_snoop_last_snapshot_at: None,
                 node_snoop_empty_polls: 0,
                 node_snoop_last_ui_log_at: None,
+                node_snoop_active_trigger_id: 0,
+                node_snoop_first_nonzero_at: None,
+                node_snoop_first_ui_render_at: None,
+                node_snoop_last_append_len: 0,
             };
 
             let node_rt = app.node_rt.clone();
@@ -125,6 +132,8 @@ struct RuntimeDemoApp {
     node_rt: Arc<Mutex<Node<f32>>>,
     seq: Arc<Mutex<sequencer::Sequencer>>,
     trigger_prev_down: bool,
+    trigger_seq: u64,
+    trigger_last_at: Option<Instant>,
     adsr_dur_0: Arc<Shared>,
     adsr_weight_0: Arc<Shared>,
     adsr_dur_1: Arc<Shared>,
@@ -137,6 +146,10 @@ struct RuntimeDemoApp {
     node_snoop_last_snapshot_at: Option<Instant>,
     node_snoop_empty_polls: u32,
     node_snoop_last_ui_log_at: Option<Instant>,
+    node_snoop_active_trigger_id: u64,
+    node_snoop_first_nonzero_at: Option<Instant>,
+    node_snoop_first_ui_render_at: Option<Instant>,
+    node_snoop_last_append_len: usize,
 }
 
 #[derive(Default)]
@@ -145,6 +158,13 @@ struct NodeSnoopShared {
     last_snapshot_at: Option<Instant>,
     empty_polls: u32,
     poll_count: u64,
+    active_trigger_id: u64,
+    active_trigger_at: Option<Instant>,
+    first_nonzero_trigger_id: u64,
+    first_nonzero_at: Option<Instant>,
+    first_nonzero_ui_render_trigger_id: u64,
+    first_nonzero_ui_render_at: Option<Instant>,
+    last_append_len: usize,
 }
 
 struct NodeSnoopWorker {
@@ -181,6 +201,28 @@ impl RuntimeDemoApp {
     }
 
     fn trigger_once(&mut self) {
+        self.trigger_seq = self.trigger_seq.saturating_add(1);
+        let trigger_id = self.trigger_seq;
+        let triggered_at = Instant::now();
+        self.trigger_last_at = Some(triggered_at);
+
+        {
+            let mut shared = self.node_snoop_shared.lock();
+            shared.active_trigger_id = trigger_id;
+            shared.active_trigger_at = Some(triggered_at);
+            shared.first_nonzero_trigger_id = 0;
+            shared.first_nonzero_at = None;
+            shared.first_nonzero_ui_render_trigger_id = 0;
+            shared.first_nonzero_ui_render_at = None;
+        }
+
+        self.testbed.register_visual_trigger(trigger_id, triggered_at);
+        log::debug!(
+            "trigger_diag trigger_id={} trigger_age_ms={:.1}",
+            trigger_id,
+            triggered_at.elapsed().as_secs_f64() * 1000.0,
+        );
+
         self.seq
             .lock()
             .push_relative(0.0, 1.0, Fade::Smooth, 0.0, 0.01, Box::new(impulse::<U1>()));
@@ -195,15 +237,32 @@ impl RuntimeDemoApp {
             self.node_snoop_last_snapshot_at = None;
             self.node_snoop_empty_polls = 0;
             self.node_snoop_last_ui_log_at = None;
+            self.node_snoop_active_trigger_id = 0;
+            self.node_snoop_first_nonzero_at = None;
+            self.node_snoop_first_ui_render_at = None;
+            self.node_snoop_last_append_len = 0;
             *self.node_snoop_shared.lock() = NodeSnoopShared::default();
             return;
         }
 
         {
-            let shared = self.node_snoop_shared.lock();
+            let now = Instant::now();
+            let mut shared = self.node_snoop_shared.lock();
+            if shared.first_nonzero_trigger_id == shared.active_trigger_id
+                && shared.first_nonzero_trigger_id != 0
+                && shared.first_nonzero_ui_render_trigger_id != shared.active_trigger_id
+                && !shared.samples.is_empty()
+            {
+                shared.first_nonzero_ui_render_trigger_id = shared.active_trigger_id;
+                shared.first_nonzero_ui_render_at = Some(now);
+            }
             self.node_snoop_samples = shared.samples.clone();
             self.node_snoop_last_snapshot_at = shared.last_snapshot_at;
             self.node_snoop_empty_polls = shared.empty_polls;
+            self.node_snoop_active_trigger_id = shared.active_trigger_id;
+            self.node_snoop_first_nonzero_at = shared.first_nonzero_at;
+            self.node_snoop_first_ui_render_at = shared.first_nonzero_ui_render_at;
+            self.node_snoop_last_append_len = shared.last_append_len;
         }
 
         let now = Instant::now();
@@ -216,11 +275,26 @@ impl RuntimeDemoApp {
                 .node_snoop_last_snapshot_at
                 .map(|timestamp| timestamp.elapsed().as_secs_f64() * 1000.0)
                 .unwrap_or(-1.0);
+            let marker_ms = match (
+                self.trigger_last_at,
+                self.node_snoop_first_nonzero_at,
+                self.node_snoop_first_ui_render_at,
+            ) {
+                (Some(triggered_at), Some(first_nonzero_at), Some(first_render_at)) => format!(
+                    "first_nonzero_ms={:.1} first_render_ms={:.1}",
+                    first_nonzero_at.duration_since(triggered_at).as_secs_f64() * 1000.0,
+                    first_render_at.duration_since(triggered_at).as_secs_f64() * 1000.0,
+                ),
+                _ => "first_nonzero_ms=n/a first_render_ms=n/a".to_string(),
+            };
             log::debug!(
-                "node_snoop_ui_diag transport=Running snapshot_age_ms={:.1} empty_polls={} samples={} worker_running={}",
+                "node_snoop_ui_diag transport=Running snapshot_age_ms={:.1} empty_polls={} samples={} last_append_len={} trigger_id={} {} worker_running={}",
                 snapshot_age_ms,
                 self.node_snoop_empty_polls,
                 self.node_snoop_samples.len(),
+                self.node_snoop_last_append_len,
+                self.node_snoop_active_trigger_id,
+                marker_ms,
                 self.node_snoop_worker.is_some(),
             );
         }
@@ -264,14 +338,31 @@ impl RuntimeDemoApp {
                     if samples.is_empty() {
                         shared.empty_polls = shared.empty_polls.saturating_add(1);
                     } else {
-                        if samples.len() > NODE_SNOOP_WINDOW_SIZE {
-                            let trim = samples.len() - NODE_SNOOP_WINDOW_SIZE;
-                            samples.drain(..trim);
+                        shared.last_append_len = samples.len();
+                        shared.samples.extend(samples.drain(..));
+                        if shared.samples.len() > NODE_SNOOP_WINDOW_SIZE {
+                            let trim = shared.samples.len() - NODE_SNOOP_WINDOW_SIZE;
+                            shared.samples.drain(..trim);
                         }
 
-                        shared.samples = samples;
+                        if shared.active_trigger_id != 0
+                            && shared.first_nonzero_trigger_id != shared.active_trigger_id
+                            && shared
+                                .samples
+                                .iter()
+                                .copied()
+                                .any(|sample| sample.abs() > NODE_SNOOP_NONZERO_EPSILON)
+                        {
+                            shared.first_nonzero_trigger_id = shared.active_trigger_id;
+                            shared.first_nonzero_at = Some(now);
+                        }
+
                         shared.last_snapshot_at = Some(now);
                         shared.empty_polls = 0;
+                    }
+
+                    if samples.is_empty() {
+                        shared.last_append_len = 0;
                     }
 
                     let should_log = last_log_at.is_none_or(|last| {
@@ -344,6 +435,23 @@ impl RuntimeDemoApp {
                     ));
                 }
 
+                let marker_text = match (
+                    self.trigger_last_at,
+                    self.node_snoop_first_nonzero_at,
+                    self.node_snoop_first_ui_render_at,
+                ) {
+                    (Some(triggered_at), Some(first_nonzero_at), Some(first_render_at)) => format!(
+                        "Trigger #{} first nonzero: {:.1} ms, first render: {:.1} ms",
+                        self.node_snoop_active_trigger_id,
+                        first_nonzero_at.duration_since(triggered_at).as_secs_f64() * 1000.0,
+                        first_render_at.duration_since(triggered_at).as_secs_f64() * 1000.0,
+                    ),
+                    _ => format!(
+                        "Trigger #{} first nonzero/render: pending",
+                        self.node_snoop_active_trigger_id
+                    ),
+                };
+
                 show_buffer_line_chart(
                     ui,
                     "node_adsr_snoop_waveform",
@@ -351,6 +459,7 @@ impl RuntimeDemoApp {
                     "No node output snapshot yet",
                     egui::Color32::from_rgb(255, 196, 92),
                 );
+                ui.small(marker_text);
             });
     }
 }

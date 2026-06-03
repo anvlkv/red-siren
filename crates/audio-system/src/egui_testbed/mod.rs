@@ -36,6 +36,8 @@ const DIAGNOSTIC_WARMUP_MS: u64 = 180;
 const TELEMETRY_LOG_INTERVAL_MS: u64 = 1000;
 const SPECTRUM_WORKER_POLL_INTERVAL_MS: u64 = 16;
 const SPECTRUM_WORKER_LOG_INTERVAL_MS: u64 = 1000;
+const RAW_ENERGY_LIVE_THRESHOLD: f32 = 5.0e-5;
+const RAW_ENERGY_LIVE_HOLD_MS: u64 = 220;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum RuntimeTransportState {
@@ -62,6 +64,9 @@ struct DiagnosticSnapshot {
     right_spectrum: BTreeMap<u32, f32>,
     left_max: f32,
     right_max: f32,
+    raw_output_peak: f32,
+    raw_energy_live: bool,
+    fft_peak_live: bool,
 }
 
 pub struct RuntimeTestbed {
@@ -93,6 +98,15 @@ struct SpectrumSharedState {
     diagnostics: Option<DiagnosticSnapshot>,
     status: String,
     updated_at: Option<Instant>,
+    active_trigger_id: u64,
+    active_trigger_at: Option<Instant>,
+    first_raw_live_trigger_id: u64,
+    first_raw_live_at: Option<Instant>,
+    first_raw_live_render_trigger_id: u64,
+    first_raw_live_render_at: Option<Instant>,
+    last_raw_output_peak: f32,
+    last_raw_energy_live: bool,
+    last_fft_peak_live: bool,
 }
 
 struct SpectrumWorker {
@@ -130,6 +144,7 @@ impl Default for RuntimeTestbed {
                 diagnostics: None,
                 status: "idle".to_string(),
                 updated_at: None,
+                ..Default::default()
             })),
             spectrum_worker: None,
             last_spectrum_worker_log_at: None,
@@ -175,6 +190,21 @@ impl RuntimeTestbed {
         F: Fn(f64) -> Net + Send + Sync + 'static,
     {
         self.startup_network_builder = Some(Box::new(builder));
+    }
+
+    pub fn register_visual_trigger(&mut self, trigger_id: u64, triggered_at: Instant) {
+        let mut shared = self.spectrum_shared.lock();
+        shared.active_trigger_id = trigger_id;
+        shared.active_trigger_at = Some(triggered_at);
+        shared.first_raw_live_trigger_id = 0;
+        shared.first_raw_live_at = None;
+        shared.first_raw_live_render_trigger_id = 0;
+        shared.first_raw_live_render_at = None;
+        log::debug!(
+            "spectrum_trigger_diag trigger_id={} trigger_age_ms={:.1}",
+            trigger_id,
+            triggered_at.elapsed().as_secs_f64() * 1000.0,
+        );
     }
 
     pub fn apply_custom_network<F>(&mut self, action_label: impl Into<String>, factory: F)
@@ -406,6 +436,14 @@ impl RuntimeTestbed {
                         latest_rx_age_ms,
                         self.latest_telemetry_drain_count
                     ));
+                    if let Some(snapshot) = &self.diagnostics {
+                        ui.small(format!(
+                            "Raw peak {:.3e}, raw_live={}, fft_live={}",
+                            snapshot.raw_output_peak,
+                            snapshot.raw_energy_live,
+                            snapshot.fft_peak_live,
+                        ));
+                    }
                 } else {
                     ui.small("Telemetry: waiting for callback messages");
                 }
@@ -498,6 +536,7 @@ impl RuntimeTestbed {
             diagnostics: None,
             status: "idle".to_string(),
             updated_at: None,
+            ..Default::default()
         };
         self.apply_quality_if_possible();
     }
@@ -665,6 +704,7 @@ impl RuntimeTestbed {
                     diagnostics: None,
                     status: "warming up".to_string(),
                     updated_at: None,
+                    ..Default::default()
                 };
                 if self.transport == RuntimeTransportState::Running {
                     self.start_spectrum_worker();
@@ -694,7 +734,16 @@ impl RuntimeTestbed {
             }
         }
 
-        let shared = self.spectrum_shared.lock();
+        let now = Instant::now();
+        let mut shared = self.spectrum_shared.lock();
+        if shared.first_raw_live_trigger_id == shared.active_trigger_id
+            && shared.first_raw_live_trigger_id != 0
+            && shared.first_raw_live_render_trigger_id != shared.active_trigger_id
+        {
+            shared.first_raw_live_render_trigger_id = shared.active_trigger_id;
+            shared.first_raw_live_render_at = Some(now);
+        }
+
         self.diagnostics = shared.diagnostics.clone();
         self.diagnostics_status = if shared.status.is_empty() {
             "waiting for worker".to_string()
@@ -702,7 +751,6 @@ impl RuntimeTestbed {
             shared.status.clone()
         };
 
-        let now = Instant::now();
         let should_log = self.last_spectrum_worker_log_at.is_none_or(|last| {
             now.duration_since(last) >= Duration::from_millis(SPECTRUM_WORKER_LOG_INTERVAL_MS)
         });
@@ -712,11 +760,21 @@ impl RuntimeTestbed {
                 .updated_at
                 .map(|at| at.elapsed().as_secs_f64() * 1000.0)
                 .unwrap_or(-1.0);
+            let marker_ms = match (shared.active_trigger_at, shared.first_raw_live_at) {
+                (Some(triggered_at), Some(first_live_at)) => {
+                    first_live_at.duration_since(triggered_at).as_secs_f64() * 1000.0
+                }
+                _ => -1.0,
+            };
             log::debug!(
-                "spectrum_ui_diag status={} has_snapshot={} snapshot_age_ms={:.1} worker_running={}",
+                "spectrum_ui_diag status={} has_snapshot={} snapshot_age_ms={:.1} raw_peak={:.3e} raw_live={} fft_live={} marker_ms={:.1} worker_running={}",
                 self.diagnostics_status,
                 self.diagnostics.is_some(),
                 age_ms,
+                shared.last_raw_output_peak,
+                shared.last_raw_energy_live,
+                shared.last_fft_peak_live,
+                marker_ms,
                 self.spectrum_worker.is_some(),
             );
         }
@@ -742,6 +800,7 @@ impl RuntimeTestbed {
             diagnostics: None,
             status: "waiting for audio".to_string(),
             updated_at: None,
+            ..Default::default()
         };
 
         let engine = self.engine.clone();
@@ -755,28 +814,48 @@ impl RuntimeTestbed {
             .spawn(move || {
                 let poll_interval = Duration::from_millis(SPECTRUM_WORKER_POLL_INTERVAL_MS);
                 let mut last_log_at: Option<Instant> = None;
+                let mut last_raw_live_at: Option<Instant> = None;
 
                 while !should_stop_for_thread.load(Ordering::Relaxed) {
                     let mut worker_snapshot: Option<DiagnosticSnapshot> = None;
                     let mut worker_status = "runtime unavailable".to_string();
+                    let mut worker_raw_peak = 0.0_f32;
+                    let mut worker_raw_live = false;
+                    let mut worker_fft_live = false;
 
                     let result = engine.with_runtime(|rt| {
                         let input_len = rt.input_snapshot().len();
-                        let (left, right) = rt.output_spectrum(sample_rate, 20.0, 20_000.0)?;
+                        let output = rt.output_diagnostics(sample_rate, 20.0, 20_000.0)?;
+                        worker_raw_peak = output.raw_output_peak;
+                        worker_fft_live = output.left_fft_peak > f32::EPSILON
+                            || output.right_fft_peak > f32::EPSILON;
+
+                        let compute_now = Instant::now();
+                        if worker_raw_peak > RAW_ENERGY_LIVE_THRESHOLD {
+                            last_raw_live_at = Some(compute_now);
+                        }
+                        worker_raw_live = last_raw_live_at.is_some_and(|last| {
+                            compute_now.duration_since(last)
+                                <= Duration::from_millis(RAW_ENERGY_LIVE_HOLD_MS)
+                        });
+
                         let snapshot = DiagnosticSnapshot {
                             input_len,
-                            left_spectrum: left.clone(),
-                            right_spectrum: right.clone(),
-                            left_max: max_peak(&left),
-                            right_max: max_peak(&right),
+                            left_spectrum: output.left_spectrum.clone(),
+                            right_spectrum: output.right_spectrum.clone(),
+                            left_max: max_peak(&output.left_spectrum),
+                            right_max: max_peak(&output.right_spectrum),
+                            raw_output_peak: worker_raw_peak,
+                            raw_energy_live: worker_raw_live,
+                            fft_peak_live: worker_fft_live,
                         };
 
-                        worker_status = if snapshot.left_max <= f32::EPSILON
-                            && snapshot.right_max <= f32::EPSILON
-                        {
-                            "stale or silent".to_string()
-                        } else {
+                        worker_status = if worker_raw_live {
                             "live".to_string()
+                        } else if worker_fft_live {
+                            "fft-active, raw-low".to_string()
+                        } else {
+                            "stale or silent".to_string()
                         };
                         worker_snapshot = Some(snapshot);
                         Ok(())
@@ -804,9 +883,19 @@ impl RuntimeTestbed {
                     let now = Instant::now();
                     {
                         let mut shared = shared.lock();
+                        if worker_raw_live
+                            && shared.active_trigger_id != 0
+                            && shared.first_raw_live_trigger_id != shared.active_trigger_id
+                        {
+                            shared.first_raw_live_trigger_id = shared.active_trigger_id;
+                            shared.first_raw_live_at = Some(now);
+                        }
                         shared.diagnostics = worker_snapshot;
                         shared.status = worker_status.clone();
                         shared.updated_at = Some(now);
+                        shared.last_raw_output_peak = worker_raw_peak;
+                        shared.last_raw_energy_live = worker_raw_live;
+                        shared.last_fft_peak_live = worker_fft_live;
                     }
 
                     let should_log = last_log_at.is_none_or(|last| {
@@ -821,12 +910,22 @@ impl RuntimeTestbed {
                             .as_ref()
                             .map(|d| d.left_spectrum.len())
                             .unwrap_or_default();
+                        let marker_ms = match (shared.active_trigger_at, shared.first_raw_live_at) {
+                            (Some(triggered_at), Some(first_live_at)) => {
+                                first_live_at.duration_since(triggered_at).as_secs_f64() * 1000.0
+                            }
+                            _ => -1.0,
+                        };
                         log::debug!(
-                            "spectrum_worker_diag poll_interval_ms={} status={} has_snapshot={} left_bins={}",
+                            "spectrum_worker_diag poll_interval_ms={} status={} has_snapshot={} left_bins={} raw_peak={:.3e} raw_live={} fft_live={} marker_ms={:.1}",
                             SPECTRUM_WORKER_POLL_INTERVAL_MS,
                             shared.status,
                             shared.diagnostics.is_some(),
                             bins,
+                            shared.last_raw_output_peak,
+                            shared.last_raw_energy_live,
+                            shared.last_fft_peak_live,
+                            marker_ms,
                         );
                     }
 

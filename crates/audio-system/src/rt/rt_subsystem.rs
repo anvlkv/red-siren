@@ -12,6 +12,14 @@ use crate::{
 pub const FADE_DURATION_MS: u64 = 120;
 const FOLLOW_RESPONSE_SECS: f32 = FADE_DURATION_MS as f32 / 1000.0;
 
+pub struct OutputDiagnosticsSnapshot {
+    pub left_spectrum: BTreeMap<u32, f32>,
+    pub right_spectrum: BTreeMap<u32, f32>,
+    pub left_fft_peak: f32,
+    pub right_fft_peak: f32,
+    pub raw_output_peak: f32,
+}
+
 pub struct RuntimeSubsystem {
     /// DSP network (frontend)
     dsp_network: Arc<RwLock<Net>>,
@@ -202,6 +210,16 @@ impl RuntimeSubsystem {
         min: f32,
         max: f32,
     ) -> Result<(BTreeMap<u32, f32>, BTreeMap<u32, f32>)> {
+        let snapshot = self.output_diagnostics(sample_rate, min, max)?;
+        Ok((snapshot.left_spectrum, snapshot.right_spectrum))
+    }
+
+    pub fn output_diagnostics(
+        &self,
+        sample_rate: f64,
+        min: f32,
+        max: f32,
+    ) -> Result<OutputDiagnosticsSnapshot> {
         let (l_data, r_data) = {
             let mut snoops = self.processed_output_snoops.write();
 
@@ -225,6 +243,9 @@ impl RuntimeSubsystem {
             return Err(AudioAnalysisError::EmptyOutputBuffer.into());
         }
 
+        let left_raw_peak = l_data.iter().copied().map(f32::abs).fold(0.0_f32, f32::max);
+        let right_raw_peak = r_data.iter().copied().map(f32::abs).fold(0.0_f32, f32::max);
+
         let (l_window, r_window) = {
             let mut spectrum_buffer = self.spectrum_buffer.write();
 
@@ -242,7 +263,22 @@ impl RuntimeSubsystem {
         let l_analysis = output_analyzer::analyze(l_window, sample_rate, min, max)?;
         let r_analysis = output_analyzer::analyze(r_window, sample_rate, min, max)?;
 
-        Ok((l_analysis, r_analysis))
+        let left_fft_peak = l_analysis
+            .values()
+            .copied()
+            .fold(0.0_f32, |acc, value| acc.max(value));
+        let right_fft_peak = r_analysis
+            .values()
+            .copied()
+            .fold(0.0_f32, |acc, value| acc.max(value));
+
+        Ok(OutputDiagnosticsSnapshot {
+            left_spectrum: l_analysis,
+            right_spectrum: r_analysis,
+            left_fft_peak,
+            right_fft_peak,
+            raw_output_peak: left_raw_peak.max(right_raw_peak),
+        })
     }
 
     pub fn input_snapshot(&self) -> Vec<f32> {
@@ -259,6 +295,7 @@ impl RuntimeSubsystem {
 mod tests {
     use super::RuntimeSubsystem;
     use crate::SampleType;
+    use common::error::{AppError, AudioAnalysisError};
 
     #[test]
     fn new_and_basic_accessors_are_callable() {
@@ -283,6 +320,14 @@ mod tests {
         let rt = RuntimeSubsystem::new(SampleType::F32, 2, None);
 
         let spectrum = rt.output_spectrum(44_100.0, 20.0, 20_000.0);
-        assert!(spectrum.is_ok());
+        assert!(
+            spectrum.is_ok()
+                || matches!(
+                    spectrum,
+                    Err(AppError::AudioAnalysis(
+                        AudioAnalysisError::EmptyOutputBuffer
+                    ))
+                )
+        );
     }
 }

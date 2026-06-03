@@ -216,7 +216,8 @@ impl RuntimeDemoApp {
             shared.first_nonzero_ui_render_at = None;
         }
 
-        self.testbed.register_visual_trigger(trigger_id, triggered_at);
+        self.testbed
+            .register_visual_trigger(trigger_id, triggered_at);
         log::debug!(
             "trigger_diag trigger_id={} trigger_age_ms={:.1}",
             trigger_id,
@@ -330,20 +331,22 @@ impl RuntimeDemoApp {
                             .flat_map(|buff| (0..buff.len()).map(|i| buff.at(i)).collect::<Vec<_>>())
                             .collect::<Vec<f32>>()
                     };
+                            let samples_empty = samples.is_empty();
 
                     let now = Instant::now();
                     let mut shared = shared.lock();
                     shared.poll_count = shared.poll_count.saturating_add(1);
 
-                    if samples.is_empty() {
+                    if samples_empty {
                         shared.empty_polls = shared.empty_polls.saturating_add(1);
                     } else {
                         shared.last_append_len = samples.len();
-                        shared.samples.extend(samples.drain(..));
-                        if shared.samples.len() > NODE_SNOOP_WINDOW_SIZE {
-                            let trim = shared.samples.len() - NODE_SNOOP_WINDOW_SIZE;
-                            shared.samples.drain(..trim);
+                        if samples.len() > NODE_SNOOP_WINDOW_SIZE {
+                            let keep_from = samples.len() - NODE_SNOOP_WINDOW_SIZE;
+                            samples = samples.split_off(keep_from);
                         }
+                        // Keep only the freshest snoop chunk so rendering tracks latest audio state.
+                        shared.samples = samples;
 
                         if shared.active_trigger_id != 0
                             && shared.first_nonzero_trigger_id != shared.active_trigger_id
@@ -361,7 +364,7 @@ impl RuntimeDemoApp {
                         shared.empty_polls = 0;
                     }
 
-                    if samples.is_empty() {
+                    if samples_empty {
                         shared.last_append_len = 0;
                     }
 

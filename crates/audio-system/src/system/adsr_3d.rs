@@ -4,170 +4,83 @@ use std::{
 };
 
 use fundsp::{
-    numeric_array::ArrayLength,
+    numeric_array::{ArrayLength, NumericArray},
     prelude::*,
     typenum::{Prod, Sum, Unsigned},
 };
 
 const ADSR_3D_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::Adsr3D"));
 
-/// One lerp segment: output on `channel`, interpolating from `start` to `end` over `duration_secs`.
-#[derive(Clone)]
-struct Segment {
-    channel: usize,
-    start: f32,
-    end: f32,
-    duration_secs: f32,
+#[derive(Clone, Copy)]
+struct Segment<F: Real> {
+    target: F,
+    current: F,
+    starts_in_samples: usize,
+    duration_samples: usize,
+    remaining_samples: usize,
 }
 
-#[derive(Clone)]
-struct TailFade {
-    channel: usize,
-    value: f32,
-    phase: f32,
-    duration_secs: f32,
-}
-
-/// One triggered cycle: walks through its Segments sequentially, one at a time.
-/// Each segment's start is the previous segment's end (the fold).
-#[derive(Clone)]
-struct Cycle {
-    segments: Vec<Segment>,
-    seg_idx: usize,
-    phase: f32,
-    ingress_phase: f32,
-    ingress_duration_secs: f32,
-    tail_fade: Option<TailFade>,
-}
-
-impl Cycle {
-    fn new(segments: Vec<Segment>, transition_ratio: f32, min_duration_secs: f32) -> Self {
-        let ingress_duration_secs = segments
-            .first()
-            .map(|seg| (seg.duration_secs * transition_ratio).max(min_duration_secs))
-            .unwrap_or(min_duration_secs);
+impl<F: Real> Default for Segment<F> {
+    fn default() -> Self {
         Self {
-            segments,
-            seg_idx: 0,
-            phase: 0.0,
-            ingress_phase: 0.0,
-            ingress_duration_secs,
-            tail_fade: None,
+            target: F::zero(),
+            current: F::zero(),
+            starts_in_samples: 0,
+            duration_samples: 0,
+            remaining_samples: 0,
         }
-    }
-
-    fn is_done(&self) -> bool {
-        self.seg_idx >= self.segments.len() && self.tail_fade.is_none()
-    }
-
-    fn ingress_gain(&self) -> f32 {
-        smooth_ratio(self.ingress_phase)
-    }
-
-    /// Current output value for `channel`; 0 if this cycle is not currently on that channel.
-    fn output_for(&self, channel: usize) -> f32 {
-        let active = match self.segments.get(self.seg_idx) {
-            Some(seg) if seg.channel == channel => {
-                let t = smooth_ratio(self.phase);
-                seg.start + (seg.end - seg.start) * t
-            }
-            _ => 0.0,
-        };
-
-        let tail = match &self.tail_fade {
-            Some(tail) if tail.channel == channel => {
-                let fade = 1.0 - smooth_ratio(tail.phase);
-                tail.value * fade
-            }
-            _ => 0.0,
-        };
-
-        (active + tail) * self.ingress_gain()
-    }
-
-    fn start_tail_fade(
-        &mut self,
-        old_seg_idx: usize,
-        min_duration_secs: f32,
-        transition_ratio: f32,
-    ) {
-        let Some(old_seg) = self.segments.get(old_seg_idx) else {
-            return;
-        };
-        let Some(next_seg) = self.segments.get(self.seg_idx) else {
-            self.tail_fade = None;
-            return;
-        };
-        if old_seg.channel == next_seg.channel {
-            self.tail_fade = None;
-            return;
-        }
-
-        self.tail_fade = Some(TailFade {
-            channel: old_seg.channel,
-            value: old_seg.end,
-            phase: 0.0,
-            duration_secs: (old_seg.duration_secs * transition_ratio).max(min_duration_secs),
-        });
-    }
-
-    fn advance_smoothing(&mut self, sample_dt: f32) {
-        if self.ingress_phase < 1.0 {
-            let dur = self.ingress_duration_secs.max(f32::EPSILON);
-            self.ingress_phase = (self.ingress_phase + sample_dt / dur).min(1.0);
-        }
-
-        let Some(tail) = &mut self.tail_fade else {
-            return;
-        };
-        let dur = tail.duration_secs.max(f32::EPSILON);
-        tail.phase = (tail.phase + sample_dt / dur).min(1.0);
-        if tail.phase >= 1.0 {
-            self.tail_fade = None;
-        }
-    }
-
-    /// Advance by `sample_dt` seconds. Returns true while the cycle still has segments to run.
-    fn advance(&mut self, sample_dt: f32, min_duration_secs: f32, transition_ratio: f32) -> bool {
-        self.advance_smoothing(sample_dt);
-
-        let mut remaining = sample_dt;
-        let guard_max = self.segments.len() * 2 + 2;
-        let mut guard = 0;
-        while remaining > 0.0 && guard < guard_max {
-            guard += 1;
-            if self.seg_idx >= self.segments.len() {
-                return false;
-            }
-            let dur = self.segments[self.seg_idx].duration_secs.max(f32::EPSILON);
-            let to_end = (1.0 - self.phase).max(0.0);
-            if to_end <= f32::EPSILON {
-                let old_seg_idx = self.seg_idx;
-                self.seg_idx += 1;
-                self.phase = 0.0;
-                self.start_tail_fade(old_seg_idx, min_duration_secs, transition_ratio);
-                continue;
-            }
-            let time_to_end = to_end * dur;
-            let consumed = remaining.min(time_to_end);
-            self.phase = (self.phase + consumed / dur).min(1.0);
-            remaining -= consumed;
-            if self.phase >= 1.0 {
-                let old_seg_idx = self.seg_idx;
-                self.seg_idx += 1;
-                self.phase = 0.0;
-                self.start_tail_fade(old_seg_idx, min_duration_secs, transition_ratio);
-            } else {
-                break;
-            }
-        }
-        !self.is_done()
     }
 }
 
-fn smooth_ratio(x: f32) -> f32 {
-    let t = x.clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
+impl<F: Real> Segment<F> {
+    fn started(&self) -> bool {
+        self.starts_in_samples == 0
+    }
+
+    fn finished(&self) -> bool {
+        self.remaining_samples == 0
+    }
+
+    fn duration_samples(duration: f64, sample_rate: f64) -> usize {
+        (duration.max(0.0) * sample_rate).round() as usize
+    }
+
+    fn samples_duration(samples: usize, sample_rate: f64) -> f64 {
+        samples as f64 / sample_rate.max(1.0)
+    }
+
+    fn progress(&self) -> F {
+        if self.duration_samples == 0 {
+            F::one()
+        } else {
+            F::one()
+                - F::from_f64(self.remaining_samples as f64)
+                    / F::from_f64(self.duration_samples as f64)
+        }
+    }
+
+    fn easing(&self) -> F {
+        let t = self.progress();
+        t.pow(F::from_f32(3.0))
+    }
+
+    fn advance(&mut self) -> Option<F> {
+        if self.remaining_samples == 0 {
+            return None;
+        }
+        if self.starts_in_samples > 0 {
+            self.starts_in_samples -= 1;
+            return None;
+        }
+
+        let increment = ((self.target - self.current) / F::from_f64(self.remaining_samples as f64))
+            * self.easing();
+
+        self.current += increment;
+        self.remaining_samples -= 1;
+
+        Some(self.current)
+    }
 }
 
 #[derive(Clone)]
@@ -183,14 +96,13 @@ pub struct Adsr3D<F: Real + 'static, P: Size<f32> + Unsigned + ArrayLength> {
     _sample_type: PhantomData<F>,
     _channels: PhantomData<P>,
     sample_rate: f64,
-    cycles: Vec<Cycle>,
-    prev_gate_high: bool,
+    cycles: Vec<NumericArray<Segment<F>, P>>,
 }
 
 impl<F: Real + 'static, P: Size<f32> + Unsigned + ArrayLength> Adsr3D<F, P> {
-    const DEFAULT_DURATION_SECS: f32 = 0.1;
-    const MIN_DURATION_SECS: f32 = 1.0e-4;
-    const TRANSITION_RATIO: f32 = 0.15;
+    const DEFAULT_DURATION_SECS: f64 = 0.1;
+    const MIN_DURATION_SECS: f64 = 1.0e-4;
+    const TRANSITION_RATIO: f64 = 1.0 / 3.0;
 
     pub fn new() -> Self {
         Self {
@@ -198,7 +110,6 @@ impl<F: Real + 'static, P: Size<f32> + Unsigned + ArrayLength> Adsr3D<F, P> {
             _channels: PhantomData,
             sample_rate: DEFAULT_SR,
             cycles: Vec::new(),
-            prev_gate_high: false,
         }
     }
 
@@ -206,41 +117,67 @@ impl<F: Real + 'static, P: Size<f32> + Unsigned + ArrayLength> Adsr3D<F, P> {
         P::USIZE
     }
 
-    fn read_duration(input: &[f32], ch: usize) -> f32 {
-        let v = input[1 + ch * 2];
+    fn read_duration(input: &[f32], ch: usize) -> F {
+        let v = input[1 + ch * 2] as f64;
         if v.is_finite() && v > 0.0 {
-            v.max(Self::MIN_DURATION_SECS)
+            F::from_f64(v.max(Self::MIN_DURATION_SECS))
         } else {
-            Self::DEFAULT_DURATION_SECS
+            F::from_f64(Self::DEFAULT_DURATION_SECS)
         }
     }
 
-    fn read_weight(input: &[f32], ch: usize) -> f32 {
-        let v = input[2 + ch * 2];
+    fn read_weight(input: &[f32], ch: usize) -> F {
+        let v = input[2 + ch * 2] as f64;
         if v.is_finite() {
-            v
+            F::from_f64(v)
         } else {
-            1.0
+            F::one()
         }
     }
 
     /// Build a Cycle from current input values at trigger time.
     /// Each segment's start = previous segment's end (the fold).
-    fn make_cycle(input: &[f32], gate: f32) -> Cycle {
-        let n = P::USIZE;
-        let mut segments = Vec::with_capacity(n);
-        let mut prev_end = 0.0f32;
-        for ch in 0..n {
-            let end = gate * Self::read_weight(input, ch);
-            segments.push(Segment {
-                channel: ch,
-                start: prev_end,
-                end,
-                duration_secs: Self::read_duration(input, ch),
-            });
-            prev_end = end;
+    fn make_cycle(input: &[f32], gate: F, sample_rate: f64) -> NumericArray<Segment<F>, P> {
+        let mut cycle = NumericArray::<Segment<F>, P>::default();
+        // let n = P::USIZE;
+        // let mut segments = Vec::with_capacity(n);
+        let mut prev_end = F::zero();
+        let mut prev_end_samples = 0;
+        for (ch, weight) in cycle.iter_mut().enumerate() {
+            let input_weight = Self::read_weight(input, ch);
+            let duration = Self::read_duration(input, ch);
+            let target = gate * input_weight;
+            let duration_samples = Segment::<F>::duration_samples(convert(duration), sample_rate);
+            *weight = Segment {
+                target,
+                current: prev_end,
+                starts_in_samples: prev_end_samples,
+                duration_samples,
+                remaining_samples: duration_samples,
+            };
+            prev_end = target;
+            prev_end_samples += duration_samples
         }
-        Cycle::new(segments, Self::TRANSITION_RATIO, Self::MIN_DURATION_SECS)
+        cycle
+    }
+
+    fn transition_segments(
+        prev: Option<&Segment<F>>,
+        current: &Segment<F>,
+        next: Option<&Segment<F>>,
+    ) -> F {
+        if current.finished() {
+            return F::zero();
+        }
+
+        if !current.started()
+            && prev.is_none_or(|p| !p.started())
+            && next.is_none_or(|n| !n.started())
+        {
+            return F::zero();
+        }
+
+        todo!()
     }
 }
 
@@ -257,38 +194,60 @@ where
 
     type Outputs = P;
 
-    fn reset(&mut self) {
-        self.cycles.clear();
-        self.prev_gate_high = false;
-    }
-
     fn set_sample_rate(&mut self, sample_rate: f64) {
+        let old_sr = self.sample_rate;
         self.sample_rate = sample_rate.max(1.0);
-        self.reset();
+        if self.sample_rate != old_sr {
+            for cycle in self.cycles.iter_mut() {
+                for segment in cycle.iter_mut() {
+                    segment.duration_samples = Segment::<F>::duration_samples(
+                        Segment::<F>::samples_duration(segment.duration_samples, old_sr),
+                        sample_rate,
+                    );
+                    segment.remaining_samples = Segment::<F>::duration_samples(
+                        Segment::<F>::samples_duration(segment.remaining_samples, old_sr),
+                        sample_rate,
+                    );
+                    segment.starts_in_samples = Segment::<F>::duration_samples(
+                        Segment::<F>::samples_duration(segment.starts_in_samples, old_sr),
+                        sample_rate,
+                    );
+                }
+            }
+        }
     }
 
     fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
         let input_slice = input.as_slice();
         let gate = if input[0].is_finite() { input[0] } else { 0.0 };
-        let gate_high = gate > 0.0;
 
-        if gate_high && !self.prev_gate_high {
-            self.cycles.push(Self::make_cycle(input_slice, gate));
+        if gate > 0.0 {
+            self.cycles.push(Self::make_cycle(
+                input_slice,
+                convert(gate),
+                self.sample_rate,
+            ));
         }
-        self.prev_gate_high = gate_high;
 
         let mut output = Frame::<f32, Self::Outputs>::default();
-        let n = Self::num_channels();
-        let sample_dt = 1.0 / self.sample_rate.max(1.0) as f32;
-
-        for cycle in &self.cycles {
-            for ch in 0..n {
-                output[ch] += cycle.output_for(ch);
-            }
-        }
 
         self.cycles.retain_mut(|cycle| {
-            cycle.advance(sample_dt, Self::MIN_DURATION_SECS, Self::TRANSITION_RATIO)
+            let mut had_some = false;
+            let mut it = cycle.iter_mut().enumerate().peekable();
+            let mut prev = Option::<Segment<F>>::None;
+
+            while let Some((ch, segment)) = it.next() {
+                let seg_next = segment.advance();
+
+                had_some = seg_next.is_some() || had_some;
+                output[ch] += convert::<F, f32>(seg_next.unwrap_or_else(|| {
+                    let next = it.peek().map(|(_, s)| **s);
+                    Self::transition_segments(prev.as_ref(), segment, next.as_ref())
+                }));
+                prev = Some(*segment);
+            }
+
+            had_some
         });
         output
     }

@@ -1,12 +1,12 @@
 use std::{
     marker::PhantomData,
-    ops::{Add, Mul, Sub},
+    ops::{Add, Mul},
 };
 
 use fundsp::{
     numeric_array::{ArrayLength, NumericArray},
     prelude::*,
-    typenum::{Diff, Prod, Sum, Unsigned},
+    typenum::{Prod, Sum, Unsigned},
 };
 
 const ADSR_3D_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::Adsr3D"));
@@ -363,7 +363,6 @@ where
     Sum<U1, Prod<P, U2>>: Size<f32>,
 {
     An(Adsr3D::new())
-    // ^ type inference needs explicit turbofish when P is no longer in a concrete field
 }
 
 #[cfg(test)]

@@ -9,6 +9,7 @@
 //! - Domain -> AppError conversions are unconditional (cheap, harmless).
 
 mod audio;
+mod instrument;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -17,6 +18,7 @@ use thiserror::Error;
 pub type Result<T> = std::result::Result<T, AppError>;
 
 pub use audio::*;
+pub use instrument::*;
 
 /// Top-level application error envelope.
 #[derive(Debug, Error, Serialize, Deserialize)]
@@ -41,6 +43,10 @@ pub enum AppError {
     /// Errors related to audio analysis.
     #[error("audio analysis error: {0}")]
     AudioAnalysis(#[from] AudioAnalysisError),
+
+    /// Errors related to instrument processing.
+    #[error("instrument error: {0}")]
+    Instrument(#[from] InstrumentError),
 }
 
 impl AppError {

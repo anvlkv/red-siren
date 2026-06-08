@@ -58,3 +58,12 @@ impl<F: Real> AudioNode for BpmGrid<F> {
             (self.ticks_to_next_beat as f64 * self.sample_rate / old_sample_rate) as u32;
     }
 }
+
+pub fn create_bpm_grid<F: Real>(initial_bpm: F) -> An<BpmGrid<F>> {
+    An(BpmGrid {
+        bpm: initial_bpm,
+        sample_rate: DEFAULT_SR,
+        ticks_per_beat: (DEFAULT_SR * 60.0 / initial_bpm.to_f64()) as u32,
+        ticks_to_next_beat: (DEFAULT_SR * 60.0 / initial_bpm.to_f64()) as u32,
+    })
+}

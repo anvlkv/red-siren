@@ -60,3 +60,13 @@ where
         output
     }
 }
+
+pub fn create_adsr_gate<P: Size<f32> + Unsigned + ArrayLength>() -> An<AdsrGate<P>>
+where
+    P: Mul<U2>,
+    Prod<P, U2>: Size<f32>,
+    U1: Add<Prod<P, U2>>,
+    Sum<U1, Prod<P, U2>>: Size<f32>,
+{
+    An(AdsrGate(PhantomData))
+}

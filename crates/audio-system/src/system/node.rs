@@ -15,6 +15,9 @@ pub struct Node<F: Real + 'static> {
     _sample_type: PhantomData<F>,
 }
 
+pub type NumNodeInputs = U3;
+pub type NumNodeOutputs = U1;
+
 impl<F: Real + 'static> Node<F> {
     const SNOOP_SIZE: usize = 256;
 

@@ -163,3 +163,8 @@ impl<F: Real> AudioNode for Scheduler<F> {
         output.encode()
     }
 }
+
+
+pub fn create_scheduler<F: Real>() -> An<Scheduler<F>> {
+    An(Scheduler::new())
+}

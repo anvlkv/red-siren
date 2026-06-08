@@ -9,7 +9,7 @@ use std::{
 
 use audio_system::{
     egui_testbed::{RuntimeTestbed, RuntimeTransportState},
-    system::{adsr_3d::adsr_3d, node::Node},
+    system::{adsr_3d::create_adsr_3d, node::Node},
 };
 use common::egui_helpers::{
     run_native_app, show_buffer_line_chart, show_scrolled_left_panel_inside,
@@ -101,7 +101,7 @@ fn main() -> eframe::Result<()> {
                             | var(&adsr_weight_1)
                             | var(&adsr_dur_2)
                             | var(&adsr_weight_2)))
-                        >> adsr_3d::<f32, U3>()
+                        >> create_adsr_3d::<f32, U3>()
                         >> (dcblock_hz::<f32>(50.0)
                             | dcblock_hz::<f32>(50.0)
                             | dcblock_hz::<f32>(50.0)),

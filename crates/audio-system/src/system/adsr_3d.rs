@@ -355,7 +355,7 @@ where
     }
 }
 
-pub fn adsr_3d<F: Real + 'static, P: Size<f32> + Unsigned + ArrayLength>() -> An<Adsr3D<F, P>>
+pub fn create_adsr_3d<F: Real + 'static, P: Size<f32> + Unsigned + ArrayLength>() -> An<Adsr3D<F, P>>
 where
     P: Mul<U2>,
     Prod<P, U2>: Size<f32>,
@@ -407,7 +407,7 @@ mod tests {
         Sum<U1, Prod<P, U2>>: Size<f32>,
         Sum<P, P>: Size<f32>,
     {
-        (pass() | interleaved_controls(durations, weights)) >> adsr_3d::<f32, P>()
+        (pass() | interleaved_controls(durations, weights)) >> create_adsr_3d::<f32, P>()
     }
 
     fn single_impulse_gate() -> InputSource {

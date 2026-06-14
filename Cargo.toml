@@ -13,7 +13,7 @@ common = { path = "crates/common" }
 console_error_panic_hook = "0.1.7"
 fastrand = "2.4.1"
 fundsp = { version = "0.23", default-features = false, features = ["std"] }
-insta = "1.47.2"
+insta = "1.48.0"
 js-sys = "0.3"
 log = "0.4"
 mint = { version = "0.5.9", features = ["serde"] }
@@ -24,8 +24,8 @@ strum = { version = "0.28.0", features = ["derive"] }
 tauri = { version = "2.11", features = ["rustls-tls"] }
 thiserror = "2.0.18"
 tokio = { version = "1", features = ["rt-multi-thread"] }
-wasm-bindgen = "0.2.122"
-wasm-bindgen-futures = "0.4.72"
+wasm-bindgen = "0.2.125"
+wasm-bindgen-futures = "0.4.75"
 web-sys = "0.3"
 eframe = { version = "0.34" }
 egui = { version = "0.34" }

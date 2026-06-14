@@ -36,18 +36,26 @@ where
         let event = SchedulingEvent::decode(input);
         match event {
             SchedulingEvent::Event { value, duration_s } => {
+                let n = P::USIZE;
                 let mut shape: Frame<f32, Prod<P, U2>> = Frame::default();
-                let d_even_step = duration_s / (P::USIZE as f64);
+                let weight_sum = (n * (n + 1)) as f64 / 2.0;
                 let mut remaining_duration = duration_s;
-                for i in 0..P::USIZE {
-                    let i_rev = P::USIZE - i;
-                    let d_step = if i == P::USIZE - 1 {
-                        remaining_duration
-                    } else {
-                        d_even_step / i_rev as f64 + remaining_duration / i_rev as f64
-                    };
+
+                for i in 0..n {
+                    let is_last = i == n - 1;
+
+                    // Increasing weights
+                    let weight = ((i + 1) as f64).powf(2.0);
+                    let mut d_step = duration_s * (weight / weight_sum);
+
+                    // Force exact total duration despite floating-point error.
+                    if is_last {
+                        d_step = remaining_duration;
+                    }
                     remaining_duration -= d_step;
-                    let env_value = i_rev as f64 / (P::USIZE as f64);
+
+                    let env_value = if is_last { 0.0 } else { 1.0 / (i + 1) as f64 };
+
                     shape[i * 2] = d_step as f32;
                     shape[i * 2 + 1] = env_value as f32;
                 }

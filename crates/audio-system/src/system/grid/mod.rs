@@ -6,7 +6,10 @@ pub mod signal;
 
 use std::collections::HashMap;
 
-use common::{config::NodeKey, error::{InstrumentError, Result}};
+use common::{
+    config::NodeKey,
+    error::{InstrumentError, Result},
+};
 use num_rational::Rational32;
 pub(self) use signal::FrameEncodedSignal;
 
@@ -21,7 +24,7 @@ use crate::system::{
         encoder::{create_scheduling_request_encoder, SchedulingRequestEncoderHandle},
         scheduler::create_scheduler,
     },
-    node::{Node, NumNodeInputs},
+    node::NumNodeInputs,
 };
 
 #[derive(Clone)]
@@ -82,17 +85,70 @@ impl Grid {
         self.metro_net.backend()
     }
 
-    pub async fn schedule_event(&self, key: NodeKey, time: Rational32, duration: Rational32, repeat: Option<u32>, event: f64) -> Result<()> {
-        if let Some(handle) = self.schedulers.get(&key) {
-            handle
-                .send(time, duration, repeat, event)
-                .await
+    pub fn schedule_event(
+        &self,
+        key: &NodeKey,
+        time: Rational32,
+        duration: Rational32,
+        repeat: Option<u32>,
+        event: f64,
+    ) -> Result<()> {
+        if let Some(handle) = self.schedulers.get(key) {
+            handle.send(time, duration, repeat, event)
         } else {
-            Err(InstrumentError::UnknownNodeKey(key).into())
+            Err(InstrumentError::UnknownNodeKey(*key).into())
         }
     }
 
     pub fn set_bpm<F: Real>(&mut self, new_bpm: F) {
         self.bpm.set(convert(new_bpm));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::test_support::low_sr_snapshot_collate;
+
+    use common::config::NodeKey;
+    use insta_fun::prelude::*;
+
+    #[test]
+    fn grid_backend_idle_smoke_snapshot() {
+        let key = NodeKey {
+            key: 0,
+            band_key: 0,
+        };
+        let mut grid = Grid::new(240.0_f32, &[key]);
+
+        let mut backend = grid.backend();
+
+        backend.tick(&[], &mut [0.0; 3]);
+        backend.tick(&[], &mut [0.0; 3]);
+
+        grid.schedule_event(
+            &key,
+            Rational32::new(1, 3),
+            Rational32::new(1, 6),
+            Some(2),
+            1.0,
+        )
+        .unwrap();
+        grid.schedule_event(
+            &key,
+            Rational32::new(2, 3),
+            Rational32::new(1, 6),
+            Some(2),
+            1.0,
+        )
+        .unwrap();
+
+        assert_audio_unit_snapshot!(
+            "grid_backend_smoke_snapshot",
+            backend,
+            InputSource::None,
+            low_sr_snapshot_collate(1024)
+        );
     }
 }

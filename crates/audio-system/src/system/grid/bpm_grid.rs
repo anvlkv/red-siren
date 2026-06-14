@@ -64,6 +64,45 @@ pub fn create_bpm_grid<F: Real>(initial_bpm: F) -> An<BpmGrid<F>> {
         bpm: initial_bpm,
         sample_rate: DEFAULT_SR,
         ticks_per_beat: (DEFAULT_SR * 60.0 / initial_bpm.to_f64()) as u32,
-        ticks_to_next_beat: (DEFAULT_SR * 60.0 / initial_bpm.to_f64()) as u32,
+        ticks_to_next_beat: 0,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::low_sr_snapshot_collate;
+    use insta_fun::prelude::*;
+
+    const SNAP_LEN: usize = 1280;
+
+    #[test]
+    fn metro_signal_roundtrips_through_frame() {
+        let original = MetroSignal::Reschedule(48);
+        let frame = original.encode();
+        let decoded = MetroSignal::decode(&frame);
+
+        assert!(matches!(decoded, MetroSignal::Reschedule(48)));
+        assert_eq!(size_of::<MetroSignal>(), size_of::<Frame<f32, U2>>());
+    }
+
+    #[test]
+    fn bpm_grid_constant_cadence_snapshot() {
+        assert_audio_unit_snapshot!(
+            "bpm_grid_constant_cadence_snapshot",
+            create_bpm_grid::<f32>(100.0),
+            InputSource::Flat(vec![100.0]),
+            low_sr_snapshot_collate(SNAP_LEN)
+        );
+    }
+
+    #[test]
+    fn bpm_grid_tempo_change_snapshot() {
+        assert_audio_unit_snapshot!(
+            "bpm_grid_tempo_change_snapshot",
+            create_bpm_grid::<f32>(100.0),
+            InputSource::Generator(Box::new(|i, _| if i < 64 { 100.0 } else { 200.0 })),
+            low_sr_snapshot_collate(SNAP_LEN)
+        );
+    }
 }

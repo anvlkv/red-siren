@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, marker::PhantomData};
+use std::{collections::HashMap, marker::PhantomData};
 
 use fundsp::{
     prelude::*,
@@ -47,7 +47,7 @@ pub struct Scheduler<F: Real> {
     _sample_type: PhantomData<F>,
     ticks_per_beat: u32,
     ticks_to_next_beat: u32,
-    schedule: BTreeMap<u32, SchedulingRequest>,
+    schedule: HashMap<u32, SchedulingRequest>,
     sample_rate: f64,
 }
 
@@ -58,7 +58,7 @@ impl<F: Real> Scheduler<F> {
             ticks_per_beat: 0,
             ticks_to_next_beat: 0,
             sample_rate: DEFAULT_SR,
-            schedule: BTreeMap::new(),
+            schedule: HashMap::with_capacity(MAX_BUFFER_SIZE),
         }
     }
 
@@ -112,11 +112,15 @@ impl<F: Real> Scheduler<F> {
 
     fn update_tempo(&mut self, new_ticks_per_beat: u32) {
         let old_ticks_per_beat = self.ticks_per_beat;
-        let ticks_to_next_beat = (self.ticks_to_next_beat as f64 * new_ticks_per_beat as f64 / old_ticks_per_beat as f64) as u32;
+        let ticks_to_next_beat = if old_ticks_per_beat == 0 {
+            new_ticks_per_beat
+        } else {
+            (self.ticks_to_next_beat as f64 * new_ticks_per_beat as f64 / old_ticks_per_beat as f64) as u32
+        };
         self.ticks_to_next_beat = ticks_to_next_beat;
         self.ticks_per_beat = new_ticks_per_beat;
         // Reschedule all events in the schedule according to the new tempo.
-        let mut new_schedule = BTreeMap::new();
+        let mut new_schedule = HashMap::new();
         for (_, request) in self.schedule.iter() {
             if let SchedulingRequest::Request { time, .. } = request {
                 let new_tick = (time * self.ticks_per_beat as i32).to_integer() as u32;
@@ -138,7 +142,6 @@ impl<F: Real> AudioNode for Scheduler<F> {
     type Outputs = <SchedulingEvent as FrameEncodedSignal>::Size;
 
     fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
-        let output = self.tick_next().unwrap_or(SchedulingEvent::None);
         let metro_slice = &input[..<MetroSignal as FrameEncodedSignal>::Size::USIZE];
         let request_slice = &input[<MetroSignal as FrameEncodedSignal>::Size::USIZE..];
 
@@ -147,6 +150,7 @@ impl<F: Real> AudioNode for Scheduler<F> {
 
         match metro_signal {
             MetroSignal::TicksToNextBeat(ttb) => {
+                self.ticks_per_beat = ttb;
                 self.ticks_to_next_beat = ttb;
             }
             MetroSignal::Reschedule(new_ttb) => {
@@ -159,12 +163,71 @@ impl<F: Real> AudioNode for Scheduler<F> {
             SchedulingRequest::Request { .. } => self.schedule_event(scheduling_request),
             SchedulingRequest::None => {}
         }
-        
+
+        let output = self.tick_next().unwrap_or(SchedulingEvent::None);
         output.encode()
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f64) {
+        self.sample_rate = sample_rate;
     }
 }
 
 
 pub fn create_scheduler<F: Real>() -> An<Scheduler<F>> {
     An(Scheduler::new())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scheduling_request_roundtrips_through_frame() {
+        let original = SchedulingRequest::Request {
+            time: Rational32::new(3, 8),
+            duration: Rational32::new(5, 16),
+            repeat: Some(2),
+            event: 17.25,
+        };
+        let frame = original.encode();
+        let decoded = SchedulingRequest::decode(&frame);
+
+        match decoded {
+            SchedulingRequest::Request {
+                time,
+                duration,
+                repeat,
+                event,
+            } => {
+                assert_eq!(time, Rational32::new(3, 8));
+                assert_eq!(duration, Rational32::new(5, 16));
+                assert_eq!(repeat, Some(2));
+                assert_eq!(event, 17.25);
+            }
+            SchedulingRequest::None => panic!("decoded request should not be empty"),
+        }
+
+        assert_eq!(size_of::<SchedulingRequest>(), size_of::<Frame<f32, U8>>());
+    }
+
+    #[test]
+    fn scheduling_event_roundtrips_through_frame() {
+        let original = SchedulingEvent::Event {
+            value: 9.0,
+            duration_s: 0.25,
+        };
+        let frame = original.encode();
+        let decoded = SchedulingEvent::decode(&frame);
+
+        match decoded {
+            SchedulingEvent::Event { value, duration_s } => {
+                assert_eq!(value, 9.0);
+                assert_eq!(duration_s, 0.25);
+            }
+            SchedulingEvent::None => panic!("decoded event should not be empty"),
+        }
+
+        assert_eq!(size_of::<SchedulingEvent>(), size_of::<Frame<f32, U6>>());
+    }
 }

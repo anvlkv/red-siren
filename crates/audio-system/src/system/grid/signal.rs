@@ -49,7 +49,8 @@ pub unsafe trait FrameEncodedSignal: Sized {
         }
     }
 
-    fn size() -> usize {
+    fn frame_size() -> usize {
+        debug_assert!(std::mem::size_of::<Self>() <= std::mem::size_of::<Frame<f32, Self::Size>>());
         Self::Size::USIZE
     }
 }

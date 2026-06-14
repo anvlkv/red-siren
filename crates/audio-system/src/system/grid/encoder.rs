@@ -35,19 +35,33 @@ pub struct SchedulingRequestEncoderHandle {
 }
 
 impl SchedulingRequestEncoderHandle {
-    pub async fn send(&self, time: Rational32, duration: Rational32, repeat: Option<u32>, event: f64) -> Result<()> {
+    pub fn send(
+        &self,
+        time: Rational32,
+        duration: Rational32,
+        repeat: Option<u32>,
+        event: f64,
+    ) -> Result<()> {
         let request = SchedulingRequest::Request {
             time,
             duration,
             repeat,
             event,
         };
-        self.sender
-            .send(request).await.map_err(|_| InstrumentError::ExciteChannelClosed.into())
+        self.sender.try_send(request).map_err(|e| match e {
+            TrySendError::Full(_) => InstrumentError::ExciteChannelFull.into(),
+            TrySendError::Closed(_) => InstrumentError::ExciteChannelClosed.into(),
+            _ => InstrumentError::Other(format!(
+                "unexpected error sending scheduling request: {}",
+                e
+            ))
+            .into(),
+        })
     }
 }
 
-pub fn create_scheduling_request_encoder() -> (SchedulingRequestEncoderHandle, An<SchedulingRequestEncoder>) {
+pub fn create_scheduling_request_encoder(
+) -> (SchedulingRequestEncoderHandle, An<SchedulingRequestEncoder>) {
     let (sender, receiver) = channel(16);
     let encoder = SchedulingRequestEncoder {
         receiver: Arc::new(receiver),

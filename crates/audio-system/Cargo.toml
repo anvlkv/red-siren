@@ -45,6 +45,11 @@ name = "node_adsr_egui"
 path = "examples/node_adsr_egui.rs"
 required-features = ["egui"]
 
+[[example]]
+name = "metro_grid_node_egui"
+path = "examples/metro_grid_node_egui.rs"
+required-features = ["egui"]
+
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2"
 

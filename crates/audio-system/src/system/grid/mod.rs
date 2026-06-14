@@ -109,8 +109,6 @@ impl Grid {
 mod tests {
     use super::*;
 
-    use crate::test_support::low_sr_snapshot_collate;
-
     use common::config::NodeKey;
     use insta_fun::prelude::*;
 
@@ -122,25 +120,22 @@ mod tests {
         };
         let mut grid = Grid::new(240.0_f32, &[key]);
 
-        let mut backend = grid.backend();
-
-        backend.tick(&[], &mut [0.0; 3]);
-        backend.tick(&[], &mut [0.0; 3]);
+        let backend = grid.backend();
 
         grid.schedule_event(
             &key,
+            Rational32::new(1, 8),
             Rational32::new(1, 3),
-            Rational32::new(1, 6),
-            Some(2),
+            Some(200),
             1.0,
         )
         .unwrap();
         grid.schedule_event(
             &key,
+            Rational32::new(2, 8),
             Rational32::new(2, 3),
-            Rational32::new(1, 6),
-            Some(2),
-            1.0,
+            Some(200),
+            0.5,
         )
         .unwrap();
 
@@ -148,7 +143,12 @@ mod tests {
             "grid_backend_smoke_snapshot",
             backend,
             InputSource::None,
-            low_sr_snapshot_collate(1024)
+            SnapshotConfigBuilder::default()
+                .sample_rate(256.0)
+                .num_samples(2048)
+                .chart_layout(Layout::Combined)
+                .build()
+                .unwrap()
         );
     }
 }

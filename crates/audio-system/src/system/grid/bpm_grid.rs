@@ -34,12 +34,14 @@ impl<F: Real> AudioNode for BpmGrid<F> {
         let input_bpm: F = convert(input[0]);
 
         if input_bpm != self.bpm {
-            let old_bpm = self.bpm;
             self.bpm = input_bpm;
+            let old_ticks_per_beat = self.ticks_per_beat;
             self.ticks_per_beat = (self.sample_rate * 60.0 / self.bpm.to_f64()) as u32;
-            self.ticks_to_next_beat = (self.ticks_to_next_beat as f64 * self.sample_rate
-                / old_bpm.to_f64()
-                / self.sample_rate) as u32;
+
+            // Preserve beat phase: fraction of current beat already elapsed
+            let beat_phase = self.ticks_to_next_beat as f64 / old_ticks_per_beat as f64;
+            self.ticks_to_next_beat = (beat_phase * self.ticks_per_beat as f64) as u32;
+
             MetroSignal::Reschedule(self.ticks_to_next_beat).encode()
         } else if self.ticks_to_next_beat == 0 {
             self.ticks_to_next_beat = self.ticks_per_beat;

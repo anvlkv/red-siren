@@ -95,9 +95,9 @@ impl<F: Real + 'static> Node<F> {
                 U => {
                     type N = NumType;
                     Box::new(feedback2(
-                        afollow(0.0, config.mode_decay_s / N::USIZE as f64) >> indexed_resonator(0),
-                        noise()
-                            * pipei::<N, _, _>(|mode_index| {
+                        indexed_resonator(0),
+                        pinkpass::<F>()
+                            >> busi::<N, _, _>(|mode_index| {
                                 let loss = 0.995_f32.powi(mode_index as i32 + 1);
                                 indexed_resonator(mode_index as usize + 1) >> mul(loss)
                             })

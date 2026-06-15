@@ -11,44 +11,72 @@ use fundsp::{
 
 const ADSR_3D_ID: u64 = crate::util::hash_str(concat!(module_path!(), "::Adsr3D"));
 
-#[derive(Clone, Copy)]
-struct Segment<F: Real> {
-    target: F,
-    start: F,
-    current: F,
-    starts_in_samples: usize,
-    duration_samples: usize,
-    remaining_samples: usize,
+#[derive(Clone)]
+struct CyclePoU<F: Real, P: Size<f32> + Unsigned + ArrayLength> {
+    weights: NumericArray<F, P>,
+    durations_secs: NumericArray<F, P>,
+    starts_in_samples: NumericArray<usize, P>,
+    duration_samples: NumericArray<usize, P>,
+    boundary_overlaps: Vec<usize>,
+    total_samples: usize,
+    cursor_samples: usize,
+    gate: F,
 }
 
-impl<F: Real> Default for Segment<F> {
-    fn default() -> Self {
-        Self {
-            target: F::zero(),
-            start: F::zero(),
-            current: F::zero(),
-            starts_in_samples: 0,
-            duration_samples: 0,
-            remaining_samples: 0,
-        }
-    }
-}
+impl<F: Real, P: Size<f32> + Unsigned + ArrayLength> CyclePoU<F, P> {
+    const TRANSITION_RATIO: f64 = 1.0 / 3.0;
 
-impl<F: Real> Segment<F> {
     fn duration_samples(duration: f64, sample_rate: f64) -> usize {
         (duration.max(0.0) * sample_rate).round() as usize
     }
 
-    fn samples_duration(samples: usize, sample_rate: f64) -> f64 {
-        samples as f64 / sample_rate.max(1.0)
+    fn rebuild_timeline(&mut self, sample_rate: f64) {
+        let mut start = 0usize;
+        for ch in 0..P::USIZE {
+            let secs: f64 = convert(self.durations_secs[ch]);
+            let seg_samples = Self::duration_samples(secs, sample_rate);
+            self.starts_in_samples[ch] = start;
+            self.duration_samples[ch] = seg_samples;
+            start += seg_samples;
+        }
+        self.total_samples = start;
+
+        self.boundary_overlaps.clear();
+        self.boundary_overlaps.reserve(P::USIZE.saturating_sub(1));
+        for b in 0..P::USIZE.saturating_sub(1) {
+            let left_secs: f64 = convert(self.durations_secs[b]);
+            let right_secs: f64 = convert(self.durations_secs[b + 1]);
+            let overlap_secs = left_secs.min(right_secs) * Self::TRANSITION_RATIO;
+            let overlap_samples = Self::duration_samples(overlap_secs, sample_rate);
+            self.boundary_overlaps.push(overlap_samples);
+        }
     }
 
-    fn progress(&self) -> F {
-        let elapsed = self.duration_samples.saturating_sub(self.remaining_samples);
-        if self.duration_samples <= 1 {
+    fn new(
+        durations: NumericArray<F, P>,
+        weights: NumericArray<F, P>,
+        gate: F,
+        sample_rate: f64,
+    ) -> Self {
+        let mut cycle = Self {
+            weights,
+            durations_secs: durations,
+            starts_in_samples: NumericArray::default(),
+            duration_samples: NumericArray::default(),
+            boundary_overlaps: Vec::with_capacity(P::USIZE.saturating_sub(1)),
+            total_samples: 0,
+            cursor_samples: 0,
+            gate,
+        };
+        cycle.rebuild_timeline(sample_rate);
+        cycle
+    }
+
+    fn norm_u(pos: usize, len: usize) -> F {
+        if len <= 1 {
             F::one()
         } else {
-            F::from_f64((elapsed + 1) as f64 / self.duration_samples as f64)
+            F::from_f64((pos as f64 / (len - 1) as f64).clamp(0.0, 1.0))
         }
     }
 
@@ -59,172 +87,84 @@ impl<F: Real> Segment<F> {
         t * t * t * (t * (t * six - fifteen) + ten)
     }
 
-    fn advance(&mut self) -> Option<F> {
-        if self.remaining_samples == 0 {
-            return None;
-        }
-        if self.starts_in_samples > 0 {
-            self.starts_in_samples -= 1;
-            return None;
-        }
-
-        let t = self.progress();
-        let d = self.target - self.start;
-        let u = Self::smoother_step(t);
-
-        self.current = self.start + d * u;
-        self.remaining_samples -= 1;
-
-        Some(self.current)
-    }
-
     fn update_sample_rate(&mut self, old_sr: f64, new_sr: f64) {
-        let old_duration = Self::samples_duration(self.duration_samples, old_sr);
-        self.duration_samples = Self::duration_samples(old_duration, new_sr);
-        let elapsed_samples = self.duration_samples - self.remaining_samples;
-        self.remaining_samples = self.duration_samples.saturating_sub(elapsed_samples);
-        self.starts_in_samples = Self::duration_samples(
-            Self::samples_duration(self.starts_in_samples, old_sr),
-            new_sr,
+        let elapsed_secs = self.cursor_samples as f64 / old_sr.max(1.0);
+        self.rebuild_timeline(new_sr);
+        self.cursor_samples = std::cmp::min(
+            Self::duration_samples(elapsed_secs, new_sr),
+            self.total_samples,
         );
     }
-}
 
-#[derive(Clone)]
-struct Cycle<F: Real, P: Size<f32> + Unsigned + ArrayLength> {
-    segments: NumericArray<Segment<F>, P>,
-    transitions: NumericArray<(Option<Segment<F>>, Option<Segment<F>>), P>,
-}
+    fn shape_at(&self, n: usize) -> Frame<F, P> {
+        let mut out = Frame::<F, P>::default();
 
-impl<F: Real, P: Size<f32> + Unsigned + ArrayLength> Default for Cycle<F, P> {
-    fn default() -> Self {
-        Self {
-            segments: NumericArray::default(),
-            transitions: NumericArray::default(),
-        }
-    }
-}
+        let segment_value = |ch: usize, sample: usize| -> F {
+            let start = self.starts_in_samples[ch];
+            let len = self.duration_samples[ch];
+            if len == 0 {
+                return self.weights[ch];
+            }
 
-impl<F: Real, P: Size<f32> + Unsigned + ArrayLength> Cycle<F, P> {
-    const TRANSITION_RATIO: f64 = 1.0 / 3.0;
+            let local = sample.saturating_sub(start);
+            let u = Self::norm_u(std::cmp::min(local, len.saturating_sub(1)), len);
+            let shaped = Self::smoother_step(u);
 
-    fn new(
-        durations: NumericArray<F, P>,
-        weights: NumericArray<F, P>,
-        excitement: F,
-        sample_rate: f64,
-    ) -> Self {
-        let mut cycle = Self::default();
-        let mut prev_end = F::zero();
-        let mut prev_end_samples = 0;
-        let mut it = cycle
-            .segments
-            .iter_mut()
-            .zip(cycle.transitions.iter_mut())
-            .enumerate()
-            .peekable();
-
-        while let Some((ch, (segment, (transition_in, transition_out)))) = it.next() {
-            let main_segment_target = excitement * weights[ch];
-            let duration = durations[ch];
-            let duration_samples = Segment::<F>::duration_samples(convert(duration), sample_rate);
-
-            let segment_start = prev_end_samples;
-            let main_segment_end = segment_start + duration_samples;
-
-            *segment = Segment {
-                target: main_segment_target,
-                start: prev_end,
-                current: prev_end,
-                starts_in_samples: segment_start,
-                duration_samples,
-                remaining_samples: duration_samples,
+            let from = if ch == 0 {
+                F::zero()
+            } else {
+                self.weights[ch - 1]
             };
+            let to = self.weights[ch];
 
-            *transition_in = ch.checked_sub(1).map(|prev_ch| {
-                let prev_duration = durations[prev_ch];
-                let transition_duration = prev_duration * convert(Self::TRANSITION_RATIO);
-                let transition_duration_samples =
-                    Segment::<F>::duration_samples(convert(transition_duration), sample_rate);
+            from + (to - from) * shaped
+        };
 
-                Segment {
-                    target: prev_end,
-                    start: F::zero(),
-                    current: F::zero(),
-                    starts_in_samples: segment_start.saturating_sub(transition_duration_samples),
-                    duration_samples: transition_duration_samples,
-                    remaining_samples: transition_duration_samples,
-                }
-            });
+        for boundary in 0..self.boundary_overlaps.len() {
+            let overlap = self.boundary_overlaps[boundary];
+            if overlap == 0 {
+                continue;
+            }
 
-            *transition_out = it.peek().as_ref().map(|(next_ch, _)| {
-                let next_duration = durations[*next_ch];
-                let transition_duration = next_duration * convert(Self::TRANSITION_RATIO);
-                let transition_duration_samples =
-                    Segment::<F>::duration_samples(convert(transition_duration), sample_rate);
+            let boundary_sample =
+                self.starts_in_samples[boundary] + self.duration_samples[boundary];
+            let window_start = boundary_sample.saturating_sub(overlap / 2);
+            let window_end = window_start + overlap;
 
-                Segment {
-                    target: F::zero(),
-                    start: main_segment_target,
-                    current: main_segment_target,
-                    starts_in_samples: main_segment_end,
-                    duration_samples: transition_duration_samples,
-                    remaining_samples: transition_duration_samples,
-                }
-            });
+            if n >= window_start && n < window_end {
+                let u = Self::norm_u(n - window_start, overlap);
+                let phi = Self::smoother_step(u);
+                let one = F::one();
 
-            prev_end = main_segment_target;
-            prev_end_samples = main_segment_end;
+                let left = segment_value(boundary, n);
+                let right = segment_value(boundary + 1, n);
+                out[boundary] = left * (one - phi);
+                out[boundary + 1] = right * phi;
+                return out;
+            }
         }
 
-        cycle
-    }
+        for ch in 0..P::USIZE {
+            let start = self.starts_in_samples[ch];
+            let end = start + self.duration_samples[ch];
+            if n >= start && n < end {
+                out[ch] = segment_value(ch, n);
+                return out;
+            }
+        }
 
-    fn update_sample_rate(&mut self, old_sr: f64, new_sr: f64) {
-        self.segments
-            .iter_mut()
-            .for_each(|segment| segment.update_sample_rate(old_sr, new_sr));
-        self.transitions
-            .iter_mut()
-            .for_each(|(transition_in, transition_out)| {
-                if let Some(t) = transition_in {
-                    t.update_sample_rate(old_sr, new_sr);
-                }
-                if let Some(t) = transition_out {
-                    t.update_sample_rate(old_sr, new_sr);
-                }
-            });
+        out
     }
 
     fn advance(&mut self) -> Option<Frame<F, P>> {
-        let mut output = Frame::<F, P>::default();
-        let mut had_some = false;
-
-        for (ch, (segment, (transition_in, transition_out))) in self
-            .segments
-            .iter_mut()
-            .zip(self.transitions.iter_mut())
-            .enumerate()
-        {
-            let seg_next = segment.advance();
-            let trans_in_next = transition_in.as_mut().and_then(|t| t.advance());
-            let trans_out_next = transition_out.as_mut().and_then(|t| t.advance());
-            let sample = seg_next
-                .or(trans_in_next)
-                .or(trans_out_next)
-                .unwrap_or(F::zero());
-            output[ch] = sample;
-            had_some = had_some
-                || seg_next.is_some()
-                || trans_in_next.is_some()
-                || trans_out_next.is_some();
+        if self.cursor_samples >= self.total_samples {
+            return None;
         }
 
-        if had_some {
-            Some(output)
-        } else {
-            None
-        }
+        let shape = self.shape_at(self.cursor_samples);
+        self.cursor_samples += 1;
+
+        Some(Frame::generate(|ch| self.gate * shape[ch]))
     }
 }
 
@@ -247,7 +187,7 @@ where
     _sample_type: PhantomData<F>,
     _channels: PhantomData<P>,
     sample_rate: f64,
-    cycles: Vec<Cycle<F, P>>,
+    cycles: Vec<CyclePoU<F, P>>,
 }
 
 impl<F: Real + 'static, P: Size<f32> + Unsigned + ArrayLength> Adsr3D<F, P>
@@ -289,10 +229,10 @@ where
 
     /// Build a Cycle from current input values at trigger time.
     /// Each segment's start = previous segment's end (the fold).
-    fn make_cycle(input: &[f32], gate: F, sample_rate: f64) -> Cycle<F, P> {
+    fn make_cycle(input: &[f32], gate: F, sample_rate: f64) -> CyclePoU<F, P> {
         let durations = NumericArray::<F, P>::generate(|ch| Self::read_duration(input, ch));
         let weights = NumericArray::<F, P>::generate(|ch| Self::read_weight(input, ch));
-        Cycle::new(durations, weights, gate, sample_rate)
+        CyclePoU::new(durations, weights, gate, sample_rate)
     }
 }
 

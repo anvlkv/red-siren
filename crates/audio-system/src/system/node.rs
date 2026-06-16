@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use common::config::{self, NodeKey};
-use fundsp::{prelude::*, typenum::Unsigned};
+use fundsp::prelude::*;
 use u_num_it::u_num_it;
 
 use crate::system::memo::memo;
@@ -34,13 +34,13 @@ impl<F: Real + 'static> Node<F> {
         ));
         let second_path_id = paths_modal_net.push(Self::resonant_path_modal(
             config,
-            2,
+            0,
             &path_spread_coeff,
             &mode_spacing_coeff,
         ));
         let third_path_id = paths_modal_net.push(Self::feedback_path_modal(
             config,
-            0,
+            2,
             &path_spread_coeff,
             &mode_spacing_coeff,
         ));
@@ -58,6 +58,8 @@ impl<F: Real + 'static> Node<F> {
         paths_modal_net.connect(third_path_id, 0, join_id, 2);
 
         paths_modal_net.pipe_output(join_id);
+
+        paths_modal_net.check();
 
         Self {
             key: config.key,
@@ -101,7 +103,8 @@ impl<F: Real + 'static> Node<F> {
                                 let loss = 0.995_f32.powi(mode_index as i32 + 1);
                                 indexed_resonator(mode_index as usize + 1) >> mul(loss)
                             })
-                            >> shape(Tanh(1.0)),
+                            >> shape(Tanh(1.0))
+                            >> follow(config.mode_decay_s),
                     )) as Box<dyn AudioUnit>
                 }
             }

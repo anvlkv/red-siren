@@ -18,15 +18,7 @@
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "rust-lang.rust-analyzer"
   },
-  "rust-analyzer.rustfmt.overrideCommand": [
-    "leptosfmt",
-    "--stdin",
-    "--rustfmt"
-  ],
   "rust-analyzer.hover.actions.enable": false,
-  "rust-analyzer.procMacro.ignored": {
-    "leptos_macro": ["server"]
-  },
   "rust-analyzer.cargo.targetDir": true,
   "rust-analyzer.cargo.features": []
 }

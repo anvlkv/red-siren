@@ -50,6 +50,11 @@ name = "metro_grid_node_egui"
 path = "examples/metro_grid_node_egui.rs"
 required-features = ["egui"]
 
+[[example]]
+name = "input_analyzer_egui"
+path = "examples/input_analyzer_egui.rs"
+required-features = ["egui"]
+
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2"
 

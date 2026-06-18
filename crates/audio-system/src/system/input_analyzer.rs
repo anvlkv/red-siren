@@ -1,10 +1,14 @@
 use std::{
-    sync::{atomic::AtomicBool, Arc},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     thread::JoinHandle,
+    time::Duration,
 };
 
 use fundsp::{fft::real_fft, prelude::*, thingbuf::ThingBuf};
-use parking_lot::RwLock;
+use spectrum_analyzer::windows::hann_window;
 
 #[derive(Clone)]
 pub struct InputAnalyzer {
@@ -12,62 +16,71 @@ pub struct InputAnalyzer {
     job_running: Arc<AtomicBool>,
     input_buffer: Arc<ThingBuf<f32>>,
     spectrum_thb: Arc<ThingBuf<Vec<Complex32>>>,
-    window_size: Arc<RwLock<usize>>,
-    overlap: Arc<RwLock<f64>>,
+    window_size: usize,
+    overlap: f64,
+    hop_size: usize,
 }
 
 impl InputAnalyzer {
     pub fn new(initial_window_size: usize, initial_overlap: f64) -> Self {
-        let input_buffer = Arc::new(ThingBuf::<f32>::new(initial_window_size));
-        let spectrum_thb = Arc::new(ThingBuf::<Vec<Complex32>>::new(initial_window_size / 2 + 1));
-        let window_size = Arc::new(RwLock::new(initial_window_size));
-        let overlap = Arc::new(RwLock::new(initial_overlap.clamp(0.0, 1.0)));
+        const SPECTRUM_QUEUE_CAPACITY: usize = 8;
+        let window_size = std::cmp::max(initial_window_size, 2);
+        // Keep overlap strictly below 1.0 so hop size always stays non-zero.
+        let overlap = initial_overlap.clamp(0.0, 0.999_999);
+        let overlap_size = std::cmp::min((overlap * window_size as f64) as usize, window_size - 1);
+        let hop_size = std::cmp::max(window_size - overlap_size, 1);
+
+        let input_buffer = Arc::new(ThingBuf::<f32>::new(window_size));
+        let spectrum_thb = Arc::new(ThingBuf::<Vec<Complex32>>::new(SPECTRUM_QUEUE_CAPACITY));
         let job_running = Arc::new(AtomicBool::new(true));
 
         let analyzer_job = Some(Arc::new({
             let input_buffer = input_buffer.clone();
             let spectrum_thb = spectrum_thb.clone();
-            let window_size = window_size.clone();
-            let overlap = overlap.clone();
             let job_running = job_running.clone();
 
             std::thread::spawn(move || {
                 let mut local_input_buffer: Vec<f32> = Vec::new();
-                let mut oversampled_buffer: Vec<f32> = Vec::new();
+                let mut frame_buffer = vec![0.0_f32; window_size];
+                let spectrum_len = window_size / 2 + 1;
+                let idle_sleep = Duration::from_millis(1);
 
                 loop {
-                    if !job_running.load(std::sync::atomic::Ordering::SeqCst) {
+                    if !job_running.load(Ordering::SeqCst) {
                         break;
-                    }
-                    let window_size = *window_size.read();
-                    let overlap_size = (*overlap.read() * window_size as f64) as usize;
-
-                    if oversampled_buffer.len() != window_size {
-                        oversampled_buffer.resize(window_size, 0.0);
                     }
 
                     // Read from the input buffer and fill the local buffer
+                    let mut got_samples = false;
                     while let Some(sample) = input_buffer.pop() {
                         local_input_buffer.push(sample);
+                        got_samples = true;
                     }
 
-                    if local_input_buffer.len() >= overlap_size {
+                    let mut produced_frame = false;
+                    while local_input_buffer.len() >= hop_size {
+                        produced_frame = true;
                         _ = spectrum_thb
                             .push_with(|spectrum| {
-                                // Shift the oversampled buffer to the left by the overlap size
-                                oversampled_buffer.copy_within(overlap_size.., 0);
-                                // Fill the end of the oversampled buffer with new samples from the local buffer
-                                let new_samples = &local_input_buffer[..window_size - overlap_size];
-                                oversampled_buffer[window_size - overlap_size..]
-                                    .copy_from_slice(new_samples);
-                                // Remove the used samples from the local buffer
-                                local_input_buffer.drain(..window_size - overlap_size);
+                                // Shift by one hop, append fresh samples, then window before FFT.
+                                frame_buffer.copy_within(hop_size.., 0);
+                                let new_samples = &local_input_buffer[..hop_size];
+                                frame_buffer[window_size - hop_size..].copy_from_slice(new_samples);
+                                local_input_buffer.drain(..hop_size);
 
-                                // Perform FFT on the oversampled buffer and store the result in the spectrum
-                                let fft_result = real_fft(&mut oversampled_buffer);
+                                let mut windowed = hann_window(&frame_buffer);
+                                let fft_result = real_fft(&mut windowed);
+
+                                if spectrum.len() != spectrum_len {
+                                    spectrum.resize(spectrum_len, Complex32::default());
+                                }
                                 spectrum.copy_from_slice(fft_result);
                             })
                             .ok();
+                    }
+
+                    if !got_samples && !produced_frame {
+                        std::thread::sleep(idle_sleep);
                     }
                 }
             })
@@ -79,6 +92,7 @@ impl InputAnalyzer {
             spectrum_thb,
             window_size,
             overlap,
+            hop_size,
             job_running,
         }
     }
@@ -87,12 +101,16 @@ impl InputAnalyzer {
         self.spectrum_thb.pop()
     }
 
-    pub fn set_window_size(&self, size: usize) {
-        *self.window_size.write() = size;
+    pub fn window_size(&self) -> usize {
+        self.window_size
     }
 
-    pub fn set_overlap(&self, overlap: f64) {
-        *self.overlap.write() = overlap.clamp(0.0, 1.0);
+    pub fn overlap(&self) -> f64 {
+        self.overlap
+    }
+
+    pub fn hop_size(&self) -> usize {
+        self.hop_size
     }
 }
 
@@ -103,8 +121,7 @@ impl Drop for InputAnalyzer {
             .take()
             .and_then(|a| Arc::try_unwrap(a).ok())
         {
-            self.job_running
-                .store(false, std::sync::atomic::Ordering::SeqCst);
+            self.job_running.store(false, Ordering::SeqCst);
             if let Err(e) = job.join() {
                 log::error!("Failed to join analyzer job: {:?}", e);
             }
@@ -125,7 +142,9 @@ impl AudioNode for InputAnalyzer {
         // Write the input to the input buffer for analysis
         if let Err(full) = self.input_buffer.push(input[0]) {
             _ = self.input_buffer.pop(); // Remove the oldest sample to make room
-            self.input_buffer.push(full.into_inner()).unwrap();
+            if self.input_buffer.push(full.into_inner()).is_err() {
+                log::warn!("Input analyzer dropped a sample because the queue remained full");
+            }
         }
         Frame::default()
     }

@@ -137,7 +137,7 @@ impl Default for RuntimeTestbed {
             output_choice: None,
             input_choice: None,
             quality: PlaybackQuality::Medium,
-            source: ExcitementSource::Entropy,
+            source: ExcitementSource::Mic,
             transport: RuntimeTransportState::Stopped,
             diagnostics: None,
             spectrum_shared: Arc::new(Mutex::new(SpectrumSharedState {

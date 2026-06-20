@@ -19,3 +19,18 @@
   --color-black: #353839;
   --color-gray: #36454f;
 }
+
+.App {
+  width: 100vw;
+  height: 100vh;
+}
+
+.App.dark {
+  background-color: var(--color-black);
+  color: var(--color-red);
+}
+
+.App.light {
+  background-color: var(--color-red);
+  color: var(--color-black);
+}

@@ -20,5 +20,6 @@
   },
   "rust-analyzer.hover.actions.enable": false,
   "rust-analyzer.cargo.targetDir": true,
-  "rust-analyzer.cargo.features": []
+  "rust-analyzer.cargo.features": [],
+  "rust-analyzer.check.command": "clippy"
 }

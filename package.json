@@ -11,10 +11,16 @@
   },
   "dependencies": {
     "@react-three/fiber": "^9.6.1",
+    "@reactuses/core": "^6.3.2",
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-log": "~2.8.0",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-window-state": "~2.4.1",
+    "classnames": "^2.5.1",
+    "modern-css-reset": "^1.4.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-router": "^7.18.0",
     "three": "^0.184.0"
   },
   "devDependencies": {

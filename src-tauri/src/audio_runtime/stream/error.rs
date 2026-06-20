@@ -1,0 +1,20 @@
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+#[derive(Debug, Clone, Error, Serialize, Deserialize)]
+pub enum AudioStreamError {
+    #[error("failed to start audio stream: {0}")]
+    Startup(String),
+    #[error("sample format not supported: {0}")]
+    UnsupportedSampleFormat(String),
+    #[error("build stream failed: {0}")]
+    BuildStream(String),
+    #[error("thread join error: {op}")]
+    ThreadJoin { op: String },
+    #[error("control channel send error: {op}")]
+    ControlChannelSend { op: String },
+    #[error("control channel receive timeout: {op}")]
+    ControlTimeout { op: String },
+    #[error("audio stream backend missing")]
+    BackendMissing,
+}

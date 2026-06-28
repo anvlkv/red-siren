@@ -1,40 +1,82 @@
-use crate::audio_runtime::SampleType;
+use std::{cmp, ops::Add};
+
+use num_traits::Float;
+use parking_lot::RwLock;
+
+use crate::{
+    audio_runtime::SampleType,
+    dsp::{DspUnit, NetTickData, Siren, SirenConfig, Snapshot},
+};
 
 use super::{DspNetwork, DspNetworkBackend};
 
 pub struct Synthesizer {
-    // Add fields for the synthesizer state, such as oscillators, filters, etc.
+    pub siren: Siren,
+    pub siren_snapshot: Snapshot<2>,
+    pub sample_type: RwLock<SampleType>,
+    pub sample_rate: RwLock<u32>,
 }
 
 impl Synthesizer {
     pub fn new() -> Self {
+        let cfgs = (512..=1024)
+            .flat_map(SirenConfig::configs_for_resolution)
+            .collect::<Vec<_>>();
+        let config = cfgs
+            .into_iter()
+            .max_by(|a, b| {
+                a.score()
+                    .partial_cmp(&b.score())
+                    .unwrap_or(cmp::Ordering::Equal)
+            })
+            .unwrap();
+
+        log::info!("Selected SirenConfig: {:#?}", config);
+
         Synthesizer {
-            // Initialize synthesizer state here
+            siren: Siren::new(config),
+            siren_snapshot: Snapshot::new(1024),
+            sample_type: RwLock::new(SampleType::default()),
+            sample_rate: RwLock::new(44100),
         }
     }
 
-    fn make_backend(&self) -> impl FnMut(&[f32], &mut [f32]) + Send + Sync {
-        // simple sine 440 mock
+    fn make_backend<S: Float + Send + Sync + 'static>(
+        &self,
+    ) -> impl FnMut(&[f32], &mut [f32]) + Send + Sync {
+        let mut tick_data = NetTickData {
+            time: 0.0,
+            sample_rate: *self.sample_rate.read(),
+        };
+        let siren_snapshot_pipe = self.siren.pipe(&self.siren_snapshot);
+        let mut siren_be = siren_snapshot_pipe.backend::<S>();
+        let siren_input_frame = Siren::input_buffer::<S>();
+        let mut siren_output_frame = Siren::output_buffer::<S>();
 
-        let mut phase: f32 = 0.0;
-        let sample_rate: f32 = 44100.0;
-        let frequency: f32 = 440.0;
-        let increment: f32 = 2.0 * std::f32::consts::PI * frequency / sample_rate;
+        let sample_duration = 1.0 / tick_data.sample_rate as f64;
+
         move |input: &[f32], output: &mut [f32]| {
-            for sample in output.iter_mut() {
-                *sample = (phase).sin();
-                phase += increment;
-                if phase > 2.0 * std::f32::consts::PI {
-                    phase -= 2.0 * std::f32::consts::PI;
-                }
-            }
+            siren_be.process(&tick_data, &siren_input_frame, &mut siren_output_frame);
+            tick_data.time = if tick_data.time.add(sample_duration).is_finite() {
+                tick_data.time + sample_duration
+            } else {
+                sample_duration - (f64::MAX - tick_data.time)
+            };
+
+            output
+                .iter_mut()
+                .zip(siren_output_frame.iter())
+                .for_each(|(o, f)| *o = f.to_f32().unwrap());
         }
     }
 }
 
 impl DspNetwork for Synthesizer {
     fn backend(&self) -> Box<dyn DspNetworkBackend + Send + Sync> {
-        Box::new(self.make_backend())
+        match *self.sample_type.read() {
+            SampleType::F32 => Box::new(self.make_backend::<f32>()),
+            SampleType::F64 => Box::new(self.make_backend::<f64>()),
+        }
     }
 
     fn set_sample_rate(&self, sample_rate: u32) {

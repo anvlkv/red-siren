@@ -7,7 +7,7 @@ use thingbuf::ThingBuf;
 
 use crate::{audio_runtime::stream::ProdData, dsp::DspNetworkBackend};
 
-use super::quality::{Message, PlaybackQualityGate, TelemetrySender};
+use super::quality::{Message, TelemetrySender};
 
 pub struct PlaybackCallbackConfig {
     pub input_buffer: Option<Arc<ThingBuf<ProdData>>>,
@@ -40,7 +40,9 @@ pub fn playback_callback(
                     .as_ref()
                     .and_then(|buf| buf.pop())
                     .unwrap_or((0.0, None));
+
                 net.process(&[input_frame], &mut frame_buffer);
+
                 frames_per_channel
                     .iter_mut()
                     .enumerate()
@@ -64,11 +66,13 @@ pub fn playback_callback(
                 None
             };
 
+            let input_latency = input_capture.map(|capture| ts.callback.duration_since(capture));
+
             let msg = Message {
                 buffer_size,
                 estimated_latency,
                 sample_rate,
-                input_latency: input_capture.map(|capture| ts.callback.duration_since(capture)),
+                input_latency,
             };
 
             if let Err(TrySendError::Full(_)) = telemetry.try_send(msg) {

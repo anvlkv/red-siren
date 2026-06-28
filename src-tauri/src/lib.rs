@@ -60,7 +60,11 @@ pub fn run() {
         audio_runtime::set_quality,
         audio_runtime::get_playback_state,
         audio_runtime::get_current_quality,
-        dsp::create_synth
+        dsp::create_synth,
+        dsp::set_speed,
+        dsp::set_shape,
+        dsp::set_window,
+        dsp::get_snapshot,
     ]);
 
     if let Err(e) = builder.run(tauri::generate_context!()) {

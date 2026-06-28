@@ -127,11 +127,17 @@ impl Output {
         }
     }
 
-    pub fn on_quality_change(&mut self) {
+    pub fn on_quality_change(&mut self) -> bool {
         let new_gate = PlaybackQualityGate::from(*self.current_quality.read());
-        if let Some(output_cfg) = self.cfg() {
+        if let Some(output_cfg) = self
+            .cfg()
+            .filter(|&cfg| self.config.is_none_or(|old_cfg| old_cfg != cfg))
+        {
             self.net.set_sample_rate(output_cfg.sample_rate());
             self.net.set_sample_type(new_gate.sample_type());
+            true
+        } else {
+            false
         }
     }
 

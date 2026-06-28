@@ -2,38 +2,26 @@ mod error;
 mod input;
 mod output;
 
-use std::{
-    f32,
-    sync::{
-        mpsc::{self, Sender},
-        Arc,
-    },
-    thread,
-    time::Duration,
-};
+use std::sync::Arc;
 
 use cpal::{
     traits::{DeviceTrait, HostTrait},
-    Device, DeviceId, HostId, StreamConfig, SupportedStreamConfig,
+    Device, DeviceId, HostId,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use tauri::async_runtime;
-use thingbuf::ThingBuf;
 
 use crate::{
     audio_runtime::{
         engine::{input::Input, output::Output},
-        stream::{
-            playback_callback, spawn_owned_input_stream, AudioStreamError, PlaybackQualityGate,
-        },
+        stream::AudioStreamError,
     },
-    dsp::{Analyzer, DspNetwork, Synthesizer},
+    dsp::{Analyzer, Synthesizer},
 };
 
 use super::stream::{
-    create_telemetry_channel, spawn_owned_output_stream, Control, PlaybackCallbackConfig,
-    PlaybackQuality, QualityGateManger, TelemetrySender,
+    create_telemetry_channel, PlaybackQuality, QualityGateManger, TelemetrySender,
 };
 
 pub use error::AudioEngineError;
@@ -68,7 +56,6 @@ pub struct AudioEngine {
     telemetry_sender: TelemetrySender,
     // output
     pub output_stream: RwLock<Option<Output>>,
-
     // input
     pub input_stream: RwLock<Option<Input>>,
 }
@@ -120,13 +107,15 @@ impl AudioEngine {
         *self.current_quality.write() = new_quality;
 
         if let Some(input) = self.input_stream.write().as_mut() {
-            input.on_quality_change();
-            self.restart_input_stream()?;
+            if input.on_quality_change() {
+                self.restart_input_stream()?;
+            }
         }
 
         if let Some(output) = self.output_stream.write().as_mut() {
-            output.on_quality_change();
-            self.restart_output_stream()?;
+            if output.on_quality_change() {
+                self.restart_output_stream()?;
+            }
         }
 
         Ok(())

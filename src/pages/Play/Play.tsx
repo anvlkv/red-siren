@@ -25,7 +25,7 @@ function Play() {
     }, []);
     return <div>
         <h1>Play: {playbackState}</h1>
-        {Array.from({ length: 6 }, (_, i) => <WheelControls key={i} index={i} />)}
+        {Array.from({ length: 1 }, (_, i) => <WheelControls key={i} index={i} />)}
         <div style={{ position: "absolute", top: "0px", right: "0px" }}>
             <Visualizer />
         </div>
@@ -74,7 +74,9 @@ function Visualizer() {
             const ctx = canvasRef.current.getContext("2d");
             if (ctx) {
                 ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-                ctx.strokeStyle = "blue";
+
+                ctx.strokeStyle = "red";
+
                 ctx.beginPath();
                 snapshot.forEach(([left, _], index) => {
                     const x = (index / snapshot.length) * canvasRef.current!.width;
@@ -85,6 +87,10 @@ function Visualizer() {
                         ctx.lineTo(x, y);
                     }
                 });
+                ctx.stroke();
+                ctx.closePath();
+
+                ctx.beginPath();
                 snapshot.forEach(([_, right], index) => {
                     const x = (index / snapshot.length) * canvasRef.current!.width;
                     const y = ((right + 1) / 2) * canvasRef.current!.height;

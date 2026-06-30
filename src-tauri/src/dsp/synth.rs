@@ -19,22 +19,27 @@ pub struct Synthesizer {
 
 impl Synthesizer {
     pub fn new() -> Self {
-        let cfgs = (512..=1024)
-            .flat_map(SirenConfig::configs_for_resolution)
-            .collect::<Vec<_>>();
-        let config = cfgs
-            .into_iter()
-            .max_by(|a, b| {
-                a.score()
-                    .partial_cmp(&b.score())
-                    .unwrap_or(cmp::Ordering::Equal)
-            })
-            .unwrap();
+        // let cfgs = (512..=1024)
+        //     .flat_map(SirenConfig::configs_for_resolution)
+        //     .collect::<Vec<_>>();
+        // let config = cfgs
+        //     .into_iter()
+        //     .min_by(|a, b| {
+        //         a.score()
+        //             .partial_cmp(&b.score())
+        //             .unwrap_or(cmp::Ordering::Equal)
+        //     })
+        //     .unwrap();
 
-        log::info!("Selected SirenConfig: {:#?}", config);
+        // log::info!("Selected SirenConfig: {:#?}", config);
 
         Synthesizer {
-            siren: Siren::new(config),
+            siren: Siren::new(SirenConfig {
+                resolution: 1024,
+                n_chambers: 1,
+                fib_n_start: 3,
+                base_opening_width: 240,
+            }),
             siren_snapshot: Snapshot::new(1024),
             sample_type: RwLock::new(SampleType::default()),
             sample_rate: RwLock::new(44100),
@@ -50,23 +55,24 @@ impl Synthesizer {
         };
         let siren_snapshot_pipe = self.siren.pipe(&self.siren_snapshot);
         let mut siren_be = siren_snapshot_pipe.backend::<S>();
-        let siren_input_frame = Siren::input_buffer::<S>();
-        let mut siren_output_frame = Siren::output_buffer::<S>();
+        let siren_input_frame = Siren::input_frame::<S>();
+        let mut siren_output_frame = Siren::output_frame::<S>();
 
         let sample_duration = 1.0 / tick_data.sample_rate as f64;
 
-        move |input: &[f32], output: &mut [f32]| {
+        move |_input: &[f32], output: &mut [f32]| {
             siren_be.process(&tick_data, &siren_input_frame, &mut siren_output_frame);
-            tick_data.time = if tick_data.time.add(sample_duration).is_finite() {
-                tick_data.time + sample_duration
-            } else {
-                sample_duration - (f64::MAX - tick_data.time)
-            };
 
             output
                 .iter_mut()
                 .zip(siren_output_frame.iter())
                 .for_each(|(o, f)| *o = f.to_f32().unwrap());
+
+            tick_data.time = if tick_data.time.add(sample_duration).is_finite() {
+                tick_data.time + sample_duration
+            } else {
+                sample_duration - (f64::MAX - tick_data.time)
+            };
         }
     }
 }

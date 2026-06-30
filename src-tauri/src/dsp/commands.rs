@@ -106,6 +106,7 @@ pub async fn set_shape(
              index,
              opening_width,
              gap_width,
+             previous_chord,
          }: &ShaperCallbackArgs| 1.0,
     );
 

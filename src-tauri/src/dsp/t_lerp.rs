@@ -16,11 +16,11 @@ impl DspUnit for TLerp {
         todo!()
     }
 
-    fn output_buffer<S: num_traits::Float + Send + Sync + 'static>() -> Vec<S> {
+    fn output_frame<S: num_traits::Float + Send + Sync + 'static>() -> Vec<S> {
         vec![S::zero(); 1]
     }
 
-    fn input_buffer<S: num_traits::Float + Send + Sync + 'static>() -> Vec<S> {
+    fn input_frame<S: num_traits::Float + Send + Sync + 'static>() -> Vec<S> {
         vec![S::zero(); 1]
     }
 }

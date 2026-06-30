@@ -2,10 +2,10 @@ use crate::dsp::siren::chamber::Chamber;
 
 #[derive(Clone, Copy, Debug)]
 pub struct SirenConfig {
-    resolution: i32,
-    n_chambers: i32,
-    fib_n_start: i32,
-    base_opening_width: i32,
+    pub resolution: i32,
+    pub n_chambers: i32,
+    pub fib_n_start: i32,
+    pub base_opening_width: i32,
 }
 
 impl SirenConfig {

@@ -17,7 +17,7 @@ pub struct Siren {
 impl Siren {
     pub fn new(config: SirenConfig) -> Self {
         let chambers = config.chambers();
-        let energy = energy::EnergySource::new(0.2, chambers.len() as f32);
+        let energy = energy::EnergySource::new(0.2);
 
         Self { energy, chambers }
     }
@@ -33,39 +33,41 @@ impl DspUnit for Siren {
             .iter()
             .map(|c| c.backend::<S>())
             .collect::<Vec<_>>();
-        let mut energy_output = energy::EnergySource::output_buffer::<S>();
-        let mut chamber_input = chamber::Chamber::input_buffer::<S>();
-        let mut chamber_output = chamber::Chamber::output_buffer::<S>();
+        let mut energy_output = energy::EnergySource::output_frame::<S>();
+        let mut chamber_input = chamber::Chamber::input_frame::<S>();
+        let mut chamber_output = chamber::Chamber::output_frame::<S>();
 
         Box::new(
             move |tick_data: &super::NetTickData, _input: &[S], output: &mut [S]| {
                 energy.process(tick_data, &[], &mut energy_output);
                 chamber_input[0] = energy_output[0];
+                chamber_input[1] = chamber_output[1];
+                chamber_input[2..].fill(S::zero());
+
+                chamber_output.fill(S::zero());
 
                 for chamber in chambers.iter_mut() {
                     chamber.process(tick_data, &chamber_input, &mut chamber_output);
                     chamber_input.copy_from_slice(&chamber_output);
                 }
 
-                output[0] = (chamber_output[2] / energy_output[0]) - S::from(0.5).unwrap();
-                output[1] = (chamber_output[3] / energy_output[0]) - S::from(0.5).unwrap();
+                // centered signal output
+                // output[0] =
+                //     ((chamber_output[2] - S::from(1.0).unwrap()) / S::from(2.0).unwrap()).tanh();
+                // output[1] =
+                //     ((chamber_output[3] - S::from(1.0).unwrap()) / S::from(2.0).unwrap()).tanh();
 
-                if output.iter().any(|x| !x.is_finite()) {
-                    let output = output
-                        .iter()
-                        .map(|s| s.to_f32().unwrap())
-                        .collect::<Vec<_>>();
-                    log::warn!("Siren output contains non-finite values: {:?}", output,);
-                }
+                output[0] = chamber_output[2];
+                output[1] = chamber_output[3];
             },
         )
     }
 
-    fn output_buffer<S: Float + Send + Sync + 'static>() -> Vec<S> {
+    fn output_frame<S: Float + Send + Sync + 'static>() -> Vec<S> {
         vec![S::zero(); 2]
     }
 
-    fn input_buffer<S: Float + Send + Sync + 'static>() -> Vec<S> {
+    fn input_frame<S: Float + Send + Sync + 'static>() -> Vec<S> {
         vec![]
     }
 }

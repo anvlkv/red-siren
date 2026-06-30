@@ -44,11 +44,11 @@ impl<'rt, A: DspUnit, B: DspUnit> DspUnit for PipeUnit<'rt, A, B> {
     ) -> Box<dyn DspUnitBackend<S> + Send + Sync> {
         let mut a_backend = self.a.backend::<S>();
         let mut b_backend = self.b.backend::<S>();
-        let mut intermediate = A::output_buffer::<S>();
+        let mut intermediate = A::output_frame::<S>();
         assert_eq!(
             intermediate.len(),
-            B::input_buffer::<S>().len(),
-            "Unit buffers' sizes must match for piping"
+            B::input_frame::<S>().len(),
+            "Unit frame' sizes must match for piping"
         );
 
         Box::new(
@@ -59,12 +59,12 @@ impl<'rt, A: DspUnit, B: DspUnit> DspUnit for PipeUnit<'rt, A, B> {
         )
     }
 
-    fn output_buffer<S: Float + Send + Sync + 'static>() -> Vec<S> {
-        B::output_buffer::<S>()
+    fn output_frame<S: Float + Send + Sync + 'static>() -> Vec<S> {
+        B::output_frame::<S>()
     }
 
-    fn input_buffer<S: Float + Send + Sync + 'static>() -> Vec<S> {
-        A::input_buffer::<S>()
+    fn input_frame<S: Float + Send + Sync + 'static>() -> Vec<S> {
+        A::input_frame::<S>()
     }
 }
 
@@ -75,9 +75,9 @@ where
     fn backend<S: Float + Send + Sync + 'static>(&self)
         -> Box<dyn DspUnitBackend<S> + Send + Sync>;
 
-    fn output_buffer<S: Float + Send + Sync + 'static>() -> Vec<S>;
+    fn output_frame<S: Float + Send + Sync + 'static>() -> Vec<S>;
 
-    fn input_buffer<S: Float + Send + Sync + 'static>() -> Vec<S>;
+    fn input_frame<S: Float + Send + Sync + 'static>() -> Vec<S>;
 
     fn pipe<'rt, U: DspUnit>(&'rt self, next: &'rt U) -> PipeUnit<'rt, Self, U> {
         PipeUnit { a: self, b: next }
@@ -93,6 +93,26 @@ where
     F: FnMut(&NetTickData, &[S], &mut [S]) + Send + Sync,
 {
     fn process(&mut self, tick_data: &NetTickData, input: &[S], output: &mut [S]) {
-        (self)(tick_data, input, output)
+        if cfg!(debug_assertions) && input.iter().any(|f| f.is_infinite() || f.is_nan()) {
+            let input = input
+                .iter()
+                .map(|s| s.to_f32().unwrap())
+                .collect::<Vec<_>>();
+            log::warn!(
+                "DspUnitBackend input contains non-finite values: {:?}",
+                input,
+            );
+        }
+        (self)(tick_data, input, output);
+        if cfg!(debug_assertions) && output.iter().any(|f| f.is_infinite() || f.is_nan()) {
+            let output = output
+                .iter()
+                .map(|s| s.to_f32().unwrap())
+                .collect::<Vec<_>>();
+            log::warn!(
+                "DspUnitBackend output contains non-finite values: {:?}",
+                output,
+            );
+        }
     }
 }

@@ -2,6 +2,7 @@ mod analyze;
 mod commands;
 mod error;
 mod net;
+mod resonator;
 mod siren;
 mod snap;
 mod synth;

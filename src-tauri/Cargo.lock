@@ -647,6 +647,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "const-primes"
+version = "0.10.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "790331fd42981afa7500ca4a570b61bfc9161170f81f6aa6b61b2865e1cf9081"
+
+[[package]]
 name = "cookie"
 version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3142,6 +3148,7 @@ name = "red-siren"
 version = "0.1.0"
 dependencies = [
  "atomic_float",
+ "const-primes",
  "cpal",
  "dasp_sample",
  "log",

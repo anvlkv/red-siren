@@ -25,7 +25,7 @@ function Play() {
     }, []);
     return <div>
         <h1>Play: {playbackState}</h1>
-        {Array.from({ length: 1 }, (_, i) => <WheelControls key={i} index={i} />)}
+        {Array.from({ length: 13 }, (_, i) => <WheelControls key={i} index={i} />)}
         <div style={{ position: "absolute", top: "0px", right: "0px" }}>
             <Visualizer />
         </div>

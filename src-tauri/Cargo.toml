@@ -33,6 +33,7 @@ dasp_sample = "0.11.0"
 thingbuf = "0.1.6"
 num-traits = "0.2.19"
 atomic_float = "1.1.0"
+const-primes = "0.10.5"
 
 
 [target."cfg(target_os = \"macos\")".dependencies]

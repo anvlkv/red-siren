@@ -6,15 +6,14 @@ use std::sync::{
 use atomic_float::AtomicF64;
 use num_traits::Float;
 
-use crate::dsp::{DspUnit, DspUnitBackend, NetTickData};
+use crate::dsp::{resonator::ResonatorHh, DspUnit, DspUnitBackend, NetTickData};
 
 pub struct Chamber {
     pub is_left_channel: bool,
     pub wheel: Arc<Vec<AtomicF64>>,
     pub window_size: Arc<AtomicU32>,
     pub speed: Arc<AtomicU32>,
-    pub space_samples: Arc<AtomicU32>,
-    pub pos: (usize, usize),
+    pub resonators: Arc<[ResonatorHh; 4]>,
     pub opening_width: usize,
     pub gap_width: usize,
 }
@@ -31,10 +30,8 @@ pub struct ShaperCallbackArgs {
 impl Chamber {
     pub fn new(
         resolution: usize,
-        pos: (usize, usize),
         is_left_channel: bool,
         initial_window_size: u32,
-        initial_space_samples: u32,
         opening_width: usize,
         gap_width: usize,
     ) -> Self {
@@ -45,15 +42,19 @@ impl Chamber {
         );
         let window_size = Arc::new(AtomicU32::new(initial_window_size));
         let speed = Arc::new(AtomicU32::new(0));
-        let space_samples = Arc::new(AtomicU32::new(initial_space_samples));
+        let resonators = Arc::new([
+            ResonatorHh::new(),
+            ResonatorHh::new(),
+            ResonatorHh::new(),
+            ResonatorHh::new(),
+        ]);
 
         Self {
             is_left_channel,
             wheel,
             window_size,
             speed,
-            space_samples,
-            pos,
+            resonators,
             opening_width,
             gap_width,
         }
@@ -102,14 +103,20 @@ impl DspUnit for Chamber {
         let wheel = self.wheel.clone();
         let window_size = self.window_size.clone();
         let speed = self.speed.clone();
-        let space_samples = self.space_samples.clone();
-        let (ch_index, num_chambers) = self.pos;
-        let initial_size = space_samples.load(Ordering::Relaxed) as usize;
+        let mut resonator_input = ResonatorHh::input_frame::<S>();
+        let mut resonator_output = ResonatorHh::output_frame::<S>();
+
+        // let (ch_index, num_chambers) = self.pos;
         let mut window_pos = 0_usize;
-        let mut space: Vec<S> = vec![S::zero(); initial_size];
+        let mut resonators_backends: [Box<dyn DspUnitBackend<S> + Send + Sync>; 4] = [
+            self.resonators[0].backend::<S>(),
+            self.resonators[1].backend::<S>(),
+            self.resonators[2].backend::<S>(),
+            self.resonators[3].backend::<S>(),
+        ];
 
         Box::new(
-            move |_tick_data: &NetTickData, input: &[S], output: &mut [S]| {
+            move |tick_data: &NetTickData, input: &[S], output: &mut [S]| {
                 let [direct_xct, _adj_xct, left, right] = *input else {
                     log::error!("Chamber input must be a slice of length 4");
                     return;
@@ -117,50 +124,42 @@ impl DspUnit for Chamber {
 
                 let speed = speed.load(Ordering::Relaxed);
                 let window_size = window_size.load(Ordering::Relaxed).max(1) as usize;
-                // let space_samples = space_samples.load(Ordering::Relaxed) as usize;
                 let mut opening_area = S::zero();
-                // let mut interaction_area = S::zero();
+                let mut perimetry = S::zero();
+                let mut prev_chord = S::zero();
                 for chord in wheel.iter().cycle().skip(window_pos).take(window_size) {
                     let chord = S::from(chord.load(Ordering::Relaxed)).unwrap_or(S::zero());
 
-                    if chord > S::zero() {
-                        opening_area = chord + opening_area;
-                    }
+                    opening_area = chord + opening_area;
+                    perimetry = (chord - prev_chord).abs()
+                        + perimetry
+                        + if !chord.is_zero() {
+                            S::from(2).unwrap()
+                        } else {
+                            S::zero()
+                        };
 
-                    // interaction_area = (S::one() - chord) + interaction_area;
+                    prev_chord = chord;
                 }
 
                 let opening_area_gain = opening_area / S::from(window_size).unwrap();
-                // let interaction_area_gain = interaction_area / S::from(window_size).unwrap();
-
-                // let space_xct = if !space.is_empty() {
-                //     space.rotate_left(1);
-                //     space[1..].iter_mut().enumerate().for_each(|(at, x)| {
-                //         let s_pos = S::from(space_samples - at + 1).unwrap_or(S::one());
-                //         *x = *x - (S::one() / (s_pos + s_pos * adj_xct)) * *x;
-                //     });
-                //     space[0] + space[0] * adj_xct
-                // } else {
-                //     S::zero()
-                // };
-
-                // if space.len() != space_samples {
-                //     space.resize(space_samples, S::zero());
-                // }
+                let perimetry_gain = perimetry / S::from(window_size * 4).unwrap();
 
                 let through_xct = direct_xct * opening_area_gain;
+                let output_xct = {
+                    let mut resonance_avg = S::zero();
+                    resonator_input[0] = through_xct;
+                    for res in resonators_backends.iter_mut() {
+                        res.process(tick_data, &resonator_input, &mut resonator_output);
+                        resonance_avg = resonator_output[0] + resonance_avg;
+                    }
+                    resonance_avg / S::from(resonators_backends.len()).unwrap()
+                };
 
-                let output_xct = through_xct; // + space_xct;
-                                              // if let Some(last_mut) = space.last_mut() {
-                                              //     *last_mut = output_xct;
-                                              // }
+                let remainder_xct = (direct_xct - through_xct) * perimetry_gain;
 
-                // let remainder_xct = (direct_xct - through_xct) * interaction_area_gain;
-
-                // let pos_gain = S::one() / S::from(num_chambers - ch_index).unwrap();
-
-                output[0] = through_xct;
-                // output[1] = remainder_xct;
+                output[0] = direct_xct;
+                output[1] = remainder_xct;
 
                 if is_left_channel {
                     output[2] = output_xct + left;

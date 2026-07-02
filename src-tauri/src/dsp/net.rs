@@ -30,6 +30,7 @@ where
 #[derive(Debug, Clone, Copy)]
 pub struct NetTickData {
     pub time: f64,
+    pub delta_time: f64,
     pub sample_rate: u32,
 }
 

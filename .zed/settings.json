@@ -1,0 +1,47 @@
+{
+  "inlay_hints": {
+    "enabled": false,
+    "toggle_on_modifiers_press": {
+      "alt": true
+    },
+    "show_type_hints": true,
+    "show_parameter_hints": true,
+    "show_other_hints": true,
+    "show_background": false,
+    "edit_debounce_ms": 700,
+    "scroll_debounce_ms": 50
+  },
+  "languages": {
+    "Rust": {
+      "format_on_save": "on",
+      "formatter": {
+        "language_server": {
+          "name": "rust-analyzer"
+        }
+      }
+    }
+  },
+
+  "lsp": {
+    "rust-analyzer": {
+      "initialization_options": {
+        "check": {
+          "command": "clippy"
+        }
+      },
+      "settings": {
+        "rust-analyzer": {
+          "hover": {
+            "actions": {
+              "enable": false
+            }
+          },
+          "cargo": {
+            "targetDir": true,
+            "features": []
+          }
+        }
+      }
+    }
+  }
+}

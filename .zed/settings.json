@@ -2,7 +2,7 @@
   "inlay_hints": {
     "enabled": false,
     "toggle_on_modifiers_press": {
-      "alt": true
+      "control": true
     },
     "show_type_hints": true,
     "show_parameter_hints": true,
@@ -19,7 +19,40 @@
           "name": "rust-analyzer"
         }
       }
-    }
+    },
+    "JavaScript": {
+      "format_on_save": "on",
+      "auto_indent": "preserve_indent",
+      "tab_size": 4,
+      "formatter": {
+        "external": {
+          "command": "node_modules/.bin/prettier",
+          "arguments": ["--stdin-filepath", "{buffer_path}"]
+        }
+      }
+    },
+    "TypeScript": {
+      "format_on_save": "on",
+      "auto_indent": "preserve_indent",
+      "tab_size": 4,
+      "formatter": {
+        "external": {
+          "command": "node_modules/.bin/prettier",
+          "arguments": ["--stdin-filepath", "{buffer_path}"]
+        }
+      }
+    },
+    "TSX": {
+      "format_on_save": "on",
+      "auto_indent": "preserve_indent",
+      "tab_size": 4,
+      "formatter": {
+        "external": {
+          "command": "node_modules/.bin/prettier",
+          "arguments": ["--stdin-filepath", "{buffer_path}"]
+        }
+      }
+    },
   },
 
   "lsp": {

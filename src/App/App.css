@@ -1,36 +1,48 @@
 @font-face {
-  font-family: "Rosarivo";
-  src: local("Rosarivo"), url("/Rosarivo/Rosarivo-Regular.ttf") format("truetype");
-  font-weight: 400;
-  font-style: normal;
+    font-family: "Rosarivo";
+    src:
+        local("Rosarivo"),
+        url("/Rosarivo/Rosarivo-Regular.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
 }
 
 @font-face {
-  font-family: "Rosarivo";
-  src: local("Rosarivo"), url("/Rosarivo/Rosarivo-Italic.ttf") format("truetype");
-  font-weight: 400;
-  font-style: italic;
+    font-family: "Rosarivo";
+    src:
+        local("Rosarivo"),
+        url("/Rosarivo/Rosarivo-Italic.ttf") format("truetype");
+    font-weight: 400;
+    font-style: italic;
 }
 
 :root {
-  font-family: "Rosarivo", cursive;
-  --color-red: #e30022;
-  --color-cinnabar: #e44d2e;
-  --color-black: #353839;
-  --color-gray: #36454f;
+    --color-red: #e30022;
+    --color-cinnabar: #e44d2e;
+    --color-gray: #36454f;
+    --color-black: #353839;
 }
 
 .App {
-  width: 100vw;
-  height: 100vh;
+    font-family: "Rosarivo", cursive;
+    width: 100vw;
+    height: 100vh;
+    background-color: var(--color-background);
+    color: var(--color-primary);
+    position: relative;
+    user-select: none;
 }
 
 .App.dark {
-  background-color: var(--color-black);
-  color: var(--color-red);
+    --color-background: var(--color-black);
+    --color-primary: var(--color-red);
+    --color-secondary: var(--color-cinnabar);
+    --color-tertiary: var(--color-gray);
 }
 
 .App.light {
-  background-color: var(--color-red);
-  color: var(--color-black);
+    --color-background: var(--color-red);
+    --color-primary: var(--color-black);
+    --color-secondary: var(--color-gray);
+    --color-tertiary: var(--color-cinnabar);
 }

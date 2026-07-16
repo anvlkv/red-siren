@@ -61,6 +61,8 @@ pub fn run() {
         audio_runtime::get_playback_state,
         audio_runtime::get_current_quality,
         dsp::create_synth,
+        dsp::request_siren_info,
+        dsp::request_chamber_info,
         dsp::set_speed,
         dsp::set_shape,
         dsp::set_window,

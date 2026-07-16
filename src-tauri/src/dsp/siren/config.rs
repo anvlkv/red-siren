@@ -1,12 +1,15 @@
 use std::iter;
 
 use const_primes::Primes;
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::dsp::siren::chamber::Chamber;
 
 pub const N_CHAMBERS_PRIMES: Primes<20> = Primes::new();
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct SirenConfig {
     pub resolution: u32,
     pub n_chambers: u32,

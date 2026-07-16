@@ -10,6 +10,7 @@ pub use chamber::*;
 pub use config::*;
 
 pub struct Siren {
+    pub resolution: u32,
     pub energy: energy::EnergySource,
     pub chambers: Vec<chamber::Chamber>,
 }
@@ -19,7 +20,11 @@ impl Siren {
         let chambers = config.chambers();
         let energy = energy::EnergySource::new(0.2);
 
-        Self { energy, chambers }
+        Self {
+            energy,
+            chambers,
+            resolution: config.resolution,
+        }
     }
 }
 

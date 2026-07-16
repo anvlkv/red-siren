@@ -7,4 +7,6 @@ pub enum DspError {
     SynthNotInitialized,
     #[error("Chamber with index {0} not present among {1} chambers")]
     NoChamberWithIndex(usize, usize),
+    #[error("Tauri error: {0}")]
+    TauriError(String),
 }

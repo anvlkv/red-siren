@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-use tauri::State;
+use tauri::{Emitter, State};
 
-use crate::dsp::{DspError, ShaperCallbackArgs};
+use crate::dsp::{DspError, ShaperCallbackArgs, SirenConfig};
 
 use super::{Analyzer, Synthesizer};
 
@@ -14,7 +14,10 @@ pub struct DspState {
 }
 
 #[tauri::command]
-pub async fn create_synth(dsp_state: State<'_, DspState>) -> Result<(), DspError> {
+pub async fn create_synth(
+    dsp_state: State<'_, DspState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), DspError> {
     let mut synth_lock = dsp_state.synth.write();
 
     if synth_lock.is_none() {
@@ -26,6 +29,84 @@ pub async fn create_synth(dsp_state: State<'_, DspState>) -> Result<(), DspError
     } else {
         log::debug!("Synthesizer already exists");
     }
+
+    let n_chambers = synth_lock.as_ref().unwrap().siren.chambers.len();
+    let resolution = synth_lock.as_ref().unwrap().siren.resolution;
+
+    app_handle
+        .emit(
+            "siren-info",
+            SirenConfig {
+                resolution,
+                n_chambers: n_chambers as u32,
+            },
+        )
+        .map_err(|e| {
+            log::error!("{e}");
+            DspError::TauriError("Failed to emit siren-info event".to_string())
+        })?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn request_siren_info(
+    dsp_state: State<'_, DspState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), DspError> {
+    let synth_lock = dsp_state.synth.read();
+
+    let Some(synth) = synth_lock.as_ref() else {
+        return Err(DspError::SynthNotInitialized);
+    };
+
+    let n_chambers = synth.siren.chambers.len();
+    let resolution = synth.siren.resolution;
+
+    app_handle
+        .emit(
+            "siren-info",
+            SirenConfig {
+                resolution,
+                n_chambers: n_chambers as u32,
+            },
+        )
+        .map_err(|e| {
+            log::error!("{e}");
+            DspError::TauriError("Failed to emit siren-info event".to_string())
+        })?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn request_chamber_info(
+    chamber_index: usize,
+    dsp_state: State<'_, DspState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), DspError> {
+    let synth_lock = dsp_state.synth.read();
+
+    let Some(synth) = synth_lock.as_ref() else {
+        return Err(DspError::SynthNotInitialized);
+    };
+
+    let Some(chamber) = synth.siren.chambers.get(chamber_index) else {
+        return Err(DspError::NoChamberWithIndex(
+            chamber_index,
+            synth.siren.chambers.len(),
+        ));
+    };
+
+    let info = chamber.info();
+
+    app_handle
+        .emit(&format!("chamber-{chamber_index}-info"), info)
+        .map_err(|e| {
+            log::error!("{e}");
+            DspError::TauriError("Failed to emit chamber info".to_string())
+        })?;
+
     Ok(())
 }
 
@@ -60,6 +141,7 @@ pub async fn set_window(
     window: u32,
     chamber_index: usize,
     dsp_state: State<'_, DspState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<(), DspError> {
     let synth_lock = dsp_state.synth.read();
 
@@ -78,6 +160,15 @@ pub async fn set_window(
         .window_size
         .store(window, std::sync::atomic::Ordering::Relaxed);
 
+    let info = chamber.info();
+
+    app_handle
+        .emit(&format!("chamber-{chamber_index}-info"), info)
+        .map_err(|e| {
+            log::error!("{e}");
+            DspError::TauriError("Failed to emit chamber info".to_string())
+        })?;
+
     Ok(())
 }
 
@@ -85,6 +176,7 @@ pub async fn set_window(
 pub async fn set_shape(
     chamber_index: usize,
     dsp_state: State<'_, DspState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<(), DspError> {
     let synth_lock = dsp_state.synth.read();
 
@@ -99,7 +191,7 @@ pub async fn set_shape(
         ));
     };
 
-    chamber.shape(
+    let info = chamber.shape(
         |ShaperCallbackArgs {
              chunk_index,
              num_chunks,
@@ -109,6 +201,13 @@ pub async fn set_shape(
              previous_chord,
          }: &ShaperCallbackArgs| 1.0,
     );
+
+    app_handle
+        .emit(&format!("chamber-{chamber_index}-info"), info)
+        .map_err(|e| {
+            log::error!("{e}");
+            DspError::TauriError("Failed to emit chamber info".to_string())
+        })?;
 
     Ok(())
 }

@@ -5,6 +5,8 @@ use std::sync::{
 
 use atomic_float::AtomicF64;
 use num_traits::Float;
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::dsp::{resonator::ResonatorHh, DspUnit, DspUnitBackend, NetTickData};
 
@@ -16,6 +18,15 @@ pub struct Chamber {
     pub resonators: Arc<[ResonatorHh; 4]>,
     pub opening_width: usize,
     pub gap_width: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ChamberInfo {
+    pub resolution: u32,
+    pub is_left_channel: bool,
+    pub wheel: Vec<f64>,
+    pub window_size: u32,
 }
 
 pub struct ShaperCallbackArgs {
@@ -60,21 +71,23 @@ impl Chamber {
         }
     }
 
-    pub fn shape<F>(&self, mut shaper: F)
+    pub fn shape<F>(&self, mut shaper: F) -> ChamberInfo
     where
         F: FnMut(&ShaperCallbackArgs) -> f64,
     {
         let num_chunks = self.wheel.len() / (self.opening_width + self.gap_width);
+        let slice_start = self.gap_width / 2;
+        let slice_end = slice_start + self.opening_width;
 
         for (chunk_index, chunk) in self
             .wheel
             .chunks(self.opening_width + self.gap_width)
             .enumerate()
         {
-            if chunk.len() < self.opening_width {
+            if chunk.len() < slice_end {
                 continue;
             }
-            chunk[..self.opening_width]
+            chunk[slice_start..slice_end]
                 .iter()
                 .enumerate()
                 .for_each(|(index, chord)| {
@@ -91,6 +104,21 @@ impl Chamber {
                     .clamp(-1.0, 1.0);
                     chord.store(shape, Ordering::Relaxed);
                 });
+        }
+
+        self.info()
+    }
+
+    pub fn info(&self) -> ChamberInfo {
+        ChamberInfo {
+            resolution: self.wheel.len() as u32,
+            is_left_channel: self.is_left_channel,
+            wheel: self
+                .wheel
+                .iter()
+                .map(|chord| chord.load(Ordering::Relaxed))
+                .collect(),
+            window_size: self.window_size.load(Ordering::Relaxed),
         }
     }
 }

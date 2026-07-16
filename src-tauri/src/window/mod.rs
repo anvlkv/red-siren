@@ -10,9 +10,9 @@ pub use commands::*;
 pub fn app_setup(app: &mut App) -> Result<(), error::WindowError> {
     app.manage(commands::WindowAppearanceState::default());
 
-    if let Some(mut main_window) = app.get_webview_window("main") {
+    if let Some(mut main_window) = app.get_webview_window(crate::MAIN_WINDOW_LABEL) {
         #[cfg(target_os = "macos")]
-        if let Err(error) = setup_mac_window::setup(&mut main_window) {
+        if let Err(error) = setup_mac_window::setup(&mut main_window, None) {
             log::warn!("macOS window appearance setup failed: {error}");
         }
 

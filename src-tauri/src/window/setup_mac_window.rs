@@ -9,7 +9,10 @@ use tauri::WebviewWindow;
 
 use super::error::WindowError;
 
-pub fn setup(window: &mut WebviewWindow) -> Result<(), WindowError> {
+pub fn setup(
+    window: &mut WebviewWindow,
+    dark_mode_override: Option<bool>,
+) -> Result<(), WindowError> {
     if let Ok(handle) = window.window_handle() {
         if let raw_window_handle::RawWindowHandle::AppKit(appkit_handle) = handle.as_raw() {
             let ns_view_ptr = appkit_handle.ns_view.as_ptr();
@@ -26,7 +29,8 @@ pub fn setup(window: &mut WebviewWindow) -> Result<(), WindowError> {
                     ))
                 })?;
 
-                let is_dark_mode = detect_dark_mode(&ns_window);
+                let is_dark_mode =
+                    dark_mode_override.unwrap_or_else(|| detect_dark_mode(&ns_window));
 
                 let background_color = if is_dark_mode {
                     NSColor::colorWithSRGBRed_green_blue_alpha(

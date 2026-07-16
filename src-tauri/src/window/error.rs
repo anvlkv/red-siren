@@ -11,4 +11,6 @@ pub enum WindowError {
     WindowCreationError(String),
     #[error("Secondary window not permitted to invoke command: {0}")]
     SecondaryWindow(String),
+    #[error("Failed to get main window")]
+    NoMain,
 }

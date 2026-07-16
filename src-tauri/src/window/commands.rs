@@ -1,5 +1,5 @@
 use parking_lot::Mutex;
-use tauri::{AppHandle, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 use super::error::WindowError;
 
@@ -22,6 +22,13 @@ pub async fn update_window_appearance(
         *state.width.lock() = width;
         *state.height.lock() = height;
         *state.is_dark.lock() = is_dark;
+
+        let mut main_window = window
+            .get_webview_window(crate::MAIN_WINDOW_LABEL)
+            .ok_or(WindowError::NoMain)?;
+
+        #[cfg(target_os = "macos")]
+        super::setup_mac_window::setup(&mut main_window, Some(is_dark))?;
 
         log::debug!(
             "Updated main window appearance: width={width}, height={height}, is_dark={is_dark}",
@@ -50,18 +57,15 @@ pub async fn open_secondary_window(
 
     if app.supports_multiple_windows() {
         #[allow(unused_mut)]
-        let mut builder = WebviewWindowBuilder::new(
-            &app,
-            label.as_str(),
-            WebviewUrl::App(format!("{url}").into()),
-        )
-        .title(title)
-        .decorations(true)
-        .resizable(true)
-        .maximizable(false)
-        .minimizable(false)
-        .maximized(false)
-        .inner_size(width, height);
+        let mut builder =
+            WebviewWindowBuilder::new(&app, label.as_str(), WebviewUrl::App(url.into()))
+                .title(title)
+                .decorations(true)
+                .resizable(true)
+                .maximizable(false)
+                .minimizable(false)
+                .maximized(false)
+                .inner_size(width, height);
 
         #[cfg(target_os = "macos")]
         {

@@ -14,19 +14,25 @@ import {
     useState,
 } from "react";
 import * as THREE from "three";
+import {
+    createPerimetryStore,
+    type PerimetryStore,
+    type PerimetryTx,
+    type ThetaRange,
+} from "./Stage.perimetry";
 import { WorldLookAt } from "./World/World";
 
-const StageContext = createContext<{
+export type { PerimetryStore, PerimetryTx, ThetaRange };
+
+interface StageContextValue {
     lookAt: WorldLookAt;
     rBase: number;
     stageSegments: number;
     setStageSegments: Dispatch<SetStateAction<number>>;
-    stagePerimetryPointsGetter: () => (i: number) => THREE.TypedArray | null;
-    stagePerimetryPointsSetter: () => (
-        i: number,
-        s: (base: THREE.TypedArray) => THREE.Vector3,
-    ) => void;
-} | null>(null);
+    perimetryStore: PerimetryStore;
+}
+
+const StageContext = createContext<StageContextValue | null>(null);
 
 function Stage({
     lookAt,
@@ -39,6 +45,16 @@ function Stage({
     const { invalidate } = useThree();
     const [segments, setSegments] = useState(360);
 
+    const setStageSegments = useCallback<Dispatch<SetStateAction<number>>>(
+        (next) => {
+            setSegments((prev) => {
+                const resolved = typeof next === "function" ? next(prev) : next;
+                return Math.max(3, Math.floor(resolved));
+            });
+        },
+        [],
+    );
+
     const stageGeometryBase = useMemo(() => {
         const baseGeometry = new THREE.CircleGeometry(rBase, segments);
         baseGeometry.rotateX(-Math.PI / 2);
@@ -48,6 +64,19 @@ function Stage({
     const stagePerimetryGeometry = useMemo(
         () => stageGeometryBase.clone(),
         [stageGeometryBase],
+    );
+
+    const perimetryStore = useMemo(
+        () =>
+            createPerimetryStore({
+                thetaCount: segments,
+                basePositionAttribute: stageGeometryBase.attributes
+                    .position as THREE.BufferAttribute,
+                perimetryPositionAttribute: stagePerimetryGeometry.attributes
+                    .position as THREE.BufferAttribute,
+                invalidate,
+            }),
+        [invalidate, segments, stageGeometryBase, stagePerimetryGeometry],
     );
 
     const focusTarget = useMemo(() => {
@@ -62,55 +91,24 @@ function Stage({
 
     const stagePerimetryPosition = useCallback(
         (t: number) => {
-            const count = stagePerimetryGeometry.attributes.position.count - 1;
-            const lowIndex = Math.floor(t * count) + 1;
-            const highIndex = ((lowIndex + 1) % count) + 1;
-            const lowPosition = new THREE.Vector3(
-                stagePerimetryGeometry.attributes.position.getX(lowIndex),
-                stagePerimetryGeometry.attributes.position.getY(lowIndex),
-                stagePerimetryGeometry.attributes.position.getZ(lowIndex),
+            const count = perimetryStore.thetaCount;
+            const normalizedT = ((t % 1) + 1) % 1;
+            const scaled = normalizedT * count;
+            const lowIndex = Math.floor(scaled) % count;
+            const highIndex = (lowIndex + 1) % count;
+            const alpha = scaled - Math.floor(scaled);
+
+            const low = perimetryStore.getPoint(lowIndex);
+            const high = perimetryStore.getPoint(highIndex);
+
+            return new THREE.Vector3(
+                THREE.MathUtils.lerp(low[0], high[0], alpha),
+                THREE.MathUtils.lerp(low[1], high[1], alpha),
+                THREE.MathUtils.lerp(low[2], high[2], alpha),
             );
-            const highPosition = new THREE.Vector3(
-                stagePerimetryGeometry.attributes.position.getX(highIndex),
-                stagePerimetryGeometry.attributes.position.getY(highIndex),
-                stagePerimetryGeometry.attributes.position.getZ(highIndex),
-            );
-            return lowPosition.lerp(highPosition, t * count - lowIndex);
         },
-        [stagePerimetryGeometry],
+        [perimetryStore],
     );
-
-    const stagePerimetryPointsGetter = useCallback(() => {
-        const count = stagePerimetryGeometry.attributes.position.count - 1;
-        const pos = stagePerimetryGeometry.attributes.position;
-
-        return (i: number) => {
-            if (i >= count) {
-                return null;
-            }
-            const innerI = i + 1;
-
-            return pos.array.subarray(innerI * 3, innerI * 3 + 3);
-        };
-    }, [stagePerimetryGeometry]);
-
-    const stagePerimetryPointsSetter = useCallback(() => {
-        const count = stageGeometryBase.attributes.position.count - 1;
-        const basePos = stageGeometryBase.attributes.position;
-        const stagePerimetryPos = stagePerimetryGeometry.attributes.position;
-        return (i: number, s: (base: THREE.TypedArray) => THREE.Vector3) => {
-            if (i >= count) {
-                return;
-            }
-            const innerI = i + 1;
-            const base = basePos.array.subarray(innerI * 3, innerI * 3 + 3);
-            const v = s(base);
-
-            stagePerimetryPos.setXYZ(innerI, v.x, v.y, v.z);
-            stagePerimetryPos.needsUpdate = true;
-            invalidate();
-        };
-    }, [stagePerimetryGeometry, stageGeometryBase]);
 
     const ref = useRef<{ pos: number; fov: number; elevation: number }>({
         pos: 0,
@@ -131,7 +129,7 @@ function Stage({
         return () => {
             gui.destroy();
         };
-    }, []);
+    }, [invalidate]);
 
     useFrame(() => {
         if (!cameraRef.current) {
@@ -153,9 +151,8 @@ function Stage({
                 lookAt,
                 rBase,
                 stageSegments: segments,
-                setStageSegments: setSegments,
-                stagePerimetryPointsGetter,
-                stagePerimetryPointsSetter,
+                setStageSegments,
+                perimetryStore,
             }}
         >
             <ambientLight />

@@ -15,12 +15,15 @@ import {
 } from "react";
 import * as THREE from "three";
 import {
+    applyRadiusDeltaBatch,
     createPerimetryStore,
     type PerimetryStore,
     type PerimetryTx,
     type ThetaRange,
 } from "./Stage.perimetry";
+import type { RadiusDeltaBatch } from "./World/Lake.types";
 import { WorldLookAt } from "./World/World";
+import { createNoise2D } from "simplex-noise";
 
 export type { PerimetryStore, PerimetryTx, ThetaRange };
 
@@ -32,16 +35,36 @@ interface StageContextValue {
     perimetryStore: PerimetryStore;
 }
 
+interface StageProps {
+    lookAt: WorldLookAt;
+    rBase: number;
+    radiusDeltaBatches?: readonly RadiusDeltaBatch[];
+}
+
+const EMPTY_RADIUS_DELTA_BATCHES: readonly RadiusDeltaBatch[] = [];
+
+function createRandomRadiusDeltas(thetaCount: number) {
+    const noiseA = createNoise2D();
+    const noiseB = createNoise2D();
+    const deltas = new Float32Array(thetaCount);
+
+    for (let theta = 0; theta < thetaCount; theta += 1) {
+        const lowFreq = noiseA(theta * 0.018, 0.12) * 16;
+        const highFreq = noiseB(theta * 0.073, 1.37) * 4;
+        deltas[theta] = lowFreq + highFreq;
+    }
+
+    return deltas;
+}
+
 const StageContext = createContext<StageContextValue | null>(null);
 
 function Stage({
     lookAt,
     rBase,
+    radiusDeltaBatches = EMPTY_RADIUS_DELTA_BATCHES,
     children,
-}: PropsWithChildren<{
-    lookAt: WorldLookAt;
-    rBase: number;
-}>) {
+}: PropsWithChildren<StageProps>) {
     const { invalidate } = useThree();
     const [segments, setSegments] = useState(360);
 
@@ -78,6 +101,79 @@ function Stage({
             }),
         [invalidate, segments, stageGeometryBase, stagePerimetryGeometry],
     );
+
+    const appliedRadiusBatchIdsRef = useRef(new Set<number>());
+    const lastRadiusBatchIdRef = useRef(Number.NEGATIVE_INFINITY);
+
+    useEffect(() => {
+        appliedRadiusBatchIdsRef.current.clear();
+    }, [perimetryStore.thetaCount]);
+
+    useEffect(() => {
+        if (radiusDeltaBatches.length > 0) {
+            return;
+        }
+
+        applyRadiusDeltaBatch(perimetryStore, {
+            id: 0,
+            start: 0,
+            deltaRadius: createRandomRadiusDeltas(perimetryStore.thetaCount),
+        });
+    }, [perimetryStore, radiusDeltaBatches]);
+
+    useEffect(() => {
+        if (radiusDeltaBatches.length === 0) {
+            return;
+        }
+
+        const seenInProp = new Set<number>();
+        let previousId = Number.NEGATIVE_INFINITY;
+
+        for (let i = 0; i < radiusDeltaBatches.length; i += 1) {
+            const batch = radiusDeltaBatches[i];
+
+            if (!Number.isInteger(batch.id) || batch.id < 0) {
+                throw new Error(
+                    `RadiusDeltaBatch.id at index ${i} must be a non-negative integer`,
+                );
+            }
+
+            if (seenInProp.has(batch.id)) {
+                throw new Error(
+                    `Duplicate RadiusDeltaBatch id ${batch.id} in prop payload`,
+                );
+            }
+
+            if (batch.id <= previousId) {
+                throw new Error(
+                    `RadiusDeltaBatch ids must be strictly increasing: got ${batch.id} after ${previousId}`,
+                );
+            }
+
+            seenInProp.add(batch.id);
+            previousId = batch.id;
+        }
+
+        const consumedIds = appliedRadiusBatchIdsRef.current;
+
+        for (let i = 0; i < radiusDeltaBatches.length; i += 1) {
+            const batch = radiusDeltaBatches[i];
+
+            if (consumedIds.has(batch.id)) {
+                continue;
+            }
+
+            if (batch.id <= lastRadiusBatchIdRef.current) {
+                throw new Error(
+                    `Stale or non-monotonic RadiusDeltaBatch id ${batch.id}; last applied id is ${lastRadiusBatchIdRef.current}`,
+                );
+            }
+
+            applyRadiusDeltaBatch(perimetryStore, batch);
+            consumedIds.add(batch.id);
+            lastRadiusBatchIdRef.current = batch.id;
+        }
+    }, [perimetryStore, radiusDeltaBatches]);
 
     const focusTarget = useMemo(() => {
         switch (lookAt) {

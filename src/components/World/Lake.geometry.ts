@@ -8,7 +8,6 @@ export interface LakeGeometryData {
     radialWeights: Float32Array;
     radialCount: number;
     rayStride: number;
-    expectedSourceLength: number;
 }
 
 function smoothstep(t: number) {
@@ -29,6 +28,11 @@ export function createThetaMajorRingGeometry(
     const positionArray = new Float32Array(vertexCount * 3);
     const normalArray = new Float32Array(vertexCount * 3);
     const uvArray = new Float32Array(vertexCount * 2);
+
+    const thetaIndexArray = new Float32Array(vertexCount);
+    const radialIndexArray = new Float32Array(vertexCount);
+    const baseDirectionArray = new Float32Array(vertexCount * 2);
+    const radialWeightArray = new Float32Array(vertexCount);
 
     const innerAnchor = new Float32Array(thetaCount * 3);
     const radialWeights = new Float32Array(radialCount);
@@ -51,6 +55,7 @@ export function createThetaMajorRingGeometry(
             const vertexIndex = i * radialCount + j;
             const posOffset = vertexIndex * 3;
             const uvOffset = vertexIndex * 2;
+            const dirOffset = vertexIndex * 2;
 
             positionArray[posOffset] = cos * radius;
             positionArray[posOffset + 1] = 0;
@@ -62,6 +67,12 @@ export function createThetaMajorRingGeometry(
 
             uvArray[uvOffset] = i / thetaCount;
             uvArray[uvOffset + 1] = t;
+
+            thetaIndexArray[vertexIndex] = theta;
+            radialIndexArray[vertexIndex] = j;
+            baseDirectionArray[dirOffset] = cos;
+            baseDirectionArray[dirOffset + 1] = sin;
+            radialWeightArray[vertexIndex] = radialWeights[j];
 
             if (i < thetaCount && j === 0) {
                 const anchorOffset = i * 3;
@@ -99,6 +110,22 @@ export function createThetaMajorRingGeometry(
     geometry.setAttribute("position", positionAttribute);
     geometry.setAttribute("normal", new THREE.BufferAttribute(normalArray, 3));
     geometry.setAttribute("uv", new THREE.BufferAttribute(uvArray, 2));
+    geometry.setAttribute(
+        "aThetaIndex",
+        new THREE.BufferAttribute(thetaIndexArray, 1),
+    );
+    geometry.setAttribute(
+        "aRadialIndex",
+        new THREE.BufferAttribute(radialIndexArray, 1),
+    );
+    geometry.setAttribute(
+        "aBaseDir",
+        new THREE.BufferAttribute(baseDirectionArray, 2),
+    );
+    geometry.setAttribute(
+        "aRadialWeight",
+        new THREE.BufferAttribute(radialWeightArray, 1),
+    );
     geometry.setIndex(new THREE.BufferAttribute(indexArray, 1));
     geometry.computeBoundingSphere();
 
@@ -110,6 +137,5 @@ export function createThetaMajorRingGeometry(
         radialWeights,
         radialCount,
         rayStride,
-        expectedSourceLength: seamThetaCount * radialCount * 3,
     };
 }

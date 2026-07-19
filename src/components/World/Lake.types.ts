@@ -1,17 +1,28 @@
-import type { RefObject } from "react";
-import type { ThetaRange } from "../Stage";
+import type { MutableRefObject } from "react";
 
-export type PositionRef = RefObject<Float32Array | null>;
+export interface RadiusDeltaBatch {
+    id: number;
+    start: number;
+    deltaRadius: Float32Array;
+}
+
+export interface YDeltaBatch {
+    id: number;
+    start: number;
+    deltaY: Float32Array;
+}
+
+export interface LakeDeformationReadApi {
+    getRadiusOffset(theta: number): number;
+    getYAt(theta: number, radial: number): number;
+    getYRay(theta: number): Float32Array;
+}
 
 export interface LakeProps {
     baseline: number;
     innerRadius: number;
     phiSegments: number;
-    yCopySourceRef?: PositionRef;
+    yDeltaBatches?: readonly YDeltaBatch[];
     raySliceSizePerFrame?: number;
-}
-
-export interface LakeHandle {
-    enqueueYCopyRange(start: number, end: number): void;
-    enqueueYCopyRanges(ranges: ThetaRange[]): void;
+    deformationReadApiRef?: MutableRefObject<LakeDeformationReadApi | null>;
 }

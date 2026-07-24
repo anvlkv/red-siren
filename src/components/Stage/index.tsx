@@ -20,9 +20,9 @@ import {
     type PerimetryStore,
     type PerimetryTx,
     type ThetaRange,
-} from "./Stage.perimetry";
-import type { RadiusDeltaBatch } from "./World/Lake.types";
-import { WorldLookAt } from "./World/World";
+} from "./perimetry";
+import type { RadiusDeltaBatch } from "../World/Lake/types";
+import { WorldLookAt } from "../World";
 import { createNoise2D } from "simplex-noise";
 
 export type { PerimetryStore, PerimetryTx, ThetaRange };

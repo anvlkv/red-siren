@@ -1,4 +1,4 @@
-import type { ThetaRange } from "../Stage";
+import type { ThetaRange } from "../../Stage/Stage";
 
 export interface RangeQueue {
     ranges: ThetaRange[];

@@ -14,7 +14,7 @@ import * as THREE from "three";
 import WebGPU from "three/addons/capabilities/WebGPU.js";
 import { WebGPURenderer, WebGPURendererParameters } from "three/webgpu";
 import Menu from "../components/Menu";
-import World, { WorldLookAt } from "../components/World/World";
+import World, { WorldLookAt } from "../components/World";
 import ThemeProvider from "./Theme";
 import "./App.css";
 import Stage from "../components/Stage";

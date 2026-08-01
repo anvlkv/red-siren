@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import type { MutableRefObject } from "react";
 
 export interface RadiusDeltaBatch {
     id: number;
@@ -9,7 +9,6 @@ export interface RadiusDeltaBatch {
 export interface YDeltaBatch {
     id: number;
     start: number;
-    end: number;
     deltaY: Float32Array;
 }
 
@@ -25,5 +24,5 @@ export interface LakeProps {
     phiSegments: number;
     yDeltaBatches?: readonly YDeltaBatch[];
     raySliceSizePerFrame?: number;
-    deformationReadApiRef?: RefObject<LakeDeformationReadApi | null>;
+    deformationReadApiRef?: MutableRefObject<LakeDeformationReadApi | null>;
 }

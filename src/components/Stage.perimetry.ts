@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import type { RadiusDeltaBatch } from "./World/Lake.types";
 
 export type ThetaRange = { start: number; end: number }; // [start, end), modulo thetaCount
 
@@ -255,76 +254,4 @@ export function createPerimetryStore({
             };
         },
     };
-}
-
-function assertFiniteNumber(value: number, label: string) {
-    if (!Number.isFinite(value)) {
-        throw new Error(`${label} must be a finite number`);
-    }
-}
-
-export function applyRadiusDeltaBatch(
-    store: PerimetryStore,
-    batch: RadiusDeltaBatch,
-) {
-    if (!Number.isInteger(batch.id) || batch.id < 0) {
-        throw new Error(`RadiusDeltaBatch.id must be a non-negative integer`);
-    }
-
-    if (!Number.isInteger(batch.start)) {
-        throw new Error(`RadiusDeltaBatch.start must be an integer`);
-    }
-
-    if (!(batch.deltaRadius instanceof Float32Array)) {
-        throw new Error(`RadiusDeltaBatch.deltaRadius must be a Float32Array`);
-    }
-
-    const thetaCount = store.thetaCount;
-    const rayCount = batch.deltaRadius.length;
-
-    if (rayCount === 0) {
-        throw new Error(`RadiusDeltaBatch.deltaRadius must not be empty`);
-    }
-
-    if (rayCount > thetaCount) {
-        throw new Error(
-            `RadiusDeltaBatch.deltaRadius length ${rayCount} exceeds thetaCount ${thetaCount}`,
-        );
-    }
-
-    for (let k = 0; k < rayCount; k += 1) {
-        assertFiniteNumber(
-            batch.deltaRadius[k],
-            `RadiusDeltaBatch.deltaRadius[${k}]`,
-        );
-    }
-
-    store.transact((tx) => {
-        for (let k = 0; k < rayCount; k += 1) {
-            const theta = mod(batch.start + k, thetaCount);
-            const basePoint = store.getBasePoint(theta);
-
-            const baseX = basePoint[0];
-            const baseY = basePoint[1];
-            const baseZ = basePoint[2];
-            const baseRadius = Math.hypot(baseX, baseZ);
-
-            if (!Number.isFinite(baseRadius) || baseRadius <= 0) {
-                throw new Error(
-                    `Invalid base radius at theta ${theta}: ${baseRadius}`,
-                );
-            }
-
-            const dirX = baseX / baseRadius;
-            const dirZ = baseZ / baseRadius;
-            const targetRadius = baseRadius + batch.deltaRadius[k];
-
-            assertFiniteNumber(
-                targetRadius,
-                `RadiusDeltaBatch target radius at theta ${theta}`,
-            );
-
-            tx.setPoint(theta, dirX * targetRadius, baseY, dirZ * targetRadius);
-        }
-    });
 }

@@ -1,7 +1,7 @@
 import LighthouseIsland from "./LighthouseIsland";
 import { useStage } from "../Stage";
-import Lake, { type YDeltaBatch } from "./Lake";
-import { useEffect, useMemo, useState } from "react";
+import Lake from "./Lake";
+import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import * as log from "@tauri-apps/plugin-log";
@@ -35,8 +35,6 @@ export enum WorldLookAt {
 //     },
 // };
 
-const EMPTY_Y_DELTA_BATCHES: readonly YDeltaBatch[] = [];
-
 function World() {
     const { setStageSegments } = useStage();
     const [nChambers, setNChambers] = useState(3);
@@ -64,17 +62,10 @@ function World() {
         setStageSegments(nextSegments);
     }, [setStageSegments, nChambers]);
 
-    const yDeltaBatches = useMemo(() => EMPTY_Y_DELTA_BATCHES, []);
-
     return (
         <group>
             <LighthouseIsland rBase={10} height={75} nChambers={nChambers} />
-            <Lake
-                baseline={-10}
-                phiSegments={256}
-                innerRadius={10}
-                yDeltaBatches={yDeltaBatches}
-            />
+            <Lake baseline={-10} phiSegments={256} innerRadius={10} />
         </group>
     );
 }

@@ -11,7 +11,7 @@ import classnames from "classnames";
 import { useEffect, useRef, useState } from "react";
 import { Outlet } from "react-router";
 import * as THREE from "three";
-import WebGPU from "three/addons/capabilities/WebGPU.js";
+import WebGPU from "three/examples/jsm/capabilities/WebGPU.js";
 import { WebGPURenderer, WebGPURendererParameters } from "three/webgpu";
 import Menu from "../components/Menu";
 import World, { WorldLookAt } from "../components/World/World";
@@ -37,7 +37,7 @@ function App() {
     const [secondaryColor] = useCssVar("--color-secondary", mainRef);
     const [tertiaryColor] = useCssVar("--color-tertiary", mainRef);
 
-    const [lookAt] = useState<WorldLookAt>(WorldLookAt.Shore);
+    const [lookAt, setLookAt] = useState<WorldLookAt>(WorldLookAt.Shore);
     const isWebGPU = WebGPU.isAvailable();
 
     useEffect(() => {

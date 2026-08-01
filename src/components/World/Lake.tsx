@@ -12,9 +12,9 @@ import {
     vec2,
     wgslFn,
 } from "three/tsl";
-import type { ThetaRange } from "../../Stage";
-import { useStage } from "../../Stage";
-import { createThetaMajorRingGeometry } from "./geometry";
+import type { ThetaRange } from "../Stage";
+import { useStage } from "../Stage";
+import { createThetaMajorRingGeometry } from "./Lake.geometry";
 import LAKE_VERTEX_SHADER from "./shaders/Lake.vertex.glsl?raw";
 import LAKE_FRAGMENT_SHADER from "./shaders/Lake.fragment.glsl?raw";
 import LAKE_WEBGPU_VERTEX_SHADER from "./shaders/Lake.vertex.wgsl?raw";
@@ -26,15 +26,19 @@ import {
     processQueue,
     queueHasWork,
     type RangeQueue,
-} from "./queue";
-import type { LakeDeformationReadApi, LakeProps, YDeltaBatch } from "./types";
+} from "./Lake.queue";
+import type {
+    LakeDeformationReadApi,
+    LakeProps,
+    YDeltaBatch,
+} from "./Lake.types";
 
 export type {
     LakeDeformationReadApi,
     LakeProps,
     RadiusDeltaBatch,
     YDeltaBatch,
-} from "./types";
+} from "./Lake.types";
 
 const EMPTY_Y_DELTA_BATCHES: readonly YDeltaBatch[] = [];
 

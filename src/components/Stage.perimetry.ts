@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { RadiusDeltaBatch } from "../World/Lake/types";
+import type { RadiusDeltaBatch } from "./World/Lake.types";
 
 export type ThetaRange = { start: number; end: number }; // [start, end), modulo thetaCount
 

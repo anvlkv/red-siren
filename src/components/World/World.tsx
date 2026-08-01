@@ -37,7 +37,7 @@ export enum WorldLookAt {
 
 function World() {
     const { setStageSegments } = useStage();
-    const [nChambers, setNChambers] = useState(3);
+    const [nChambers, setNChambers] = useState(0);
 
     useEffect(() => {
         let unlisten: () => void;
@@ -57,10 +57,10 @@ function World() {
         };
     }, []);
 
-    useEffect(() => {
-        const nextSegments = Math.max(3, 360 * nChambers);
-        setStageSegments(nextSegments);
-    }, [setStageSegments, nChambers]);
+    useEffect(
+        () => setStageSegments(360 * nChambers),
+        [setStageSegments, nChambers],
+    );
 
     return (
         <group>

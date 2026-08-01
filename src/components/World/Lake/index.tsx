@@ -517,7 +517,7 @@ function Lake({
                 );
             }
 
-            const rayCount = batch.deltaY.length / radialCount;
+            const rayCount = batch.end - batch.start;
             if (rayCount <= 0) {
                 throw new Error(`YDeltaBatch has invalid rayCount ${rayCount}`);
             }
@@ -538,7 +538,11 @@ function Lake({
 
             const yMirror = yDeltaByThetaRadialRef.current;
 
-            for (let rayOffset = 0; rayOffset < rayCount; rayOffset += 1) {
+            for (
+                let rayOffset = batch.start;
+                rayOffset < batch.end;
+                rayOffset += 1
+            ) {
                 const theta = mod(batch.start + rayOffset, stageSegments);
                 const srcBase = rayOffset * radialCount;
                 const dstBase = theta * radialCount;

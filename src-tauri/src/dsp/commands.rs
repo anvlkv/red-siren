@@ -213,12 +213,24 @@ pub async fn set_shape(
 }
 
 #[tauri::command]
-pub async fn get_snapshot(dsp_state: State<'_, DspState>) -> Result<Vec<[f32; 2]>, DspError> {
+pub async fn get_snapshot(dsp_state: State<'_, DspState>) -> Result<Vec<Vec<f32>>, DspError> {
     let synth_lock = dsp_state.synth.read();
 
     let Some(synth) = synth_lock.as_ref() else {
         return Err(DspError::SynthNotInitialized);
     };
 
-    Ok(synth.siren_snapshot.get_snapshot())
+    let snapshot = synth
+        .siren
+        .chambers
+        .iter()
+        .map(|c| {
+            c.get_snapshot()
+                .into_iter()
+                .flat_map(|f| f.into_iter())
+                .collect()
+        })
+        .collect::<Vec<Vec<f32>>>();
+
+    Ok(snapshot)
 }

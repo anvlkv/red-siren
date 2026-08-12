@@ -14,12 +14,12 @@ function Play() {
                 console.error("Error creating synth:", error);
             }
 
-            // try {
-            //     const next = await invoke<PlaybackState>("start_playback");
-            //     setPlaybackState(next);
-            // } catch (error) {
-            //     console.error("Error starting playback:", error);
-            // }
+            try {
+                const next = await invoke<PlaybackState>("start_playback");
+                setPlaybackState(next);
+            } catch (error) {
+                console.error("Error starting playback:", error);
+            }
         })();
     }, []);
     return (

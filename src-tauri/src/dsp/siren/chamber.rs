@@ -8,7 +8,7 @@ use num_traits::Float;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::dsp::{resonator::ResonatorHh, DspUnit, DspUnitBackend, NetTickData};
+use crate::dsp::{resonator::ResonatorHh, DspUnit, DspUnitBackend, NetTickData, Snapshot};
 
 pub struct Chamber {
     pub is_left_channel: bool,
@@ -18,6 +18,7 @@ pub struct Chamber {
     pub resonators: Arc<[ResonatorHh; 4]>,
     pub opening_width: usize,
     pub gap_width: usize,
+    pub snapshot: Arc<Snapshot<1>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
@@ -60,6 +61,8 @@ impl Chamber {
             ResonatorHh::new(),
         ]);
 
+        let snapshot = Arc::new(Snapshot::new(1024));
+
         Self {
             is_left_channel,
             wheel,
@@ -68,10 +71,11 @@ impl Chamber {
             resonators,
             opening_width,
             gap_width,
+            snapshot,
         }
     }
 
-    pub fn shape<F>(&self, mut shaper: F) -> ChamberInfo
+    pub fn shape<F>(&self, mut shaper: F)
     where
         F: FnMut(&ShaperCallbackArgs) -> f64,
     {
@@ -105,8 +109,6 @@ impl Chamber {
                     chord.store(shape, Ordering::Relaxed);
                 });
         }
-
-        self.info()
     }
 
     pub fn info(&self) -> ChamberInfo {
@@ -121,6 +123,10 @@ impl Chamber {
             window_size: self.window_size.load(Ordering::Relaxed),
         }
     }
+
+    pub fn get_snapshot(&self) -> Vec<[f32; 1]> {
+        self.snapshot.get_snapshot()
+    }
 }
 
 impl DspUnit for Chamber {
@@ -133,6 +139,7 @@ impl DspUnit for Chamber {
         let speed = self.speed.clone();
         let mut resonator_input = ResonatorHh::input_frame::<S>();
         let mut resonator_output = ResonatorHh::output_frame::<S>();
+        let mut snapshot = self.snapshot.backend();
 
         // let (ch_index, num_chambers) = self.pos;
         let mut window_pos = 0_usize;
@@ -188,6 +195,8 @@ impl DspUnit for Chamber {
 
                 output[0] = direct_xct;
                 output[1] = remainder_xct;
+
+                snapshot.process(tick_data, &[output_xct], &mut [S::zero(); 1]);
 
                 if is_left_channel {
                     output[2] = output_xct + left;

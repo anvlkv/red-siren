@@ -1,11 +1,14 @@
-import LighthouseIsland from "./LighthouseIsland";
-import { useStage } from "../Stage";
-import Lake from "./Lake";
-import { useEffect, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import * as log from "@tauri-apps/plugin-log";
+import { useEffect, useRef, useState } from "react";
+import * as THREE from "three";
 import { SirenConfig } from "../../types/SirenConfig";
+import { useAnimationFrameFps } from "../../util";
+import { useStage } from "../Stage";
+import Lake, { LakeRef } from "./Lake";
+import LighthouseIsland from "./LighthouseIsland";
+import dat from "dat.gui";
 // import LighthouseIsland from "./LighthouseIsland";
 // import Mountain from "./Mountain";
 // import Shore from "./Shore";
@@ -36,7 +39,7 @@ export enum WorldLookAt {
 // };
 
 function World() {
-    const { setStageSegments } = useStage();
+    const { setStageSegments, stageSegments } = useStage();
     const [nChambers, setNChambers] = useState(0);
 
     useEffect(() => {
@@ -58,14 +61,55 @@ function World() {
     }, []);
 
     useEffect(
-        () => setStageSegments(360 * nChambers),
+        () => setStageSegments(16 * nChambers),
         [setStageSegments, nChambers],
     );
+
+    const lakeRef = useRef<LakeRef>(null);
+    const snapshotRef = useRef<number[][]>([]);
+    const updateRef = useRef<number>(0);
+
+    useAnimationFrameFps(30, async () => {
+        if (!lakeRef.current) return;
+        const snap = snapshotRef.current.splice(0, nChambers);
+        if (snap.length)
+            lakeRef.current.geometry.update_t_range(
+                updateRef.current,
+                updateRef.current + snap.length,
+                (i, b, c) =>
+                    b.map((base, j) => {
+                        const s = snap[i][j];
+                        // const v = c[i][1] + s[0];
+                        const v = s + base[1];
+                        console.log(s, base, v);
+                        // const v = base[1];
+
+                        return new THREE.Vector3(base[0], v, base[2]);
+                    }),
+            );
+
+        const nextSnapshot = await invoke<number[][]>("get_snapshot");
+
+        snapshotRef.current.push(...nextSnapshot);
+    });
+
+    useEffect(() => {
+        const gui = new dat.GUI();
+        gui.add(updateRef, "current", 0, stageSegments, 1).name("update index");
+        return () => {
+            gui.destroy();
+        };
+    }, [stageSegments]);
 
     return (
         <group>
             <LighthouseIsland rBase={10} height={75} nChambers={nChambers} />
-            <Lake baseline={-10} phiSegments={256} innerRadius={10} />
+            <Lake
+                baseline={-10}
+                phiSegments={64}
+                innerRadius={10}
+                ref={lakeRef}
+            />
         </group>
     );
 }

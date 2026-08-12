@@ -50,15 +50,15 @@ function Stage({
         [stageGeometryBase],
     );
 
-    const focusTarget = useMemo(() => {
-        switch (lookAt) {
-            case WorldLookAt.Shore:
-            case WorldLookAt.LighthouseIsland:
-            case WorldLookAt.Mountain:
-            default:
-                return new THREE.Vector3(0, 65, 0);
-        }
-    }, [lookAt]);
+    // const focusTarget = useMemo(() => {
+    //     switch (lookAt) {
+    //         case WorldLookAt.Shore:
+    //         case WorldLookAt.LighthouseIsland:
+    //         case WorldLookAt.Mountain:
+    //         default:
+    //             return new THREE.Vector3(0, 65, 0);
+    //     }
+    // }, [lookAt]);
 
     const stagePerimetryPosition = useCallback(
         (t: number) => {
@@ -112,15 +112,28 @@ function Stage({
         };
     }, [stagePerimetryGeometry, stageGeometryBase]);
 
-    const ref = useRef<{ pos: number; fov: number; elevation: number }>({
+    const ref = useRef<{
+        pos: number;
+        fov: number;
+        elevation: number;
+        translationX: number;
+        translationY: number;
+        translationZ: number;
+        focusTarget: THREE.Vector3;
+    }>({
         pos: 0,
         fov: 35,
         elevation: 0,
+        translationX: 0,
+        translationY: 0,
+        translationZ: 0,
+        focusTarget: new THREE.Vector3(0, 65, 0),
     });
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
 
     useEffect(() => {
         const gui = new GUI({ name: "Camera" });
+        // game like
         gui.add(ref.current, "pos", 0, 1, 0.001)
             .name("Camera Position")
             .onChange(invalidate);
@@ -128,6 +141,27 @@ function Stage({
         gui.add(ref.current, "elevation", -1000, 1000)
             .name("Elevation")
             .onChange(invalidate);
+        // editor like
+        gui.add(ref.current, "translationX", -1000, 1000)
+            .name("Translation X")
+            .onChange(invalidate);
+        gui.add(ref.current, "translationY", -1000, 1000)
+            .name("Translation Y")
+            .onChange(invalidate);
+        gui.add(ref.current, "translationZ", -1000, 1000)
+            .name("Translation Z")
+            .onChange(invalidate);
+
+        gui.add(ref.current.focusTarget, "x", -1000, 1000)
+            .name("Focus Target X")
+            .onChange(invalidate);
+        gui.add(ref.current.focusTarget, "y", -1000, 1000)
+            .name("Focus Target Y")
+            .onChange(invalidate);
+        gui.add(ref.current.focusTarget, "z", -1000, 1000)
+            .name("Focus Target Z")
+            .onChange(invalidate);
+
         return () => {
             gui.destroy();
         };
@@ -143,8 +177,12 @@ function Stage({
                 new THREE.Vector3(0, ref.current.elevation, 0),
             ),
         );
-        cameraRef.current.lookAt(focusTarget);
+        cameraRef.current.lookAt(ref.current.focusTarget);
         cameraRef.current.setFocalLength(ref.current.fov);
+
+        cameraRef.current.position.x += ref.current.translationX;
+        cameraRef.current.position.y += ref.current.translationY;
+        cameraRef.current.position.z += ref.current.translationZ;
     });
 
     return (
